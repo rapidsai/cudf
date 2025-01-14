@@ -13,6 +13,16 @@ from pylibcudf.table cimport Table
 
 from cython.operator import dereference
 
+__all__ = [
+    "rsplit",
+    "rsplit_re",
+    "rsplit_record",
+    "rsplit_record_re",
+    "split",
+    "split_re",
+    "split_record",
+    "split_record_re",
+]
 
 cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
     """

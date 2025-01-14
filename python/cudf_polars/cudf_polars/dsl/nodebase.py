@@ -43,9 +43,7 @@ class Node(Generic[T]):
     def _ctor_arguments(self, children: Sequence[T]) -> Sequence[Any | T]:
         return (*(getattr(self, attr) for attr in self._non_child), *children)
 
-    def reconstruct(
-        self, children: Sequence[T]
-    ) -> Self:  # pragma: no cover; not yet used
+    def reconstruct(self, children: Sequence[T]) -> Self:
         """
         Rebuild this node with new children.
 

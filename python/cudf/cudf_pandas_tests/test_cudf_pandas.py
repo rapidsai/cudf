@@ -12,6 +12,7 @@ import pathlib
 import pickle
 import subprocess
 import tempfile
+import time
 import types
 from io import BytesIO, StringIO
 
@@ -30,10 +31,16 @@ from numba import (
 from packaging import version
 from pytz import utc
 
+from rmm import RMMError
+
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
-    ProxyFallbackError,
+    AttributeFallbackError,
+    FallbackError,
+    NotImplementedFallbackError,
+    OOMFallbackError,
+    TypeFallbackError,
     _Unusable,
     is_proxy_object,
 )
@@ -1582,8 +1589,8 @@ def test_numpy_cupy_flatiter(series):
     _, s = series
     arr = s.values
 
-    assert type(arr.flat._fsproxy_fast) == cp.flatiter
-    assert type(arr.flat._fsproxy_slow) == np.flatiter
+    assert type(arr.flat._fsproxy_fast) is cp.flatiter
+    assert type(arr.flat._fsproxy_slow) is np.flatiter
 
 
 @pytest.mark.xfail(
@@ -1757,8 +1764,69 @@ def test_numpy_ndarray_numba_cuda_ufunc(array):
 def test_fallback_raises_error(monkeypatch):
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
-        with pytest.raises(ProxyFallbackError):
+        with pytest.raises(FallbackError):
             pd.Series(range(2)).astype(object)
+
+
+def mock_mean_memory_error(self, *args, **kwargs):
+    raise MemoryError()
+
+
+def mock_mean_rmm_error(self, *args, **kwargs):
+    raise RMMError(1, "error")
+
+
+def mock_mean_not_impl_error(self, *args, **kwargs):
+    raise NotImplementedError()
+
+
+def mock_mean_attr_error(self, *args, **kwargs):
+    raise AttributeError()
+
+
+def mock_mean_type_error(self, *args, **kwargs):
+    raise TypeError()
+
+
+@pytest.mark.parametrize(
+    "mock_mean, err",
+    [
+        (
+            mock_mean_memory_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_rmm_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_not_impl_error,
+            NotImplementedFallbackError,
+        ),
+        (
+            mock_mean_attr_error,
+            AttributeFallbackError,
+        ),
+        (
+            mock_mean_type_error,
+            TypeFallbackError,
+        ),
+    ],
+)
+def test_fallback_raises_specific_error(
+    monkeypatch,
+    mock_mean,
+    err,
+):
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        s = xpd.Series([1, 2])
+        with pytest.raises(err, match="Falling back to the slow path"):
+            assert s.mean() == 1.5
+
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf.Series.mean)
 
 
 @pytest.mark.parametrize(
@@ -1777,3 +1845,43 @@ def test_cudf_pandas_util_version(attrs):
         assert not hasattr(pd.util, attrs)
     else:
         assert hasattr(pd.util, attrs)
+
+
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
+    dtype_series = xdf.dtypes
+    assert all(is_proxy_object(x) for x in dtype_series)
+    assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
+    assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
+
+
+def test_iter_doesnot_raise(monkeypatch):
+    s = xpd.Series([1, 2, 3])
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        for _ in s:
+            pass
+
+
+def test_dataframe_setitem_slowdown():
+    # We are explicitly testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    start_time = time.time()
+    df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)

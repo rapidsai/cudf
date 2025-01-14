@@ -10,7 +10,7 @@ from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars import translate_ir
+from cudf_polars import Translator
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -32,21 +32,21 @@ def test_traversal_unique():
     dt = plc.DataType(plc.TypeId.INT8)
 
     e1 = make_expr(dt, "a", "a")
-    unique_exprs = list(traversal(e1))
+    unique_exprs = list(traversal([e1]))
 
     assert len(unique_exprs) == 2
     assert set(unique_exprs) == {expr.Col(dt, "a"), e1}
     assert unique_exprs == [e1, expr.Col(dt, "a")]
 
     e2 = make_expr(dt, "a", "b")
-    unique_exprs = list(traversal(e2))
+    unique_exprs = list(traversal([e2]))
 
     assert len(unique_exprs) == 3
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e2}
     assert unique_exprs == [e2, expr.Col(dt, "a"), expr.Col(dt, "b")]
 
     e3 = make_expr(dt, "b", "a")
-    unique_exprs = list(traversal(e3))
+    unique_exprs = list(traversal([e3]))
 
     assert len(unique_exprs) == 3
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e3}
@@ -109,14 +109,18 @@ def test_rewrite_ir_node():
     df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
     q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
 
-    orig = translate_ir(q._ldf.visit())
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
 
     def replace_df(node, rec):
         if isinstance(node, ir.DataFrameScan):
             return ir.DataFrameScan(
-                node.schema, new_df._df, node.projection, node.predicate
+                node.schema,
+                new_df._df,
+                node.projection,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
@@ -144,13 +148,17 @@ def test_rewrite_scan_node(tmp_path):
     def replace_scan(node, rec):
         if isinstance(node, ir.Scan):
             return ir.DataFrameScan(
-                node.schema, right._df, node.with_columns, node.predicate
+                node.schema,
+                right._df,
+                node.with_columns,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
     mapper = CachingVisitor(replace_scan)
 
-    orig = translate_ir(q._ldf.visit())
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
     result = new.evaluate(cache={}).to_polars()
@@ -174,7 +182,7 @@ def test_rewrite_names_and_ops():
         .collect()
     )
 
-    qir = translate_ir(q._ldf.visit())
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     @singledispatch
     def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:

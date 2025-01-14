@@ -50,11 +50,6 @@ using mixed_multimap_type =
                         cudf::detail::cuco_allocator<char>,
                         cuco::legacy::double_hashing<1, hash_type, hash_type>>;
 
-using row_hash_legacy =
-  cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;
-
-using row_equality_legacy = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
-
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace detail
 }  // namespace cudf

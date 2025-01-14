@@ -22,8 +22,12 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::groupby::detail::hash {
+std::size_t get_available_shared_memory_size(cudf::size_type grid_size);
 
-std::size_t available_shared_memory_size(cudf::size_type grid_size);
+std::size_t constexpr compute_shmem_offsets_size(cudf::size_type num_cols)
+{
+  return sizeof(cudf::size_type) * num_cols;
+}
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 std::size_t available_shmem_size,
@@ -37,5 +41,4 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 cudf::mutable_table_device_view output_values,
                                 cudf::aggregation::Kind const* d_agg_kinds,
                                 rmm::cuda_stream_view stream);
-
 }  // namespace cudf::groupby::detail::hash

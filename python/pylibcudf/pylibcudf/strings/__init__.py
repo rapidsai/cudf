@@ -28,6 +28,7 @@ from . import (
 from .side_type import SideType
 
 __all__ = [
+    "SideType",
     "attributes",
     "capitalize",
     "case",
@@ -46,9 +47,8 @@ __all__ = [
     "replace",
     "replace_re",
     "slice",
-    "strip",
     "split",
-    "SideType",
+    "strip",
     "translate",
     "wrap",
 ]

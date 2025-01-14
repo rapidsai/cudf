@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_112
+from cudf_polars.utils.versions import POLARS_VERSION_LT_112, POLARS_VERSION_LT_113
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -51,6 +51,15 @@ def right():
             "d": [6, None, 7, 8, -1, 2, 4],
         }
     )
+
+
+@pytest.mark.parametrize(
+    "maintain_order", ["left", "left_right", "right_left", "right"]
+)
+def test_join_maintain_order_param_unsupported(left, right, maintain_order):
+    q = left.join(right, on=pl.col("a"), how="inner", maintain_order=maintain_order)
+
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -110,7 +119,11 @@ def test_cross_join(left, right, zlice):
 
 
 @pytest.mark.parametrize(
-    "left_on,right_on", [(pl.col("a"), pl.lit(2)), (pl.lit(2), pl.col("a"))]
+    "left_on,right_on",
+    [
+        (pl.col("a"), pl.lit(2, dtype=pl.Int64)),
+        (pl.lit(2, dtype=pl.Int64), pl.col("a")),
+    ],
 )
 def test_join_literal_key_unsupported(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
@@ -125,7 +138,13 @@ def test_join_literal_key_unsupported(left, right, left_on, right_on):
         [pl.col("a_right") <= pl.col("a") * 2],
         [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
         [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
-        [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
+        pytest.param(
+            [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
+            marks=pytest.mark.xfail(
+                POLARS_VERSION_LT_113,
+                reason="https://github.com/pola-rs/polars/issues/19597",
+            ),
+        ),
     ],
 )
 def test_join_where(left, right, conditions, zlice):

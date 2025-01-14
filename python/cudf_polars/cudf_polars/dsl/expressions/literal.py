@@ -38,6 +38,7 @@ class Literal(Expr):
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
         self.children = ()
+        self.is_pointwise = True
 
     def do_evaluate(
         self,
@@ -58,13 +59,14 @@ class Literal(Expr):
 class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Array[Any, Any]
+    value: pa.Array[Any]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         self.dtype = dtype
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
         self.children = ()
+        self.is_pointwise = True
 
     def get_hashable(self) -> Hashable:
         """Compute a hash of the column."""

@@ -9,6 +9,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.table cimport Table
 
+__all__ = ["extract", "extract_all_record"]
 
 cpdef Table extract(Column input, RegexProgram prog):
     """

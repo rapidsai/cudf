@@ -36,6 +36,23 @@ from .table cimport Table
 from .utils cimport _as_vector
 
 
+__all__ = [
+    "MaskAllocationPolicy",
+    "OutOfBoundsPolicy",
+    "allocate_like",
+    "boolean_mask_scatter",
+    "copy_if_else",
+    "copy_range",
+    "copy_range_in_place",
+    "empty_like",
+    "gather",
+    "get_element",
+    "scatter",
+    "shift",
+    "slice",
+    "split",
+]
+
 cpdef Table gather(
     Table source_table,
     Column gather_map,

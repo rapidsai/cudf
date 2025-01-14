@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 {% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -43,7 +43,7 @@ requirements:
   run:
     - python
     - pylibcudf ={{ version }}
-    - polars >=1.11,<1.12
+    - polars >=1.11,<1.18
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:

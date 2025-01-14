@@ -16,7 +16,7 @@
 
 #pragma once
 
-#ifdef CUFILE_FOUND
+#ifdef CUDF_CUFILE_FOUND
 #include <cudf_test/file_utilities.hpp>
 
 #include <BS_thread_pool.hpp>
@@ -97,7 +97,7 @@ class cufile_output {
   virtual std::future<void> write_async(void const* data, size_t offset, size_t size) = 0;
 };
 
-#ifdef CUFILE_FOUND
+#ifdef CUDF_CUFILE_FOUND
 
 class cufile_shim;
 

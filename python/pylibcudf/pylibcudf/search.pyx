@@ -10,6 +10,7 @@ from pylibcudf.libcudf.types cimport null_order, order
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["contains", "lower_bound", "upper_bound"]
 
 cpdef Column lower_bound(
     Table haystack,

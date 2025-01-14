@@ -7,6 +7,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport wrap as cpp_wrap
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["wrap"]
 
 cpdef Column wrap(Column input, size_type width):
     """

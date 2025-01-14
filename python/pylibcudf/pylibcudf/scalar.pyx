@@ -11,6 +11,8 @@ from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 from .column cimport Column
 from .types cimport DataType
 
+__all__ = ["Scalar"]
+
 
 # The DeviceMemoryResource attribute could be released prematurely
 # by the gc if the Scalar is in a reference cycle. Removing the tp_clear
@@ -36,6 +38,8 @@ cdef class Scalar:
         # support, but it here for now to ease the transition of
         # DeviceScalar.
         raise ValueError("Scalar should be constructed with a factory")
+
+    __hash__ = None
 
     cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()

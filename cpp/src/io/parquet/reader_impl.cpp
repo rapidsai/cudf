@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,9 +97,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                              _stream);
     }
 
+    // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
 
-    // check for overflow
+    // Check for overflow in cumulative column string sizes of this pass so that the page string
+    // offsets of overflowing (large) string columns are treated as 64-bit.
     auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
     auto const has_large_strings = std::any_of(col_string_sizes.cbegin(),
                                                col_string_sizes.cend(),
@@ -108,12 +110,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // mark any chunks that are large string columns
-    if (has_large_strings) {
-      for (auto& chunk : pass.chunks) {
-        auto const idx = chunk.src_col_index;
-        if (col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
-      }
+    // Mark/unmark column-chunk descriptors depending on the string sizes of corresponding output
+    // column chunks and the large strings threshold.
+    for (auto& chunk : pass.chunks) {
+      auto const idx            = chunk.src_col_index;
+      chunk.is_large_string_col = (col_string_sizes[idx] > threshold);
     }
   }
 
@@ -133,7 +134,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
 
-    size_t max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
+    size_t const max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
     chunk_offsets.push_back(chunk_off);
 
     // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers
@@ -188,14 +189,16 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       auto& out_buf = (*cols)[input_col.nesting[idx]];
       cols          = &out_buf.children;
 
-      int owning_schema = out_buf.user_data & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
+      int const owning_schema = out_buf.user_data & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
         // only do string buffer for leaf
         if (idx == max_depth - 1 and out_buf.string_size() == 0 and
             col_string_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index], _stream);
+          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index],
+                                     pass.chunks[c].is_large_string_col,
+                                     _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
@@ -397,11 +400,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         final_offsets.emplace_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
-        // need to cap off the string offsets column
-        auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        if (sz <= strings::detail::get_offset64_threshold()) {
+        // only if it is not a large strings column
+        if (col_string_sizes[idx] <=
+            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(sz);
+          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
       }
     }
@@ -416,7 +419,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     ColumnChunkDesc* col               = &pass.chunks[pi->chunk_idx];
     input_column_info const& input_col = _input_columns[col->src_col_index];
 
-    int index                   = pi->nesting_decode - page_nesting_decode.device_ptr();
+    int const index             = pi->nesting_decode - page_nesting_decode.device_ptr();
     PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
 
     auto* cols = &_output_buffers;

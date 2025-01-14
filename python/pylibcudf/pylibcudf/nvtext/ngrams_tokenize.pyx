@@ -12,6 +12,7 @@ from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["ngrams_tokenize"]
 
 cpdef Column ngrams_tokenize(
     Column input,

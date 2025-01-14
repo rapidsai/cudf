@@ -64,6 +64,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
@@ -125,6 +126,20 @@ std::size_t calc_device_memory_size(cudf::column_view const& view, bool const pa
                          [pad_for_cpu](std::size_t t, cudf::column_view const& v) {
                            return t + calc_device_memory_size(v, pad_for_cpu);
                          });
+}
+
+cudf::datetime::rounding_frequency as_rounding_freq(jint freq)
+{
+  switch (freq) {
+    case 0: return cudf::datetime::rounding_frequency::DAY;
+    case 1: return cudf::datetime::rounding_frequency::HOUR;
+    case 2: return cudf::datetime::rounding_frequency::MINUTE;
+    case 3: return cudf::datetime::rounding_frequency::SECOND;
+    case 4: return cudf::datetime::rounding_frequency::MILLISECOND;
+    case 5: return cudf::datetime::rounding_frequency::MICROSECOND;
+    case 6: return cudf::datetime::rounding_frequency::NANOSECOND;
+    default: throw std::invalid_argument("Invalid rounding_frequency");
+  }
 }
 
 }  // anonymous namespace
@@ -1099,79 +1114,30 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_round(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_year(JNIEnv* env, jclass, jlong input_ptr)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractDateTimeComponent(JNIEnv* env,
+                                                                                jclass,
+                                                                                jlong input_ptr,
+                                                                                jint component)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_year(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_month(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_month(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_day(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_day(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hour(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_hour(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_minute(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_minute(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_second(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_second(*input));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_weekDay(JNIEnv* env, jclass, jlong input_ptr)
-{
-  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
-    return release_as_jlong(cudf::datetime::extract_weekday(*input));
+    cudf::datetime::datetime_component comp;
+    switch (component) {
+      case 0: comp = cudf::datetime::datetime_component::YEAR; break;
+      case 1: comp = cudf::datetime::datetime_component::MONTH; break;
+      case 2: comp = cudf::datetime::datetime_component::DAY; break;
+      case 3: comp = cudf::datetime::datetime_component::WEEKDAY; break;
+      case 4: comp = cudf::datetime::datetime_component::HOUR; break;
+      case 5: comp = cudf::datetime::datetime_component::MINUTE; break;
+      case 6: comp = cudf::datetime::datetime_component::SECOND; break;
+      case 7: comp = cudf::datetime::datetime_component::MILLISECOND; break;
+      case 8: comp = cudf::datetime::datetime_component::MICROSECOND; break;
+      case 9: comp = cudf::datetime::datetime_component::NANOSECOND; break;
+      default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid component", 0);
+    }
+    return release_as_jlong(cudf::datetime::extract_datetime_component(*input, comp));
   }
   CATCH_STD(env, 0);
 }
@@ -1231,6 +1197,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_addCalendricalMonths(JNIE
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_addScalarCalendricalMonths(JNIEnv* env,
+                                                                                  jclass,
+                                                                                  jlong ts_ptr,
+                                                                                  jlong months_ptr)
+{
+  JNI_NULL_CHECK(env, ts_ptr, "ts is null", 0);
+  JNI_NULL_CHECK(env, months_ptr, "months is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const* ts = reinterpret_cast<cudf::column_view*>(ts_ptr);
+    cudf::scalar const* months  = reinterpret_cast<cudf::scalar*>(months_ptr);
+    return release_as_jlong(cudf::datetime::add_calendrical_months(*ts, *months));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isLeapYear(JNIEnv* env,
                                                                   jclass,
                                                                   jlong input_ptr)
@@ -1240,6 +1222,64 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isLeapYear(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
     return release_as_jlong(cudf::datetime::is_leap_year(*input));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_daysInMonth(JNIEnv* env,
+                                                                   jclass,
+                                                                   jlong input_ptr)
+{
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
+    return release_as_jlong(cudf::datetime::days_in_month(*input));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeCeil(JNIEnv* env,
+                                                                    jclass,
+                                                                    jlong input_ptr,
+                                                                    jint freq)
+{
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
+    return release_as_jlong(cudf::datetime::ceil_datetimes(*input, n_freq));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeFloor(JNIEnv* env,
+                                                                     jclass,
+                                                                     jlong input_ptr,
+                                                                     jint freq)
+{
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
+    return release_as_jlong(cudf::datetime::floor_datetimes(*input, n_freq));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeRound(JNIEnv* env,
+                                                                     jclass,
+                                                                     jlong input_ptr,
+                                                                     jint freq)
+{
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
+    return release_as_jlong(cudf::datetime::round_datetimes(*input, n_freq));
   }
   CATCH_STD(env, 0);
 }
@@ -2827,4 +2867,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_toHex(JNIEnv* env, jclass
   }
   CATCH_STD(env, 0);
 }
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(
+  JNIEnv* env, jobject j_object, jlong j_view_handle, jlong j_target_view_handle)
+{
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
+  JNI_NULL_CHECK(env, j_target_view_handle, "targets is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto* column_view         = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    auto* targets_view        = reinterpret_cast<cudf::column_view*>(j_target_view_handle);
+    auto const strings_column = cudf::strings_column_view(*column_view);
+    auto const targets_column = cudf::strings_column_view(*targets_view);
+    auto contains_results     = cudf::strings::contains_multiple(strings_column, targets_column);
+    return cudf::jni::convert_table_for_return(env, std::move(contains_results));
+  }
+  CATCH_STD(env, 0);
+}
+
 }  // extern "C"

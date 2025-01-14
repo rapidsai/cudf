@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_ipv4 as cpp_convert_ipv4
 
+__all__ = ["integers_to_ipv4", "ipv4_to_integers", "is_ipv4"]
 
 cpdef Column ipv4_to_integers(Column input):
     """

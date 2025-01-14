@@ -17,6 +17,15 @@ from .types cimport DataType, type_id
 from .types import MaskState, TypeId
 
 
+__all__ = [
+    "make_duration_column",
+    "make_empty_column",
+    "make_fixed_point_column",
+    "make_fixed_width_column",
+    "make_numeric_column",
+    "make_timestamp_column",
+]
+
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
     """Creates an empty column of the specified type.
 

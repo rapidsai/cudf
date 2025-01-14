@@ -11,6 +11,7 @@ from pylibcudf.libcudf.types cimport size_type
 from .aggregation cimport Aggregation
 from .column cimport Column
 
+__all__ = ["rolling_window"]
 
 cpdef Column rolling_window(
     Column source,

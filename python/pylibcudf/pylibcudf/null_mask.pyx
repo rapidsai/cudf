@@ -14,6 +14,13 @@ from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "bitmask_allocation_size_bytes",
+    "bitmask_and",
+    "bitmask_or",
+    "copy_bitmask",
+    "create_null_mask",
+]
 
 cdef DeviceBuffer buffer_to_python(device_buffer buf):
     return DeviceBuffer.c_from_unique_ptr(make_unique[device_buffer](move(buf)))

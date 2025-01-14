@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
+import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 
@@ -60,7 +61,7 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table: pa.Table = plc.interop.to_arrow(
+        table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
@@ -146,6 +147,75 @@ class DataFrame:
         return cls(
             Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
         )
+
+    @classmethod
+    def deserialize(
+        cls, header: Mapping[str, Any], frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a DataFrame from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        DataFrame
+            The deserialized DataFrame.
+        """
+        packed_metadata, packed_gpu_data = frames
+        table = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        )
+        return cls(
+            Column(c, **kw)
+            for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
+        )
+
+    def serialize(
+        self,
+    ) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the table into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+        >>> from cudf_polars.experimental.dask_serialize import register
+        >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(self.table)
+
+        # Keyword arguments for `Column.__init__`.
+        columns_kwargs = [
+            {
+                "is_sorted": col.is_sorted,
+                "order": col.order,
+                "null_order": col.null_order,
+                "name": col.name,
+            }
+            for col in self.columns
+        ]
+        header = {
+            "columns_kwargs": columns_kwargs,
+            # Dask Distributed uses "type-serialized" to dispatch deserialization
+            "type-serialized": pickle.dumps(type(self)),
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None

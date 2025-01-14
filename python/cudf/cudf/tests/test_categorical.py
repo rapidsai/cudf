@@ -98,7 +98,7 @@ def test_categorical_compare_unordered():
     # test equal
     out = sr == sr
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr == pdsr)
 
@@ -134,7 +134,7 @@ def test_categorical_compare_ordered():
     # test equal
     out = sr1 == sr1
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr1 == pdsr1)
 
@@ -768,7 +768,7 @@ def test_categorical_setitem_with_nan():
     assert_eq(gs, expected_series)
 
 
-@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
+@pytest.mark.parametrize("dtype", [*list(NUMERIC_TYPES), "object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
     dtype = cudf.dtype(dtype)
@@ -949,4 +949,14 @@ def test_index_set_categories(ordered):
 
     expected = pd_ci.set_categories([1, 2, 3, 4], ordered=ordered)
     result = cudf_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)
+
+
+def test_categorical_interval_pandas_roundtrip():
+    expected = cudf.Series(cudf.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected.to_pandas())
+    assert_eq(result, expected)
+
+    expected = pd.Series(pd.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected).to_pandas()
     assert_eq(result, expected)

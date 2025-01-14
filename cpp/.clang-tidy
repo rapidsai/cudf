@@ -40,7 +40,7 @@ Checks:
        -clang-analyzer-optin.cplusplus.UninitializedObject'
 
 WarningsAsErrors: '*'
-HeaderFilterRegex: '.*cudf/cpp/(src|include|tests).*'
+HeaderFilterRegex: '.*cudf/cpp/(src|include).*'
 ExcludeHeaderFilterRegex: '.*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp).*'
 FormatStyle:     none
 CheckOptions:

@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -410,10 +411,11 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
+                                          rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return tdigest::percentile_approx(input, percentiles, cudf::get_default_stream(), mr);
+  return tdigest::percentile_approx(input, percentiles, stream, mr);
 }
 
 }  // namespace cudf

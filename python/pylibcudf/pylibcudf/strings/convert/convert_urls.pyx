@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_urls as cpp_convert_urls
 
+__all__ = ["url_decode", "url_encode"]
 
 cpdef Column url_encode(Column input):
     """

@@ -12,6 +12,7 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["is_letter", "porter_stemmer_measure"]
 
 cpdef Column is_letter(
     Column input,

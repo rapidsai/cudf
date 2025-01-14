@@ -10,6 +10,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["GetJsonObjectOptions", "get_json_object"]
 
 cdef class GetJsonObjectOptions:
     """Settings for ``get_json_object()``"""
@@ -25,6 +26,8 @@ cdef class GetJsonObjectOptions:
             strip_quotes_from_single_strings
         )
         self.set_missing_fields_as_nulls(missing_fields_as_nulls)
+
+    __hash__ = None
 
     def get_allow_single_quotes(self):
         """

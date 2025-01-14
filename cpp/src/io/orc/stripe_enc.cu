@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/nvcomp_adapter.hpp"
+#include "io/comp/gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -23,10 +23,10 @@
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -45,6 +45,8 @@ namespace orc {
 namespace gpu {
 
 using cudf::detail::device_2dspan;
+using cudf::io::detail::compression_result;
+using cudf::io::detail::compression_status;
 
 constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
@@ -1357,7 +1359,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
-  CompressionKind compression,
+  compression_type compression,
   uint32_t comp_blk_size,
   uint32_t max_comp_blk_size,
   uint32_t comp_block_align,
@@ -1382,54 +1384,14 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
                                                                             max_comp_blk_size,
                                                                             comp_block_align);
 
-  if (compression == SNAPPY) {
-    try {
-      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
-      } else {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      }
-    } catch (...) {
-      // There was an error in compressing so set an error status for each block
-      thrust::for_each(
-        rmm::exec_policy(stream),
-        comp_res.begin(),
-        comp_res.end(),
-        [] __device__(compression_result & stat) { stat.status = compression_status::FAILURE; });
-      // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
-      // writing without compression
-      CUDF_LOG_WARN("ORC writer: compression failed, writing uncompressed data");
-    }
-  } else if (compression == ZLIB) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(
-      nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_res, stream);
-  } else if (compression == ZSTD) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-  } else if (compression == LZ4) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
-  } else if (compression != NONE) {
-    CUDF_FAIL("Unsupported compression type");
-  }
+  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
 
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 
   if (collect_statistics) {
-    return cudf::io::collect_compression_statistics(comp_in, comp_res, stream);
+    return cudf::io::detail::collect_compression_statistics(comp_in, comp_res, stream);
   } else {
     return std::nullopt;
   }

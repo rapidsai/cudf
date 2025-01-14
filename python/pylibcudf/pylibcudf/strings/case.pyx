@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport case as cpp_case
 
+__all__ = ["swapcase", "to_lower", "to_upper"]
 
 cpdef Column to_lower(Column input):
     cdef unique_ptr[column] c_result

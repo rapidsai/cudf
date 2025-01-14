@@ -10,6 +10,7 @@ from pylibcudf.libcudf.types cimport null_order, order, size_type
 
 from .table cimport Table
 
+__all__ = ["merge"]
 
 cpdef Table merge (
     list tables_to_merge,

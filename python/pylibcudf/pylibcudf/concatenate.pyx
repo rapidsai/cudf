@@ -12,6 +12,7 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["concatenate"]
 
 cpdef concatenate(list objects):
     """Concatenate columns or tables.

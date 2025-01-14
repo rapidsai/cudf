@@ -1,10 +1,9 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import functools
 import inspect
-import pickle
 import textwrap
 import warnings
 from collections import abc
@@ -17,7 +16,6 @@ import pandas as pd
 from typing_extensions import Self, assert_never
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -28,7 +26,6 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -415,7 +412,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
-class Series(SingleColumnFrame, IndexedFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame):
     """
     One-dimensional GPU array (including time series).
 
@@ -517,7 +514,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    a
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
-        """  # noqa: E501
+        """
         col = as_column(categorical)
         if codes is not None:
             codes = as_column(codes)
@@ -526,7 +523,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
             mask = None
             if not valid_codes.all():
-                mask = libcudf.transform.bools_to_mask(valid_codes)
+                mask = valid_codes.as_mask()
             col = CategoricalColumn(
                 data=col.data,
                 size=codes.size,
@@ -900,7 +897,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -916,8 +913,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj
@@ -942,7 +938,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             labels, axis, index, columns, level, inplace, errors
         )
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicity conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -1087,7 +1096,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",  # noqa: E501
+""",
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -1196,7 +1205,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         12      c
         13   <NA>
         15      d
-        """  # noqa: E501
+        """
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
@@ -1440,35 +1449,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 warnings.simplefilter("ignore", FutureWarning)
                 preprocess = cudf.concat([top, bottom])
         else:
-            preprocess = self.copy()
-        preprocess.index = preprocess.index._clean_nulls_from_index()
-        if (
-            preprocess.nullable
-            and not isinstance(
-                preprocess.dtype,
-                (
-                    cudf.CategoricalDtype,
-                    cudf.ListDtype,
-                    cudf.StructDtype,
-                    cudf.core.dtypes.DecimalDtype,
-                ),
-            )
-        ) or preprocess.dtype.kind == "m":
-            fill_value = (
-                str(cudf.NaT)
-                if preprocess.dtype.kind in "mM"
-                else str(cudf.NA)
-            )
-            output = repr(
-                preprocess.astype("str").fillna(fill_value).to_pandas()
-            )
-        elif isinstance(preprocess.dtype, cudf.CategoricalDtype):
+            preprocess = self
+        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
                 else pd.get_option("display.min_rows")
             )
             show_dimensions = pd.get_option("display.show_dimensions")
+            preprocess = preprocess.copy(deep=False)
+            preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
@@ -1493,7 +1483,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=str(cudf.NA),
             )
         else:
-            output = repr(preprocess.to_pandas())
+            output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, cudf.CategoricalDtype):
@@ -1597,6 +1587,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def dtype(self):
         """The dtype of the Series."""
         return self._column.dtype
+
+    @property  # type: ignore
+    @_performance_tracking
+    def dtypes(self):
+        """The dtype of the Series.
+
+        This is an alias for `Series.dtype`.
+        """
+        return self.dtype
 
     @classmethod
     @_performance_tracking
@@ -2113,7 +2112,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """  # noqa: E501
+        """
         return self._column.data
 
     @property  # type: ignore
@@ -3392,7 +3391,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def digitize(self, bins, right=False):
+    def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
         """Return the indices of the bins to which each value belongs.
 
         Notes
@@ -3423,9 +3422,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    2
         dtype: int32
         """
-        return Series._from_column(
-            cudf.core.column.numerical.digitize(self._column, bins, right),
-            name=self.name,
+        return type(self)._from_column(
+            self._column.digitize(bins, right), name=self.name
         )
 
     @_performance_tracking
@@ -3954,7 +3952,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2002
         dtype: int16
         """
-        return self._get_dt_field("year")
+        return self._return_result_like_self(self.series._column.year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3979,7 +3977,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("month")
+        return self._return_result_like_self(self.series._column.month)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4004,7 +4002,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("day")
+        return self._return_result_like_self(self.series._column.day)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4029,7 +4027,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("hour")
+        return self._return_result_like_self(self.series._column.hour)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4054,7 +4052,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("minute")
+        return self._return_result_like_self(self.series._column.minute)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4079,7 +4077,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("second")
+        return self._return_result_like_self(self.series._column.second)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4104,13 +4102,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int32
         """
-        micro = self.series._column.get_dt_field("microsecond")
+        micro = self.series._column.microsecond
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.get_dt_field("millisecond").astype(
-            "int32"
-        ) * cudf.Scalar(1000, dtype="int32")
+        extra = self.series._column.millisecond.astype("int32") * np.int32(
+            1000
+        )
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4136,7 +4134,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("nanosecond")
+        return self._return_result_like_self(self.series._column.nanosecond)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4173,7 +4171,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4210,7 +4208,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4248,7 +4246,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4286,7 +4284,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4340,8 +4338,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
-        return self._return_result_like_self(res)
+        return self._return_result_like_self(
+            self.series._column.is_leap_year.fillna(False)
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -4368,10 +4367,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         1    4
         dtype: int8
         """
-        res = libcudf.datetime.extract_quarter(self.series._column).astype(
-            np.int8
+        return self._return_result_like_self(
+            self.series._column.quarter.astype(np.int8)
         )
-        return self._return_result_like_self(res)
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Series:
@@ -4581,7 +4579,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         7    False
         8    False
         dtype: bool
-        """  # noqa: E501
+        """
         return self._return_result_like_self(self.series._column.is_month_end)
 
     @property  # type: ignore
@@ -4721,12 +4719,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: bool
         """
         return self._return_result_like_self(self.series._column.is_year_end)
-
-    @_performance_tracking
-    def _get_dt_field(self, field: str) -> Series:
-        return self._return_result_like_self(
-            self.series._column.get_dt_field(field)
-        )
 
     @_performance_tracking
     def ceil(self, freq: str) -> Series:
@@ -5034,7 +5026,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4       37
         dtype: int64
         """
-        return self._get_td_field("days")
+        return self._return_result_like_self(self.series._column.days)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5073,7 +5065,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("seconds")
+        return self._return_result_like_self(self.series._column.seconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5105,7 +5097,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("microseconds")
+        return self._return_result_like_self(self.series._column.microseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5137,7 +5129,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._get_td_field("nanoseconds")
+        return self._return_result_like_self(self.series._column.nanoseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5166,16 +5158,70 @@ class TimedeltaProperties(BaseDatelikeProperties):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
         )
 
-    @_performance_tracking
-    def _get_td_field(self, field: str) -> Series:
+    def total_seconds(self) -> Series:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is available directly on TimedeltaIndex
+        and on Series containing timedelta values under the ``.dt`` namespace.
+
+        Returns
+        -------
+        Index or Series
+            When the calling object is a TimedeltaIndex,
+            the return type is an Index with a float64 dtype. When the calling object
+            is a Series, the return type is Series of type `float64` whose
+            index is the same as the original.
+
+        See Also
+        --------
+        datetime.timedelta.total_seconds : Standard library version
+            of this method.
+        TimedeltaIndex.components : Return a DataFrame with components of
+            each Timedelta.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> s = cudf.Series(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> s
+        0    0 days 00:00:00
+        1    1 days 00:00:00
+        2    2 days 00:00:00
+        3    3 days 00:00:00
+        4    4 days 00:00:00
+        dtype: timedelta64[ns]
+
+        >>> s.dt.total_seconds()
+        0         0.0
+        1     86400.0
+        2    172800.0
+        3    259200.0
+        4    345600.0
+        dtype: float64
+
+        **TimedeltaIndex**
+
+        >>> idx = cudf.from_pandas(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> idx
+        TimedeltaIndex(['0 days', '1 days', '2 days', '3 days', '4 days'],
+                       dtype='timedelta64[ns]', freq=None)
+
+        >>> idx.total_seconds()
+        Index([0.0, 86400.0, 172800.0, 259200.0, 345600.0], dtype='float64')
+        """
         return self._return_result_like_self(
-            getattr(self.series._column, field)
+            self.series._column.total_seconds()
         )
 
 

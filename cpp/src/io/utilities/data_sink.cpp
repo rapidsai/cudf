@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 #include "file_io_utilities.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/file_handle.hpp>
@@ -44,8 +44,8 @@ class file_sink : public data_sink {
     if (cufile_integration::is_kvikio_enabled()) {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath, "w");
-      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
-                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
+      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
+                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);
     }
@@ -72,8 +72,12 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (size < _gds_write_preferred_threshold) { return false; }
-    return supports_device_write();
+    if (!supports_device_write()) { return false; }
+
+    // Always prefer device writes if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_write_preferred_threshold;
   }
 
   std::future<void> device_write_async(void const* gpu_data,
@@ -82,7 +86,7 @@ class file_sink : public data_sink {
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
-    size_t offset = _bytes_written;
+    size_t const offset = _bytes_written;
     _bytes_written += size;
 
     if (!_kvikio_file.closed()) {
@@ -166,7 +170,7 @@ class void_sink : public data_sink {
   size_t bytes_written() override { return _bytes_written; }
 
  private:
-  size_t _bytes_written;
+  size_t _bytes_written{};
 };
 
 class user_sink_wrapper : public data_sink {

@@ -16,6 +16,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
 
+__all__ = ["replace_re", "replace_with_backrefs"]
 
 cpdef Column replace_re(
     Column input,

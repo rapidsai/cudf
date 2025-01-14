@@ -360,7 +360,7 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   constexpr int64_t right_depth_level = 75;
 
   auto generate_ast_expr = [](int64_t depth_level,
-                              cudf::ast::column_reference col_ref,
+                              cudf::ast::column_reference const& col_ref,
                               cudf::ast::ast_operator root_operator,
                               cudf::ast::ast_operator arithmetic_operator,
                               bool nested_left_tree) {

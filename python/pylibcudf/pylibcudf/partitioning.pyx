@@ -11,6 +11,11 @@ from pylibcudf.libcudf.table.table cimport table
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "hash_partition",
+    "partition",
+    "round_robin_partition",
+]
 
 cpdef tuple[Table, list] hash_partition(
     Table input,

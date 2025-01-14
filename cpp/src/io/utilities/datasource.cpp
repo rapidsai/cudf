@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,15 @@
 #include "file_io_utilities.hpp"
 #include "getenv_or.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
-#include <kvikio/remote_handle.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -36,6 +35,10 @@
 
 #include <regex>
 #include <vector>
+
+#ifdef CUDF_KVIKIO_REMOTE_IO
+#include <kvikio/remote_handle.hpp>
+#endif
 
 namespace cudf {
 namespace io {
@@ -52,8 +55,8 @@ class file_source : public datasource {
     if (cufile_integration::is_kvikio_enabled()) {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
-      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
-                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
+      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
+                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
     }
@@ -92,8 +95,12 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (size < _gds_read_preferred_threshold) { return false; }
-    return supports_device_read();
+    if (!supports_device_read()) { return false; }
+
+    // Always prefer device reads if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_read_preferred_threshold;
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -121,7 +128,8 @@ class file_source : public datasource {
                                                   rmm::cuda_stream_view stream) override
   {
     rmm::device_buffer out_data(size, stream);
-    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    size_t const read =
+      device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
     out_data.resize(read, stream);
     return datasource::buffer::create(std::move(out_data));
   }
@@ -222,7 +230,7 @@ class memory_mapped_source : public file_source {
   {
     if (_map_addr != nullptr) {
       auto const result = munmap(_map_addr, _map_size);
-      if (result != 0) { CUDF_LOG_WARN("munmap failed with {}", result); }
+      if (result != 0) { CUDF_LOG_WARN("munmap failed with %d", result); }
       _map_addr = nullptr;
     }
   }
@@ -391,6 +399,7 @@ class user_datasource_wrapper : public datasource {
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
+#ifdef CUDF_KVIKIO_REMOTE_IO
 /**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
@@ -436,7 +445,8 @@ class remote_file_source : public datasource {
                                                   rmm::cuda_stream_view stream) override
   {
     rmm::device_buffer out_data(size, stream);
-    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    size_t const read =
+      device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
     out_data.resize(read, stream);
     return datasource::buffer::create(std::move(out_data));
   }
@@ -463,14 +473,23 @@ class remote_file_source : public datasource {
   static bool is_supported_remote_url(std::string const& url)
   {
     // Regular expression to match "s3://"
-    std::regex pattern{R"(^s3://)", std::regex_constants::icase};
+    static std::regex const pattern{R"(^s3://)", std::regex_constants::icase};
     return std::regex_search(url, pattern);
   }
 
  private:
   kvikio::RemoteHandle _kvikio_file;
 };
-
+#else
+/**
+ * @brief When KvikIO remote IO is disabled, `is_supported_remote_url()` return false always.
+ */
+class remote_file_source : public file_source {
+ public:
+  explicit remote_file_source(char const* filepath) : file_source(filepath) {}
+  static constexpr bool is_supported_remote_url(std::string const&) { return false; }
+};
+#endif
 }  // namespace
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -1506,3 +1506,25 @@ def test_tdi_unit():
     result = pd_tdi.unit
     expected = cudf_tdi.unit
     assert result == expected
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_series_total_seconds(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.total_seconds()
+    actual = gsr.dt.total_seconds()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_index_total_seconds(request, data, dtype):
+    gi = cudf.Index(data, dtype=dtype)
+    pi = gi.to_pandas()
+
+    expected = pi.total_seconds()
+    actual = gi.total_seconds()
+    assert_eq(expected, actual)

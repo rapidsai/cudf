@@ -1473,10 +1473,11 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   to_stack_op::start_state,
                                   stream);
 
-  auto stack_ops_bufsize = d_num_stack_ops.value(stream);
+  // Copy back to actual number of stack operations
+  auto num_stack_ops = d_num_stack_ops.value(stream);
   // Sequence of stack symbols and their position in the original input (sparse representation)
-  rmm::device_uvector<StackSymbolT> stack_ops{stack_ops_bufsize, stream};
-  rmm::device_uvector<SymbolOffsetT> stack_op_indices{stack_ops_bufsize, stream};
+  rmm::device_uvector<StackSymbolT> stack_ops{num_stack_ops, stream};
+  rmm::device_uvector<SymbolOffsetT> stack_op_indices{num_stack_ops, stream};
 
   // Run bracket-brace FST to retrieve starting positions of structs and lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
@@ -1486,9 +1487,6 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   thrust::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
-
-  // Copy back to actual number of stack operations
-  auto const num_stack_ops = d_num_stack_ops.value(stream);
 
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
@@ -2198,9 +2196,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // - String columns will be returned as nullable, iff there's at least one null entry
       if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
-      // For string columns return ["offsets", "char"] schema
+      // For string columns return ["offsets"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {

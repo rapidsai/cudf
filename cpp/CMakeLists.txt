@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -35,6 +35,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
       "libcudf requires CUDA Toolkit 11.5+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
   )
 endif()
+
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
@@ -77,6 +79,7 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -88,7 +91,15 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_CLANG_TIDY "Enable clang-tidy checking" OFF)
+option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
+option(CUDF_IWYU "Enable IWYU during compilation" OFF)
+option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
+
+option(
+  CUDF_KVIKIO_REMOTE_IO
+  "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
+  ON
+)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -109,6 +120,9 @@ message(
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE
+        "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
+)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -146,7 +160,7 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
 endif()
 
 # ##################################################################################################
-# * clang-tidy configuration ----------------------------------------------------------------------
+# * linter configuration ---------------------------------------------------------------------------
 if(CUDF_CLANG_TIDY)
   find_program(
     CLANG_TIDY_EXE
@@ -176,25 +190,56 @@ if(CUDF_CLANG_TIDY)
   endif()
 endif()
 
+if(CUDF_IWYU)
+  find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
+endif()
+
 # Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
-function(enable_clang_tidy target)
-  set(_tidy_options)
+function(enable_static_checkers target)
+  set(_tidy_options IWYU CLANG_TIDY)
   set(_tidy_one_value)
   set(_tidy_multi_value SKIPPED_FILES)
   cmake_parse_arguments(
-    _TIDY "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
+    _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_CLANG_TIDY)
+  if(_LINT_CLANG_TIDY)
     # clang will complain about unused link libraries on the compile line unless we specify
     # -Qunused-arguments.
-    set_target_properties(
-      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
-    )
-    foreach(file IN LISTS _TIDY_SKIPPED_FILES)
-      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
-    endforeach()
+    if(CUDF_CLANG_TIDY_AUTOFIX)
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY
+                             "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
+      )
+    else()
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+      )
+    endif()
   endif()
+  if(_LINT_IWYU)
+    # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+    # relevant since they don't show up in any other build so it's better to suppress them until we
+    # can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not appear to
+    # be sufficient, we must also ensure that it is set to the underlying target's CXX compile
+    # flags. To do this completely cleanly we should modify the flags on the target rather than the
+    # global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run the linters
+    # on real builds.
+    foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+      list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+      if(_flag_index EQUAL -1)
+        list(APPEND CUDF_CXX_FLAGS ${_flag})
+      endif()
+    endforeach()
+    set(CUDF_CXX_FLAGS
+        "${CUDF_CXX_FLAGS}"
+        PARENT_SCOPE
+    )
+    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+  endif()
+  foreach(file IN LISTS _LINT_SKIPPED_FILES)
+    set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+  endforeach()
 endfunction()
 
 # ##################################################################################################
@@ -203,6 +248,7 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
@@ -227,6 +273,11 @@ endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+
+include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
+rapids_cpm_rapids_logger()
+rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
+
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find NVTX
@@ -249,14 +300,10 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
-# find cuFile
-include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
 include(cmake/thirdparty/get_fmt.cmake)
-# find spdlog
-include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
@@ -267,9 +314,6 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
-  if(TARGET cufile::cuFile_interface)
-    list(APPEND dependencies cuFile)
-  endif()
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -292,6 +336,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/Add.cu
@@ -368,11 +413,14 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_aggregations.cu
+  src/groupby/hash/compute_aggregations_null.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
@@ -396,7 +444,6 @@ add_library(
   src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
-  src/groupby/sort/scan.cpp
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
@@ -404,6 +451,8 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/host_udf_aggregation.cpp
+  src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
@@ -413,6 +462,7 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
+  src/hash/xxhash_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
@@ -427,13 +477,14 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
+  src/io/comp/comp.cpp
+  src/io/comp/comp.cu
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -667,6 +718,7 @@ add_library(
   src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
+  src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -726,7 +778,6 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
-  src/utilities/logger.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -771,11 +822,24 @@ set_target_properties(
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
+# Note: This must come before the target_compile_options below so that the function can modify the
+# flags if necessary.
+if(CUDF_CLANG_TIDY OR CUDF_IWYU)
+  set(linters)
+  if(CUDF_CLANG_TIDY)
+    list(APPEND linters CLANG_TIDY)
+  endif()
+  if(CUDF_IWYU)
+    list(APPEND linters IWYU)
+  endif()
+  enable_static_checkers(
+    cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ${linters}
+  )
+endif()
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-enable_clang_tidy(cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp)
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
   # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
@@ -851,11 +915,26 @@ if(CUDF_LARGE_STRINGS_DISABLED)
   target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
-# Define RMM logging level
-target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
+# Define logging level
+target_compile_definitions(
+  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=CUDF_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
+)
 
-# Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
+# Enable remote IO through KvikIO
+target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
+
+# Enable cuFile support
+set(_cufile_suffix)
+if(CUDA_STATIC_CUFILE)
+  set(_cufile_suffix _static)
+endif()
+if(TARGET CUDA::cuFile${_cufile_suffix})
+  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
+endif()
+
+# Remove this after upgrading to a CCCL that has a proper CMake option. See
+# https://github.com/NVIDIA/cccl/pull/2844
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
@@ -863,9 +942,16 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
+          nanoarrow
+          rmm::rmm_logger_impl
+          cudf_logger_impl
 )
 
 # Add Conda library, and include paths if specified
@@ -944,7 +1030,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
                            $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -1021,7 +1107,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm rmm::rmm_logger rmm::rmm_logger_impl)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
@@ -1079,6 +1165,9 @@ install(
   TARGETS cudf
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
+)
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
 set(_components_export_string)

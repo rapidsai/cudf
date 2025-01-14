@@ -20,26 +20,32 @@ from .table cimport Table
 from .utils cimport int_to_void_ptr
 
 
+__all__ = [
+    "PackedColumns",
+    "pack",
+    "unpack",
+    "unpack_from_memoryviews",
+]
+
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
-    cdef unique_ptr[vector[uint8_t]] c_obj
-    cdef size_t nbytes
-    cdef Py_ssize_t[1] shape
-    cdef Py_ssize_t[1] strides
-
     @staticmethod
     cdef HostBuffer from_unique_ptr(
         unique_ptr[vector[uint8_t]] vec
     ):
-        cdef HostBuffer out = HostBuffer()
+        cdef HostBuffer out = HostBuffer.__new__(HostBuffer)
+        # Allow construction from nullptr
+        out.nbytes = 0 if vec.get() == NULL else dereference(vec).size()
         out.c_obj = move(vec)
-        out.nbytes = dereference(out.c_obj).size()
         out.shape[0] = out.nbytes
         out.strides[0] = 1
         return out
 
+    __hash__ = None
+
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        buffer.buf = dereference(self.c_obj).data()
+        # Empty vec produces empty buffer
+        buffer.buf = NULL if self.nbytes == 0 else dereference(self.c_obj).data()
         buffer.format = NULL  # byte
         buffer.internal = NULL
         buffer.itemsize = 1
@@ -53,6 +59,7 @@ cdef class HostBuffer:
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
+
 
 cdef class PackedColumns:
     """Column data in a serialized format.
@@ -69,6 +76,8 @@ cdef class PackedColumns:
             "Use one of the factories."
         )
 
+    __hash__ = None
+
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data):
         """Create a Python PackedColumns from a libcudf packed_columns."""
@@ -76,7 +85,7 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    def release(self):
+    cpdef tuple release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After

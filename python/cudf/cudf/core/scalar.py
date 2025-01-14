@@ -178,13 +178,13 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def is_valid(self):
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
+        return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        valid = not cudf._lib.scalar._is_null_host_scalar(value)
+        valid = not cudf.utils.utils._is_null_host_scalar(value)
 
         if isinstance(value, list):
             if dtype is not None:
@@ -304,7 +304,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         # https://github.com/numpy/numpy/issues/17552
         return (
             f"{self.__class__.__name__}"
-            f"({str(self.value)}, dtype={self.dtype})"
+            f"({self.value!s}, dtype={self.dtype})"
         )
 
     def _binop_result_dtype_or_error(self, other, op):

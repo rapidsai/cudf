@@ -10,6 +10,7 @@ from cython.operator import dereference
 
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 
+__all__ = ["contains", "ends_with", "find", "rfind", "starts_with"]
 
 cpdef Column find(
     Column input,

@@ -16,6 +16,7 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["filter_tokens", "replace_tokens"]
 
 cpdef Column replace_tokens(
     Column input,

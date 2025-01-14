@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from typing_extensions import Self
+
+import pylibcudf as plc
 
 from cudf._typing import Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
@@ -71,3 +75,8 @@ class Column:
     # TODO: The val parameter should be Scalar, not ScalarLike
     @staticmethod
     def from_scalar(val: ScalarLike, size: int) -> ColumnBase: ...
+    @staticmethod
+    def from_pylibcudf(
+        col: plc.Column, data_ptr_exposed: bool = False
+    ) -> ColumnBase: ...
+    def to_pylibcudf(self, mode: Literal["read", "write"]) -> plc.Column: ...

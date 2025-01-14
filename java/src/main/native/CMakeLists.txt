@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -43,6 +43,7 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
@@ -120,7 +121,12 @@ endif()
 
 if(USE_GDS)
   message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
-  find_package(cuFile REQUIRED)
+  if(CUDA_STATIC_CUFILE)
+    set(_cufile_suffix _static)
+  endif()
+  if(NOT TARGET CUDA::cuFile${_cufile_suffix})
+    message(FATAL_ERROR "cuFile support not found")
+  endif()
 endif()
 
 # ##################################################################################################
@@ -150,8 +156,9 @@ add_library(
   src/ScalarJni.cpp
   src/TableJni.cpp
   src/aggregation128_utils.cu
-  src/maps_column_view.cu
   src/check_nvcomp_output_sizes.cu
+  src/maps_column_view.cu
+  src/multi_host_buffer_source.cpp
 )
 
 # Disable NVTX if necessary
@@ -228,8 +235,7 @@ if(USE_GDS)
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-  target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
+  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile${_cufile_suffix})
 endif()
 
 # ##################################################################################################

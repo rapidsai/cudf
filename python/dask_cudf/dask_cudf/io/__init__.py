@@ -1,9 +1,8 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-from dask_cudf import _deprecated_api
+from dask_cudf.core import _deprecated_api
 
-from . import csv, orc, json, parquet, text  # noqa: F401
-
+from . import csv, json, orc, parquet, text  # noqa: F401
 
 read_csv = _deprecated_api(
     "dask_cudf.io.read_csv", new_api="dask_cudf.read_csv"
@@ -16,15 +15,13 @@ read_orc = _deprecated_api(
 )
 to_orc = _deprecated_api(
     "dask_cudf.io.to_orc",
-    new_api="dask_cudf._legacy.io.to_orc",
+    new_api="dask_cudf.io.orc.to_orc",
     rec="Please use the DataFrame.to_orc method instead.",
 )
 read_text = _deprecated_api(
     "dask_cudf.io.read_text", new_api="dask_cudf.read_text"
 )
-read_parquet = _deprecated_api(
-    "dask_cudf.io.read_parquet", new_api="dask_cudf.read_parquet"
-)
+read_parquet = parquet.read_parquet
 to_parquet = _deprecated_api(
     "dask_cudf.io.to_parquet",
     new_api="dask_cudf._legacy.io.parquet.to_parquet",

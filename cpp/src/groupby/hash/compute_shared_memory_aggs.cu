@@ -47,9 +47,8 @@ struct size_of_functor {
 /// Shared memory data alignment
 CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
 
-// Prepares shared memory data required by each output column, exits if
-// no enough memory space to perform the shared memory aggregation for the
-// current output column
+// Allocates shared memory required for output columns. Exits if there is insufficient memory to
+// perform shared memory aggregation for the current output column.
 __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                                cudf::size_type& col_end,
                                                cudf::mutable_table_device_view output_values,
@@ -74,9 +73,7 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                 ALIGNMENT);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
-    if (bytes_allocated + next_col_total_size > total_agg_size) {
-      CUDF_UNREACHABLE("Not enough memory for shared memory aggregations");
-    }
+    if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
 
     shmem_agg_res_offsets[col_end]  = bytes_allocated;
     shmem_agg_mask_offsets[col_end] = bytes_allocated + next_col_size;
@@ -275,7 +272,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
-std::size_t available_shared_memory_size(cudf::size_type grid_size)
+std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -302,11 +299,11 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
 {
   // For each aggregation, need one offset determining where the aggregation is
   // performed, another indicating the validity of the aggregation
-  auto const shmem_offsets_size = output_values.num_columns() * sizeof(cudf::size_type);
+  auto const offsets_size = compute_shmem_offsets_size(output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
-  CUDF_EXPECTS(available_shmem_size > shmem_offsets_size * 2,
+  CUDF_EXPECTS(available_shmem_size > offsets_size * 2,
                "No enough space for shared memory aggregations");
-  auto const shmem_agg_size = available_shmem_size - shmem_offsets_size * 2;
+  auto const shmem_agg_size = available_shmem_size - offsets_size * 2;
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
@@ -318,6 +315,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
     output_values,
     d_agg_kinds,
     shmem_agg_size,
-    shmem_offsets_size);
+    offsets_size);
 }
 }  // namespace cudf::groupby::detail::hash

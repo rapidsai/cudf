@@ -7,6 +7,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport findall as cpp_findall
 from pylibcudf.strings.regex_program cimport RegexProgram
 
+__all__ = ["findall", "find_re"]
 
 cpdef Column findall(Column input, RegexProgram pattern):
     """

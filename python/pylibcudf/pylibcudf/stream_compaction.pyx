@@ -21,6 +21,18 @@ from pylibcudf.libcudf.stream_compaction import \
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "DuplicateKeepOption",
+    "apply_boolean_mask",
+    "distinct",
+    "distinct_count",
+    "distinct_indices",
+    "drop_nans",
+    "drop_nulls",
+    "stable_distinct",
+    "unique",
+    "unique_count",
+]
 
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     """Filters out rows from the input table based on the presence of nulls.

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
@@ -11,14 +11,12 @@ import pyarrow as pa
 from packaging.version import Version
 from pandas.api.types import is_scalar
 
-import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
 )
-from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
@@ -28,6 +26,8 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
+    meta_nonempty,
+    partd_encode_dispatch,
     pyarrow_schema_dispatch,
     to_pyarrow_table_dispatch,
     tolist_dispatch,
@@ -45,13 +45,6 @@ from dask.utils import Dispatch, is_arraylike
 import cudf
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
-from ._legacy.core import DataFrame, Index, Series
-
-get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
-get_parallel_type.register(cudf.Series, lambda _: Series)
-get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
-
 
 # Required for Arrow filesystem support in read_parquet
 PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
@@ -318,7 +311,7 @@ def tolist_cudf(obj):
 
 
 @is_categorical_dtype_dispatch.register(
-    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
+    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype)  # , Series)
 )
 @_dask_cudf_performance_tracking
 def is_categorical_dtype_cudf(obj):
@@ -464,28 +457,21 @@ def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
 
-# TODO: Remove try/except when cudf is pinned to dask>=2023.10.0
-try:
-    from dask.dataframe.dispatch import partd_encode_dispatch
+@partd_encode_dispatch.register(cudf.DataFrame)
+def _simple_cudf_encode(_):
+    # Basic pickle-based encoding for a partd k-v store
+    import pickle
 
-    @partd_encode_dispatch.register(cudf.DataFrame)
-    def _simple_cudf_encode(_):
-        # Basic pickle-based encoding for a partd k-v store
-        import pickle
+    import partd
 
-        import partd
+    def join(dfs):
+        if not dfs:
+            return cudf.DataFrame()
+        else:
+            return cudf.concat(dfs)
 
-        def join(dfs):
-            if not dfs:
-                return cudf.DataFrame()
-            else:
-                return cudf.concat(dfs)
-
-        dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-        return partial(partd.Encode, dumps, pickle.loads, join)
-
-except ImportError:
-    pass
+    dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    return partial(partd.Encode, dumps, pickle.loads, join)
 
 
 def _default_backend(func, *args, **kwargs):
@@ -557,105 +543,22 @@ def to_cudf_dispatch_from_cudf(data, **kwargs):
     return data
 
 
-# Define "cudf" backend engine to be registered with Dask
-class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
-    """Backend-entrypoint class for Dask-DataFrame
+# Define the "cudf" backend for "legacy" Dask DataFrame
+class LegacyCudfBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Backend-entrypoint class for legacy Dask-DataFrame
 
     This class is registered under the name "cudf" for the
-    ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
-    Dask-DataFrame will use the methods defined in this class
-    in place of ``dask.dataframe.<creation-method>`` when the
-    "dataframe.backend" configuration is set to "cudf":
-
-    Examples
-    --------
-    >>> import dask
-    >>> import dask.dataframe as dd
-    >>> with dask.config.set({"dataframe.backend": "cudf"}):
-    ...     ddf = dd.from_dict({"a": range(10)})
-    >>> type(ddf)
-    <class 'dask_cudf._legacy.core.DataFrame'>
+    ``dask.dataframe.backends`` entrypoint in ``pyproject.toml``.
+    This "legacy" backend is only used for CSV support.
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        return to_cudf_dispatch
 
-    @classmethod
-    def to_backend(cls, data: dd.core._Frame, **kwargs):
-        if isinstance(data._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
-            # Already a cudf-backed collection
-            _unsupported_kwargs("cudf", "cudf", kwargs)
-            return data
-        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
-
-    @staticmethod
-    def from_dict(
-        data,
-        npartitions,
-        orient="columns",
-        dtype=None,
-        columns=None,
-        constructor=cudf.DataFrame,
-    ):
-        return _default_backend(
-            dd.from_dict,
-            data,
-            npartitions=npartitions,
-            orient=orient,
-            dtype=dtype,
-            columns=columns,
-            constructor=constructor,
-        )
-
-    @staticmethod
-    def read_parquet(*args, engine=None, **kwargs):
-        from dask_cudf._legacy.io.parquet import CudfEngine
-
-        _raise_unsupported_parquet_kwargs(**kwargs)
-        return _default_backend(
-            dd.read_parquet,
-            *args,
-            engine=CudfEngine,
-            **kwargs,
-        )
-
-    @staticmethod
-    def read_json(*args, **kwargs):
-        from dask_cudf._legacy.io.json import read_json
-
-        return read_json(*args, **kwargs)
-
-    @staticmethod
-    def read_orc(*args, **kwargs):
-        from dask_cudf._legacy.io import read_orc
-
-        return read_orc(*args, **kwargs)
-
-    @staticmethod
-    def read_csv(*args, **kwargs):
-        from dask_cudf._legacy.io import read_csv
-
-        return read_csv(*args, **kwargs)
-
-    @staticmethod
-    def read_hdf(*args, **kwargs):
-        # HDF5 reader not yet implemented in cudf
-        warnings.warn(
-            "read_hdf is not yet implemented in cudf/dask_cudf. "
-            "Moving to cudf from pandas. Expect poor performance!"
-        )
-        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend(
-            "cudf"
-        )
-
-
-# Define "cudf" backend entrypoint for dask-expr
-class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
+# Define the "cudf" backend for expr-based Dask DataFrame
+class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-Expressions
 
     This class is registered under the name "cudf" for the
-    ``dask-expr.dataframe.backends`` entrypoint in ``setup.cfg``.
+    ``dask_expr.dataframe.backends`` entrypoint in ``pyproject.toml``.
     Dask-DataFrame will use the methods defined in this class
     in place of ``dask_expr.<creation-method>`` when the
     "dataframe.backend" configuration is set to "cudf":
@@ -700,140 +603,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(path, *args, filesystem="fsspec", engine=None, **kwargs):
-        import dask_expr as dx
-        import fsspec
+    def read_parquet(*args, **kwargs):
+        from dask_cudf.io.parquet import read_parquet as read_parquet_expr
 
-        if (
-            isinstance(filesystem, fsspec.AbstractFileSystem)
-            or isinstance(filesystem, str)
-            and filesystem.lower() == "fsspec"
-        ):
-            # Default "fsspec" filesystem
-            from dask_cudf._legacy.io.parquet import CudfEngine
-
-            _raise_unsupported_parquet_kwargs(**kwargs)
-            return _default_backend(
-                dx.read_parquet,
-                path,
-                *args,
-                filesystem=filesystem,
-                engine=CudfEngine,
-                **kwargs,
-            )
-
-        else:
-            # EXPERIMENTAL filesystem="arrow" support.
-            # This code path uses PyArrow for IO, which is only
-            # beneficial for remote storage (e.g. S3)
-
-            from fsspec.utils import stringify_path
-            from pyarrow import fs as pa_fs
-
-            # CudfReadParquetPyarrowFS requires import of distributed beforehand
-            # (See: https://github.com/dask/dask/issues/11352)
-            import distributed  # noqa: F401
-            from dask.core import flatten
-            from dask.dataframe.utils import pyarrow_strings_enabled
-
-            from dask_cudf.io.parquet import CudfReadParquetPyarrowFS
-
-            if args:
-                raise ValueError(f"Unexpected positional arguments: {args}")
-
-            if not (
-                isinstance(filesystem, pa_fs.FileSystem)
-                or isinstance(filesystem, str)
-                and filesystem.lower() in ("arrow", "pyarrow")
-            ):
-                raise ValueError(f"Unexpected filesystem value: {filesystem}.")
-
-            if not PYARROW_GE_15:
-                raise NotImplementedError(
-                    "Experimental Arrow filesystem support requires pyarrow>=15"
-                )
-
-            if not isinstance(path, str):
-                path = stringify_path(path)
-
-            # Extract kwargs
-            columns = kwargs.pop("columns", None)
-            filters = kwargs.pop("filters", None)
-            categories = kwargs.pop("categories", None)
-            index = kwargs.pop("index", None)
-            storage_options = kwargs.pop("storage_options", None)
-            dtype_backend = kwargs.pop("dtype_backend", None)
-            calculate_divisions = kwargs.pop("calculate_divisions", False)
-            ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
-            metadata_task_size = kwargs.pop("metadata_task_size", None)
-            split_row_groups = kwargs.pop("split_row_groups", "infer")
-            blocksize = kwargs.pop("blocksize", "default")
-            aggregate_files = kwargs.pop("aggregate_files", None)
-            parquet_file_extension = kwargs.pop(
-                "parquet_file_extension", (".parq", ".parquet", ".pq")
-            )
-            arrow_to_pandas = kwargs.pop("arrow_to_pandas", None)
-            open_file_options = kwargs.pop("open_file_options", None)
-
-            # Validate and normalize kwargs
-            kwargs["dtype_backend"] = dtype_backend
-            if arrow_to_pandas is not None:
-                raise ValueError(
-                    "arrow_to_pandas not supported for the 'cudf' backend."
-                )
-            if open_file_options is not None:
-                raise ValueError(
-                    "The open_file_options argument is no longer supported "
-                    "by the 'cudf' backend."
-                )
-            if filters is not None:
-                for filter in flatten(filters, container=list):
-                    _, op, val = filter
-                    if op == "in" and not isinstance(val, (set, list, tuple)):
-                        raise TypeError(
-                            "Value of 'in' filter must be a list, set or tuple."
-                        )
-            if metadata_task_size is not None:
-                raise NotImplementedError(
-                    "metadata_task_size is not supported when using the pyarrow filesystem."
-                )
-            if split_row_groups != "infer":
-                raise NotImplementedError(
-                    "split_row_groups is not supported when using the pyarrow filesystem."
-                )
-            if parquet_file_extension != (".parq", ".parquet", ".pq"):
-                raise NotImplementedError(
-                    "parquet_file_extension is not supported when using the pyarrow filesystem."
-                )
-            if blocksize is not None and blocksize != "default":
-                warnings.warn(
-                    "blocksize is not supported when using the pyarrow filesystem."
-                    "blocksize argument will be ignored."
-                )
-            if aggregate_files is not None:
-                warnings.warn(
-                    "aggregate_files is not supported when using the pyarrow filesystem. "
-                    "Please use the 'dataframe.parquet.minimum-partition-size' config."
-                    "aggregate_files argument will be ignored."
-                )
-
-            return dx.new_collection(
-                CudfReadParquetPyarrowFS(
-                    path,
-                    columns=dx._util._convert_to_list(columns),
-                    filters=filters,
-                    categories=categories,
-                    index=index,
-                    calculate_divisions=calculate_divisions,
-                    storage_options=storage_options,
-                    filesystem=filesystem,
-                    ignore_metadata_file=ignore_metadata_file,
-                    arrow_to_pandas=arrow_to_pandas,
-                    pyarrow_strings_enabled=pyarrow_strings_enabled(),
-                    kwargs=kwargs,
-                    _series=isinstance(columns, str),
-                )
-            )
+        return read_parquet_expr(*args, **kwargs)
 
     @staticmethod
     def read_csv(
@@ -844,33 +617,44 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         storage_options=None,
         **kwargs,
     ):
-        import dask_expr as dx
-        from fsspec.utils import stringify_path
+        try:
+            # TODO: Remove when cudf is pinned to dask>2024.12.0
+            import dask_expr as dx
+            from dask_expr.io.csv import ReadCSV
+            from fsspec.utils import stringify_path
 
-        if not isinstance(path, str):
-            path = stringify_path(path)
-        return dx.new_collection(
-            dx.io.csv.ReadCSV(
-                path,
-                dtype_backend=dtype_backend,
-                storage_options=storage_options,
-                kwargs=kwargs,
-                header=header,
-                dataframe_backend="cudf",
+            if not isinstance(path, str):
+                path = stringify_path(path)
+            return dx.new_collection(
+                ReadCSV(
+                    path,
+                    dtype_backend=dtype_backend,
+                    storage_options=storage_options,
+                    kwargs=kwargs,
+                    header=header,
+                    dataframe_backend="cudf",
+                )
             )
-        )
+        except ImportError:
+            # Requires dask>2024.12.0
+            from dask_cudf.io.csv import read_csv
+
+            return read_csv(
+                path,
+                *args,
+                header=header,
+                storage_options=storage_options,
+                **kwargs,
+            )
 
     @staticmethod
     def read_json(*args, **kwargs):
-        from dask_cudf._legacy.io.json import read_json as read_json_impl
+        from dask_cudf.io.json import read_json as read_json_impl
 
         return read_json_impl(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):
-        from dask_expr import from_legacy_dataframe
+        from dask_cudf.io.orc import read_orc as legacy_read_orc
 
-        from dask_cudf._legacy.io.orc import read_orc as legacy_read_orc
-
-        ddf = legacy_read_orc(*args, **kwargs)
-        return from_legacy_dataframe(ddf)
+        return legacy_read_orc(*args, **kwargs)

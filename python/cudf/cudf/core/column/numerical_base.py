@@ -3,14 +3,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 
+import pylibcudf as plc
+
 import cudf
-from cudf import _lib as libcudf
-from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase
+from cudf.core._internals import sorting
+from cudf.core.buffer import Buffer, acquire_spill_lock
+from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 
@@ -137,17 +139,24 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             result = cast(
                 NumericalBaseColumn,
                 cudf.core.column.column_empty(
-                    row_count=len(q), dtype=self.dtype, masked=True
+                    row_count=len(q), dtype=self.dtype
                 ),
             )
         else:
+            no_nans = self.nans_to_nulls()
             # get sorted indices and exclude nulls
-            indices = libcudf.sort.order_by(
-                [self], [True], "first", stable=True
-            ).slice(self.null_count, len(self))
-            result = libcudf.quantiles.quantile(
-                self, q, interpolation, indices, exact
-            )
+            indices = sorting.order_by(
+                [no_nans], [True], "first", stable=True
+            ).slice(no_nans.null_count, len(no_nans))
+            with acquire_spill_lock():
+                plc_column = plc.quantiles.quantile(
+                    no_nans.to_pylibcudf(mode="read"),
+                    q,
+                    plc.types.Interpolation[interpolation.upper()],
+                    indices.to_pylibcudf(mode="read"),
+                    exact,
+                )
+                result = type(self).from_pylibcudf(plc_column)  # type: ignore[assignment]
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -238,14 +247,23 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return cov / lhs_std / rhs_std
 
     def round(
-        self, decimals: int = 0, how: str = "half_even"
+        self,
+        decimals: int = 0,
+        how: Literal["half_even", "half_up"] = "half_even",
     ) -> NumericalBaseColumn:
         if not cudf.api.types.is_integer(decimals):
-            raise TypeError("Values in decimals must be integers")
-        """Round the values in the Column to the given number of decimals."""
-        return libcudf.round.round(self, decimal_places=decimals, how=how)
+            raise TypeError("Argument 'decimals' must an integer")
+        if how not in {"half_even", "half_up"}:
+            raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
+        plc_how = plc.round.RoundingMethod[how.upper()]
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.round.round(
+                    self.to_pylibcudf(mode="read"), decimals, plc_how
+                )
+            )
 
     def _scan(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(
-            op.replace("cum", ""), self, True
-        )._with_type_metadata(self.dtype)
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )

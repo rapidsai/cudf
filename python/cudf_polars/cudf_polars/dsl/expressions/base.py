@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import Column, DataFrame
 
-__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext"]
+__all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
 
 
 class AggInfo(NamedTuple):
@@ -36,9 +36,11 @@ class ExecutionContext(IntEnum):
 class Expr(Node["Expr"]):
     """An abstract expression object."""
 
-    __slots__ = ("dtype",)
+    __slots__ = ("dtype", "is_pointwise")
     dtype: plc.DataType
     """Data type of the expression."""
+    is_pointwise: bool
+    """Whether this expression acts pointwise on its inputs."""
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
@@ -155,6 +157,18 @@ class Expr(Node["Expr"]):
         )  # pragma: no cover; check_agg trips first
 
 
+class ErrorExpr(Expr):
+    __slots__ = ("error",)
+    _non_child = ("dtype", "error")
+    error: str
+
+    def __init__(self, dtype: plc.DataType, error: str) -> None:
+        self.dtype = dtype
+        self.error = error
+        self.children = ()
+        self.is_pointwise = True
+
+
 class NamedExpr:
     # NamedExpr does not inherit from Expr since it does not appear
     # when evaluating expressions themselves, only when constructing
@@ -232,6 +246,7 @@ class Col(Expr):
     def __init__(self, dtype: plc.DataType, name: str) -> None:
         self.dtype = dtype
         self.name = name
+        self.is_pointwise = True
         self.children = ()
 
     def do_evaluate(
@@ -249,3 +264,37 @@ class Col(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         return AggInfo([(self, plc.aggregation.collect_list(), self)])
+
+
+class ColRef(Expr):
+    __slots__ = ("index", "table_ref")
+    _non_child = ("dtype", "index", "table_ref")
+    index: int
+    table_ref: plc.expressions.TableReference
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        index: int,
+        table_ref: plc.expressions.TableReference,
+        column: Expr,
+    ) -> None:
+        if not isinstance(column, Col):
+            raise TypeError("Column reference should only apply to columns")
+        self.dtype = dtype
+        self.index = index
+        self.table_ref = table_ref
+        self.is_pointwise = True
+        self.children = (column,)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        raise NotImplementedError(
+            "Only expect this node as part of an expression translated to libcudf AST."
+        )

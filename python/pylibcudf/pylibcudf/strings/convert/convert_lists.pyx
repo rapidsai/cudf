@@ -17,6 +17,7 @@ from pylibcudf.types cimport type_id
 
 from cython.operator import dereference
 
+__all__ = ["format_list_column"]
 
 cpdef Column format_list_column(
     Column input,

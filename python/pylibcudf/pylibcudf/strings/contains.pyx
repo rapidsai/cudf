@@ -12,6 +12,7 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
 from pylibcudf.strings.regex_program cimport RegexProgram
 
+__all__ = ["contains_re", "count_re", "like", "matches_re"]
 
 cpdef Column contains_re(
     Column input,

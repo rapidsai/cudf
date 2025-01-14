@@ -13,6 +13,7 @@ from pylibcudf.table cimport Table
 
 from cython.operator import dereference
 
+__all__ = ["partition", "rpartition"]
 
 cpdef Table partition(Column input, Scalar delimiter=None):
     """

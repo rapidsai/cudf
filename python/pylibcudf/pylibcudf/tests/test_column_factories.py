@@ -105,7 +105,7 @@ def test_make_empty_column_dtype(pa_type):
     plc_type = plc.interop.from_arrow(pa_col).type()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             plc.column_factories.make_empty_column(plc_type)
         return
 
@@ -119,7 +119,7 @@ def test_make_empty_column_typeid(pa_type):
     tid = plc.interop.from_arrow(pa_col).type().id()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             plc.column_factories.make_empty_column(tid)
         return
 
@@ -154,7 +154,7 @@ def test_make_numeric_column(numeric_pa_type, mask_state):
 )
 def test_make_numeric_column_dtype_err(non_numeric_pa_type):
     plc_type = plc.interop.from_arrow(non_numeric_pa_type)
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         plc.column_factories.make_numeric_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
@@ -183,7 +183,7 @@ def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
 )
 def test_make_fixed_point_column_dtype_err(non_fixed_point_pa_type):
     plc_type = plc.interop.from_arrow(non_fixed_point_pa_type)
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         plc.column_factories.make_fixed_point_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
@@ -211,7 +211,7 @@ def test_make_timestamp_column(timestamp_pa_type, mask_state):
 )
 def test_make_timestamp_column_dtype_err(non_timestamp_pa_type):
     plc_type = plc.interop.from_arrow(non_timestamp_pa_type)
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         plc.column_factories.make_timestamp_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
@@ -239,7 +239,7 @@ def test_make_duration_column(duration_pa_type, mask_state):
 )
 def test_make_duration_column_dtype_err(non_duration_pa_type):
     plc_type = plc.interop.from_arrow(non_duration_pa_type)
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         plc.column_factories.make_duration_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
         )

@@ -12,6 +12,11 @@ from cython.operator import dereference
 from pylibcudf.libcudf.strings.char_types import \
     string_character_types as StringCharacterTypes  # no-cython-lint
 
+__all__ = [
+    "StringCharacterTypes",
+    "all_characters_of_type",
+    "filter_characters_of_type",
+]
 
 cpdef Column all_characters_of_type(
     Column source_strings,

@@ -8,7 +8,7 @@ from .column cimport Column
 cpdef Column label_bins(
     Column input,
     Column left_edges,
-    bool left_inclusive,
+    inclusive left_inclusive,
     Column right_edges,
-    bool right_inclusive
+    inclusive right_inclusive
 )

@@ -9,6 +9,7 @@ from pylibcudf.libcudf.filling cimport (
     fill_in_place as cpp_fill_in_place,
     repeat as cpp_repeat,
     sequence as cpp_sequence,
+    calendrical_month_sequence as cpp_calendrical_month_sequence
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
@@ -17,6 +18,14 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 
+
+__all__ = [
+    "fill",
+    "fill_in_place",
+    "repeat",
+    "sequence",
+    "calendrical_month_sequence",
+]
 
 cpdef Column fill(
     Column destination,
@@ -164,3 +173,39 @@ cpdef Table repeat(
                 count
             )
     return Table.from_libcudf(move(result))
+
+
+cpdef Column calendrical_month_sequence(
+    size_type n,
+    Scalar init,
+    size_type months,
+):
+
+    """Fill destination column from begin to end with value.
+
+    For details, see :cpp:func:`calendrical_month_sequence`.
+
+    Parameters
+    ----------
+    n : size_type
+        Number of timestamps to generate
+    init : Scalar
+        The initial timestamp
+    months : size_type
+        Months to increment
+
+    Returns
+    -------
+    pylibcudf.Column
+        Timestamps column with sequences of months
+    """
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = cpp_calendrical_month_sequence(
+            n,
+            dereference(init.c_obj),
+            months
+        )
+    return Column.from_libcudf(move(c_result))

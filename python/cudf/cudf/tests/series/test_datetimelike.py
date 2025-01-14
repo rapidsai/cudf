@@ -57,7 +57,7 @@ def test_localize_ambiguous(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(
             condition=(zone_name == "America/Metlakatla"),
-            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",  # noqa: E501
+            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",
         )
     )
     s = cudf.Series(
@@ -83,7 +83,7 @@ def test_localize_nonexistent(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(
             condition=(zone_name == "America/Grand_Turk"),
-            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",  # noqa: E501
+            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",
         )
     )
     s = cudf.Series(

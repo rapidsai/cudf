@@ -222,18 +222,19 @@ struct json_column_data {
 using hashmap_of_device_columns =
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
 
-std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree(
-  device_json_column& root,
-  host_span<uint8_t const> is_str_column_all_nulls,
-  tree_meta_t& d_column_tree,
-  device_span<NodeIndexT const> d_unique_col_ids,
-  device_span<size_type const> d_max_row_offsets,
-  std::vector<std::string> const& column_names,
-  NodeIndexT row_array_parent_col_id,
-  bool is_array_of_arrays,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+std::
+  tuple<cudf::detail::host_vector<bool>, cudf::detail::host_vector<bool>, hashmap_of_device_columns>
+  build_tree(device_json_column& root,
+             host_span<uint8_t const> is_str_column_all_nulls,
+             tree_meta_t& d_column_tree,
+             device_span<NodeIndexT const> d_unique_col_ids,
+             device_span<size_type const> d_max_row_offsets,
+             std::vector<std::string> const& column_names,
+             NodeIndexT row_array_parent_col_id,
+             bool is_array_of_arrays,
+             cudf::io::json_reader_options const& options,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr);
 
 void scatter_offsets(tree_meta_t const& tree,
                      device_span<NodeIndexT const> col_ids,
@@ -242,6 +243,7 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
                      host_span<const bool> ignore_vals,
+                     host_span<const bool> is_mixed,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream);
 
@@ -269,7 +271,8 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        });
         return dnew;
       },
-      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; }},
+      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; },
+      [](schema_element const& user_dtypes) { return user_dtypes.child_types; }},
     options.get_dtypes());
 }
 
@@ -362,17 +365,17 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
     return std::vector<uint8_t>();
   }();
-  auto const [ignore_vals, columns] = build_tree(root,
-                                                 is_str_column_all_nulls,
-                                                 d_column_tree,
-                                                 d_unique_col_ids,
-                                                 d_max_row_offsets,
-                                                 column_names,
-                                                 row_array_parent_col_id,
-                                                 is_array_of_arrays,
-                                                 options,
-                                                 stream,
-                                                 mr);
+  auto const [ignore_vals, is_mixed_pruned, columns] = build_tree(root,
+                                                                  is_str_column_all_nulls,
+                                                                  d_column_tree,
+                                                                  d_unique_col_ids,
+                                                                  d_max_row_offsets,
+                                                                  column_names,
+                                                                  row_array_parent_col_id,
+                                                                  is_array_of_arrays,
+                                                                  options,
+                                                                  stream,
+                                                                  mr);
   if (ignore_vals.empty()) return;
   scatter_offsets(tree,
                   col_ids,
@@ -381,22 +384,24 @@ void make_device_json_column(device_span<SymbolT const> input,
                   sorted_col_ids,
                   d_column_tree,
                   ignore_vals,
+                  is_mixed_pruned,
                   columns,
                   stream);
 }
 
-std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree(
-  device_json_column& root,
-  host_span<uint8_t const> is_str_column_all_nulls,
-  tree_meta_t& d_column_tree,
-  device_span<NodeIndexT const> d_unique_col_ids,
-  device_span<size_type const> d_max_row_offsets,
-  std::vector<std::string> const& column_names,
-  NodeIndexT row_array_parent_col_id,
-  bool is_array_of_arrays,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::
+  tuple<cudf::detail::host_vector<bool>, cudf::detail::host_vector<bool>, hashmap_of_device_columns>
+  build_tree(device_json_column& root,
+             host_span<uint8_t const> is_str_column_all_nulls,
+             tree_meta_t& d_column_tree,
+             device_span<NodeIndexT const> d_unique_col_ids,
+             device_span<size_type const> d_max_row_offsets,
+             std::vector<std::string> const& column_names,
+             NodeIndexT row_array_parent_col_id,
+             bool is_array_of_arrays,
+             cudf::io::json_reader_options const& options,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr)
 {
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
@@ -487,12 +492,14 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   // NoPruning: iterate through schema and enforce type.
 
   if (adj[parent_node_sentinel].empty())
-    return {cudf::detail::make_host_vector<bool>(0, stream), {}};  // for empty file
+    return {cudf::detail::make_host_vector<bool>(0, stream),
+            cudf::detail::make_host_vector<bool>(0, stream),
+            {}};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
 
-  auto lookup_names = [&column_names](auto child_ids, auto name) {
+  auto lookup_names = [&column_names](auto const& child_ids, auto const& name) {
     for (auto const& child_id : child_ids) {
       if (column_names[child_id] == name) return child_id;
     }
@@ -550,11 +557,14 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
       auto list_child = schema.child_types.at(this_list_child_name);
       for (auto const& child_id : child_ids)
         mark_is_pruned(child_id, list_child);
+      // TODO: Store null map of non-target types for list children to mark list entry as null.
     }
   };
   if (is_array_of_arrays) {
     if (adj[adj[parent_node_sentinel][0]].empty())
-      return {cudf::detail::make_host_vector<bool>(0, stream), {}};
+      return {cudf::detail::make_host_vector<bool>(0, stream),
+              cudf::detail::make_host_vector<bool>(0, stream),
+              {}};
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
     // mark root and row array col_id as not pruned.
@@ -569,7 +579,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    for (size_t i = 0; i < adj[root_list_col_id].size() && i < user_dtypes.size();
                         i++) {
                      NodeIndexT const first_child_id = adj[root_list_col_id][i];
-                     auto name                       = column_names[first_child_id];
+                     auto const& name                = column_names[first_child_id];
                      auto value_id                   = std::stol(name);
                      if (value_id >= 0 and value_id < static_cast<long>(user_dtypes.size()))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes[value_id]});
@@ -580,7 +590,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    std::map<std::string, data_type> const& user_dtypes) -> void {
                    for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
                      auto const first_child_id = adj[root_list_col_id][i];
-                     auto name                 = column_names[first_child_id];
+                     auto const& name          = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
                    }
@@ -589,9 +599,18 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    std::map<std::string, schema_element> const& user_dtypes) -> void {
                    for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
                      auto const first_child_id = adj[root_list_col_id][i];
-                     auto name                 = column_names[first_child_id];
+                     auto const& name          = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, user_dtypes.at(name));
+                   }
+                 },
+                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+                   schema_element const& user_dtypes) -> void {
+                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
+                     auto const first_child_id = adj[root_list_col_id][i];
+                     auto const& name          = column_names[first_child_id];
+                     if (user_dtypes.child_types.count(name) != 0)
+                       mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
                    }
                  }},
                options.get_dtypes());
@@ -626,7 +645,9 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
           std::map<std::string, schema_element> const& user_dtypes) -> void {
           mark_is_pruned(root_struct_col_id, u_schema);
-        }},
+        },
+        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](schema_element const& user_dtypes)
+          -> void { mark_is_pruned(root_struct_col_id, u_schema); }},
       options.get_dtypes());
   }
   // Useful for array of arrays
@@ -635,8 +656,12 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
       ? adj[parent_node_sentinel][0]
       : (adj[adj[parent_node_sentinel][0]].empty() ? -1 : adj[adj[parent_node_sentinel][0]][0]);
 
+  // List children which are pruned mixed types, nullify parent list row.
+  auto is_mixed_pruned = cudf::detail::make_host_vector<bool>(num_columns, stream);
+  std::fill_n(is_mixed_pruned.begin(), num_columns, false);
   auto handle_mixed_types = [&column_categories,
                              &is_str_column_all_nulls,
+                             &is_mixed_pruned,
                              &is_pruned,
                              &expected_types,
                              &is_enabled_mixed_types_as_string,
@@ -714,7 +739,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
     if (expected_category == NC_STRUCT) {
       // find field column ids, and its children and create columns.
       for (auto const& field_id : child_ids) {
-        auto name = column_names[field_id];
+        auto const& name = column_names[field_id];
         if (is_pruned[field_id]) continue;
         auto inserted =
           ref.get().child_columns.try_emplace(name, device_json_column(stream, mr)).second;
@@ -745,7 +770,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         std::map<NodeIndexT, std::vector<NodeIndexT>> array_values;
         for (auto const& child_id : child_ids) {
           if (is_pruned[child_id]) continue;
-          auto name = column_names[child_id];
+          auto const& name = column_names[child_id];
           array_values[std::stoi(name)].push_back(child_id);
         }
         //
@@ -782,6 +807,14 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                      "list child column insertion failed, duplicate column name in the parent");
         ref.get().column_order.emplace_back(list_child_name);
         auto this_ref = std::ref(ref.get().child_columns.at(list_child_name));
+        if (options.is_enabled_experimental()) {
+          for (auto const& child_id : child_ids) {
+            if (is_pruned[child_id]) {
+              // store this child_id for mixed_type nullify parent list_id.
+              is_mixed_pruned[child_id] = is_pruned[child_id];
+            }
+          }
+        }
         // Mixed type handling
         handle_mixed_types(child_ids);
         if (child_ids.empty()) {
@@ -817,7 +850,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
   cudf::detail::cuda_memcpy_async<NodeT>(d_column_tree.node_categories, expected_types, stream);
 
-  return {is_pruned, columns};
+  return {is_pruned, is_mixed_pruned, columns};
 }
 
 void scatter_offsets(tree_meta_t const& tree,
@@ -827,6 +860,7 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
                      host_span<const bool> ignore_vals,
+                     host_span<const bool> is_mixed_pruned,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream)
 {
@@ -845,6 +879,8 @@ void scatter_offsets(tree_meta_t const& tree,
 
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
     ignore_vals, stream, cudf::get_current_device_resource_ref());
+  auto d_is_mixed_pruned = cudf::detail::make_device_uvector_async(
+    is_mixed_pruned, stream, cudf::get_current_device_resource_ref());
   auto d_columns_data = cudf::detail::make_device_uvector_async(
     columns_data, stream, cudf::get_current_device_resource_ref());
 
@@ -909,9 +945,31 @@ void scatter_offsets(tree_meta_t const& tree,
              column_categories[col_ids[parent_node_id]] == NC_LIST and
              (!d_ignore_vals[col_ids[parent_node_id]]);
     });
+  // For children of list and in ignore_vals, find it's parent node id, and set corresponding
+  // parent's null mask to null. Setting mixed type list rows to null.
+  auto const num_list_children = thrust::distance(
+    thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()), list_children_end);
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    num_list_children,
+    [node_ids          = node_ids.begin(),
+     parent_node_ids   = tree.parent_node_ids.begin(),
+     column_categories = d_column_tree.node_categories.begin(),
+     col_ids           = col_ids.begin(),
+     row_offsets       = row_offsets.begin(),
+     d_is_mixed_pruned = d_is_mixed_pruned.begin(),
+     d_ignore_vals     = d_ignore_vals.begin(),
+     d_columns_data    = d_columns_data.begin()] __device__(size_type i) {
+      auto const node_id        = node_ids[i];
+      auto const parent_node_id = parent_node_ids[node_id];
+      if (parent_node_id == parent_node_sentinel or d_ignore_vals[col_ids[parent_node_id]]) return;
+      if (column_categories[col_ids[parent_node_id]] == NC_LIST and
+          d_is_mixed_pruned[col_ids[node_id]]) {
+        clear_bit(d_columns_data[col_ids[parent_node_id]].validity, row_offsets[parent_node_id]);
+      }
+    });
 
-  auto const num_list_children =
-    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
   thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
                              parent_col_ids.begin(),
                              parent_col_ids.begin() + num_list_children,

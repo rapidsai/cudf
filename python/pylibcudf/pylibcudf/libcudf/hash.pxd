@@ -1,5 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -43,6 +42,11 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
 
     cdef unique_ptr[column] sha512(
         const table_view& input
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] xxhash_32(
+        const table_view& input,
+        const uint32_t seed
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] xxhash_64(

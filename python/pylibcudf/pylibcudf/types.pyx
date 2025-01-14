@@ -20,6 +20,22 @@ from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, i
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+__all__ = [
+    "DataType",
+    "Interpolation",
+    "MaskState",
+    "NanEquality",
+    "NanPolicy",
+    "NullEquality",
+    "NullOrder",
+    "NullPolicy",
+    "Order",
+    "SIZE_TYPE",
+    "SIZE_TYPE_ID",
+    "Sorted",
+    "TypeId",
+    "size_of"
+]
 
 cdef class DataType:
     """Indicator for the logical data type of an element in a column.
@@ -59,6 +75,9 @@ cdef class DataType:
 
     def __hash__(self):
         return hash((self.c_obj.id(), self.c_obj.scale()))
+
+    def __reduce__(self):
+        return (type(self), (self.c_obj.id(), self.c_obj.scale()))
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt):

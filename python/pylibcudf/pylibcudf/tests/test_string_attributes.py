@@ -8,7 +8,7 @@ from utils import assert_column_eq
 import pylibcudf as plc
 
 
-@pytest.fixture()
+@pytest.fixture
 def str_data():
     pa_data = pa.array(["A", None])
     return pa_data, plc.interop.from_arrow(pa_data)

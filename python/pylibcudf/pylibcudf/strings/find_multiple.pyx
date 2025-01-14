@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find_multiple as cpp_find_multiple
 
+__all__ = ["find_multiple"]
 
 cpdef Column find_multiple(Column input, Column targets):
     """

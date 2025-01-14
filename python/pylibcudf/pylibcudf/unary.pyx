@@ -13,6 +13,16 @@ from pylibcudf.libcudf.unary import \
 from .column cimport Column
 from .types cimport DataType
 
+__all__ = [
+    "UnaryOperator",
+    "cast",
+    "is_nan",
+    "is_not_nan",
+    "is_null",
+    "is_supported_cast",
+    "is_valid",
+    "unary_operation",
+]
 
 cpdef Column unary_operation(Column input, unary_operator op):
     """Perform a unary operation on a column.

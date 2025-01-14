@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport padding as cpp_padding
 from pylibcudf.libcudf.strings.side_type cimport side_type
 
+__all__ = ["pad", "zfill"]
 
 cpdef Column pad(Column input, size_type width, side_type side, str fill_char):
     """

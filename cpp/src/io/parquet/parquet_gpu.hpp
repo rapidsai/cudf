@@ -17,7 +17,7 @@
 #pragma once
 
 #include "error.hpp"
-#include "io/comp/gpuinflate.hpp"
+#include "io/comp/comp.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
@@ -310,8 +310,10 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
-  int32_t num_rows;   // number of rows in this page
+  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
+  int32_t num_rows;           // number of rows in this page
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
   // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -597,12 +599,12 @@ struct EncColumnChunk {
  */
 struct EncPage {
   // all pointers at the top to keep things properly aligned
-  uint8_t* page_data;            //!< Ptr to uncompressed page
-  uint8_t* compressed_data;      //!< Ptr to compressed page
-  EncColumnChunk* chunk;         //!< Chunk that this page belongs to
-  compression_result* comp_res;  //!< Ptr to compression result
-  uint32_t* def_histogram;       //!< Histogram of counts for each definition level
-  uint32_t* rep_histogram;       //!< Histogram of counts for each repetition level
+  uint8_t* page_data;                              //!< Ptr to uncompressed page
+  uint8_t* compressed_data;                        //!< Ptr to compressed page
+  EncColumnChunk* chunk;                           //!< Chunk that this page belongs to
+  cudf::io::detail::compression_result* comp_res;  //!< Ptr to compression result
+  uint32_t* def_histogram;  //!< Histogram of counts for each definition level
+  uint32_t* rep_histogram;  //!< Histogram of counts for each repetition level
   // put this here in case it's ever made 64-bit
   encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
   // the rest can be 4 byte aligned
@@ -1021,7 +1023,7 @@ void EncodePages(device_span<EncPage> pages,
                  bool write_v2_headers,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<compression_result> comp_res,
+                 device_span<cudf::io::detail::compression_result> comp_res,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -1044,7 +1046,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @param[in] stream CUDA stream to use
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<compression_result const> comp_res,
+                       device_span<cudf::io::detail::compression_result const> comp_res,
                        device_span<statistics_chunk const> page_stats,
                        statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream);
