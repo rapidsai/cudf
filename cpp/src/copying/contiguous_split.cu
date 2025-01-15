@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -2072,14 +2071,16 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
 std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            std::vector<size_type> const& splits,
+                                           rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contiguous_split(input, splits, cudf::get_default_stream(), mr);
+  return detail::contiguous_split(input, splits, stream, mr);
 }
 
 chunked_pack::chunked_pack(cudf::table_view const& input,
                            std::size_t user_buffer_size,
+                           rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref temp_mr)
 {
   CUDF_EXPECTS(user_buffer_size >= desired_batch_size,
@@ -2087,7 +2088,7 @@ chunked_pack::chunked_pack(cudf::table_view const& input,
   // We pass `std::nullopt` for the first `mr` in `contiguous_split_state` to indicate
   // that it does not allocate any user-bound data for the `chunked_pack` case.
   state = std::make_unique<detail::contiguous_split_state>(
-    input, user_buffer_size, cudf::get_default_stream(), std::nullopt, temp_mr);
+    input, user_buffer_size, stream, std::nullopt, temp_mr);
 }
 
 // required for the unique_ptr to work with a incomplete type (contiguous_split_state)
@@ -2112,9 +2113,10 @@ std::unique_ptr<std::vector<uint8_t>> chunked_pack::build_metadata() const
 
 std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input,
                                                    std::size_t user_buffer_size,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref temp_mr)
 {
-  return std::make_unique<chunked_pack>(input, user_buffer_size, temp_mr);
+  return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr);
 }
 
 };  // namespace cudf
