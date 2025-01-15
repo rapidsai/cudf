@@ -43,7 +43,6 @@ from pylibcudf.libcudf.column.column_factories cimport (
 )
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
-from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 from cudf._lib.scalar cimport DeviceScalar
@@ -346,7 +345,15 @@ cdef class Column:
     @property
     def null_count(self):
         if self._null_count is None:
-            self._null_count = self.compute_null_count()
+            if not self.nullable or self.size == 0:
+                self._null_count = 0
+            else:
+                with acquire_spill_lock():
+                    self._null_count = pylibcudf.null_mask.null_count(
+                        self.base_mask.get_ptr(mode="read"),
+                        self.offset,
+                        self.offset + self.size
+                    )
         return self._null_count
 
     @property
@@ -409,18 +416,6 @@ cdef class Column:
             self.set_base_mask(other_col.base_mask)
         else:
             return other_col
-
-    cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        with acquire_spill_lock():
-            if not self.nullable:
-                return 0
-            return cpp_null_count(
-                <libcudf_types.bitmask_type*><uintptr_t>(
-                    self.base_mask.get_ptr(mode="read")
-                ),
-                self.offset,
-                self.offset + self.size
-            )
 
     cdef mutable_column_view mutable_view(self) except *:
         if isinstance(self.dtype, cudf.CategoricalDtype):
