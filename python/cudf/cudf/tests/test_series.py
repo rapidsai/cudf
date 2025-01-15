@@ -3005,6 +3005,15 @@ def test_dtype_dtypes_equal():
     assert ser.dtypes is ser.to_pandas().dtypes
 
 
+def test_null_like_to_nan_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        ser = cudf.Series([1, 2, np.nan, 10, None])
+        pser = pd.Series([1, 2, np.nan, 10, None])
+
+        assert pser.dtype == ser.dtype
+        assert_eq(ser, pser)
+
+
 @pytest.mark.parametrize("ps", _series_na_data())
 def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)

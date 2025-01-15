@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import pylibcudf as plc
@@ -188,6 +189,23 @@ class Merge:
             self._using_right_index = any(
                 isinstance(idx, _IndexIndexer) for idx in self._right_keys
             )
+            if self.how in {"left", "right"} and not (
+                all(
+                    isinstance(idx, _IndexIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+                or all(
+                    isinstance(idx, _ColumnIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+            ):
+                # For left/right merges, joining on an index and column should result in a RangeIndex
+                self._using_left_index = False
+                self._using_right_index = False
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
