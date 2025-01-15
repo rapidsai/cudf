@@ -543,16 +543,6 @@ def to_cudf_dispatch_from_cudf(data, **kwargs):
     return data
 
 
-# Define the "cudf" backend for "legacy" Dask DataFrame
-class LegacyCudfBackendEntrypoint(DataFrameBackendEntrypoint):
-    """Backend-entrypoint class for legacy Dask-DataFrame
-
-    This class is registered under the name "cudf" for the
-    ``dask.dataframe.backends`` entrypoint in ``pyproject.toml``.
-    This "legacy" backend is only used for CSV support.
-    """
-
-
 # Define the "cudf" backend for expr-based Dask DataFrame
 class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-Expressions
