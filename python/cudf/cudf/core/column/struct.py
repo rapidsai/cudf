@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
 
 
 class StructColumn(ColumnBase):
@@ -50,6 +51,16 @@ class StructColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
 
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
@@ -101,21 +112,15 @@ class StructColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         for child in self.children:
             n += child.memory_usage
 
         return n
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return {
-            field: value
-            for field, value in zip(self.dtype.fields, result.values())
-        }
+        return dict(zip(self.dtype.fields, result.values()))
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

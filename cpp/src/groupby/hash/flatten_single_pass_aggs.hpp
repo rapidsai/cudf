@@ -26,7 +26,10 @@
 namespace cudf::groupby::detail::hash {
 
 // flatten aggs to filter in single pass aggs
-std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests);
+std::tuple<table_view,
+           cudf::detail::host_vector<aggregation::Kind>,
+           std::vector<std::unique_ptr<aggregation>>>
+flatten_single_pass_aggs(host_span<aggregation_request const> requests,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

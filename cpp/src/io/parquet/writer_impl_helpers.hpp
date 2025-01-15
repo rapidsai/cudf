@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,47 +20,11 @@
  */
 
 #pragma once
-#include "io/comp/nvcomp_adapter.hpp"
-#include "parquet_common.hpp"
 
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/io/detail/parquet.hpp>
 
 namespace cudf::io::parquet::detail {
-
-/**
- * @brief Function that translates GDF compression to parquet compression.
- *
- * @param compression The compression type
- * @return The supported Parquet compression
- */
-Compression to_parquet_compression(compression_type compression);
-
-/**
- * @brief Function that translates the given compression codec to nvcomp compression type.
- *
- * @param codec Compression codec
- * @return Translated nvcomp compression type
- */
-nvcomp::compression_type to_nvcomp_compression_type(Compression codec);
-
-/**
- * @brief Function that computes input alignment requirements for the given compression type.
- *
- * @param codec Compression codec
- * @return Required alignment
- */
-uint32_t page_alignment(Compression codec);
-
-/**
- * @brief Gets the maximum compressed chunk size for the largest chunk uncompressed chunk in the
- *        batch.
- *
- * @param codec Compression codec
- * @param compression_blocksize Size of the largest uncompressed chunk in the batch
- * @return Maximum compressed chunk size
- */
-size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize);
 
 /**
  * @brief Fill the table metadata with default column names.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
@@ -180,9 +181,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto window = dict.map_slots.begin() + t + i;
-      // Collect all slots from each window.
-      for (auto& slot : *window) {
+      auto bucket = dict.map_slots.begin() + t + i;
+      // Collect all slots from each bucket.
+      for (auto& slot : *bucket) {
         auto const key = slot.first;
         if (key != KEY_SENTINEL) {
           auto loc       = counter.fetch_add(1, memory_order_relaxed);

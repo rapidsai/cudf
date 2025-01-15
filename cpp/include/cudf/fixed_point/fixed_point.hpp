@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
  * @return `true` if the type is supported by `fixed_point` implementation
  */
 template <typename T>
-constexpr inline auto is_supported_representation_type()
+CUDF_HOST_DEVICE constexpr inline auto is_supported_representation_type()
 {
   return cuda::std::is_same_v<T, int32_t> ||  //
          cuda::std::is_same_v<T, int64_t> ||  //
@@ -71,6 +71,24 @@ constexpr inline auto is_supported_representation_type()
 
 // Helper functions for `fixed_point` type
 namespace detail {
+
+/**
+ * @brief Returns the smaller of the given scales
+ *
+ * @param a The left-hand side value to compare
+ * @param b The right-hand side value to compare
+ * @return The smaller of the given scales
+ */
+CUDF_HOST_DEVICE constexpr inline scale_type min(scale_type const& a, scale_type const& b)
+{
+  // TODO This is a temporary workaround because <cuda/std/functional> is not self-contained when
+  // built with NVRTC 11.8. Replace this with cuda::std::min once the underlying issue is resolved.
+#ifdef __CUDA_ARCH__
+  return scale_type{min(static_cast<int>(a), static_cast<int>(b))};
+#else
+  return std::min(a, b);
+#endif
+}
 
 /**
  * @brief A function for integer exponentiation by squaring.
@@ -267,12 +285,12 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U, typename cuda::std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
-  explicit constexpr operator U() const
+  CUDF_HOST_DEVICE explicit constexpr operator U() const
   {
     // Cast to the larger of the two types (of U and Rep) before converting to Rep because in
     // certain cases casting to U before shifting will result in integer overflow (i.e. if U =
     // int32_t, Rep = int64_t and _value > 2 billion)
-    auto const value = std::common_type_t<U, Rep>(_value);
+    auto const value = cuda::std::common_type_t<U, Rep>(_value);
     return static_cast<U>(detail::shift<Rep, Rad>(value, scale_type{-_scale}));
   }
 
@@ -669,7 +687,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   auto const sum   = lhs.rescaled(scale)._value + rhs.rescaled(scale)._value;
 
 #if defined(__CUDACC_DEBUG__)
@@ -687,7 +705,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   auto const diff  = lhs.rescaled(scale)._value - rhs.rescaled(scale)._value;
 
 #if defined(__CUDACC_DEBUG__)
@@ -735,7 +753,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                         fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value == rhs.rescaled(scale)._value;
 }
 
@@ -744,7 +762,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
                                         fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value != rhs.rescaled(scale)._value;
 }
 
@@ -753,7 +771,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
                                         fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value <= rhs.rescaled(scale)._value;
 }
 
@@ -762,7 +780,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
                                         fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value >= rhs.rescaled(scale)._value;
 }
 
@@ -771,7 +789,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator<(fixed_point<Rep1, Rad1> const& lhs,
                                        fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value < rhs.rescaled(scale)._value;
 }
 
@@ -780,7 +798,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
                                        fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale = std::min(lhs._scale, rhs._scale);
+  auto const scale = detail::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
@@ -789,7 +807,7 @@ template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
 {
-  auto const scale     = std::min(lhs._scale, rhs._scale);
+  auto const scale     = detail::min(lhs._scale, rhs._scale);
   auto const remainder = lhs.rescaled(scale)._value % rhs.rescaled(scale)._value;
   return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -13,12 +13,7 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
-from dask_cudf._legacy.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import (
-    QUERY_PLANNING_ON,
-    require_dask_expr,
-    xfail_dask_expr,
-)
+from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -58,7 +53,7 @@ def pdf(request):
 # deprecation check for "collect".
 @pytest.mark.parametrize(
     "aggregation",
-    sorted(tuple(set(OPTIMIZED_AGGS) - {list}) + ("collect",)),
+    sorted((*tuple(set(OPTIMIZED_AGGS) - {list}), "collect")),
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
@@ -78,17 +73,11 @@ def test_groupby_basic(series, aggregation, pdf):
         expect = getattr(gdf_grouped, aggregation)()
         actual = getattr(ddf_grouped, aggregation)()
 
-    if not QUERY_PLANNING_ON:
-        assert_cudf_groupby_layers(actual)
-
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
     if not series:
         expect = gdf_grouped.agg({"x": aggregation})
         actual = ddf_grouped.agg({"x": aggregation})
-
-        if not QUERY_PLANNING_ON:
-            assert_cudf_groupby_layers(actual)
 
         dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
@@ -133,13 +122,6 @@ def test_groupby_agg(func, aggregation, pdf):
     expect = func(gdf, aggregation)
 
     check_dtype = aggregation != "count"
-
-    if not QUERY_PLANNING_ON:
-        assert_cudf_groupby_layers(actual)
-
-        # groupby.agg should add an explicit getitem layer
-        # to improve/enable column projection
-        assert hlg_layer(actual.dask, "getitem")
 
     dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
@@ -556,20 +538,13 @@ def test_groupby_categorical_key():
         True,
         pytest.param(
             False,
-            marks=xfail_dask_expr("as_index not supported in dask-expr"),
+            marks=pytest.mark.xfail(
+                reason="as_index not supported in dask-expr"
+            ),
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "fused",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=require_dask_expr("Not supported by legacy API"),
-        ),
-    ],
-)
+@pytest.mark.parametrize("fused", [True, False])
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
@@ -590,19 +565,16 @@ def test_groupby_agg_params(
         "c": ["mean", "std", "var"],
     }
 
-    fused_kwarg = {"fused": fused} if QUERY_PLANNING_ON else {}
+    fused_kwarg = {"fused": fused}
     split_kwargs = {"split_every": split_every, "split_out": split_out}
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
 
     # Avoid using as_index when query-planning is enabled
-    if QUERY_PLANNING_ON:
-        with pytest.warns(FutureWarning, match="argument is now deprecated"):
-            # Should warn when `as_index` is used
-            ddf.groupby(["name", "a"], sort=False, as_index=as_index)
-        maybe_as_index = {"as_index": as_index} if as_index is False else {}
-    else:
-        maybe_as_index = {"as_index": as_index}
+    with pytest.warns(FutureWarning, match="argument is now deprecated"):
+        # Should warn when `as_index` is used
+        ddf.groupby(["name", "a"], sort=False, as_index=as_index)
+    maybe_as_index = {"as_index": as_index} if as_index is False else {}
 
     # Check `sort=True` behavior
     if split_out == 1:
@@ -671,7 +643,6 @@ def test_groupby_agg_params(
     dd.assert_eq(gf, pf)
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize(
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
@@ -711,7 +682,6 @@ def test_is_supported(arg, supported):
     assert _aggs_optimized(arg, OPTIMIZED_AGGS) is supported
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_groupby_unique_lists():
     df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
     gdf = cudf.from_pandas(df)
@@ -758,7 +728,7 @@ def test_groupby_first_last(data, agg):
     )
 
 
-@xfail_dask_expr("Co-alignment check fails in dask-expr")
+@pytest.mark.xfail(reason="Co-alignment check fails in dask-expr")
 def test_groupby_with_list_of_series():
     df = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
     gdf = dask_cudf.from_cudf(df, npartitions=2)
@@ -773,7 +743,6 @@ def test_groupby_with_list_of_series():
     )
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize(
     "func",
     [
@@ -833,7 +802,7 @@ def test_groupby_all_columns(func):
     expect = func(ddf)
     actual = func(gddf)
 
-    dd.assert_eq(expect, actual, check_names=not QUERY_PLANNING_ON)
+    dd.assert_eq(expect, actual, check_names=False)
 
 
 def test_groupby_shuffle():
@@ -870,15 +839,3 @@ def test_groupby_shuffle():
     # NOTE: `shuffle_method=True` should be default
     got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
     dd.assert_eq(expect, got.compute().sort_index())
-
-    if not QUERY_PLANNING_ON:
-        # Sorted aggregation fails with split_out>1 when shuffle is False
-        # (sort=True, split_out=2, shuffle_method=False)
-        with pytest.raises(ValueError):
-            gddf.groupby("a", sort=True).agg(
-                spec, shuffle_method=False, split_out=2
-            )
-
-        # Check shuffle kwarg deprecation
-        with pytest.warns(match="'shuffle' keyword is deprecated"):
-            gddf.groupby("a", sort=True).agg(spec, shuffle=False)

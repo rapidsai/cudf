@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -8,15 +8,16 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.transform import one_hot_encode
-from cudf._lib.types import size_type_dtype
+from cudf._lib.column import Column
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty_like
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import min_unsigned_type
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
@@ -421,16 +422,17 @@ def concat(
                         # if join is inner and it contains an empty df
                         # we return an empty df, hence creating an empty
                         # column with dtype metadata retained.
-                        result_data[name] = cudf.core.column.column_empty_like(
-                            col, newsize=0
+                        result_data[name] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[name] = col
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 
@@ -458,8 +460,8 @@ def concat(
                     else:
                         col_label = (k, name)
                     if empty_inner:
-                        result_data[col_label] = (
-                            cudf.core.column.column_empty_like(col, newsize=0)
+                        result_data[col_label] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[col_label] = col
@@ -687,7 +689,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -941,21 +943,46 @@ def _merge_sorted(
                 idx + objs[0].index.nlevels for idx in key_columns_indices
             ]
 
-    columns = [
-        [
-            *(obj.index._columns if not ignore_index else ()),
-            *obj._columns,
-        ]
+    columns = (
+        itertools.chain(obj.index._columns, obj._columns)
+        if not ignore_index
+        else obj._columns
         for obj in objs
+    )
+
+    input_tables = [
+        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
+        for source_columns in columns
+    ]
+
+    num_keys = len(key_columns_indices)
+
+    column_order = (
+        plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
+    )
+
+    if not ascending:
+        na_position = "last" if na_position == "first" else "first"
+
+    null_precedence = (
+        plc.types.NullOrder.BEFORE
+        if na_position == "first"
+        else plc.types.NullOrder.AFTER
+    )
+
+    plc_table = plc.merge.merge(
+        input_tables,
+        key_columns_indices,
+        [column_order] * num_keys,
+        [null_precedence] * num_keys,
+    )
+
+    result_columns = [
+        Column.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(
-        cudf._lib.merge.merge_sorted(
-            input_columns=columns,
-            key_columns_indices=key_columns_indices,
-            ascending=ascending,
-            na_position=na_position,
-        ),
+        result_columns,
         column_names=objs[0]._column_names,
         index_names=None if ignore_index else objs[0]._index_names,
     )
@@ -995,16 +1022,15 @@ def _pivot(
             ]
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target_col = cudf.core.column.column_empty_like(
-                col, masked=True, newsize=new_size
-            )
+            target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
             target = cudf.Index._from_column(target_col)
             result.update(
                 {
                     name: idx._column
                     for name, idx in zip(
-                        names, target._split(range(nrows, new_size, nrows))
+                        names,
+                        target._split(list(range(nrows, new_size, nrows))),
                     )
                 }
             )
@@ -1013,7 +1039,7 @@ def _pivot(
     ca = ColumnAccessor(
         result,
         multiindex=True,
-        level_names=(None,) + columns._column_names,
+        level_names=(None, *columns._column_names),
         verify=False,
     )
     return cudf.DataFrame._from_data(ca, index=index_labels)
@@ -1247,7 +1273,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:
@@ -1300,17 +1326,23 @@ def _one_hot_encode_column(
     """
     if isinstance(column.dtype, cudf.CategoricalDtype):
         if column.size == column.null_count:
-            column = column_empty_like(categories, newsize=column.size)
+            column = column_empty(
+                row_count=column.size, dtype=categories.dtype
+            )
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
-    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
+    if column.size * categories.size >= np.iinfo(SIZE_TYPE_DTYPE).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            f"np.iinfo({SIZE_TYPE_DTYPE}).max. Consider reducing "
             "size of category"
         )
-    data = one_hot_encode(column, categories)
+    result_labels = (
+        x if x is not None else "<NA>"
+        for x in categories.to_arrow().to_pylist()
+    )
+    data = dict(zip(result_labels, column.one_hot_encode(categories)))
 
     if drop_first and len(data):
         data.pop(next(iter(data)))

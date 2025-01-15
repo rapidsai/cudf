@@ -32,21 +32,21 @@ def test_traversal_unique():
     dt = plc.DataType(plc.TypeId.INT8)
 
     e1 = make_expr(dt, "a", "a")
-    unique_exprs = list(traversal(e1))
+    unique_exprs = list(traversal([e1]))
 
     assert len(unique_exprs) == 2
     assert set(unique_exprs) == {expr.Col(dt, "a"), e1}
     assert unique_exprs == [e1, expr.Col(dt, "a")]
 
     e2 = make_expr(dt, "a", "b")
-    unique_exprs = list(traversal(e2))
+    unique_exprs = list(traversal([e2]))
 
     assert len(unique_exprs) == 3
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e2}
     assert unique_exprs == [e2, expr.Col(dt, "a"), expr.Col(dt, "b")]
 
     e3 = make_expr(dt, "b", "a")
-    unique_exprs = list(traversal(e3))
+    unique_exprs = list(traversal([e3]))
 
     assert len(unique_exprs) == 3
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e3}
@@ -116,7 +116,11 @@ def test_rewrite_ir_node():
     def replace_df(node, rec):
         if isinstance(node, ir.DataFrameScan):
             return ir.DataFrameScan(
-                node.schema, new_df._df, node.projection, node.predicate
+                node.schema,
+                new_df._df,
+                node.projection,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
@@ -144,7 +148,11 @@ def test_rewrite_scan_node(tmp_path):
     def replace_scan(node, rec):
         if isinstance(node, ir.Scan):
             return ir.DataFrameScan(
-                node.schema, right._df, node.with_columns, node.predicate
+                node.schema,
+                right._df,
+                node.with_columns,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 

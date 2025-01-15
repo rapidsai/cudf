@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
-__all__ = ["Gather", "Filter"]
+__all__ = ["Filter", "Gather"]
 
 
 class Gather(Expr):
@@ -30,6 +30,7 @@ class Gather(Expr):
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
         self.dtype = dtype
         self.children = (values, indices)
+        self.is_pointwise = False
 
     def do_evaluate(
         self,
@@ -71,6 +72,7 @@ class Filter(Expr):
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
         self.dtype = dtype
         self.children = (values, indices)
+        self.is_pointwise = True
 
     def do_evaluate(
         self,

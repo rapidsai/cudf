@@ -24,7 +24,7 @@ template rmm::device_uvector<cudf::size_type> compute_global_memory_aggs<nullabl
   bitmask_type const* row_bitmask,
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
-  std::vector<cudf::aggregation::Kind> const& agg_kinds,
+  host_span<cudf::aggregation::Kind const> agg_kinds,
   nullable_global_set_t& global_set,
   std::vector<std::unique_ptr<aggregation>>& aggregations,
   cudf::detail::result_cache* sparse_results,

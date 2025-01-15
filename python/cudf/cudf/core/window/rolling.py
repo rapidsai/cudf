@@ -1,16 +1,20 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION
+# Copyright (c) 2020-2025, NVIDIA CORPORATION
 from __future__ import annotations
 
 import warnings
 from typing import TYPE_CHECKING
 
 import numba
+import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
+
+import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
+from cudf.core._internals.aggregation import make_aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
@@ -270,12 +274,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             end = as_column(end, dtype="int32")
 
             idx = as_column(range(len(start)))
-            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
-            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
+            preceding_window = (idx - start + np.int32(1)).astype("int32")
+            following_window = (end - idx - np.int32(1)).astype("int32")
             window = None
         else:
             preceding_window = as_column(self.window)
@@ -284,16 +284,37 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             )
             window = None
 
-        return libcudf.rolling.rolling(
-            source_column=source_column,
-            pre_column_window=preceding_window,
-            fwd_column_window=following_window,
-            window=window,
-            min_periods=min_periods,
-            center=self.center,
-            op=agg_name,
-            agg_params=self.agg_params,
-        )
+        with acquire_spill_lock():
+            if window is None:
+                if self.center:
+                    # TODO: we can support this even though Pandas currently does not
+                    raise NotImplementedError(
+                        "center is not implemented for offset-based windows"
+                    )
+                pre = preceding_window.to_pylibcudf(mode="read")
+                fwd = following_window.to_pylibcudf(mode="read")
+            else:
+                if self.center:
+                    pre = (window // 2) + 1
+                    fwd = window - (pre)
+                else:
+                    pre = window
+                    fwd = 0
+
+            return libcudf.column.Column.from_pylibcudf(
+                plc.rolling.rolling_window(
+                    source_column.to_pylibcudf(mode="read"),
+                    pre,
+                    fwd,
+                    min_periods,
+                    make_aggregation(
+                        agg_name,
+                        {"dtype": source_column.dtype}
+                        if callable(agg_name)
+                        else self.agg_params,
+                    ).plc_obj,
+                )
+            )
 
     def _reduce(
         self,

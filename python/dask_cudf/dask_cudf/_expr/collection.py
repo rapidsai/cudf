@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import warnings
 from functools import cached_property
@@ -15,18 +15,10 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.dispatch import get_parallel_type
 from dask.typing import no_default
 
 import cudf
-
-_LEGACY_WORKAROUND = (
-    "To enable the 'legacy' dask-cudf API, set the "
-    "global 'dataframe.query-planning' config to "
-    "`False` before dask is imported. This can also "
-    "be done by setting an environment variable: "
-    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
-)
-
 
 ##
 ## Custom collection classes
@@ -103,9 +95,8 @@ class DataFrame(DXDataFrame, CudfFrameBase):
             divisions = None
             warnings.warn(
                 "Ignoring divisions='quantile'. This option is now "
-                "deprecated. Please use the legacy API and raise an "
-                "issue on github if this feature is necessary."
-                f"\n{_LEGACY_WORKAROUND}",
+                "deprecated. Please raise an issue on github if this "
+                "feature is necessary.",
                 FutureWarning,
             )
 
@@ -135,9 +126,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
             if kwargs.pop("as_index") is not True:
                 raise NotImplementedError(
-                    f"{msg} Please reset the index after aggregating, or "
-                    "use the legacy API if `as_index=False` is required.\n"
-                    f"{_LEGACY_WORKAROUND}"
+                    f"{msg} Please reset the index after aggregating."
                 )
             else:
                 warnings.warn(msg, FutureWarning)
@@ -153,19 +142,20 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         )
 
     def to_orc(self, *args, **kwargs):
-        from dask_cudf._legacy.io import to_orc
+        from dask_cudf.io.orc import to_orc as to_orc_impl
 
-        return to_orc(self, *args, **kwargs)
-        # return self.to_legacy_dataframe().to_orc(*args, **kwargs)
+        return to_orc_impl(self, *args, **kwargs)
 
     @staticmethod
     def read_text(*args, **kwargs):
-        from dask_expr import from_legacy_dataframe
+        from dask_cudf.io.text import read_text as read_text_impl
 
-        from dask_cudf._legacy.io.text import read_text as legacy_read_text
+        return read_text_impl(*args, **kwargs)
 
-        ddf = legacy_read_text(*args, **kwargs)
-        return from_legacy_dataframe(ddf)
+    def clip(self, lower=None, upper=None, axis=1):
+        if axis not in (None, 1):
+            raise NotImplementedError("axis not yet supported in clip.")
+        return new_collection(self.expr.clip(lower, upper, 1))
 
 
 class Series(DXSeries, CudfFrameBase):
@@ -186,11 +176,23 @@ class Series(DXSeries, CudfFrameBase):
 
         return StructMethods(self)
 
+    def clip(self, lower=None, upper=None, axis=1):
+        if axis not in (None, 1):
+            raise NotImplementedError("axis not yet supported in clip.")
+        return new_collection(self.expr.clip(lower, upper, 1))
+
 
 class Index(DXIndex, CudfFrameBase):
     pass  # Same as pandas (for now)
 
 
+# dask.dataframe dispatch
+get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
+get_parallel_type.register(cudf.Series, lambda _: Series)
+get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+
+
+# dask_expr dispatch (might go away?)
 get_collection_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_collection_type.register(cudf.Series, lambda _: Series)
 get_collection_type.register(cudf.BaseIndex, lambda _: Index)
@@ -217,8 +219,9 @@ def _create_array_collection_with_meta(expr):
     name = result._name
     meta = result._meta
     divisions = result.divisions
-    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
-        (d,) for d in meta.shape[1:]
+    chunks = (
+        (np.nan,) * (len(divisions) - 1),
+        *tuple((d,) for d in meta.shape[1:]),
     )
     if len(chunks) > 1:
         if isinstance(dsk, HighLevelGraph):
@@ -228,11 +231,11 @@ def _create_array_collection_with_meta(expr):
             layer = dsk
         if isinstance(layer, Blockwise):
             layer.new_axes["j"] = chunks[1][0]
-            layer.output_indices = layer.output_indices + ("j",)
+            layer.output_indices = (*layer.output_indices, "j")
         else:
             suffix = (0,) * (len(chunks) - 1)
             for i in range(len(chunks[0])):
-                layer[(name, i) + suffix] = layer.pop((name, i))
+                layer[(name, i, *suffix)] = layer.pop((name, i))
 
     return da.Array(dsk, name=name, chunks=chunks, meta=meta)
 

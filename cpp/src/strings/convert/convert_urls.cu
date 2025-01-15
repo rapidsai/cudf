@@ -207,7 +207,8 @@ CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
   auto const global_warp_id = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
   auto const local_warp_id  = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
   auto const warp_lane      = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
-  auto const nwarps     = static_cast<size_type>(gridDim.x * blockDim.x / cudf::detail::warp_size);
+  auto const nwarps =
+    static_cast<size_type>(cudf::detail::grid_1d::grid_stride() / cudf::detail::warp_size);
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp.
@@ -293,7 +294,8 @@ CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
   auto const global_warp_id = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
   auto const local_warp_id  = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
   auto const warp_lane      = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
-  auto const nwarps     = static_cast<size_type>(gridDim.x * blockDim.x / cudf::detail::warp_size);
+  auto const nwarps =
+    static_cast<size_type>(cudf::detail::grid_1d::grid_stride() / cudf::detail::warp_size);
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
   // Loop through strings, and assign each string to a warp

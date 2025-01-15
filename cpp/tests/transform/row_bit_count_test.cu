@@ -590,6 +590,7 @@ TEST_F(RowBitCount, EmptyChildColumnInListOfLists)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{32, 32, 32, 32});
 }
 
+namespace {
 struct sum_functor {
   cudf::size_type const* s0;
   cudf::size_type const* s1;
@@ -597,6 +598,7 @@ struct sum_functor {
 
   cudf::size_type operator() __device__(int i) { return s0[i] + s1[i] + s2[i]; }
 };
+}  // namespace
 
 TEST_F(RowBitCount, Table)
 {
