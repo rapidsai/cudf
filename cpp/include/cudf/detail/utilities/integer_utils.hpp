@@ -120,7 +120,7 @@ CUDF_HOST_DEVICE constexpr S div_rounding_up_unsafe(S const& dividend, T const& 
 
 namespace detail {
 template <typename I>
-CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(std::integral_constant<bool, false>,
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(cuda::std::integral_constant<bool, false>,
                                                   I dividend,
                                                   I divisor) noexcept
 {
@@ -130,7 +130,7 @@ CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(std::integral_constant<bool, f
 }
 
 template <typename I>
-CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(std::integral_constant<bool, true>,
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(cuda::std::integral_constant<bool, true>,
                                                   I dividend,
                                                   I divisor) noexcept
 {
