@@ -277,7 +277,7 @@ auto sizes_to_offsets(SizesIterator begin,
   // when computing the individual scan output elements.
   thrust::exclusive_scan(
     rmm::exec_policy(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
-  return last_element.value(stream) - static_cast<LastType>(initial_offset);
+  return last_element.value(stream);
 }
 
 /**
