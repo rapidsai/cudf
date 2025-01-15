@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
+from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -5562,6 +5563,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif hasattr(dataframe, "__dataframe__"):
             # TODO: Probably should be handled in the constructor as
             # this isn't pandas specific
+            assert version.parse(cudf.__version__) < version.parse("25.04.00")
+            warnings.warn(
+                "Support for loading dataframes via the `__dataframe__` interchange "
+                "protocol is deprecated",
+                FutureWarning,
+            )
             return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
@@ -7709,6 +7716,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def __dataframe__(
         self, nan_as_null: bool = False, allow_copy: bool = True
     ):
+        assert version.parse(cudf.__version__) < version.parse("25.04.00")
+        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
         return df_protocol.__dataframe__(
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
