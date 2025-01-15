@@ -344,8 +344,8 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
   __shared__ cudf::size_type words_found;
   __shared__ cudf::size_type output_count;
 
-  namespace cg     = cooperative_groups;
-  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  // namespace cg     = cooperative_groups;
+  // auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
 
   auto const lane_idx     = idx % block_size;  // block.thread_rank();
   constexpr auto no_token = cuda::std::numeric_limits<cudf::size_type>::max();
@@ -357,7 +357,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
     words_found  = 0;
     output_count = 0;
   }
-  block.sync();
+  __syncthreads();
 
   auto first_token = no_token;  // only used by lane_idx==0
   auto const begin = d_str.data();
@@ -377,50 +377,50 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
       start_words[j] = no_token;
       end_words[j]   = no_token;
     }
-    block.sync();  // init 2 lanes/thread above might eliminate this
+    __syncthreads();  // init 2 lanes/thread above might eliminate this
 
-    int last_idx = 0;
+    // int last_idx = 0;
 
     // each thread processes one byte of the d_str;
     // the for-loop has each thread process bytes_per_thread before tokenizing
     for (auto k = lane_idx; k < words_size && itr < end; k += block_size) {
       if ((*itr != ' ') && ((itr == begin) || (*(itr - 1) == ' '))) {
-        last_idx              = (k / 2) + 1;
+        auto last_idx         = (k / 2) + 1;
         start_words[last_idx] = static_cast<cudf::size_type>(thrust::distance(begin, itr));
       }
       if (((itr + 1) == end) || ((itr != begin) && (*itr == ' ') && (*(itr - 1) != ' '))) {
         cudf::size_type const adjust = (*itr != ' ');
-        last_idx                     = (k / 2) + adjust;
+        auto last_idx                = (k / 2) + adjust;
         end_words[last_idx] = static_cast<cudf::size_type>(thrust::distance(begin, itr)) + adjust;
       }
       itr += block_size;
     }
     //__syncthreads(); handled by cg::reduce?
-    last_idx = cg::reduce(block, last_idx, cg::greater<int>{});
+    // last_idx = cg::reduce(block, last_idx, cg::greater<int>{});
 
     if (lane_idx == 0) {
       auto const count = static_cast<int>(thrust::distance(
         start_words,
-        thrust::remove(thrust::seq, start_words, start_words + last_idx + 1, no_token)));
+        thrust::remove(thrust::seq, start_words, start_words + words_size + 1, no_token)));
       words_found      = static_cast<int>(thrust::distance(
-        end_words, thrust::remove(thrust::seq, end_words, end_words + last_idx + 1, no_token)));
+        end_words, thrust::remove(thrust::seq, end_words, end_words + words_size + 1, no_token)));
       // this partial word wraps around for the next iteration
       first_token = (count > words_found) ? start_words[words_found] : no_token;
     }
-    block.sync();
+    __syncthreads();
 
     // compute word lengths
     for (auto k = lane_idx; k < words_found; k += block_size) {
       auto const size = end_words[k] - start_words[k];
       end_words[k]    = min(size, max_word_size);
     }
-    block.sync();
+    __syncthreads();
 
     // convert lengths to offsets; number of values can be larger than block_size
     if (lane_idx == 0) {
       thrust::exclusive_scan(thrust::seq, end_words, end_words + words_found + 1, end_words);
     }
-    block.sync();
+    __syncthreads();
 
     // each thread now tokenizes a single word
     for (auto k = lane_idx; k < words_found; k += block_size) {
@@ -432,7 +432,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
                                              : cudf::string_view{"[UNK]", 5};
       wp_tokenize_fn(word, d_map, d_map2, s_tokens + offset);
     }
-    block.sync();
+    __syncthreads();
 
     if (lane_idx == 0) {
       output_count = static_cast<cudf::size_type>(thrust::distance(
@@ -440,7 +440,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
       output_count = min(output_count, max_tokens - token_count);
     }
     auto out_itr = d_output + token_count;
-    block.sync();
+    __syncthreads();
 
     // copy results to the output
     for (auto k = lane_idx; k < output_count; k += block_size) {
@@ -452,7 +452,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
       token_count += output_count;
       byte_count += block_size * bytes_per_thread;
     }
-    block.sync();
+    __syncthreads();
   }
 
   // fill in remainder of the output
@@ -482,6 +482,7 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
 
   rmm::device_uvector<cudf::size_type> d_token_counts(input.size(), stream);
   rmm::device_uvector<cudf::size_type> d_tokens(input.size() * max_tokens_per_row, stream);
+  thrust::uninitialized_fill(rmm::exec_policy(stream), d_tokens.begin(), d_tokens.end(), no_token);
 
   // launch block per string to compute tokens
   cudf::detail::grid_1d grid{input.size() * block_size, block_size};
@@ -524,6 +525,7 @@ CUDF_KERNEL void tokenize_kernel2(cudf::device_span<int64_t const> d_edges,
   // printf("%ld: (%ld,%ld)\n", idx, d_edges[idx], d_edges[idx + 1]);
   auto word_end = thrust::find(thrust::seq, begin, end, ' ');
   auto size     = static_cast<cudf::size_type>(thrust::distance(begin, word_end));
+  if (size == 0) { return; }
   auto word     = cudf::string_view{begin, size};
   auto d_output = d_tokens + d_edges[idx];
   // print_s(idx, word);
@@ -557,27 +559,33 @@ std::unique_ptr<cudf::column> wordpiece_tokenize2(cudf::strings_column_view cons
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
   auto d_all_edges = [&] {
     rmm::device_uvector<int64_t> d_edges(chars_size / 2, stream);
+    nvtxRangePushA("copy_if_safe");
     auto edges_end = cudf::detail::copy_if_safe(
       thrust::make_counting_iterator<int64_t>(0),
       thrust::counting_iterator<int64_t>(chars_size),
       d_edges.begin(),
       [d_input_chars] __device__(auto idx) {
-        if (idx == 0) { return false; }  // already accounted for
+        if (idx == 0) { return *d_input_chars == ' '; }
         return (d_input_chars[idx] != ' ' && d_input_chars[idx - 1] == ' ');
       },
       stream);
+    stream.synchronize();
+    nvtxRangePop();
 
     auto edges = input.size() + 1 + thrust::distance(d_edges.begin(), edges_end);
     CUDF_EXPECTS(edges < std::numeric_limits<cudf::size_type>::max(),
                  "output exceeds column size limit");
 
     auto d_all_edges = rmm::device_uvector<int64_t>(edges, stream);
+    nvtxRangePushA("thrust::merge");
     thrust::merge(rmm::exec_policy_nosync(stream),
                   input_offsets,  // these need to be adjusted for sliced offset
                   input_offsets + input.size() + 1,
                   d_edges.begin(),
                   edges_end,
                   d_all_edges.begin());
+    stream.synchronize();
+    nvtxRangePop();
     return d_all_edges;
   }();
 
@@ -603,6 +611,7 @@ std::unique_ptr<cudf::column> wordpiece_tokenize2(cudf::strings_column_view cons
         [d_tokens = d_tokens.data()] __device__(auto idx) {
           return static_cast<cudf::size_type>(d_tokens[idx] != no_token);
         }));
+    nvtxRangePushA("segmented_reduce");
     std::size_t temp = 0;
     auto d_out       = d_token_counts.data();
     cub::DeviceSegmentedReduce::Sum(
@@ -617,6 +626,8 @@ std::unique_ptr<cudf::column> wordpiece_tokenize2(cudf::strings_column_view cons
                                     input_offsets,
                                     input_offsets + 1,
                                     stream.value());
+    stream.synchronize();
+    nvtxRangePop();
   }
 
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
@@ -625,7 +636,10 @@ std::unique_ptr<cudf::column> wordpiece_tokenize2(cudf::strings_column_view cons
   auto tokens =
     cudf::make_numeric_column(output_type, total_count, cudf::mask_state::UNALLOCATED, stream, mr);
   auto output = tokens->mutable_view().begin<cudf::size_type>();
+  nvtxRangePushA("thrust::remove_copy");
   thrust::remove_copy(rmm::exec_policy(stream), d_tokens.begin(), d_tokens.end(), output, no_token);
+  stream.synchronize();
+  nvtxRangePop();
 
   return cudf::make_lists_column(input.size(),
                                  std::move(token_offsets),
@@ -640,7 +654,7 @@ namespace {
 CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
                                       cudf::size_type max_tokens,
                                       cudf::size_type* starts,
-                                      cudf::size_type* word_sizes,
+                                      cudf::size_type* ends,
                                       cudf::size_type* word_counts)
 {
   // string per block
@@ -652,7 +666,7 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
   if (d_str.empty()) { return; }
 
   auto const d_start_words = starts + (str_idx * max_tokens);
-  auto const d_word_sizes  = word_sizes + (str_idx * max_tokens);
+  auto const d_end_words   = ends + (str_idx * max_tokens);
 
   constexpr int bytes_per_thread = 6;  // avg 5 chars per word plus space
   constexpr int words_size       = block_size * bytes_per_thread;
@@ -663,8 +677,12 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
   __shared__ cudf::size_type words_found;
   __shared__ cudf::size_type output_count;
 
-  namespace cg     = cooperative_groups;
-  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  namespace cg = cooperative_groups;
+  //__shared__ cg::block_tile_memory<block_size> btm;
+  auto const block = cg::this_thread_block();
+  // auto const tile  = cg::tiled_partition<block_size>(block);
+  using block_reduce = cub::BlockReduce<int, block_size>;
+  __shared__ typename block_reduce::TempStorage tmp_stg;
 
   auto const lane_idx     = idx % block_size;  // block.thread_rank();
   constexpr auto no_token = cuda::std::numeric_limits<cudf::size_type>::max();
@@ -675,8 +693,9 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
     byte_count   = 0;
     words_found  = 0;
     output_count = 0;
+    // printf(">mt=%d, sz=%d\n", max_tokens, d_str.size_bytes());
   }
-  block.sync();
+  block.sync();  // __syncthreads();
 
   auto first_token = no_token;  // only used by lane_idx==0
   auto const begin = d_str.data();
@@ -692,10 +711,9 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
       start_words[j] = no_token;
       end_words[j]   = no_token;
     }
-    block.sync();  // init 2 lanes/thread above might eliminate this
+    __syncthreads();  // init 2 lanes/thread above might eliminate this
 
     int last_idx = 0;
-
     // each thread processes one byte of the d_str;
     // the for-loop has each thread process bytes_per_thread before tokenizing
     for (auto k = lane_idx; k < words_size && itr < end; k += block_size) {
@@ -710,63 +728,43 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
       }
       itr += block_size;
     }
-    //__syncthreads(); handled by cg::reduce?
-    last_idx = cg::reduce(block, last_idx, cg::greater<int>{});
+    //__syncthreads();  // handled by cg::reduce ?
+    // last_idx = cg::reduce(tile, last_idx, cg::greater<int>{}) + 1;
+    last_idx = block_reduce(tmp_stg).Reduce(last_idx, cub::Max()) + 1;
 
     if (lane_idx == 0) {
       auto const count = static_cast<int>(thrust::distance(
-        start_words,
-        thrust::remove(thrust::seq, start_words, start_words + last_idx + 1, no_token)));
+        start_words, thrust::remove(thrust::seq, start_words, start_words + last_idx, no_token)));
       words_found      = static_cast<int>(thrust::distance(
-        end_words, thrust::remove(thrust::seq, end_words, end_words + last_idx + 1, no_token)));
+        end_words, thrust::remove(thrust::seq, end_words, end_words + last_idx, no_token)));
       // this partial word wraps around for the next iteration
       first_token = (count > words_found) ? start_words[words_found] : no_token;
+      // printf(">wf=%d, li=%d\n", words_found, last_idx);
+      output_count = min(words_found, max_tokens - word_count);
     }
-    block.sync();
-
-    // compute word lengths
-    for (auto k = lane_idx; k < words_size; k += block_size) {
-      auto const size = end_words[k] - start_words[k];
-      end_words[k]    = k < words_found ? min(size, max_word_size) : 0;
-    }
-    block.sync();
-
-    // {
-    //   auto size = end_words[lane_idx];
-    //   cg::exclusive_scan(size, size);
-    //   end_words[lane_idx] = size;
-    //   for (auto k = 0; k < words_found / block_size; ++k) {
-    //     auto const prev = end_words[block_size * (k + 1) - 1];
-    //     auto const j    = block_size * (k + 1) + lane_idx;
-    //     size            = prev + end_words[j];
-    //     cg::inclusive_scan(size, size);
-    //     end_words[j] = size;
-    //   }
-    // }
-
-    auto out_words = d_start_words + word_count;
-    auto out_sizes = d_word_sizes + word_count;
-
-    // convert lengths to offsets; number of values can be larger than block_size
-    if (lane_idx == 0) {
-      thrust::exclusive_scan(thrust::seq, end_words, end_words + words_found + 1, end_words);
-      output_count = min(words_found, max_tokens - words_found);
-      word_count += output_count;
-      byte_count += block_size * bytes_per_thread;
-    }
-    block.sync();
+    auto out_starts = d_start_words + word_count;
+    auto out_ends   = d_end_words + word_count;
+    __syncthreads();
 
     // copy results to the output
     for (auto k = lane_idx; k < output_count; k += block_size) {
-      out_words[k] = start_words[k];
-      out_sizes[k] = end_words[k];
+      out_starts[k] = start_words[k];
+      out_ends[k]   = end_words[k];
     }
-    block.sync();
+    //__syncthreads();
+
+    if (lane_idx == 0) {
+      word_count += output_count;
+      // printf(">wc=%d, oc=%d\n", word_count, output_count);
+      byte_count += block_size * bytes_per_thread;
+      // printf(">bc=%d\n", byte_count);
+    }
+    __syncthreads();
   }
 
   // fill in remainder of the output
   auto out_words = d_start_words + word_count;
-  auto out_sizes = d_word_sizes + word_count;
+  auto out_sizes = d_end_words + word_count;
   for (auto k = lane_idx; k < (max_tokens - word_count); k += block_size) {
     out_words[k] = no_token;
     out_sizes[k] = no_token;
@@ -778,7 +776,7 @@ CUDF_KERNEL void find_word_boundaries(cudf::column_device_view const d_strings,
 template <typename MapRefType, typename MapRefType2>
 CUDF_KERNEL void tokenize_kernel3(cudf::column_device_view const d_strings,
                                   cudf::size_type const* d_starts,
-                                  cudf::size_type const* d_offsets,
+                                  cudf::size_type const* d_ends,
                                   cudf::size_type const* d_word_counts,
                                   MapRefType d_map,
                                   MapRefType2 d_map2,
@@ -796,21 +794,23 @@ CUDF_KERNEL void tokenize_kernel3(cudf::column_device_view const d_strings,
   if (d_str.empty()) { return; }
 
   auto const d_output  = d_tokens + (str_idx * max_tokens);
-  auto start_words     = d_starts + (str_idx * max_tokens);
-  auto end_words       = d_offsets + (str_idx * max_tokens);
   auto const words_max = d_word_counts[str_idx];
 
   constexpr int items_per_thread = 6;
-  constexpr int words_size       = block_size * items_per_thread;
-  // extra size needed when token wraps around
+  // constexpr int words_size       = block_size * items_per_thread;
+  //  extra size needed when token wraps around
   constexpr int tokens_size = block_size * items_per_thread + max_word_size;
   __shared__ cudf::size_type s_tokens[tokens_size];
   __shared__ cudf::size_type word_count;
   __shared__ cudf::size_type token_count;
   __shared__ cudf::size_type output_count;
 
-  namespace cg     = cooperative_groups;
-  auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  // namespace cg     = cooperative_groups;
+  // auto const block = cg::tiled_partition<block_size>(cg::this_thread_block());
+  using block_scan = cub::BlockScan<int, block_size>;
+  __shared__ typename block_scan::TempStorage scan_stg;
+  using block_reduce = cub::BlockReduce<int, block_size>;
+  __shared__ typename block_reduce::TempStorage reduce_stg;
 
   auto const lane_idx     = idx % block_size;  // block.thread_rank();
   constexpr auto no_token = cuda::std::numeric_limits<cudf::size_type>::max();
@@ -820,53 +820,63 @@ CUDF_KERNEL void tokenize_kernel3(cudf::column_device_view const d_strings,
     token_count  = 0;
     word_count   = 0;
     output_count = 0;
+    // printf("mt=%d, mw=%d\n", max_tokens, words_max);
   }
-  block.sync();
+  __syncthreads();
 
-  // continue until all bytes have been consumed or the max token count has been reached
+  auto start_words = d_starts + (str_idx * max_tokens);
+  auto end_words   = d_ends + (str_idx * max_tokens);
+
+  // continue until all words have been consumed or the max token count has been reached
   while (token_count < max_tokens && word_count < words_max) {
     // initialize all intermediate results
     s_tokens[lane_idx] = no_token;
     for (auto j = lane_idx + block_size; j < tokens_size; j += block_size) {
       s_tokens[j] = no_token;
     }
-    block.sync();
+    __syncthreads();
 
-    // each thread now tokenizes a single word
-    auto words = min(words_size, words_max - word_count);
-    for (auto k = lane_idx; k < words; k += block_size) {
-      auto const word_pos = start_words[k];
-      auto const offset   = end_words[k];  // these are offsets now
-      if (word_pos == no_token) { continue; }
-      auto const size = end_words[k + 1] - offset;
-      // lookup token(s) for this word and place them in s_tokens
-      auto const word = size < max_word_size ? cudf::string_view{d_str.data() + word_pos, size}
+    auto start  = ((word_count + lane_idx) < words_max) ? start_words[word_count + lane_idx] : 0;
+    auto end    = ((word_count + lane_idx) < words_max) ? end_words[word_count + lane_idx] : 0;
+    auto size   = end - start;
+    auto offset = size < max_word_size ? size : 5;
+    block_scan(scan_stg).ExclusiveSum(offset, offset);
+
+    int words = 0;
+    if (size > 0 && ((offset + size) < tokens_size)) {
+      auto const word = size < max_word_size ? cudf::string_view{d_str.data() + start, size}
                                              : cudf::string_view{"[UNK]", 5};
       wp_tokenize_fn(word, d_map, d_map2, s_tokens + offset);
+      ++words;
     }
-    block.sync();
+    __syncthreads();
+    // auto last_offset = block_reduce(reduce_stg).Reduce(offset, cub::Max());
 
     if (lane_idx == 0) {
-      output_count = static_cast<cudf::size_type>(thrust::distance(
-        s_tokens, thrust::remove(thrust::seq, s_tokens, s_tokens + tokens_size, no_token)));
+      // auto tokens_end = min(last_offset, tokens_size);
+      // output_count = static_cast<cudf::size_type>(thrust::distance(
+      //  s_tokens, thrust::remove(thrust::seq, s_tokens, s_tokens + tokens_size, no_token)));
+      output_count = 81;
+      // printf("oc=%d\n", output_count);
       output_count = min(output_count, max_tokens - token_count);
     }
     auto out_itr = d_output + token_count;
-    block.sync();
+    __syncthreads();
 
     // copy results to the output
     for (auto k = lane_idx; k < output_count; k += block_size) {
       out_itr[k] = s_tokens[k];
     }
 
-    // setup for next chunk of characters
+    words = block_reduce(reduce_stg).Sum(words);
+    // setup for next words
     if (lane_idx == 0) {
       token_count += output_count;
-      word_count += words_size;
-      start_words += words_size;
-      end_words += words_size;
+      // printf("tc=%d, oc=%d\n", token_count, output_count);
+      word_count += words;
+      // printf("wc=%d, words=%d\n", word_count, words);
     }
-    block.sync();
+    __syncthreads();
   }
 
   // fill in remainder of the output
@@ -903,14 +913,11 @@ std::unique_ptr<cudf::column> wordpiece_tokenize3(cudf::strings_column_view cons
   find_word_boundaries<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, max_tokens_per_row, start_words.data(), word_sizes.data(), word_counts.data());
 
-  // compute scan-by-key on word_sizes to convert them to offsets
-
   auto d_tokens = rmm::device_uvector<cudf::size_type>(max_size, stream);
   auto map_ref  = vocabulary._impl->get_map_ref();
   auto map2_ref = vocabulary._impl->get_map2_ref();
 
   // resolve tokens and store them in d_tokens
-
   auto d_token_counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
 
   // cudf::detail::grid_1d grid{input.size() * block_size, block_size};
