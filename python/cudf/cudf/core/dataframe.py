@@ -8146,12 +8146,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         the data and mask buffers of the pylibcudf columns, so the newly created
         object is not tied to the lifetime of the original pylibcudf.Table.
         """
-        if (
-            not isinstance(metadata, dict)
-            or len(metadata) == 0
-            or len(metadata) > 2
-            or "columns" not in metadata
-            or (len(metadata) == 2 and {"columns", "index"} != set(metadata))
+        if not (
+            isinstance(metadata, dict)
+            and 1 <= len(metadata) <= 2
+            and "columns" in metadata
+            and (len(metadata) != 2 or {"columns", "index"} == set(metadata))
         ):
             raise ValueError(
                 "Must at least pass metadata dict with column names and optionally indices only"
@@ -8164,7 +8163,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for name, col in zip(metadata["columns"], columns)
             },
-            index=metadata["index"],
+            index=metadata.get("index"),
         )
         return df
 

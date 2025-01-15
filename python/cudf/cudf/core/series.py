@@ -3871,19 +3871,16 @@ class Series(SingleColumnFrame, IndexedFrame):
         name = None
         index = None
         if metadata is not None:
-            if (
-                not isinstance(metadata, dict)
-                or len(metadata) > 2
-                or (
-                    not set(metadata).issubset({"name", "index"})
-                    and len(metadata) > 0
-                )
+            if not (
+                isinstance(metadata, dict)
+                and 1 <= len(metadata) <= 2
+                and set(metadata).issubset({"name", "index"})
             ):
                 raise ValueError(
                     "Metadata dict must only contain name or index"
                 )
-            name = (metadata.get("name", None),)
-            index = (metadata.get("index", None),)
+            name = metadata.get("name")
+            index = metadata.get("index")
         return cls._from_column(
             cudf.core.column.ColumnBase.from_pylibcudf(
                 col, data_ptr_exposed=True
