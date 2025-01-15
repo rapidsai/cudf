@@ -787,11 +787,6 @@ add_library(
   src/utilities/type_dispatcher.cpp
 )
 
-set_source_files_properties(
-  src/join/mixed_join_size_kernel.cu src/join/mixed_join_size_kernel_nulls.cu
-  PROPERTIES COMPILE_OPTIONS $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
-)
-
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
 set_source_files_properties(
