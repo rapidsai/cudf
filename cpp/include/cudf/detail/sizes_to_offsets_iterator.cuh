@@ -262,7 +262,7 @@ template <typename SizesIterator, typename OffsetsIterator>
 auto sizes_to_offsets(SizesIterator begin,
                       SizesIterator end,
                       OffsetsIterator result,
-                      uint64_t initial_offset,
+                      int64_t initial_offset,
                       rmm::cuda_stream_view stream)
 {
   using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
@@ -277,7 +277,7 @@ auto sizes_to_offsets(SizesIterator begin,
   // when computing the individual scan output elements.
   thrust::exclusive_scan(
     rmm::exec_policy(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
-  return last_element.value(stream);
+  return last_element.value(stream) - static_cast<LastType>(initial_offset);
 }
 
 /**
