@@ -3,34 +3,22 @@
 import warnings
 from functools import cached_property
 
-try:
-    from dask.dataframe.dask_expr import (
-        DataFrame as DXDataFrame,
-        FrameBase,
-        Index as DXIndex,
-        Series as DXSeries,
-        get_collection_type,
-    )
-    from dask.dataframe.dask_expr._collection import new_collection
-    from dask.dataframe.dask_expr._util import _raise_if_object_series
-except ImportError:
-    # TODO: Remove when pinned to dask>2024.12.1
-    from dask_expr import (
-        DataFrame as DXDataFrame,
-        FrameBase,
-        Index as DXIndex,
-        Series as DXSeries,
-        get_collection_type,
-    )
-    from dask_expr._collection import new_collection
-    from dask_expr._util import _raise_if_object_series
-
 from dask import config
 from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.dispatch import get_parallel_type
 from dask.typing import no_default
 
 import cudf
+
+from dask_cudf._expr import (
+    DXDataFrame,
+    DXIndex,
+    DXSeries,
+    FrameBase,
+    _raise_if_object_series,
+    get_collection_type,
+    new_collection,
+)
 
 ##
 ## Custom collection classes

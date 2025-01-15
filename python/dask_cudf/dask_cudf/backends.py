@@ -575,11 +575,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def to_backend(data, **kwargs):
-        try:
-            from dask.dataframe.dask_expr import new_collection
-        except ImportError:
-            # TODO: Remove when pinned to dask>2024.12.1
-            from dask_expr import new_collection
+        from dask_cudf._expr import new_collection
         from dask_cudf._expr.expr import ToCudfBackend
 
         return new_collection(ToCudfBackend(data, kwargs))
@@ -593,11 +589,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         columns=None,
         constructor=cudf.DataFrame,
     ):
-        try:
-            from dask.dataframe.dask_expr import from_dict
-        except ImportError:
-            # TODO: Remove when pinned to dask>2024.12.1
-            from dask_expr import from_dict
+        from dask_cudf._expr import from_dict
 
         return _default_backend(
             from_dict,
