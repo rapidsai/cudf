@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -658,6 +658,33 @@ void CompactProtocolReader::read(ColumnChunk* c)
   function_builder(this, op);
 }
 
+void CompactProtocolReader::read(BloomFilterAlgorithm* alg)
+{
+  auto op = std::make_tuple(parquet_field_union_enumerator(1, alg->algorithm));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(BloomFilterHash* hash)
+{
+  auto op = std::make_tuple(parquet_field_union_enumerator(1, hash->hash));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(BloomFilterCompression* comp)
+{
+  auto op = std::make_tuple(parquet_field_union_enumerator(1, comp->compression));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(BloomFilterHeader* bf)
+{
+  auto op = std::make_tuple(parquet_field_int32(1, bf->num_bytes),
+                            parquet_field_struct(2, bf->algorithm),
+                            parquet_field_struct(3, bf->hash),
+                            parquet_field_struct(4, bf->compression));
+  function_builder(this, op);
+}
+
 void CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
   using optional_size_statistics =
@@ -665,7 +692,9 @@ void CompactProtocolReader::read(ColumnChunkMetaData* c)
   using optional_list_enc_stats =
     parquet_field_optional<std::vector<PageEncodingStats>,
                            parquet_field_struct_list<PageEncodingStats>>;
-  auto op = std::make_tuple(parquet_field_enum<Type>(1, c->type),
+  using optional_i64 = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_i32 = parquet_field_optional<int32_t, parquet_field_int32>;
+  auto op            = std::make_tuple(parquet_field_enum<Type>(1, c->type),
                             parquet_field_enum_list(2, c->encodings),
                             parquet_field_string_list(3, c->path_in_schema),
                             parquet_field_enum<Compression>(4, c->codec),
@@ -677,6 +706,8 @@ void CompactProtocolReader::read(ColumnChunkMetaData* c)
                             parquet_field_int64(11, c->dictionary_page_offset),
                             parquet_field_struct(12, c->statistics),
                             optional_list_enc_stats(13, c->encoding_stats),
+                            optional_i64(14, c->bloom_filter_offset),
+                            optional_i32(15, c->bloom_filter_length),
                             optional_size_statistics(16, c->size_statistics));
   function_builder(this, op);
 }

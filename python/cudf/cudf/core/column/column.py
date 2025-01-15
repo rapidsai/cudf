@@ -2413,7 +2413,11 @@ def as_column(
                 and pa.types.is_integer(arbitrary.type)
                 and arbitrary.null_count > 0
             ):
+                # TODO: Need to re-visit this cast and fill_null
+                # calls while addressing the following issue:
+                # https://github.com/rapidsai/cudf/issues/14149
                 arbitrary = arbitrary.cast(pa.float64())
+                arbitrary = pc.fill_null(arbitrary, np.nan)
             if (
                 cudf.get_option("default_integer_bitwidth")
                 and pa.types.is_integer(arbitrary.type)

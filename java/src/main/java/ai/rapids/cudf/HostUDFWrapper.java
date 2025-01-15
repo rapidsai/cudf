@@ -24,8 +24,10 @@ package ai.rapids.cudf;
  * <p>
  * A new host UDF aggregation implementation must extend this class and override the
  * {@code hashCode} and {@code equals} methods for such purposes.
+ * In addition, since this class implements {@code AutoCloseable}, the {@code close} method must
+ * also be overridden to automatically delete the native UDF instance upon class destruction.
  */
-public abstract class HostUDFWrapper {
+public abstract class HostUDFWrapper implements AutoCloseable {
   public final long udfNativeHandle;
 
   public HostUDFWrapper(long udfNativeHandle) {

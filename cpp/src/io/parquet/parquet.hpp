@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,10 +382,60 @@ struct ColumnChunkMetaData {
   // Set of all encodings used for pages in this column chunk. This information can be used to
   // determine if all data pages are dictionary encoded for example.
   std::optional<std::vector<PageEncodingStats>> encoding_stats;
+  // Byte offset from beginning of file to Bloom filter data.
+  std::optional<int64_t> bloom_filter_offset;
+  // Size of Bloom filter data including the serialized header, in bytes. Added in 2.10 so readers
+  // may not read this field from old files and it can be obtained after the BloomFilterHeader has
+  // been deserialized. Writers should write this field so readers can read the bloom filter in a
+  // single I/O.
+  std::optional<int32_t> bloom_filter_length;
   // Optional statistics to help estimate total memory when converted to in-memory representations.
   // The histograms contained in these statistics can also be useful in some cases for more
   // fine-grained nullability/list length filter pushdown.
   std::optional<SizeStatistics> size_statistics;
+};
+
+/**
+ * @brief The algorithm used in bloom filter
+ */
+struct BloomFilterAlgorithm {
+  // Block-based Bloom filter.
+  enum class Algorithm { UNDEFINED, SPLIT_BLOCK };
+  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
+};
+
+/**
+ * @brief The hash function used in Bloom filter
+ */
+struct BloomFilterHash {
+  // xxHash_64
+  enum class Hash { UNDEFINED, XXHASH };
+  Hash hash{Hash::XXHASH};
+};
+
+/**
+ * @brief The compression used in the bloom filter
+ */
+struct BloomFilterCompression {
+  enum class Compression { UNDEFINED, UNCOMPRESSED };
+  Compression compression{Compression::UNCOMPRESSED};
+};
+
+/**
+ * @brief Bloom filter header struct
+ *
+ * The bloom filter data of a column chunk stores this header at the beginning
+ * following by the filter bitset.
+ */
+struct BloomFilterHeader {
+  // The size of bitset in bytes
+  int32_t num_bytes;
+  // The algorithm for setting bits
+  BloomFilterAlgorithm algorithm;
+  // The hash function used for bloom filter
+  BloomFilterHash hash;
+  // The compression used in the bloom filter
+  BloomFilterCompression compression;
 };
 
 /**
