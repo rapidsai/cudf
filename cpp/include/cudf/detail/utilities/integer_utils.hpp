@@ -158,9 +158,9 @@ CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(std::integral_constant<bool, t
  * the non-integral division `dividend/divisor`
  */
 template <typename I>
-constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
 {
-  using i_is_a_signed_type = std::integral_constant<bool, std::is_signed_v<I>>;
+  using i_is_a_signed_type = cuda::std::integral_constant<bool, cuda::std::is_signed_v<I>>;
   return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 
