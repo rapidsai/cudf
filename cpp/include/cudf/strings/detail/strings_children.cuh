@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,15 +129,13 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets_column->mutable_view().template data<int32_t>();
 
-  auto const data = device_span<cudf::size_type>{begin, static_cast<std::size_t>(lcount)};
-
   // The number of offsets is strings_count+1 so to build the offsets from the sizes
   // using exclusive-scan technically requires strings_count+1 input values even though
   // the final input value is never used.
   // The input iterator is wrapped here to allow the 'last value' to be safely read.
   auto map_fn = cuda::proclaim_return_type<size_type>(
-    [data, strings_count] __device__(size_type idx) -> size_type {
-      return idx < strings_count ? data[idx] : size_type{0};
+    [begin, strings_count] __device__(size_type idx) -> size_type {
+      return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
     });
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
