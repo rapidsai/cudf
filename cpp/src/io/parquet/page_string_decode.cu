@@ -931,4 +931,108 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   }
 }
 
+// Functor used to set the `temp_string_buf` pointer for each page. `data` points to a buffer
+// to be used when skipping rows in the delta_byte_array decoder. Given a page and an offset,
+// set the page's `temp_string_buf` to be `data + offset`.
+struct page_tform_functor {
+  uint8_t* const data;
+
+  __device__ PageInfo operator()(PageInfo& page, int64_t offset)
+  {
+    if (page.temp_string_size != 0) { page.temp_string_buf = data + offset; }
+    return page;
+  }
+};
+
+}  // anonymous namespace
+
+/**
+ * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
+ */
+void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                            cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                            rmm::device_uvector<uint8_t>& temp_string_buf,
+                            size_t min_row,
+                            size_t num_rows,
+                            int level_type_size,
+                            uint32_t kernel_mask,
+                            rmm::cuda_stream_view stream)
+{
+  dim3 const dim_block(preprocess_block_size, 1);
+  dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
+  if (level_type_size == 1) {
+    gpuComputeStringPageBounds<uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+  } else {
+    gpuComputeStringPageBounds<uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+  }
+
+  // kernel mask may contain other kernels we don't need to count
+  int const count_mask = kernel_mask & STRINGS_MASK;
+  int const nkernels   = std::bitset<32>(count_mask).count();
+  auto const streams   = cudf::detail::fork_streams(stream, nkernels);
+
+  int s_idx = 0;
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
+    dim3 dim_delta(delta_preproc_block_size, 1);
+    gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows);
+  }
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
+    dim3 dim_delta(delta_length_block_size, 1);
+    gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows);
+  }
+  if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
+    gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows);
+  }
+
+  // synchronize the streams
+  cudf::detail::join_streams(streams, stream);
+
+  // check for needed temp space for DELTA_BYTE_ARRAY
+  auto const need_sizes =
+    thrust::any_of(rmm::exec_policy(stream),
+                   pages.device_begin(),
+                   pages.device_end(),
+                   cuda::proclaim_return_type<bool>(
+                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
+
+  if (need_sizes) {
+    // sum up all of the temp_string_sizes
+    auto const page_sizes = cuda::proclaim_return_type<int64_t>(
+      [] __device__(PageInfo const& page) { return page.temp_string_size; });
+    auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                     pages.device_begin(),
+                                                     pages.device_end(),
+                                                     page_sizes,
+                                                     0L,
+                                                     thrust::plus<int64_t>{});
+
+    // now do an exclusive scan over the temp_string_sizes to get offsets for each
+    // page's chunk of the temp buffer
+    rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
+    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
+                                     pages.device_begin(),
+                                     pages.device_end(),
+                                     page_string_offsets.begin(),
+                                     page_sizes,
+                                     0L,
+                                     thrust::plus<int64_t>{});
+
+    // allocate the temp space
+    temp_string_buf.resize(total_size, stream);
+
+    // now use the offsets array to set each page's temp_string_buf pointers
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      pages.device_begin(),
+                      pages.device_end(),
+                      page_string_offsets.begin(),
+                      pages.device_begin(),
+                      page_tform_functor{temp_string_buf.data()});
+  }
+}
+
 }  // namespace cudf::io::parquet::detail
