@@ -116,7 +116,7 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
  * atomically update the initial string offset to be used during large string column construction
  */
 template <int block_size>
-__device__ void compute_string_offsets(page_state_s* const state,
+__device__ void compute_string_offsets(page_state_s const* const state,
                                        uint8_t* data_out,
                                        size_t* initial_str_offsets,
                                        int32_t chunk_idx,
