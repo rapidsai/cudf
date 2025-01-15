@@ -13,7 +13,6 @@ from pylibcudf.libcudf.column.column_view cimport (
 from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.device_buffer cimport device_buffer
 
-cdef dtype_from_lists_column_view(column_view cv)
 cdef dtype_from_column_view(column_view cv)
 
 cdef class Column:
@@ -42,5 +41,3 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(column_view, object)
-
-    cdef size_type compute_null_count(self) except? 0
