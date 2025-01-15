@@ -127,7 +127,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
       return size + cudf::strings_column_view{column}.chars_size(cudf::get_default_stream());
     });
 
-  // Create expression trees
+  // Create expression tree
   cudf::ast::tree tree;
 
   // Create column references
