@@ -336,6 +336,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/Add.cu
@@ -515,6 +516,7 @@ add_library(
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
+  src/io/parquet/bloom_filter_reader.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
