@@ -2598,7 +2598,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
 
     ProtobufWriter pbw;
     pbw.write(sf);
-    if (_compression != compression_type::NONE) {
+    if (_compression == compression_type::NONE) {
       _out_sink->host_write(pbw.data(), pbw.size());
       stripe.footerLength = pbw.size();
     } else {
