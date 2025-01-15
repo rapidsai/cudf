@@ -530,7 +530,7 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 struct EncPage;
 
 // convert Encoding to a mask value
-constexpr uint32_t encoding_to_mask(Encoding encoding)
+__device__ constexpr uint32_t encoding_to_mask(Encoding encoding)
 {
   return 1 << static_cast<uint32_t>(encoding);
 }
