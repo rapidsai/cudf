@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1030,7 +1030,6 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
-  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
@@ -1043,7 +1042,7 @@ aggregate_reader_metadata::select_row_groups(
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
     filtered_row_group_indices = filter_row_groups(
-      sources, row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());

@@ -1,7 +1,6 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
-import decimal
 import glob
 import hashlib
 import math
@@ -4370,58 +4369,4 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
     assert_eq(
         cudf.read_parquet([buf2, buf1]),
         cudf.concat([df2, df1]).reset_index(drop=True),
-    )
-
-
-@pytest.mark.parametrize(
-    "stats_fname,bloom_filter_fname",
-    [
-        (
-            "mixed_card_ndv_100_chunk_stats.snappy.parquet",
-            "mixed_card_ndv_100_bf_fpp0.1_nostats.snappy.parquet",
-        ),
-        (
-            "mixed_card_ndv_500_chunk_stats.snappy.parquet",
-            "mixed_card_ndv_500_bf_fpp0.1_nostats.snappy.parquet",
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "predicate,expected_len",
-    [
-        ([[("str", "==", "FINDME")], [("fp64", "==", float(500))]], 2),
-        ([("fixed_pt", "==", decimal.Decimal(float(500)))], 2),
-        ([[("ui32", "==", np.uint32(500)), ("str", "==", "FINDME")]], 2),
-        ([[("str", "==", "FINDME")], [("ui32", ">=", np.uint32(0))]], 1000),
-        (
-            [
-                ("str", "!=", "FINDME"),
-                ("fixed_pt", "==", decimal.Decimal(float(500))),
-            ],
-            0,
-        ),
-    ],
-)
-def test_parquet_bloom_filters(
-    datadir, stats_fname, bloom_filter_fname, predicate, expected_len
-):
-    fname_stats = datadir / stats_fname
-    fname_bf = datadir / bloom_filter_fname
-    df_stats = cudf.read_parquet(fname_stats, filters=predicate).reset_index(
-        drop=True
-    )
-    df_bf = cudf.read_parquet(fname_bf, filters=predicate).reset_index(
-        drop=True
-    )
-
-    # Check if tables equal
-    assert_eq(
-        df_stats,
-        df_bf,
-    )
-
-    # Check for table length
-    assert_eq(
-        len(df_stats),
-        expected_len,
     )
