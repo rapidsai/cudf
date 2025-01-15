@@ -582,11 +582,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
   // initial string buffer offset to be used during large string column construction
-  compute_string_offsets<decode_block_size>(s,
-                                            nesting_info_base[leaf_level_index].data_out,
-                                            initial_str_offsets,
-                                            pages[page_idx].chunk_idx,
-                                            nesting_info_base[leaf_level_index].value_count);
+  convert_string_lengths_to_offsets<decode_block_size>(
+    s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -740,11 +737,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
   // initial string buffer offset to be used during large string column construction
-  compute_string_offsets<decode_block_size>(s,
-                                            nesting_info_base[leaf_level_index].data_out,
-                                            initial_str_offsets,
-                                            pages[page_idx].chunk_idx,
-                                            nesting_info_base[leaf_level_index].value_count);
+  convert_string_lengths_to_offsets<decode_block_size>(
+    s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
 
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;

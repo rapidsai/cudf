@@ -36,10 +36,8 @@ namespace cg = cooperative_groups;
 namespace {
 
 constexpr int preprocess_block_size    = 512;
-constexpr int decode_block_size        = 128;
 constexpr int delta_preproc_block_size = 64;
 constexpr int delta_length_block_size  = 32;
-constexpr int rolling_buf_size         = decode_block_size * 2;
 constexpr int preproc_buf_size         = LEVEL_DECODE_BUF_SIZE;
 
 /**
@@ -866,7 +864,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
                           chunks,
                           min_row,
                           num_rows,
-                          mask_filter{decode_kernel_mask::STRING},
+                          mask_filter{STRINGS_MASK_NON_DELTA},
                           page_processing_stage::STRING_BOUNDS)) {
     return;
   }
@@ -1192,7 +1190,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
     gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }
-  if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
+  if (BitAnd(kernel_mask, STRINGS_MASK_NON_DELTA) != 0) {
     gpuComputePageStringSizes<<<dim_grid, dim_block, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }

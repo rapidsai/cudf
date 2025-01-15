@@ -64,20 +64,6 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
     return indices
 
 
-def _compute_levels_and_codes(
-    data: MutableMapping,
-) -> tuple[list[cudf.Index], list[column.ColumnBase]]:
-    """Return MultiIndex level and codes from a ColumnAccessor-like mapping."""
-    levels = []
-    codes = []
-    for col in data.values():
-        code, cats = factorize(col)
-        codes.append(column.as_column(code.astype(np.int64)))
-        levels.append(cats)
-
-    return levels, codes
-
-
 class MultiIndex(Frame, BaseIndex, NotIterable):
     """A multi-level or hierarchical index.
 
@@ -203,8 +189,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
         super().__init__(ColumnAccessor(source_data))
-        self._levels = new_levels
-        self._codes = new_codes
+        self._levels: None | list[cudf.Index] = new_levels
+        self._codes: None | list[column.ColumnBase] = new_codes
         self._name = None
         self.names = names
 
@@ -341,6 +327,26 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         return self._set_names(names=names, inplace=inplace)
 
+    def _maybe_materialize_codes_and_levels(self: Self) -> Self:
+        """
+        Set self._codes and self._levels from self._columns _when_ needed.
+
+        Factorization of self._columns to self._codes and self._levels is delayed
+        due to being expensive and sometimes unnecessary for operations.
+
+        MultiIndex methods are responsible for calling this when needed.
+        """
+        if self._levels is None and self._codes is None:
+            levels = []
+            codes = []
+            for col in self._data.values():
+                code, cats = factorize(col)
+                codes.append(column.as_column(code.astype(np.int64)))
+                levels.append(cats)
+            self._levels = levels
+            self._codes = codes
+        return self
+
     @classmethod
     @_performance_tracking
     def _from_data(
@@ -350,12 +356,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     ) -> Self:
         """
         Use when you have a ColumnAccessor-like mapping but no codes and levels.
+
+        Preferable to use _simple_new if you have codes and levels.
         """
-        levels, codes = _compute_levels_and_codes(data)
         return cls._simple_new(
             data=ColumnAccessor(data),
-            levels=levels,
-            codes=codes,
+            levels=None,
+            codes=None,
             names=pd.core.indexes.frozen.FrozenList(data.keys()),
             name=name,
         )
@@ -371,8 +378,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def _simple_new(
         cls,
         data: ColumnAccessor,
-        levels: list[cudf.Index],
-        codes: list[column.ColumnBase],
+        levels: None | list[cudf.Index],
+        codes: None | list[column.ColumnBase],
         names: pd.core.indexes.frozen.FrozenList,
         name: Any = None,
     ) -> Self:
@@ -457,10 +464,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             names = pd.core.indexes.frozen.FrozenList(names)
         else:
             names = self.names
+        if self._levels is not None:
+            levels: None | list[cudf.Index] = [
+                idx.copy(deep=deep) for idx in self._levels
+            ]
+        else:
+            levels = self._levels
+        if self._codes is not None:
+            codes: None | list[column.ColumnBase] = [
+                code.copy(deep=deep) for code in self._codes
+            ]
+        else:
+            codes = self._codes
         return type(self)._simple_new(
             data=self._data.copy(deep=deep),
-            levels=[idx.copy(deep=deep) for idx in self._levels],
-            codes=[code.copy(deep=deep) for code in self._codes],
+            levels=levels,
+            codes=codes,
             names=names,
             name=name,
         )
@@ -529,8 +548,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         >>> midx.codes
         FrozenList([[0, 1, 2], [0, 1, 2]])
         """
+        self._maybe_materialize_codes_and_levels()
         return pd.core.indexes.frozen.FrozenList(
-            col.values for col in self._codes
+            col.values
+            for col in self._codes  # type: ignore[union-attr]
         )
 
     def get_slice_bound(self, label, side):
@@ -572,8 +593,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         >>> midx.levels
         [Index([1, 2, 3], dtype='int64', name='a'), Index([10, 11, 12], dtype='int64', name='b')]
         """
+        self._maybe_materialize_codes_and_levels()
         return [
-            idx.rename(name) for idx, name in zip(self._levels, self.names)
+            idx.rename(name)
+            for idx, name in zip(self._levels, self.names)  # type: ignore[arg-type]
         ]
 
     @property  # type: ignore
@@ -953,7 +976,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ca = self._data._from_columns_like_self(
             (col.take(indexer) for col in self._columns), verify=False
         )
-        codes = [code.take(indexer) for code in self._codes]
+        if self._codes is not None:
+            codes = [code.take(indexer) for code in self._codes]
+        else:
+            codes = self._codes
         result = type(self)._simple_new(
             data=ca, codes=codes, levels=self._levels, names=self.names
         )
@@ -1124,6 +1150,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @classmethod
     @_performance_tracking
     def _concat(cls, objs) -> Self:
+        # TODO: This will discard previously computed self._codes and self._levels.
+        # Try preserving them if defined.
         source_data = [o.to_frame(index=False) for o in objs]
 
         # TODO: Verify if this is really necessary or if we can rely on
@@ -1484,15 +1512,17 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         name_i = self._column_names[i] if isinstance(i, int) else i
         name_j = self._column_names[j] if isinstance(j, int) else j
+        to_swap = {name_i, name_j}
         new_data = {}
+        # TODO: Preserve self._codes and self._levels if set
         for k, v in self._column_labels_and_values:
-            if k not in (name_i, name_j):
+            if k not in to_swap:
                 new_data[k] = v
             elif k == name_i:
                 new_data[name_j] = self._data[name_j]
             elif k == name_j:
                 new_data[name_i] = self._data[name_i]
-        midx = MultiIndex._from_data(new_data)
+        midx = type(self)._from_data(new_data)
         if all(n is None for n in self.names):
             midx = midx.set_names(self.names)
         return midx
@@ -1569,7 +1599,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(new_data) == 1:
             return cudf.core.index._index_from_data(new_data)
         else:
-            mi = MultiIndex._from_data(new_data)
+            mi = type(self)._from_data(new_data)
             mi.names = new_names
             return mi
 
@@ -1579,12 +1609,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     ) -> pd.MultiIndex:
         # cudf uses np.iinfo(SIZE_TYPE_DTYPE).min as missing code
         # pandas uses -1 as missing code
+        self._maybe_materialize_codes_and_levels()
         pd_codes = (
             code.find_and_replace(
                 column.as_column(np.iinfo(SIZE_TYPE_DTYPE).min, length=1),
                 column.as_column(-1, length=1),
             )
-            for code in self._codes
+            for code in self._codes  # type: ignore[union-attr]
         )
         return pd.MultiIndex(
             levels=[
@@ -1683,7 +1714,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 f"{type(null_position)}"
             )
         return sorting.is_sorted(
-            [*self._columns], ascending=ascending, null_position=null_position
+            self._columns,  # type: ignore[arg-type]
+            ascending=ascending,
+            null_position=null_position,
         )
 
     @cached_property  # type: ignore
@@ -1762,8 +1795,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         usage = sum(col.memory_usage for col in self._columns)
-        usage += sum(level.memory_usage(deep=deep) for level in self._levels)
-        usage += sum(code.memory_usage for code in self._codes)
+        if self._levels is not None:
+            usage += sum(
+                level.memory_usage(deep=deep) for level in self._levels
+            )
+        if self._codes is not None:
+            usage += sum(code.memory_usage for code in self._codes)
         return usage
 
     @_performance_tracking
@@ -1820,8 +1857,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                    )
         """
         if isinstance(other, (list, tuple)):
-            to_concat = [self]
-            to_concat.extend(other)
+            to_concat = [self, *other]
         else:
             to_concat = [self, other]
 
@@ -1833,7 +1869,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     f"found object of type: {type(obj)}"
                 )
 
-        return MultiIndex._concat(to_concat)
+        return type(self)._concat(to_concat)
 
     @_performance_tracking
     def __array_function__(self, func, types, args, kwargs):
@@ -2010,7 +2046,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return self.rename(names)
         return self
 
-    def _maybe_match_names(self, other):
+    def _maybe_match_names(self, other) -> list[Hashable]:
         """
         Try to find common names to attach to the result of an operation
         between a and b. Return a consensus list of names if they match
@@ -2103,7 +2139,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         res = super()._copy_type_metadata(other)
         if isinstance(other, MultiIndex):
             res._names = other._names
-        self._levels, self._codes = _compute_levels_and_codes(res._data)
         return res
 
     @_performance_tracking
@@ -2167,6 +2202,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
-                super()._repeat([*self._columns], repeats, axis)
+                super()._repeat(self._columns, repeats, axis)
             )
         )
