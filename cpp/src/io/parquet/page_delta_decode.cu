@@ -580,28 +580,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Number of values decoded from this page
-  int value_count = nesting_info_base[leaf_level_index].value_count;
-
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
-
-  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
-  // latter case, offsets will be computed during string column creation.
-  if (value_count > 0) {
-    // Compute offsets if this is not a large strings col
-    if (not s->col.is_large_string_col) {
-      auto const offptr =
-        reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-      block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
-    }
-    // Update the initial string offset to be added to large string column offsets
-    else {
-      update_initial_string_offset(
-        initial_str_offsets, pages[page_idx].chunk_idx, s->page.str_offset);
-    }
-  }
+  // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
+  // initial string buffer offset to be used during large string column construction
+  compute_string_offsets<decode_block_size>(s,
+                                            nesting_info_base[leaf_level_index].data_out,
+                                            initial_str_offsets,
+                                            pages[page_idx].chunk_idx,
+                                            nesting_info_base[leaf_level_index].value_count);
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -753,28 +738,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Number of values decoded from this page
-  int value_count = nesting_info_base[leaf_level_index].value_count;
-
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
-
-  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
-  // latter case, offsets will be computed during string column creation.
-  if (value_count > 0) {
-    // Compute offsets if this is not a large strings col
-    if (not s->col.is_large_string_col) {
-      auto const offptr =
-        reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-      block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
-    }
-    // Update the initial string offset to be added to large string column offsets
-    else {
-      update_initial_string_offset(
-        initial_str_offsets, pages[page_idx].chunk_idx, s->page.str_offset);
-    }
-  }
+  // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
+  // initial string buffer offset to be used during large string column construction
+  compute_string_offsets<decode_block_size>(s,
+                                            nesting_info_base[leaf_level_index].data_out,
+                                            initial_str_offsets,
+                                            pages[page_idx].chunk_idx,
+                                            nesting_info_base[leaf_level_index].value_count);
 
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;

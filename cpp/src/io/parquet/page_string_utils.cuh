@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "page_decode.cuh"
+
 #include <cudf/strings/detail/gather.cuh>
 
 #include <cuda/atomic>
@@ -110,16 +112,36 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
 }
 
 /**
- * @brief Atomically update the initial string offset for large string columns.
+ * @brief Converts string sizes to offsets if this is not a large string column. Otherwise,
+ * atomically update the initial string offset to be used during large string column construction
  */
-inline __device__ void update_initial_string_offset(size_t* initial_str_offsets,
-                                                    int32_t chunk_idx,
-                                                    size_t str_offset)
+template <int block_size>
+__device__ void compute_string_offsets(page_state_s* const state,
+                                       uint8_t* data_out,
+                                       size_t* initial_str_offsets,
+                                       int32_t chunk_idx,
+                                       int32_t value_count)
 {
-  if (threadIdx.x == 0) {
-    cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
-      initial_str_offsets[chunk_idx]};
-    initial_str_offsets_ref.fetch_min(str_offset, cuda::std::memory_order_relaxed);
+  auto const has_repetition = state->col.max_level[level_type::REPETITION] > 0;
+
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (not has_repetition) { value_count -= state->first_row; }
+
+  // Convert the array of lengths into offsets if this not a large string column.
+  if (value_count > 0) {
+    // Compute final string offsets if this is not a large strings col
+    if (not state->col.is_large_string_col) {
+      auto const offptr = reinterpret_cast<size_type*>(data_out);
+      block_excl_sum<block_size>(offptr, value_count, state->page.str_offset);
+    }
+    // Atomically update the initial string offset if this is a large string column. This initial
+    // offset will be used to compute (64-bit) offsets during large string column construction.
+    else if (!threadIdx.x) {
+      cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
+        initial_str_offsets[chunk_idx]};
+      initial_str_offsets_ref.fetch_min(state->page.str_offset, cuda::std::memory_order_relaxed);
+    }
   }
 }
 
