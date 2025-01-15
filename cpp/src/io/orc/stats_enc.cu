@@ -22,6 +22,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
+
 namespace cudf::io::orc::gpu {
 
 using strings::detail::fixed_point_string_size;

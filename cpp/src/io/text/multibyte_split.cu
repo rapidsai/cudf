@@ -184,7 +184,7 @@ CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   auto const thread_input_offset =
     tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
   auto const thread_input_size =
-    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
+    cuda::std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
