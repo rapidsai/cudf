@@ -603,9 +603,15 @@ struct EncColumnChunk {
   uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 
-  [[nodiscard]] constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_dict_pages() const
+  {
+    return use_dictionary ? 1 : 0;
+  }
 
-  [[nodiscard]] constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_data_pages() const
+  {
+    return num_pages - num_dict_pages();
+  }
 };
 
 /**

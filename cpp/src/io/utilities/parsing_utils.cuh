@@ -213,9 +213,9 @@ CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__device__ cuda::std::optional<T> parse_numeric(char const* begin,
-                                                char const* end,
-                                                parse_options_view const& opts)
+CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
+                                                      char const* end,
+                                                      parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;

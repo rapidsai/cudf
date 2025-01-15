@@ -115,7 +115,7 @@ using rle_page_enc_state_s = page_enc_state_s<rle_buffer_size>;
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_length)
+__device__ constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_length)
 {
   if (physical_type == FIXED_LEN_BYTE_ARRAY) {
     return id == type_id::DECIMAL128 ? sizeof(__int128_t) : type_length;
@@ -129,7 +129,7 @@ constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_le
   }
 }
 
-constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
+__device__ constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
 {
   if (value_bit_width == 0) return 0;
 
@@ -147,7 +147,7 @@ constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_value
 }
 
 // subtract b from a, but return 0 if this would underflow
-constexpr size_t underflow_safe_subtract(size_t a, size_t b)
+__device__ constexpr size_t underflow_safe_subtract(size_t a, size_t b)
 {
   if (b > a) { return 0; }
   return a - b;
@@ -1324,7 +1324,7 @@ static __device__ void PlainBoolEncode(rle_page_enc_state_s* s,
  * @return The difference between two epochs in `cuda::std::chrono::duration` format with a period
  * of hours.
  */
-constexpr auto julian_calendar_epoch_diff()
+__device__ constexpr auto julian_calendar_epoch_diff()
 {
   using namespace cuda::std::chrono;
   using namespace cuda::std::chrono_literals;
