@@ -8134,10 +8134,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         Returns
         -------
-        table : pylibcudf.Table
-            A pylibcudf.Table referencing the same data.
-        column_names : list[str]
-            The list of columns names.
+        table : cudf.DataFrame
+            A cudf.DataFrame referencing the columns in the pylibcudf.Table.
+        metadata : list[str]
+            Dict of metadata (includes column names and dataframe indices)
 
         Notes
         -----
@@ -8146,8 +8146,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         the data and mask buffers of the pylibcudf columns, so the newly created
         object is not tied to the lifetime of the original pylibcudf.Table.
         """
-        if not isinstance(metadata, dict):
-            raise ValueError("Must at least pass metadata with column names")
+        if (
+            not isinstance(metadata, dict)
+            or len(metadata) == 0
+            or len(metadata) > 2
+            or "columns" not in metadata
+            or (len(metadata) == 2 and {"columns", "index"} != set(metadata))
+        ):
+            raise ValueError(
+                "Must at least pass metadata dict with column names and optionally indices only"
+            )
         columns = table.columns()
         df = cls._from_data(
             {
@@ -8155,11 +8163,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     col, data_ptr_exposed=True
                 )
                 for name, col in zip(metadata["columns"], columns)
-            }
+            },
+            index=metadata["index"],
         )
-        for key in metadata:
-            if key in {"index", "columns"}:
-                setattr(df, key, metadata[key])
         return df
 
 

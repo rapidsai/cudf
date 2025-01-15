@@ -3845,7 +3845,9 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @classmethod
     @_performance_tracking
-    def from_pylibcudf(cls, col: plc.Column, metadata=None) -> Self:
+    def from_pylibcudf(
+        cls, col: plc.Column, metadata: dict | None = None
+    ) -> Self:
         """
         Create a Series from a pylibcudf.Column.
 
@@ -3866,15 +3868,29 @@ class Series(SingleColumnFrame, IndexedFrame):
         the data and mask buffers of the pylibcudf Column, so the newly created
         object is not tied to the lifetime of the original pylibcudf.Column.
         """
-        cudf_col = cls._from_column(
+        name = None
+        index = None
+        if metadata is not None:
+            if (
+                not isinstance(metadata, dict)
+                or len(metadata) > 2
+                or (
+                    not set(metadata).issubset({"name", "index"})
+                    and len(metadata) > 0
+                )
+            ):
+                raise ValueError(
+                    "Metadata dict must only contain name or index"
+                )
+            name = (metadata.get("name", None),)
+            index = (metadata.get("index", None),)
+        return cls._from_column(
             cudf.core.column.ColumnBase.from_pylibcudf(
                 col, data_ptr_exposed=True
-            )
+            ),
+            name=name,
+            index=index,
         )
-        if isinstance(metadata, dict):
-            for key in metadata:
-                setattr(cudf_col, key, metadata[key])
-        return cudf_col
 
 
 def make_binop_func(op):
