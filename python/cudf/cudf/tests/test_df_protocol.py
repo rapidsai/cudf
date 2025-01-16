@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +21,10 @@ from cudf.core.df_protocol import (
     protocol_dtype_to_cupy_dtype,
 )
 from cudf.testing import assert_eq
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Using `__dataframe__` is deprecated:FutureWarning"
+)
 
 
 @pytest.fixture(
