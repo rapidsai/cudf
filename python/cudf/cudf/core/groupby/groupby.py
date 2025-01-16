@@ -592,9 +592,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = cudf.core._internals.stream_compaction.drop_duplicates(
-            group_keys
-        )
+        group_keys = [
+            ColumnBase.from_pylibcudf(col)
+            for col in cudf.core._internals.stream_compaction.drop_duplicates(
+                group_keys
+            )
+        ]
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -1084,16 +1087,18 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sorting.sort_by_key(
+                right_order = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
                     ["first"],
                     stable=False,
-                )
+                )[0]
                 result = result._gather(
                     GatherMap.from_column_unchecked(
-                        right_order, len(result), nullify=False
+                        ColumnBase.from_pylibcudf(right_order),
+                        len(result),
+                        nullify=False,
                     )
                 )
 

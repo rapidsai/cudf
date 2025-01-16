@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Literal
 import pylibcudf as plc
 
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from cudf.core.column import ColumnBase
 
 
 @acquire_spill_lock()
@@ -118,7 +119,7 @@ def order_by(
     na_position: Literal["first", "last"],
     *,
     stable: bool,
-):
+) -> plc.Column:
     """
     Get index to sort the table in ascending/descending order.
 
@@ -144,14 +145,12 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    return ColumnBase.from_pylibcudf(
-        func(
-            plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns_from_table],
-            ),
-            order[0],
-            order[1],
-        )
+    return func(
+        plc.Table(
+            [col.to_pylibcudf(mode="read") for col in columns_from_table],
+        ),
+        order[0],
+        order[1],
     )
 
 
@@ -163,7 +162,7 @@ def sort_by_key(
     na_position: list[Literal["first", "last"]],
     *,
     stable: bool,
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     """
     Sort a table by given keys
 
@@ -192,12 +191,9 @@ def sort_by_key(
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
-    return [
-        ColumnBase.from_pylibcudf(col)
-        for col in func(
-            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-            plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
-            order[0],
-            order[1],
-        ).columns()
-    ]
+    return func(
+        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+        plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
+        order[0],
+        order[1],
+    ).columns()

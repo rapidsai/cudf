@@ -719,7 +719,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            return drop_nulls([self])[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            return ColumnBase.from_pylibcudf(
+                drop_nulls([self])[0]
+            )._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             return self.copy()
 
@@ -1300,9 +1302,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             value = as_column(value, dtype=self.dtype, length=1)
         mask = value.contains(self)
-        return apply_boolean_mask(  # type: ignore[return-value]
-            [as_column(range(0, len(self)), dtype=SIZE_TYPE_DTYPE)], mask
-        )[0]
+        return as_column(
+            range(len(self)), dtype=SIZE_TYPE_DTYPE
+        ).apply_boolean_mask(mask)  # type: ignore[return-value]
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
@@ -1682,9 +1684,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
-        return apply_boolean_mask([self], mask)[0]._with_type_metadata(
-            self.dtype
-        )
+        return ColumnBase.from_pylibcudf(
+            apply_boolean_mask([self], mask)[0]
+        )._with_type_metadata(self.dtype)
 
     def argsort(
         self,
@@ -1705,8 +1707,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
-            return sorting.order_by(
-                [self], [ascending], na_position, stable=True
+            return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+                sorting.order_by([self], [ascending], na_position, stable=True)
             )
 
     def __arrow_array__(self, type=None):
@@ -1772,9 +1774,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            return drop_duplicates([self], keep="first")[  # type: ignore[return-value]
-                0
-            ]._with_type_metadata(self.dtype)
+            return ColumnBase.from_pylibcudf(
+                drop_duplicates([self], keep="first")[  # type: ignore[return-value]
+                    0
+                ]
+            )._with_type_metadata(self.dtype)
 
     def serialize(self) -> tuple[dict, list]:
         # data model:
@@ -2010,10 +2014,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
-        (codes,) = sorting.sort_by_key(
+        plc_codes = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
-        )
-        return codes.fillna(na_sentinel.value)
+        )[0]
+        return ColumnBase.from_pylibcudf(plc_codes).fillna(na_sentinel.value)
 
     @acquire_spill_lock()
     def copy_if_else(

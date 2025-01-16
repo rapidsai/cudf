@@ -6,12 +6,14 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from cudf import Scalar
+
+    # ruff does not identify that there's a relative import in use
+    from cudf.core.column import ColumnBase  # noqa: TC004
     from cudf.core.column.numerical import NumericalColumn
 
 
@@ -20,7 +22,7 @@ def gather(
     columns: Iterable[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     plc_tbl = plc.copying.gather(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
         gather_map.to_pylibcudf(mode="read"),
@@ -28,7 +30,7 @@ def gather(
         if nullify
         else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     )
-    return [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
+    return plc_tbl.columns()
 
 
 @acquire_spill_lock()
@@ -69,13 +71,13 @@ def scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )
 
-    return [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
+    return plc_tbl.columns()
 
 
 @acquire_spill_lock()
 def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
-) -> list[list[ColumnBase]]:
+) -> list[list[plc.Column]]:
     return [
         [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
         for plc_tbl in plc.copying.split(

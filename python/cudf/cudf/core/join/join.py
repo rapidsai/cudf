@@ -10,6 +10,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
@@ -266,14 +267,17 @@ class Merge:
             )
             for map_, n, null in zip(maps, lengths, nullify)
         ]
-        return sorting.sort_by_key(
-            list(maps),
-            # If how is right, right map is primary sort key.
-            key_order[:: -1 if self.how == "right" else 1],
-            [True] * len(key_order),
-            ["last"] * len(key_order),
-            stable=True,
-        )
+        return [
+            ColumnBase.from_pylibcudf(col)
+            for col in sorting.sort_by_key(
+                list(maps),
+                # If how is right, right map is primary sort key.
+                key_order[:: -1 if self.how == "right" else 1],
+                [True] * len(key_order),
+                ["last"] * len(key_order),
+                stable=True,
+            )
+        ]
 
     def perform_merge(self) -> cudf.DataFrame:
         left_join_cols = []
@@ -444,7 +448,9 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                result_columns, result._column_names, index_names
+                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                result._column_names,
+                index_names,
             )
         return result
 

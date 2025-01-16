@@ -2032,10 +2032,13 @@ class BaseIndex(Serializable):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            drop_nulls(
-                data_columns,
-                how=how,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in drop_nulls(
+                    data_columns,
+                    how=how,
+                )
+            ],
             self._column_names,
         )
 
@@ -2103,7 +2106,12 @@ class BaseIndex(Serializable):
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(
-            apply_boolean_mask(list(self._columns), boolean_mask),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in apply_boolean_mask(
+                    list(self._columns), boolean_mask
+                )
+            ],
             column_names=self._column_names,
         )
 

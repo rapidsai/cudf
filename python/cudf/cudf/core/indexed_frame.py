@@ -3122,14 +3122,17 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_duplicates(
-                list(self._columns)
-                if ignore_index
-                else list(self.index._columns + self._columns),
-                keys=keys,
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in cudf.core._internals.stream_compaction.drop_duplicates(
+                    list(self._columns)
+                    if ignore_index
+                    else list(self.index._columns + self._columns),
+                    keys=keys,
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                )
+            ],
             self._column_names,
             self.index.names if not ignore_index else None,
         )
@@ -3304,7 +3307,7 @@ class IndexedFrame(Frame):
 
         return [
             self._from_columns_like_self(
-                split,
+                [ColumnBase.from_pylibcudf(col) for col in split],
                 self._column_names,
                 self.index.names if keep_index else None,
             )
@@ -4378,12 +4381,15 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_nulls(
-                [*self.index._columns, *data_columns],
-                how=how,
-                keys=self._positions_from_column_names(subset),
-                thresh=thresh,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in cudf.core._internals.stream_compaction.drop_nulls(
+                    [*self.index._columns, *data_columns],
+                    how=how,
+                    keys=self._positions_from_column_names(subset),
+                    thresh=thresh,
+                )
+            ],
             self._column_names,
             self.index.names,
         )
@@ -4401,12 +4407,15 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.apply_boolean_mask(
-                list(self.index._columns + self._columns)
-                if keep_index
-                else list(self._columns),
-                boolean_mask.column,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in cudf.core._internals.stream_compaction.apply_boolean_mask(
+                    list(self.index._columns + self._columns)
+                    if keep_index
+                    else list(self._columns),
+                    boolean_mask.column,
+                )
+            ],
             column_names=self._column_names,
             index_names=self.index.names if keep_index else None,
         )
