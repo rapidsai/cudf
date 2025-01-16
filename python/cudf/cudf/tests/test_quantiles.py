@@ -91,3 +91,19 @@ def test_quantile_type_int_float(interpolation):
 
     assert expected == actual
     assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [float("nan"), float("nan"), 0.9],
+        [float("nan"), float("nan"), float("nan")],
+    ],
+)
+def test_ignore_nans(data):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
+    expected = gsr.quantile(0.9)
+    result = psr.quantile(0.9)
+    assert_eq(result, expected)

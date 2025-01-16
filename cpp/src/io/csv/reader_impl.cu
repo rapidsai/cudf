@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
-#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "io/utilities/parsing_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/csv.hpp>
@@ -771,7 +771,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
       for (auto& col_name : column_names) {
         if (++col_names_counts[col_name] > 1) {
-          CUDF_LOG_WARN("Multiple columns with name {}; only the first appearance is parsed",
+          CUDF_LOG_WARN("Multiple columns with name %s; only the first appearance is parsed",
                         col_name);
 
           auto const idx    = &col_name - column_names.data();

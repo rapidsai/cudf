@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,16 +74,14 @@ CUDF_EXPORT trie create_serialized_trie(std::vector<std::string> const& keys,
 /*
  * @brief Searches for a string in a serialized trie.
  *
- * Can be executed on host or device, as long as the data is available
- *
  * @param trie Pointer to the array of nodes that make up the trie
  * @param key Pointer to the start of the string to find
  * @param key_len Length of the string to find
  *
  * @return Boolean value; true if string is found, false otherwise
  */
-__host__ __device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
-                                                         device_span<char const> key)
+__device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
+                                                device_span<char const> key)
 {
   if (trie.empty()) { return false; }
   if (key.empty()) { return trie.front().is_leaf; }

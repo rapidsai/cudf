@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -132,6 +132,8 @@ ConfigureTest(
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
+  groupby/host_udf_example_tests.cu
+  groupby/host_udf_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -190,6 +192,7 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
+  hashing/xxhash_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 
@@ -217,11 +220,12 @@ ConfigureTest(
   REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
+  reductions/host_udf_example_tests.cu
+  reductions/list_rank_test.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
   GPUS 1
   PERCENT 70
@@ -314,14 +318,15 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )

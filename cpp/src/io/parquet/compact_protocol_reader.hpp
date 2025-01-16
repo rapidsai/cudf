@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,10 @@ class CompactProtocolReader {
   void read(IntType* t);
   void read(RowGroup* r);
   void read(ColumnChunk* c);
+  void read(BloomFilterAlgorithm* bf);
+  void read(BloomFilterHash* bf);
+  void read(BloomFilterCompression* bf);
+  void read(BloomFilterHeader* bf);
   void read(ColumnChunkMetaData* c);
   void read(PageHeader* p);
   void read(DataPageHeader* d);
