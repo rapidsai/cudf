@@ -356,8 +356,8 @@ class aggregate_reader_metadata {
    * @brief Filters the row groups based on predicate filter
    *
    * @param sources Lists of input datasources
-   * @param row_group_indices Lists of row groups to read, one per source
-   * @param total_row_groups Total number of row groups in `row_group_indices`
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
@@ -367,7 +367,7 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::tuple<std::optional<std::vector<std::vector<size_type>>>, size_type, size_type>
   filter_row_groups(host_span<std::unique_ptr<datasource> const> sources,
-                    host_span<std::vector<size_type> const> row_group_indices,
+                    host_span<std::vector<size_type> const> input_row_group_indices,
                     size_type total_row_groups,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
@@ -378,8 +378,8 @@ class aggregate_reader_metadata {
    * @brief Filters the row groups using bloom filters
    *
    * @param sources Dataset sources
-   * @param row_group_indices Lists of input row groups to read, one per source
-   * @param total_row_groups Total number of row groups in `row_group_indices`
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership

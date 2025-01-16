@@ -1050,11 +1050,12 @@ aggregate_reader_metadata::select_row_groups(
   // Compute total number of input row groups if needed
   size_type total_row_groups = [&]() {
     if (not row_group_indices.empty()) {
-      return std::accumulate(
-        row_group_indices.begin(),
-        row_group_indices.end(),
-        size_type{0},
-        [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+      return std::accumulate(row_group_indices.begin(),
+                             row_group_indices.end(),
+                             size_type{0},
+                             [](auto& sum, auto const& per_file_row_groups) {
+                               return sum + per_file_row_groups.size();
+                             });
     } else {
       return num_row_groups;
     }
