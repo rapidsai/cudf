@@ -34,15 +34,12 @@ namespace detail {
 namespace {
 
 template <typename ColumnView>
-void prefetch_col_data(ColumnView& col,
-                       void const* data_ptr,
-                       std::string_view key,
-                       rmm::cuda_stream_view stream) noexcept
+void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
 {
   if (cudf::experimental::prefetch::detail::prefetch_config::instance().get(key)) {
     if (cudf::is_fixed_width(col.type())) {
       cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key, data_ptr, col.size() * size_of(col.type()), stream);
+        key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
       strings_column_view const scv{col};
       if (data_ptr == nullptr) {
@@ -50,7 +47,10 @@ void prefetch_col_data(ColumnView& col,
         return;
       }
       cudf::experimental::prefetch::detail::prefetch_noexcept(
-        key, data_ptr, scv.chars_size(stream) * sizeof(char), stream);
+        key,
+        data_ptr,
+        scv.chars_size(cudf::get_default_stream()) * sizeof(char),
+        cudf::get_default_stream());
     } else {
       std::cout << key << ": Unsupported type: " << static_cast<int32_t>(col.type().id())
                 << std::endl;
@@ -207,15 +207,15 @@ mutable_column_view::operator column_view() const
   return column_view{_type, _size, _data, _null_mask, _null_count, _offset, std::move(child_views)};
 }
 
-void const* column_view::get_data(rmm::cuda_stream_view stream) const noexcept
+void const* column_view::get_data() const noexcept
 {
-  detail::prefetch_col_data(*this, _data, "column_view::get_data", stream);
+  detail::prefetch_col_data(*this, _data, "column_view::get_data");
   return _data;
 }
 
-void const* mutable_column_view::get_data(rmm::cuda_stream_view stream) const noexcept
+void const* mutable_column_view::get_data() const noexcept
 {
-  detail::prefetch_col_data(*this, _data, "mutable_column_view::get_data", stream);
+  detail::prefetch_col_data(*this, _data, "mutable_column_view::get_data");
   return _data;
 }
 
