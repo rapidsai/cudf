@@ -25,7 +25,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf._lib as libcudf
 import cudf.core
 import cudf.core._internals
 import cudf.core.algorithms
@@ -2939,7 +2938,7 @@ class IndexedFrame(Frame):
                 plc_column = plc.hashing.sha512(plc_table)
             else:
                 raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = libcudf.column.Column.from_pylibcudf(plc_column)
+            result = ColumnBase.from_pylibcudf(plc_column)
         return cudf.Series._from_column(
             result,
             index=self.index,
@@ -3057,7 +3056,7 @@ class IndexedFrame(Frame):
                 [start, stop],
             )
             sliced = [
-                libcudf.column.Column.from_pylibcudf(col)
+                ColumnBase.from_pylibcudf(col)
                 for col in plc_tables[0].columns()
             ]
         result = self._from_columns_like_self(
@@ -3257,10 +3256,10 @@ class IndexedFrame(Frame):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            distinct = libcudf.column.Column.from_pylibcudf(plc_column)
+            distinct = ColumnBase.from_pylibcudf(plc_column)
         result = copying.scatter(
             [cudf.Scalar(False)],
-            distinct,
+            distinct,  # type: ignore[arg-type]
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )[0]
@@ -3282,8 +3281,7 @@ class IndexedFrame(Frame):
                 )
             )
             columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
         result = self._from_columns_like_self(
             columns,
@@ -5391,8 +5389,7 @@ class IndexedFrame(Frame):
                 column_index + len(idx_cols),
             )
             exploded = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
@@ -5449,8 +5446,7 @@ class IndexedFrame(Frame):
                 count,
             )
             tiled = [
-                libcudf.column.Column.from_pylibcudf(plc)
-                for plc in plc_table.columns()
+                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
             ]
         return self._from_columns_like_self(
             tiled,
@@ -6455,7 +6451,7 @@ class IndexedFrame(Frame):
 
         with acquire_spill_lock():
             result_columns = [
-                libcudf.column.Column.from_pylibcudf(
+                ColumnBase.from_pylibcudf(
                     plc.sorting.rank(
                         col.to_pylibcudf(mode="read"),
                         method_enum,

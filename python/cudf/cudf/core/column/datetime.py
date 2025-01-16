@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop, unary
 from cudf.core._internals.search import search_sorted
@@ -908,7 +907,7 @@ class DatetimeColumn(column.ColumnBase):
                 ambiguous_end.to_pylibcudf(mode="read"),
                 plc.labeling.Inclusive.NO,
             )
-            ambiguous = libcudf.column.Column.from_pylibcudf(plc_column)
+            ambiguous = ColumnBase.from_pylibcudf(plc_column)
         ambiguous = ambiguous.notnull()
 
         # At the start of a non-existent time period, Clock 2 reads less
@@ -927,10 +926,10 @@ class DatetimeColumn(column.ColumnBase):
                 nonexistent_end.to_pylibcudf(mode="read"),
                 plc.labeling.Inclusive.NO,
             )
-            nonexistent = libcudf.column.Column.from_pylibcudf(plc_column)
+            nonexistent = ColumnBase.from_pylibcudf(plc_column)
         nonexistent = nonexistent.notnull()
 
-        return ambiguous, nonexistent
+        return ambiguous, nonexistent  # type: ignore[return-value]
 
     def tz_localize(
         self,

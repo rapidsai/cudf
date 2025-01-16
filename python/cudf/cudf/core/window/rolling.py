@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
 
 import numba
 import numpy as np
@@ -12,17 +11,13 @@ from pandas.api.indexers import BaseIndexer
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core._internals.aggregation import make_aggregation
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import as_column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
-
-if TYPE_CHECKING:
-    from cudf.core.column.column import ColumnBase
 
 
 class _RollingBase:
@@ -301,7 +296,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     pre = window
                     fwd = 0
 
-            return libcudf.column.Column.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.rolling.rolling_window(
                     source_column.to_pylibcudf(mode="read"),
                     pre,

@@ -20,7 +20,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core._internals
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_list_like,
@@ -1079,10 +1078,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                         plc_tables[1],
                         plc.types.NullEquality.EQUAL,
                     )
-                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
-                    right_order = libcudf.column.Column.from_pylibcudf(
-                        right_plc
-                    )
+                    left_order = ColumnBase.from_pylibcudf(left_plc)
+                    right_order = ColumnBase.from_pylibcudf(right_plc)
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
@@ -2518,7 +2515,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return libcudf.column.Column.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [c.to_pylibcudf(mode="read") for c in source_columns]

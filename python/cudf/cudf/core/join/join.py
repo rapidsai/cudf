@@ -7,7 +7,6 @@ from typing import Any
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase
@@ -25,10 +24,10 @@ class Merge:
     @staticmethod
     @acquire_spill_lock()
     def _joiner(
-        lhs: list[libcudf.column.Column],
-        rhs: list[libcudf.column.Column],
+        lhs: list[ColumnBase],
+        rhs: list[ColumnBase],
         how: str,
-    ) -> tuple[libcudf.column.Column, libcudf.column.Column]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         if how == "outer":
             how = "full"
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
@@ -39,9 +38,10 @@ class Merge:
             plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
             plc.types.NullEquality.EQUAL,
         )
-        return libcudf.column.Column.from_pylibcudf(
-            left_rows
-        ), libcudf.column.Column.from_pylibcudf(right_rows)
+        return (
+            ColumnBase.from_pylibcudf(left_rows),
+            ColumnBase.from_pylibcudf(right_rows),
+        )
 
     def __init__(
         self,
@@ -574,11 +574,11 @@ class Merge:
 class MergeSemi(Merge):
     @staticmethod
     @acquire_spill_lock()
-    def _joiner(
-        lhs: list[libcudf.column.Column],
-        rhs: list[libcudf.column.Column],
+    def _joiner(  # type: ignore[override]
+        lhs: list[ColumnBase],
+        rhs: list[ColumnBase],
         how: str,
-    ) -> tuple[libcudf.column.Column, None]:
+    ) -> tuple[ColumnBase, None]:
         if (
             join_func := getattr(
                 plc.join, f"{how.replace('left', 'left_')}_join", None
@@ -586,7 +586,7 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        return libcudf.column.Column.from_pylibcudf(
+        return ColumnBase.from_pylibcudf(
             join_func(
                 plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
                 plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),

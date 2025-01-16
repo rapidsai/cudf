@@ -18,7 +18,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -1364,8 +1363,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 plc.Table([rcol.to_pylibcudf(mode="read")]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
-            indices = libcudf.column.Column.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.from_pylibcudf(left_plc)
+            indices = ColumnBase.from_pylibcudf(right_plc)
         result = copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
@@ -3383,7 +3382,7 @@ def interval_range(
     freq = freq.astype(common_dtype)
 
     with acquire_spill_lock():
-        bin_edges = libcudf.column.Column.from_pylibcudf(
+        bin_edges = ColumnBase.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
                 init=start.device_value.c_value,
