@@ -153,10 +153,9 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
           --col_name_len;
         }
 
-        string new_col_name{
+        col_names.emplace_back(
           remove_quotes(std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
-                        parse_opts.quotechar)};
-        col_names.push_back(std::move(new_col_name));
+                        parse_opts.quotechar));
       } else {
         // This is the first data row, add the automatically generated name
         col_names.push_back(prefix + std::to_string(col_names.size()));
