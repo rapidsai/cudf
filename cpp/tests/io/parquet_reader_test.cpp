@@ -2737,8 +2737,6 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   EXPECT_LE(result.metadata.num_stats_filtered_row_groups, result.metadata.num_input_row_groups);
 }
 
-// TYPED_TEST(ParquetReaderPredicatePushdownTest, BloomFilterTest) {}
-
 //////////////////////
 // wide tables tests
 
