@@ -57,7 +57,59 @@ struct bloom_filter_caster {
 
   enum class is_int96_timestamp : bool { YES, NO };
 
-  template <typename T, is_int96_timestamp IS_INT96_TIMESTAMP = is_int96_timestamp::NO>
+  // Functor to compute bloom filter query results
+  template <typename T, is_int96_timestamp IS_INT96_TIMESTAMP>
+  struct bloom_filter_query_fn {
+    cudf::device_span<cuda::std::byte> const* filter_span;
+    ast::generic_scalar_device_view d_scalar;
+    cudf::size_type col_idx;
+    size_t num_equality_columns;
+
+    __device__ bool operator()(int row_group_idx) const
+    {
+      // Filter bitset buffer index
+      auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
+      auto const filter_size = filter_span[filter_idx].size();
+
+      // If no bloom filter, then fill in `true` as membership cannot be determined
+      if (filter_size == 0) { return true; }
+
+      // Filter properties
+      using key_type    = T;
+      using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+      using word_type   = typename policy_type::word_type;
+      auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
+
+      // Number of filter blocks
+      auto const num_filter_blocks = filter_size / bytes_per_block;
+
+      // Create a bloom filter view.
+      cuco::bloom_filter_ref<key_type,
+                             cuco::extent<std::size_t>,
+                             cuco::thread_scope_thread,
+                             policy_type>
+        filter{reinterpret_cast<word_type*>(filter_span[filter_idx].data()),
+               num_filter_blocks,
+               {},   // Thread scope as the same literal is being searched across different bitsets
+                     // per thread
+               {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
+                     // compatibility
+
+      // If int96_timestamp type, convert literal to string_view and query bloom
+      // filter
+      if constexpr (cuda::std::is_same_v<T, cudf::string_view> and
+                    IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
+        auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
+        cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key), 12};
+        return filter.contains(probe_key);
+      } else {
+        // Query the bloom filter and store results
+        return filter.contains(d_scalar.value<T>());
+      }
+    }
+  };
+
+  template <typename T, is_int96_timestamp IS_INT96_TIMESTAMP>
   std::enable_if_t<not std::is_same_v<T, bool> and
                      not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
                    std::unique_ptr<cudf::column>>
@@ -66,10 +118,6 @@ struct bloom_filter_caster {
                      ast::literal const* const literal,
                      rmm::cuda_stream_view stream) const
   {
-    using key_type    = T;
-    using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
-    using word_type   = typename policy_type::word_type;
-
     // Check if the literal has the same type as the predicate column
     CUDF_EXPECTS(
       dtype == literal->get_data_type() and
@@ -77,9 +125,6 @@ struct bloom_filter_caster {
           cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
           cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
       "Mismatched predicate column and literal types");
-
-    // Filter properties
-    auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
     rmm::device_buffer results{total_row_groups, stream, cudf::get_current_device_resource_ref()};
     cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
@@ -89,44 +134,8 @@ struct bloom_filter_caster {
       rmm::exec_policy_nosync(stream),
       results_span.begin(),
       results_span.end(),
-      [filter_span          = bloom_filter_spans.data(),
-       d_scalar             = literal->get_value(),
-       col_idx              = equality_col_idx,
-       num_equality_columns = num_equality_columns] __device__(auto row_group_idx) {
-        // Filter bitset buffer index
-        auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
-        auto const filter_size = filter_span[filter_idx].size();
-
-        // If no bloom filter, then fill in `true` as membership cannot be determined
-        if (filter_size == 0) { return true; }
-
-        // Number of filter blocks
-        auto const num_filter_blocks = filter_size / bytes_per_block;
-
-        // Create a bloom filter view.
-        cuco::bloom_filter_ref<key_type,
-                               cuco::extent<std::size_t>,
-                               cuco::thread_scope_thread,
-                               policy_type>
-          filter{reinterpret_cast<word_type*>(filter_span[filter_idx].data()),
-                 num_filter_blocks,
-                 {},  // Thread scope as the same literal is being searched across different bitsets
-                      // per thread
-                 {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
-                       // compatibility
-
-        // If int96_timestamp type, convert literal to string_view and query bloom
-        // filter
-        if constexpr (cuda::std::is_same_v<T, cudf::string_view> and
-                      IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
-          auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
-          cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key), 12};
-          return filter.contains(probe_key);
-        } else {
-          // Query the bloom filter and store results
-          return filter.contains(d_scalar.value<T>());
-        }
-      });
+      bloom_filter_query_fn<T, IS_INT96_TIMESTAMP>{
+        bloom_filter_spans.data(), literal->get_value(), equality_col_idx, num_equality_columns});
 
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           static_cast<cudf::size_type>(total_row_groups),
@@ -157,7 +166,8 @@ struct bloom_filter_caster {
       }
 
       // For all other cases
-      return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream);
+      return query_bloom_filter<T, is_int96_timestamp::NO>(
+        equality_col_idx, dtype, literal, stream);
     }
   }
 };
