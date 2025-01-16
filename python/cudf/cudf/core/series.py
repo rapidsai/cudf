@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc  # noqa: TC002
+
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -71,8 +73,6 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     import pyarrow as pa
-
-    import pylibcudf as plc
 
     from cudf._typing import (
         ColumnLike,
