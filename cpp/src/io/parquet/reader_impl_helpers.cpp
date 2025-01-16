@@ -1051,9 +1051,7 @@ aggregate_reader_metadata::select_row_groups(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
-
-  // Compute total number of input row groups if needed
+  // Compute total number of input row groups
   size_type total_row_groups = [&]() {
     if (not row_group_indices.empty()) {
       size_t const total_row_groups =
@@ -1074,6 +1072,8 @@ aggregate_reader_metadata::select_row_groups(
   // Initialize to the total number of row groups
   size_type num_stats_filtered_row_groups = total_row_groups;
   size_type num_bloom_filtered_row_groups = total_row_groups;
+
+  std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
 
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
