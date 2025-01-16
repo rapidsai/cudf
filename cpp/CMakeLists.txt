@@ -328,6 +328,19 @@ endif()
 # * library targets -------------------------------------------------------------------------------
 
 add_library(
+  cudf_mixed_joins OBJECT
+  src/join/mixed_join.cu
+  src/join/mixed_join_kernel.cu
+  src/join/mixed_join_kernel_nulls.cu
+  src/join/mixed_join_kernels_semi.cu
+  src/join/mixed_join_semi.cu
+  src/join/mixed_join_size_kernel.cu
+  src/join/mixed_join_size_kernel_nulls.cu
+)
+
+set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES "60-virtual")
+
+add_library(
   cudf
   src/aggregation/aggregation.cpp
   src/aggregation/aggregation.cu
@@ -560,13 +573,6 @@ add_library(
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
-  src/join/mixed_join.cu
-  src/join/mixed_join_kernel.cu
-  src/join/mixed_join_kernel_nulls.cu
-  src/join/mixed_join_kernels_semi.cu
-  src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernel.cu
-  src/join/mixed_join_size_kernel_nulls.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -822,6 +828,21 @@ set_target_properties(
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
+set_target_properties(
+  cudf_mixed_joins
+  PROPERTIES # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             # For std:: support of __int128_t. Can be removed once using cuda::std
+             CXX_EXTENSIONS ON
+             CXX_VISIBILITY_PRESET hidden
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET hidden
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
+
 # Note: This must come before the target_compile_options below so that the function can modify the
 # flags if necessary.
 if(CUDF_CLANG_TIDY OR CUDF_IWYU)
@@ -839,6 +860,10 @@ endif()
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+target_compile_options(
+  cudf_mixed_joins PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
@@ -879,9 +904,26 @@ target_include_directories(
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
+# Specify include paths for the current target and dependents
+target_include_directories(
+  cudf_mixed_joins
+  PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+         "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
+  PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
+  INTERFACE "$<INSTALL_INTERFACE:include>"
+)
+
 target_compile_definitions(
   cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
               "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
+)
+target_compile_definitions(
+  cudf_mixed_joins PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
+                          "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
@@ -941,10 +983,21 @@ add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(
+  cudf_mixed_joins PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger
+                          $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
+)
+
+target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
+  PRIVATE cudf_mixed_joins
+          $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
+          nanoarrow
 )
 
 # Add Conda library, and include paths if specified
