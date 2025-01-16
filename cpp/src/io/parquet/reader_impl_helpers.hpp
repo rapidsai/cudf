@@ -357,28 +357,29 @@ class aggregate_reader_metadata {
    *
    * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
+   * @param total_row_groups Total number of row groups in `row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return A tuple of filtered row group indices, if any is filtered,  number of input row groups,
-   *         number of row groups after stats filtering, and number of row groups after bloom
-   *         filtering
+   * @return A tuple of filtered row group indices, if any is filtered, number of surviving row
+   * groups after stats filtering, and number of surviving row groups after bloom filtering
    */
-  [[nodiscard]] std::
-    tuple<std::optional<std::vector<std::vector<size_type>>>, size_t, size_t, size_t>
-    filter_row_groups(    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-                      host_span<data_type const> output_dtypes,
-                      host_span<int const> output_column_schemas,
-                      std::reference_wrapper<ast::expression const> filter,
-                      rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::tuple<std::optional<std::vector<std::vector<size_type>>>, size_type, size_type>
+  filter_row_groups(host_span<std::unique_ptr<datasource> const> sources,
+                    host_span<std::vector<size_type> const> row_group_indices,
+                    size_type total_row_groups,
+                    host_span<data_type const> output_dtypes,
+                    host_span<int const> output_column_schemas,
+                    std::reference_wrapper<ast::expression const> filter,
+                    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters the row groups using bloom filters
    *
    * @param sources Dataset sources
    * @param row_group_indices Lists of input row groups to read, one per source
+   * @param total_row_groups Total number of row groups in `row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership
@@ -389,6 +390,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
     host_span<std::unique_ptr<datasource> const> sources,
     host_span<std::vector<size_type> const> input_row_group_indices,
+    size_type total_row_groups,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
@@ -416,10 +418,10 @@ class aggregate_reader_metadata {
                            size_type,
                            std::vector<row_group_info>,
                            std::vector<size_t>,
-                           size_t,
-                           size_t,
-                           size_t>
-  select_row_groups(host_span<std::unique_ptr<datasource> const> sources, 
+                           size_type,
+                           size_type,
+                           size_type>
+  select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
                     std::optional<size_type> const& row_count,

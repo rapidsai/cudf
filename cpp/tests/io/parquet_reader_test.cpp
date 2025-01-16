@@ -2698,6 +2698,11 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
       return cudf::numeric_scalar<T>((100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
     }
   }();
+
+  // The `literal_value` and stats should filter out 2 out of 4 row groups.
+  auto constexpr expected_total_row_groups          = 4;
+  auto constexpr expected_stats_filtered_row_groups = 2;
+
   auto literal           = cudf::ast::literal(literal_value);
   auto col_name_0        = cudf::ast::column_name_reference("col0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
@@ -2725,7 +2730,17 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   EXPECT_EQ(result_table.num_rows(), expected->num_rows());
   EXPECT_EQ(result_table.num_columns(), expected->num_columns());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+
+  // To make sure we filtered row groups
+  EXPECT_EQ(result.metadata.num_input_row_groups, expected_total_row_groups);
+  EXPECT_EQ(result.metadata.num_stats_filtered_row_groups, expected_stats_filtered_row_groups);
+  EXPECT_LE(result.metadata.num_stats_filtered_row_groups, result.metadata.num_input_row_groups);
 }
+
+// TYPED_TEST(ParquetReaderPredicatePushdownTest, BloomFilterTest) {}
+
+//////////////////////
+// wide tables tests
 
 // The test below requires several minutes to complete with memcheck, thus it is disabled by
 // default.

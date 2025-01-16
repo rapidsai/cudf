@@ -388,37 +388,17 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-
-std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
+std::tuple<std::optional<std::vector<std::vector<size_type>>>, size_type, size_type>
+aggregate_reader_metadata::filter_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
-  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
   auto mr = cudf::get_current_device_resource_ref();
-  // Create row group indices.
-  std::vector<std::vector<size_type>> all_row_group_indices;
-  host_span<std::vector<size_type> const> input_row_group_indices;
-  if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.cbegin(),
-                   per_file_metadata.cend(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto const& file_meta) {
-                     std::vector<size_type> rg_idx(file_meta.row_groups.size());
-                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                     return rg_idx;
-                   });
-    input_row_group_indices = host_span<std::vector<size_type> const>(all_row_group_indices);
-  } else {
-    input_row_group_indices = row_group_indices;
-  }
-  auto const total_row_groups = std::accumulate(
-    input_row_group_indices.begin(),
-    input_row_group_indices.end(),
-    size_t{0},
-    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Check if we have less than 2B total row groups.
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -462,6 +442,17 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   auto const filtered_row_group_indices = collect_filtered_row_group_indices(
     stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
 
+  // Number of surviving row groups after applying stats filter
+  auto const num_stats_filtered_row_groups =
+    filtered_row_group_indices.has_value()
+      ? std::accumulate(filtered_row_group_indices.value().cbegin(),
+                        filtered_row_group_indices.value().cend(),
+                        size_type{0},
+                        [](auto& sum, auto const& per_file_row_groups) {
+                          return sum + per_file_row_groups.size();
+                        })
+      : total_row_groups;
+
   // Span of row groups to apply bloom filtering on.
   auto const bloom_filter_input_row_groups =
     filtered_row_group_indices.has_value()
@@ -469,22 +460,30 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
       : input_row_group_indices;
 
   // Apply bloom filtering on the bloom filter input row groups
-  auto const bloom_filtered_row_groups = apply_bloom_filters(
-    sources, bloom_filter_input_row_groups, output_dtypes, output_column_schemas, filter, stream);
+  auto const bloom_filtered_row_groups = apply_bloom_filters(sources,
+                                                             bloom_filter_input_row_groups,
+                                                             num_stats_filtered_row_groups,
+                                                             output_dtypes,
+                                                             output_column_schemas,
+                                                             filter,
+                                                             stream);
 
-  // Compute
-  auto const num_stats_filtered_row_groups =
-    std::accumulate(filtered_row_group_indices.begin(),
-                    filtered_row_group_indices.end(),
-                    0,
-                    [](size_type sum, auto const& per_file_row_groups) {
-                      return sum + per_file_row_groups.size();
-                    });
-
+  // Number of surviving row groups after applying bloom filter
+  auto const num_bloom_filtered_row_groups =
+    bloom_filtered_row_groups.has_value()
+      ? std::accumulate(bloom_filtered_row_groups.value().cbegin(),
+                        bloom_filtered_row_groups.value().cend(),
+                        size_type{0},
+                        [](auto& sum, auto const& per_file_row_groups) {
+                          return sum + per_file_row_groups.size();
+                        })
+      : num_stats_filtered_row_groups;
 
   // Return bloom filtered row group indices iff collected
-  return bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups
-                                               : filtered_row_group_indices;
+  return {
+    bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : filtered_row_group_indices,
+    num_stats_filtered_row_groups,
+    num_bloom_filtered_row_groups};
 }
 
 // convert column named expression to column index reference expression

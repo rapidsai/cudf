@@ -574,6 +574,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
@@ -581,13 +582,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 {
   // Number of input table columns
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
-
-  // Total number of row groups after StatsAST filtration
-  auto const total_row_groups = std::accumulate(
-    input_row_group_indices.begin(),
-    input_row_group_indices.end(),
-    size_t{0},
-    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Check if we have less than 2B total row groups.
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -636,8 +630,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     h_bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
 
   // Create a bloom filter query table caster
-  bloom_filter_caster const bloom_filter_col{
-    bloom_filter_spans, parquet_types, total_row_groups, equality_col_schemas.size()};
+  bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
+                                             parquet_types,
+                                             static_cast<size_t>(total_row_groups),
+                                             equality_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.

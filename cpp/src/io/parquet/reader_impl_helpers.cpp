@@ -1032,9 +1032,9 @@ std::tuple<int64_t,
            size_type,
            std::vector<row_group_info>,
            std::vector<size_t>,
-           size_t,
-           size_t,
-           size_t>
+           size_type,
+           size_type,
+           size_type>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
@@ -1046,25 +1046,62 @@ aggregate_reader_metadata::select_row_groups(
   rmm::cuda_stream_view stream) const
 {
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
-  size_t num_input_row_groups;
-  size_t num_stats_filtered_row_groups;
-  size_t num_bloom_filtered_row_groups;
+
+  // Compute total number of input row groups if needed
+  size_type total_row_groups = [&]() {
+    if (not row_group_indices.empty()) {
+      return std::accumulate(
+        row_group_indices.begin(),
+        row_group_indices.end(),
+        size_type{0},
+        [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+    } else {
+      return num_row_groups;
+    }
+  }();
+
+  // Initialize to the total number of row groups
+  size_type num_stats_filtered_row_groups = total_row_groups;
+  size_type num_bloom_filtered_row_groups = total_row_groups;
 
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    std::tie(filtered_row_group_indices,
-             num_input_row_groups,
-             num_stats_filtered_row_groups,
-             num_bloom_filtered_row_groups) =
-      filter_row_groups(
-        sources, row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+    // Span of input row group indices for predicate pushdown
+    host_span<std::vector<size_type> const> input_row_group_indices;
+    std::vector<std::vector<size_type>> all_row_group_indices;
+    if (row_group_indices.empty()) {
+      std::transform(per_file_metadata.cbegin(),
+                     per_file_metadata.cend(),
+                     std::back_inserter(all_row_group_indices),
+                     [](auto const& file_meta) {
+                       std::vector<size_type> rg_idx(file_meta.row_groups.size());
+                       std::iota(rg_idx.begin(), rg_idx.end(), 0);
+                       return rg_idx;
+                     });
+      input_row_group_indices = host_span<std::vector<size_type> const>(all_row_group_indices);
+    } else {
+      input_row_group_indices = row_group_indices;
+    }
+    // Predicate pushdown: Filter row groups using stats and bloom filters
+    std::tie(
+      filtered_row_group_indices, num_stats_filtered_row_groups, num_bloom_filtered_row_groups) =
+      filter_row_groups(sources,
+                        input_row_group_indices,
+                        total_row_groups,
+                        output_dtypes,
+                        output_column_schemas,
+                        filter.value(),
+                        stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
 
+  // Vector to hold the `row_group_info` of selected row groups
   std::vector<row_group_info> selection;
+
+  // Compute the number of rows to read and skip
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
@@ -1097,8 +1134,9 @@ aggregate_reader_metadata::select_row_groups(
       }
     }
   } else {
-    // Reset input row group count as filtered row group indices are empty
-    num_input_row_groups = 0;
+    // Reset and recompute input row group count to adjust for num_rows and skip_rows. Here, the
+    // output from predicate pushdown was empty. i.e., no row groups filtered.
+    total_row_groups = 0;
 
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
@@ -1111,7 +1149,7 @@ aggregate_reader_metadata::select_row_groups(
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
           // Keep this row group, increase count
-          num_input_row_groups++;
+          total_row_groups++;
 
           // start row of this row group adjusted with rows_to_skip
           num_rows_per_source[src_idx] += count;
@@ -1133,16 +1171,16 @@ aggregate_reader_metadata::select_row_groups(
         }
       }
     }
-    // Since no filtering was applied, set these to the number of input row groups
-    num_stats_filtered_row_groups = num_input_row_groups;
-    num_bloom_filtered_row_groups = num_input_row_groups;
+    // Since no filtering was applied, set these to the number of adjusted input row groups
+    num_stats_filtered_row_groups = total_row_groups;
+    num_bloom_filtered_row_groups = total_row_groups;
   }
 
   return {rows_to_skip,
           rows_to_read,
           std::move(selection),
           std::move(num_rows_per_source),
-          num_input_row_groups,
+          total_row_groups,
           num_stats_filtered_row_groups,
           num_bloom_filtered_row_groups};
 }
