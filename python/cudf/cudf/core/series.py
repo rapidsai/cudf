@@ -3829,14 +3829,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         -----
         User requests to convert to pylibcudf must assume that the
         data may be modified afterwards.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(["a", "b", "u", "h", "d"]).to_pylibcudf()
-        >>> sr.to_pylibcudf()
-        (<pylibcudf.column.Column at 0x7f8160f16800>,
-        {'index': RangeIndex(start=0, stop=5, step=1), 'name': None})
         """
         if copy:
             raise NotImplementedError("copy=True is not supported")
