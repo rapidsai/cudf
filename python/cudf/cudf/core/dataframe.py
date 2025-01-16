@@ -8100,17 +8100,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         -----
         User requests to convert to pylibcudf must assume that the
         data may be modified afterwards.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3],
-        ...                    'b': ['a', 'b', 'c']},
-        ...                    index=['x', 'y', 'z'])
-        >>> df.to_pylibcudf()
-        (<pylibcudf.table.Table at 0x7f9b5996e1d0>,
-        {'index': Index(['x', 'y', 'z'], dtype='object'),
-        'column_names': Index(['a', 'b'], dtype='object')})
         """
         if copy:
             raise NotImplementedError("copy=True is not supported")
