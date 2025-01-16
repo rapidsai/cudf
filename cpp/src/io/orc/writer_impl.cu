@@ -2595,16 +2595,30 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
           : 0;
       if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }
-    ProtobufWriter pbw((_compression != compression_type::NONE) ? 3 : 0);
+
+    ProtobufWriter pbw;
     pbw.write(sf);
-    stripe.footerLength = pbw.size();
-    if (_compression != compression_type::NONE) {
-      uint32_t uncomp_sf_len = (stripe.footerLength - 3) * 2 + 1;
-      pbw.buffer()[0]        = static_cast<uint8_t>(uncomp_sf_len >> 0);
-      pbw.buffer()[1]        = static_cast<uint8_t>(uncomp_sf_len >> 8);
-      pbw.buffer()[2]        = static_cast<uint8_t>(uncomp_sf_len >> 16);
+    if (_compression == compression_type::NONE) {
+      _out_sink->host_write(pbw.data(), pbw.size());
+      stripe.footerLength = pbw.size();
+    } else {
+      std::size_t bytes_written  = 0;
+      std::size_t written_sf_len = 0;
+      while (written_sf_len < pbw.size()) {
+        auto const block_size = std::min(_compression_blocksize, pbw.size() - written_sf_len);
+        auto const header_val = block_size * 2 + 1;  // 1 means uncompressed
+        CUDF_EXPECTS(header_val >> 24 == 0, "Block length exceeds maximum size");
+        std::array const header{static_cast<uint8_t>(header_val >> 0),
+                                static_cast<uint8_t>(header_val >> 8),
+                                static_cast<uint8_t>(header_val >> 16)};
+
+        _out_sink->host_write(header.data(), header.size());
+        _out_sink->host_write(pbw.data() + written_sf_len, block_size);
+        written_sf_len += block_size;
+        bytes_written += header.size() + block_size;
+      }
+      stripe.footerLength = bytes_written;
     }
-    _out_sink->host_write(pbw.data(), pbw.size());
   }
   for (auto const& task : write_tasks) {
     task.wait();

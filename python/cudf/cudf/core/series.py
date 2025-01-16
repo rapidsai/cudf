@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc  # noqa: TC002
+
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -3804,6 +3806,79 @@ class Series(SingleColumnFrame, IndexedFrame):
                 self._data._from_columns_like_self([result_col])
             ),
             inplace=inplace,
+        )
+
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+        """
+        Convert this Series to a pylibcudf.Column.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        dict
+            Dict of metadata (includes name and series indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"name": self.name, "index": self.index}
+        return self._column.to_pylibcudf(mode="write"), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(
+        cls, col: plc.Column, metadata: dict | None = None
+    ) -> Self:
+        """
+        Create a Series from a pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The input Column.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+
+        Notes
+        -----
+        This function will generate a Series which contains a Column
+        pointing to the provided pylibcudf Column.  It will directly access
+        the data and mask buffers of the pylibcudf Column, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Column.
+        """
+        name = None
+        index = None
+        if metadata is not None:
+            if not (
+                isinstance(metadata, dict)
+                and 1 <= len(metadata) <= 2
+                and set(metadata).issubset({"name", "index"})
+            ):
+                raise ValueError(
+                    "Metadata dict must only contain name or index"
+                )
+            name = metadata.get("name")
+            index = metadata.get("index")
+        return cls._from_column(
+            cudf.core.column.ColumnBase.from_pylibcudf(
+                col, data_ptr_exposed=True
+            ),
+            name=name,
+            index=index,
         )
 
 
