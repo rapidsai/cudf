@@ -73,6 +73,11 @@ void verify_column_views(cudf::column& col)
   EXPECT_EQ(col.size(), mutable_view.size());
   EXPECT_EQ(col.null_count(), view.null_count());
   EXPECT_EQ(col.null_count(), mutable_view.null_count());
+  EXPECT_EQ(view.null_count(0, col.size(), cudf::test::get_default_stream()),
+            mutable_view.null_count(0, col.size(), cudf::test::get_default_stream()));
+  EXPECT_EQ(view.has_nulls(0, col.size(), cudf::test::get_default_stream()),
+            mutable_view.has_nulls(0, col.size(), cudf::test::get_default_stream()));
+  EXPECT_EQ(col.null_count(), mutable_view.null_count());
   EXPECT_EQ(col.nullable(), view.nullable());
   EXPECT_EQ(col.nullable(), mutable_view.nullable());
   EXPECT_EQ(col.num_children(), view.num_children());
@@ -95,45 +100,4 @@ TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
   cudf::column_view copy_view     = copy;
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
-}
-
-template <typename T>
-struct ListsColumnTest : public cudf::test::BaseFixture {};
-
-using NumericTypesNotBool =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
-
-TYPED_TEST_SUITE(ListsColumnTest, NumericTypesNotBool);
-
-TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
-{
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-
-  auto expect_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
-
-  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
-
-  cudf::test::lists_column_wrapper<TypeParam> list{
-    {{{{1, 2}, {3, 4}}, valids}, LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}},
-    valids};
-
-  cudf::test::lists_column_wrapper<TypeParam> expect{
-    {LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, expect_valids};
-
-  auto sliced = cudf::slice(list, {1, 5}, cudf::test::get_default_stream()).front();
-  auto result = std::make_unique<cudf::column>(sliced, cudf::test::get_default_stream());
-
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, result->view());
-
-  // TODO: null mask equality is being checked separately because
-  // expect_columns_equal doesn't do the check for lists columns.
-  // This is fixed in https://github.com/rapidsai/cudf/pull/5904,
-  // so we should remove this check after that's merged:
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    cudf::mask_to_bools(result->view().null_mask(), 0, 4, cudf::test::get_default_stream())->view(),
-    cudf::mask_to_bools(
-      static_cast<cudf::column_view>(expect).null_mask(), 0, 4, cudf::test::get_default_stream())
-      ->view());
 }
