@@ -407,10 +407,16 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
-  return std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
+  auto const total_row_groups = std::accumulate(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
+
+  return static_cast<size_type>(total_row_groups);
 }
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
@@ -1050,12 +1056,16 @@ aggregate_reader_metadata::select_row_groups(
   // Compute total number of input row groups if needed
   size_type total_row_groups = [&]() {
     if (not row_group_indices.empty()) {
-      return std::accumulate(row_group_indices.begin(),
-                             row_group_indices.end(),
-                             size_type{0},
-                             [](auto& sum, auto const& per_file_row_groups) {
-                               return sum + per_file_row_groups.size();
-                             });
+      size_t const total_row_groups =
+        std::accumulate(row_group_indices.begin(),
+                        row_group_indices.end(),
+                        size_t{0},
+                        [](size_t& sum, auto const& pfm) { return sum + pfm.size(); });
+
+      // Check if we have less than 2B total row groups.
+      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+                   "Total number of row groups exceed the size_type's limit");
+      return static_cast<size_type>(total_row_groups);
     } else {
       return num_row_groups;
     }

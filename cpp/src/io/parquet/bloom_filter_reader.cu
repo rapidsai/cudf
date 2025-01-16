@@ -583,10 +583,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Number of input table columns
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
 
-  // Check if we have less than 2B total row groups.
-  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-               "Total number of row groups exceed the size_type's limit");
-
   // Collect equality literals for each input table column
   auto const equality_literals =
     equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();

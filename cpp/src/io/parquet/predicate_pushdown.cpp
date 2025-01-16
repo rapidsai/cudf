@@ -400,10 +400,6 @@ aggregate_reader_metadata::filter_row_groups(
 {
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Check if we have less than 2B total row groups.
-  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-               "Total number of row groups exceed the size_type's limit");
-
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
