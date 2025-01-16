@@ -286,9 +286,9 @@ struct table_metadata {
     per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
 
   // The following variables are currently only computed for Parquet reader
-  size_type num_input_row_groups;           //!< Number of input row groups across all data sources.
-  size_type num_stats_filtered_row_groups;  //!< Number of row groups after applying stats filter.
-  size_type num_bloom_filtered_row_groups;  //!< Number of row groups after applying bloom filter.
+  size_type num_input_row_groups;           //!< Number of input row groups across all data sources
+  size_type num_stats_filtered_row_groups;  //!< Number of row groups after applying stats filter
+  size_type num_bloom_filtered_row_groups;  //!< Number of row groups after applying bloom filter
 };
 
 /**
