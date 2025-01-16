@@ -125,6 +125,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
+        self._mask = None
+        self._base_mask = None
+        self._data = None
+        self._children = None
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -152,7 +156,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self._data is None:  # type: ignore[has-type]
             start = self.offset * self.dtype.itemsize
             end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]
+            self._data = self.base_data[start:end]  # type: ignore[assignment]
         return self._data
 
     @property
@@ -187,10 +191,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def mask(self) -> None | Buffer:
         if self._mask is None:  # type: ignore[has-type]
             if self.base_mask is None or self.offset == 0:
-                self._mask = self.base_mask
+                self._mask = self.base_mask  # type: ignore[assignment]
             else:
                 with acquire_spill_lock():
-                    self._mask = as_buffer(
+                    self._mask = as_buffer(  # type: ignore[assignment]
                         plc.null_mask.copy_bitmask(
                             self.to_pylibcudf(mode="read")
                         )
@@ -236,7 +240,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         self._mask = None
         self._children = None
-        self._base_mask = value
+        self._base_mask = value  # type: ignore[assignment]
         self._clear_cache()
 
     def _clear_cache(self) -> None:
@@ -1174,9 +1178,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     ._with_type_metadata(self.dtype)
                 )
         else:
-            return copying.scatter([value], key, [self])[
-                0
-            ]._with_type_metadata(self.dtype)
+            return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+                copying.scatter([value], key, [self])[0]
+            )._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
         self, num_keys: int, value: cudf.core.scalar.Scalar | ColumnBase
@@ -1385,8 +1389,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if indices.dtype.kind not in {"u", "i"}:
             indices = indices.astype(SIZE_TYPE_DTYPE)
         GatherMap(indices, len(self), nullify=not check_bounds or nullify)
-        gathered = copying.gather([self], indices, nullify=nullify)  # type: ignore[arg-type]
-        return gathered[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        gathered = ColumnBase.from_pylibcudf(
+            copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
+        )
+        return gathered._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.

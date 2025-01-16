@@ -2057,7 +2057,12 @@ class BaseIndex(Serializable):
 
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
-            copying.gather(self._columns, gather_map, nullify=nullify),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in copying.gather(
+                    self._columns, gather_map, nullify=nullify
+                )
+            ],
             self._column_names,
         )
 
