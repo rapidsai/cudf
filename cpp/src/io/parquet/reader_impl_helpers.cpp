@@ -1119,11 +1119,11 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
-  // Get number of rows in each data source
-  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
-
   // Vector to hold the `row_group_info` of selected row groups
   std::vector<row_group_info> selection;
+  // Number of rows in each data source
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
+
   if (!row_group_indices.empty()) {
     CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                  "Must specify row groups for each source");
