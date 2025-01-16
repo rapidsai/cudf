@@ -840,6 +840,15 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
+class GroupbyOptions:
+    """Serializable wrapper for polars GroupbyOptions."""
+
+    def __init__(self, polars_groupby_options: Any):
+        self.dynamic = polars_groupby_options.dynamic
+        self.rolling = polars_groupby_options.rolling
+        self.slice = polars_groupby_options.slice
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -873,8 +882,8 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = options
         self.children = (df,)
+        self.options = GroupbyOptions(options)
         if self.options.rolling:
             raise NotImplementedError(
                 "rolling window/groupby"
