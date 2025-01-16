@@ -8114,7 +8114,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         if copy:
             raise NotImplementedError("copy=True is not supported")
-        metadata = {"index": self.index, "columns": self.columns}
+        metadata = {"index": self.index, "columns": self._data.to_pandas_index}
         return plc.Table(
             [col.to_pylibcudf(mode="write") for col in self._columns]
         ), metadata
