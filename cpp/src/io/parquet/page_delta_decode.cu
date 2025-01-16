@@ -435,7 +435,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          size_t* initial_str_offsets,
+                          cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -580,10 +580,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
-  // initial string buffer offset to be used during large string column construction
-  convert_string_lengths_to_offsets<decode_block_size>(
-    s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+  // Convert string sizes to offsets if this is not a large string column.
+  if (not s->col.is_large_string_col) {
+    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
+  }  // For large strings, update the initial string buffer offset to be used during large string
+     // column construction
+  else {
+    compute_initial_large_strings_offset(
+      s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+  }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -596,7 +601,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                                 device_span<ColumnChunkDesc const> chunks,
                                 size_t min_row,
                                 size_t num_rows,
-                                size_t* initial_str_offsets,
+                                cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -735,10 +740,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
-  // initial string buffer offset to be used during large string column construction
-  convert_string_lengths_to_offsets<decode_block_size>(
-    s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+  // Convert string sizes to offsets if this is not a large string column.
+  if (not s->col.is_large_string_col) {
+    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
+  }  // For large strings, update the initial string buffer offset to be used during large string
+     // column construction
+  else {
+    compute_initial_large_strings_offset(
+      s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+  }
 
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;
@@ -783,7 +793,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          size_t* initial_str_offsets,
+                          cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream)
 {
@@ -809,7 +819,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
-                                size_t* initial_str_offsets,
+                                cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {

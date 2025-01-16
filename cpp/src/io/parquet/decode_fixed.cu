@@ -942,7 +942,7 @@ constexpr bool is_split_decode()
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
- * @param initial_str_offsets A vector to store the initial str_offset for large strings
+ * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
@@ -951,7 +951,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
-                           size_t* initial_str_offsets,
+                           cudf::device_span<size_t> initial_str_offsets,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -1163,11 +1163,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     valid_count = next_valid_count;
   }
 
-  // Convert string sizes to offsets if this is not a large string column. Otherwise, update the
-  // initial string buffer offset to be used during large string column construction
   if constexpr (has_strings_t) {
-    convert_string_lengths_to_offsets<decode_block_size_t>(
-      s, initial_str_offsets, pages[page_idx].chunk_idx, has_lists_t);
+    // Convert string sizes to offsets if this is not a large string column.
+    if (not s->col.is_large_string_col) {
+      convert_small_string_lengths_to_offsets<decode_block_size_t>(s, has_lists_t);
+    }  // For large strings, update the initial string buffer offset to be used during large string
+       // column construction
+    else {
+      compute_initial_large_strings_offset(
+        s, initial_str_offsets, pages[page_idx].chunk_idx, has_lists_t);
+    }
   }
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -1186,7 +1191,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t min_row,
                              int level_type_size,
                              decode_kernel_mask kernel_mask,
-                             size_t* initial_str_offsets,
+                             cudf::device_span<size_t> initial_str_offsets,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {

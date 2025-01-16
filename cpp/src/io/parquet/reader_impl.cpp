@@ -230,6 +230,10 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // create this before we fork streams
   kernel_error error_code(_stream);
 
+  // create a device span of initial string offsets vector
+  auto initial_str_offsets_span =
+    cudf::device_span<size_t>{initial_str_offsets.d_begin(), initial_str_offsets.size()};
+
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
@@ -243,7 +247,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    skip_rows,
                    level_type_size,
                    decoder_mask,
-                   initial_str_offsets.d_begin(),
+                   initial_str_offsets_span,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -300,7 +304,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         initial_str_offsets.d_begin(),
+                         initial_str_offsets_span,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -312,7 +316,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
-                               initial_str_offsets.d_begin(),
+                               initial_str_offsets_span,
                                error_code.data(),
                                streams[s_idx++]);
   }

@@ -105,10 +105,8 @@ __device__ inline void block_excl_sum(size_type* arr, size_type length, size_typ
  * atomically update the initial string offset to be used during large string column construction
  */
 template <int block_size>
-__device__ void convert_string_lengths_to_offsets(page_state_s const* const state,
-                                                  size_t* initial_str_offsets,
-                                                  int32_t chunk_idx,
-                                                  bool has_lists)
+__device__ void convert_small_string_lengths_to_offsets(page_state_s const* const state,
+                                                        bool has_lists)
 {
   // If this is a large string column. In the
   // latter case, offsets will be computed during string column creation.
@@ -119,20 +117,38 @@ __device__ void convert_string_lengths_to_offsets(page_state_s const* const stat
   // values until we reach first_row. account for that here.
   if (not has_lists) { value_count -= state->first_row; }
 
-  auto const initial_value = state->page.str_offset;
-
+  // Convert the array of lengths into offsets
   if (value_count > 0) {
-    // Convert the array of lengths into offsets if this not a large string column.
-    if (not state->col.is_large_string_col) {
-      auto const offptr = reinterpret_cast<size_type*>(ni.data_out);
-      block_excl_sum<block_size>(offptr, value_count, initial_value);
-    }  // Atomically update the initial string offset if this is a large string column. This initial
-    // offset will be used to compute (64-bit) offsets during large string column construction.
-    else if (!threadIdx.x) {
-      cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
-        initial_str_offsets[chunk_idx]};
-      initial_str_offsets_ref.fetch_min(initial_value, cuda::std::memory_order_relaxed);
-    }
+    auto const offptr        = reinterpret_cast<size_type*>(ni.data_out);
+    auto const initial_value = state->page.str_offset;
+    block_excl_sum<block_size>(offptr, value_count, initial_value);
+  }
+}
+
+/**
+ * @brief Atomically update the initial string offset to be used during large string column
+ * construction
+ */
+inline __device__ void compute_initial_large_strings_offset(
+  page_state_s const* const state,
+  cudf::device_span<size_t> initial_str_offsets,
+  int32_t chunk_idx,
+  bool has_lists)
+{
+  // Values decoded by this page.
+  int value_count = state->nesting_info[state->col.max_nesting_depth - 1].value_count;
+
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (not has_lists) { value_count -= state->first_row; }
+
+  // Atomically update the initial string offset if this is a large string column. This initial
+  // offset will be used to compute (64-bit) offsets during large string column construction.
+  if (value_count > 0 and !threadIdx.x) {
+    auto const initial_value = state->page.str_offset;
+    cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
+      initial_str_offsets[chunk_idx]};
+    initial_str_offsets_ref.fetch_min(initial_value, cuda::std::memory_order_relaxed);
   }
 }
 
