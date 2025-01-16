@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -8,9 +8,9 @@ from numba.np import numpy_support
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf.api.types import is_scalar
 from cudf.utils import cudautils
+from cudf.utils.dtypes import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,11 +29,11 @@ _agg_name_map = {
 
 class Aggregation:
     def __init__(self, agg: plc.aggregation.Aggregation) -> None:
-        self.c_obj = agg
+        self.plc_obj = agg
 
     @property
     def kind(self) -> str:
-        name = self.c_obj.kind().name
+        name = self.plc_obj.kind().name
         return _agg_name_map.get(name, name)
 
     @classmethod

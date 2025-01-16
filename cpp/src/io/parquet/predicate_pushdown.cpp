@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -265,7 +266,6 @@ class stats_expression_converter : public ast::detail::expression_transformer {
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
   {
-    _stats_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -278,7 +278,6 @@ class stats_expression_converter : public ast::detail::expression_transformer {
                  "Statistics AST supports only left table");
     CUDF_EXPECTS(expr.get_column_index() < _num_columns,
                  "Column index cannot be more than number of columns in the table");
-    _stats_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -307,6 +306,9 @@ class stats_expression_converter : public ast::detail::expression_transformer {
       CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
                    "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
+      // Push literal into the ast::tree
+      auto const& literal =
+        _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
       auto const col_index = v->get_column_index();
       switch (op) {
         /* transform to stats conditions. op(col, literal)
@@ -318,34 +320,33 @@ class stats_expression_converter : public ast::detail::expression_transformer {
         col1 <= val --> vmin <= val
         */
         case ast_operator::EQUAL: {
-          auto const& vmin = _col_ref.emplace_back(col_index * 2);
-          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-          auto const& op1 =
-            _operators.emplace_back(ast_operator::LESS_EQUAL, vmin, operands[1].get());
-          auto const& op2 =
-            _operators.emplace_back(ast_operator::GREATER_EQUAL, vmax, operands[1].get());
-          _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{
+            ast::ast_operator::LOGICAL_AND,
+            _stats_expr.push(ast::operation{ast_operator::GREATER_EQUAL, vmax, literal}),
+            _stats_expr.push(ast::operation{ast_operator::LESS_EQUAL, vmin, literal})});
           break;
         }
         case ast_operator::NOT_EQUAL: {
-          auto const& vmin = _col_ref.emplace_back(col_index * 2);
-          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-          auto const& op1  = _operators.emplace_back(ast_operator::NOT_EQUAL, vmin, vmax);
-          auto const& op2 =
-            _operators.emplace_back(ast_operator::NOT_EQUAL, vmax, operands[1].get());
-          _operators.emplace_back(ast_operator::LOGICAL_OR, op1, op2);
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{
+            ast_operator::LOGICAL_OR,
+            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmin, vmax}),
+            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmax, literal})});
           break;
         }
         case ast_operator::LESS: [[fallthrough]];
         case ast_operator::LESS_EQUAL: {
-          auto const& vmin = _col_ref.emplace_back(col_index * 2);
-          _operators.emplace_back(op, vmin, operands[1].get());
+          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
+          _stats_expr.push(ast::operation{op, vmin, literal});
           break;
         }
         case ast_operator::GREATER: [[fallthrough]];
         case ast_operator::GREATER_EQUAL: {
-          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-          _operators.emplace_back(op, vmax, operands[1].get());
+          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
+          _stats_expr.push(ast::operation{op, vmax, literal});
           break;
         }
         default: CUDF_FAIL("Unsupported operation in Statistics AST");
@@ -353,13 +354,12 @@ class stats_expression_converter : public ast::detail::expression_transformer {
     } else {
       auto new_operands = visit_operands(operands);
       if (cudf::ast::detail::ast_operator_arity(op) == 2) {
-        _operators.emplace_back(op, new_operands.front(), new_operands.back());
+        _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _operators.emplace_back(op, new_operands.front());
+        _stats_expr.push(ast::operation{op, new_operands.front()});
       }
     }
-    _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-    return std::reference_wrapper<ast::expression const>(_operators.back());
+    return _stats_expr.back();
   }
 
   /**
@@ -369,7 +369,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const
   {
-    return _stats_expr.value().get();
+    return _stats_expr.back();
   }
 
  private:
@@ -383,14 +383,13 @@ class stats_expression_converter : public ast::detail::expression_transformer {
     }
     return transformed_operands;
   }
-  std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
+  ast::tree _stats_expr;
   size_type _num_columns;
-  std::list<ast::column_reference> _col_ref;
-  std::list<ast::operation> _operators;
 };
 }  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -399,7 +398,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 {
   auto mr = cudf::get_current_device_resource_ref();
   // Create row group indices.
-  std::vector<std::vector<size_type>> filtered_row_group_indices;
   std::vector<std::vector<size_type>> all_row_group_indices;
   host_span<std::vector<size_type> const> input_row_group_indices;
   if (row_group_indices.empty()) {
@@ -415,18 +413,22 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   } else {
     input_row_group_indices = row_group_indices;
   }
-  auto const total_row_groups = std::accumulate(input_row_group_indices.begin(),
-                                                input_row_group_indices.end(),
-                                                0,
-                                                [](size_type sum, auto const& per_file_row_groups) {
-                                                  return sum + per_file_row_groups.size();
-                                                });
+  auto const total_row_groups = std::accumulate(
+    input_row_group_indices.begin(),
+    input_row_group_indices.end(),
+    size_t{0},
+    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster const stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
+  stats_caster const stats_col{
+    static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
@@ -455,44 +457,23 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(predicate.size());
-    if (predicate.nullable()) {
-      return cudf::detail::make_host_vector_sync(
-        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
-    } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
-      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
-      return bitmask;
-    }
-  }();
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  auto const filtered_row_group_indices = collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
 
-  auto validity_it = cudf::detail::make_counting_transform_iterator(
-    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+  // Span of row groups to apply bloom filtering on.
+  auto const bloom_filter_input_row_groups =
+    filtered_row_group_indices.has_value()
+      ? host_span<std::vector<size_type> const>(filtered_row_group_indices.value())
+      : input_row_group_indices;
 
-  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+  // Apply bloom filtering on the bloom filter input row groups
+  auto const bloom_filtered_row_groups = apply_bloom_filters(
+    sources, bloom_filter_input_row_groups, output_dtypes, output_column_schemas, filter, stream);
 
-  // Return only filtered row groups based on predicate
-  // if all are required or all are nulls, return.
-  if (std::all_of(is_row_group_required.cbegin(),
-                  is_row_group_required.cend(),
-                  [](auto i) { return bool(i); }) or
-      predicate.null_count() == predicate.size()) {
-    return std::nullopt;
-  }
-  size_type is_required_idx = 0;
-  for (auto const& input_row_group_index : input_row_group_indices) {
-    std::vector<size_type> filtered_row_groups;
-    for (auto const rg_idx : input_row_group_index) {
-      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
-        filtered_row_groups.push_back(rg_idx);
-      }
-      ++is_required_idx;
-    }
-    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
-  }
-  return {std::move(filtered_row_group_indices)};
+  // Return bloom filtered row group indices iff collected
+  return bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups
+                                               : filtered_row_group_indices;
 }
 
 // convert column named expression to column index reference expression
@@ -513,14 +494,14 @@ named_to_reference_converter::named_to_reference_converter(
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::literal const& expr)
 {
-  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::column_reference const& expr)
 {
-  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
@@ -534,7 +515,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   }
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
-  _stats_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
+  _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
 }
 
@@ -549,7 +530,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
     _operators.emplace_back(op, new_operands.front());
   }
-  _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+  _converted_expr = std::reference_wrapper<ast::expression const>(_operators.back());
   return std::reference_wrapper<ast::expression const>(_operators.back());
 }
 
@@ -641,6 +622,62 @@ class names_from_expression : public ast::detail::expression_transformer {
   std::vector<std::string> const& skip_names)
 {
   return names_from_expression(expr, skip_names).to_vector();
+}
+
+std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
+  cudf::table_view table,
+  std::reference_wrapper<ast::expression const> ast_expr,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  rmm::cuda_stream_view stream)
+{
+  // Filter the input table using AST expression
+  auto predicate_col = cudf::detail::compute_column(
+    table, ast_expr.get(), stream, cudf::get_current_device_resource_ref());
+  auto predicate = predicate_col->view();
+  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+               "Filter expression must return a boolean column");
+
+  auto const host_bitmask = [&] {
+    auto const num_bitmasks = num_bitmask_words(predicate.size());
+    if (predicate.nullable()) {
+      return cudf::detail::make_host_vector_sync(
+        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+    } else {
+      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
+      return bitmask;
+    }
+  }();
+
+  auto validity_it = cudf::detail::make_counting_transform_iterator(
+    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+
+  // Return only filtered row groups based on predicate
+  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
+    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+
+  // Return if all are required, or all are nulls.
+  if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
+                                                                is_row_group_required.cend(),
+                                                                [](auto i) { return bool(i); })) {
+    return std::nullopt;
+  }
+
+  // Collect indices of the filtered row groups
+  size_type is_required_idx = 0;
+  std::vector<std::vector<size_type>> filtered_row_group_indices;
+  for (auto const& input_row_group_index : input_row_group_indices) {
+    std::vector<size_type> filtered_row_groups;
+    for (auto const rg_idx : input_row_group_index) {
+      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
+        filtered_row_groups.push_back(rg_idx);
+      }
+      ++is_required_idx;
+    }
+    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
+  }
+
+  return {filtered_row_group_indices};
 }
 
 }  // namespace cudf::io::parquet::detail
