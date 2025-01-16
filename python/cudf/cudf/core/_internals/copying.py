@@ -1,17 +1,17 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cudf.core.column import ColumnBase
+    from cudf import Scalar
     from cudf.core.column.numerical import NumericalColumn
 
 
@@ -28,15 +28,12 @@ def gather(
         if nullify
         else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     )
-    return [
-        cudf._lib.column.Column.from_pylibcudf(col)
-        for col in plc_tbl.columns()
-    ]
+    return [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
 
 
 @acquire_spill_lock()
 def scatter(
-    sources: list[ColumnBase | cudf.Scalar],
+    sources: list[ColumnBase | Scalar],
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
@@ -66,16 +63,13 @@ def scatter(
 
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
-        if isinstance(sources[0], cudf._lib.column.Column)
+        if isinstance(sources[0], ColumnBase)
         else [slr.device_value.c_value for slr in sources],  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )
 
-    return [
-        cudf._lib.column.Column.from_pylibcudf(col)
-        for col in plc_tbl.columns()
-    ]
+    return [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
 
 
 @acquire_spill_lock()
@@ -83,10 +77,7 @@ def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
 ) -> list[list[ColumnBase]]:
     return [
-        [
-            cudf._lib.column.Column.from_pylibcudf(col)
-            for col in plc_tbl.columns()
-        ]
+        [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
         for plc_tbl in plc.copying.split(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in input_columns]

@@ -1,15 +1,12 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import pylibcudf as plc
 
-from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
-
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase
 
 
 @acquire_spill_lock()
@@ -53,7 +50,7 @@ def drop_nulls(
         keys,
         keep_threshold,
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return [ColumnBase.from_pylibcudf(col) for col in plc_table.columns()]
 
 
 @acquire_spill_lock()
@@ -76,7 +73,7 @@ def apply_boolean_mask(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
         boolean_mask.to_pylibcudf(mode="read"),
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return [ColumnBase.from_pylibcudf(col) for col in plc_table.columns()]
 
 
 @acquire_spill_lock()
@@ -118,4 +115,4 @@ def drop_duplicates(
         else plc.types.NullEquality.UNEQUAL,
         plc.types.NanEquality.ALL_EQUAL,
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return [ColumnBase.from_pylibcudf(col) for col in plc_table.columns()]

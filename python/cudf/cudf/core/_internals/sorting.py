@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -6,13 +6,11 @@ from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
-from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    from cudf.core.column import ColumnBase
 
 
 @acquire_spill_lock()
@@ -146,7 +144,7 @@ def order_by(
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
-    return Column.from_pylibcudf(
+    return ColumnBase.from_pylibcudf(
         func(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in columns_from_table],
@@ -195,7 +193,7 @@ def sort_by_key(
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
     return [
-        Column.from_pylibcudf(col)
+        ColumnBase.from_pylibcudf(col)
         for col in func(
             plc.Table([col.to_pylibcudf(mode="read") for col in values]),
             plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
