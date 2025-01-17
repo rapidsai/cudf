@@ -379,6 +379,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  * @param bloom_filter_sizes Bloom filter sizes for all chunks
  * @param chunk_source_map Association between each column chunk and its source
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
  */
 void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources,
                             size_t num_chunks,
@@ -386,26 +387,11 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
                             cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
                             cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
                             std::vector<size_type> const& chunk_source_map,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref aligned_mr)
 {
   // Read tasks for bloom filter data
   std::vector<std::future<size_t>> read_tasks;
-
-  // Using `cuco::arrow_filter_policy` with a temporary `cuda::std::byte` key type to extract
-  // properties.
-  using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
-
-  // Number of words per bloom filter block
-  auto constexpr words_per_block = policy_type::words_per_block;
-
-  // Alignment requirement in accordance with
-  // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
-  size_t constexpr alignment =
-    policy_type::words_per_block * sizeof(typename policy_type::word_type);
-
-  // Create an `rmm::mr::aligned_resource_adaptor` to allocate bloom filter device buffers with.
-  auto aligned_mr =
-    rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(), alignment);
 
   // Read bloom filters for all column chunks
   std::for_each(
@@ -435,6 +421,12 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       BloomFilterHeader header;
       CompactProtocolReader cp{buffer->data(), buffer->size()};
       cp.read(&header);
+
+      // Get the hardcoded words_per_block value from `cuco::arrow_filter_policy` using a temporary
+      // `std::byte` key type.
+      auto constexpr words_per_block =
+        cuco::arrow_filter_policy<cuda::std::byte,
+                                  cudf::hashing::detail::XXHash_64>::words_per_block;
 
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
@@ -493,7 +485,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<int const> column_schemas,
   size_type total_row_groups,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref aligned_mr) const
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = column_schemas.size();
@@ -552,7 +545,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
                          bloom_filter_offsets,
                          bloom_filter_sizes,
                          chunk_source_map,
-                         stream);
+                         stream,
+                         aligned_mr);
 
   // Return bloom filter data
   return bloom_filter_data;
@@ -621,10 +615,16 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
 
+  using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+  size_t constexpr alignment =
+    policy_type::words_per_block * sizeof(typename policy_type::word_type);
+  auto aligned_mr =
+    rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(), alignment);
+
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
   auto bloom_filter_data = read_bloom_filters(
-    sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream);
+    sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream, aligned_mr);
 
   // No bloom filter buffers, return the original row group indices
   if (bloom_filter_data.empty()) { return std::nullopt; }
