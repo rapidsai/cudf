@@ -67,9 +67,12 @@ struct bloom_filter_caster {
                      ast::literal const* const literal,
                      rmm::cuda_stream_view stream) const
   {
-    using key_type    = T;
-    using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
-    using word_type   = typename policy_type::word_type;
+    using key_type          = T;
+    using policy_type       = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+    using bloom_filter_type = cuco::
+      bloom_filter_ref<key_type, cuco::extent<std::size_t>, cuco::thread_scope_thread, policy_type>;
+    using filter_block_type = typename bloom_filter_type::filter_block_type;
+    using word_type         = typename policy_type::word_type;
 
     // Check if the literal has the same type as the predicate column
     CUDF_EXPECTS(
@@ -105,16 +108,13 @@ struct bloom_filter_caster {
         auto const num_filter_blocks = filter_size / bytes_per_block;
 
         // Create a bloom filter view.
-        cuco::bloom_filter_ref<key_type,
-                               cuco::extent<std::size_t>,
-                               cuco::thread_scope_thread,
-                               policy_type>
-          filter{reinterpret_cast<word_type*>(filter_span[filter_idx].data()),
-                 num_filter_blocks,
-                 {},  // Thread scope as the same literal is being searched across different bitsets
-                      // per thread
-                 {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
-                       // compatibility
+        bloom_filter_type filter{
+          reinterpret_cast<filter_block_type*>(filter_span[filter_idx].data()),
+          num_filter_blocks,
+          {},   // Thread scope as the same literal is being searched across different bitsets per
+                // thread
+          {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
+                // compatibility
 
         // If int96_timestamp type, convert literal to string_view and query bloom
         // filter
