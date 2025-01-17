@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -419,7 +419,7 @@ template <typename T, CUDF_ENABLE_IF(cudf::column_device_view::has_element_acces
 /// at the beginning of the column or at the end.
 /// If no null values are founds, null_begin and null_end are 0.
 std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
-  column_view const& orderby_column)
+  column_view const& orderby_column, rmm::cuda_stream_view stream)
 {
   auto const num_rows  = orderby_column.size();
   auto const num_nulls = orderby_column.null_count();
@@ -429,7 +429,7 @@ std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
     return std::make_tuple(0, num_nulls);
   }
 
-  auto const first_row_is_null = orderby_column.null_count(0, 1) == 1;
+  auto const first_row_is_null = orderby_column.null_count(0, 1, stream) == 1;
 
   return first_row_is_null ? std::make_tuple(0, num_nulls)
                            : std::make_tuple(num_rows - num_nulls, num_rows);
@@ -451,7 +451,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
-  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] =
+    get_null_bounds_for_orderby_column(orderby_column, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
   auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
@@ -740,7 +741,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] =
+    get_null_bounds_for_orderby_column(orderby_column, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
   auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
