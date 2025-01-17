@@ -543,16 +543,6 @@ def to_cudf_dispatch_from_cudf(data, **kwargs):
     return data
 
 
-# Define the "cudf" backend for "legacy" Dask DataFrame
-class LegacyCudfBackendEntrypoint(DataFrameBackendEntrypoint):
-    """Backend-entrypoint class for legacy Dask-DataFrame
-
-    This class is registered under the name "cudf" for the
-    ``dask.dataframe.backends`` entrypoint in ``pyproject.toml``.
-    This "legacy" backend is only used for CSV support.
-    """
-
-
 # Define the "cudf" backend for expr-based Dask DataFrame
 class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-Expressions
@@ -566,20 +556,19 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     Examples
     --------
     >>> import dask
-    >>> import dask_expr as dx
+    >>> import dask.dataframe as dd
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
-    ...     ddf = dx.from_dict({"a": range(10)})
+    ...     ddf = dd.from_dict({"a": range(10)})
     >>> type(ddf._meta)
     <class 'cudf.core.dataframe.DataFrame'>
     """
 
     @staticmethod
     def to_backend(data, **kwargs):
-        import dask_expr as dx
-
+        from dask_cudf._expr import new_collection
         from dask_cudf._expr.expr import ToCudfBackend
 
-        return dx.new_collection(ToCudfBackend(data, kwargs))
+        return new_collection(ToCudfBackend(data, kwargs))
 
     @staticmethod
     def from_dict(
@@ -590,10 +579,10 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         columns=None,
         constructor=cudf.DataFrame,
     ):
-        import dask_expr as dx
+        from dask_cudf._expr import from_dict
 
         return _default_backend(
-            dx.from_dict,
+            from_dict,
             data,
             npartitions=npartitions,
             orient=orient,
@@ -617,35 +606,15 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         storage_options=None,
         **kwargs,
     ):
-        try:
-            # TODO: Remove when cudf is pinned to dask>2024.12.0
-            import dask_expr as dx
-            from dask_expr.io.csv import ReadCSV
-            from fsspec.utils import stringify_path
+        from dask_cudf.io.csv import read_csv
 
-            if not isinstance(path, str):
-                path = stringify_path(path)
-            return dx.new_collection(
-                ReadCSV(
-                    path,
-                    dtype_backend=dtype_backend,
-                    storage_options=storage_options,
-                    kwargs=kwargs,
-                    header=header,
-                    dataframe_backend="cudf",
-                )
-            )
-        except ImportError:
-            # Requires dask>2024.12.0
-            from dask_cudf.io.csv import read_csv
-
-            return read_csv(
-                path,
-                *args,
-                header=header,
-                storage_options=storage_options,
-                **kwargs,
-            )
+        return read_csv(
+            path,
+            *args,
+            header=header,
+            storage_options=storage_options,
+            **kwargs,
+        )
 
     @staticmethod
     def read_json(*args, **kwargs):
