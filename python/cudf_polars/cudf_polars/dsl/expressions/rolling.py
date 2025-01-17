@@ -13,7 +13,7 @@ from cudf_polars.dsl.expressions.base import Expr
 if TYPE_CHECKING:
     import pylibcudf as plc
 
-__all__ = ["RollingWindow", "GroupedRollingWindow"]
+__all__ = ["GroupedRollingWindow", "RollingWindow"]
 
 
 class RollingWindow(Expr):
@@ -24,6 +24,7 @@ class RollingWindow(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (agg,)
+        self.is_pointwise = False
         raise NotImplementedError("Rolling window not implemented")
 
 
@@ -35,4 +36,5 @@ class GroupedRollingWindow(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
+        self.is_pointwise = False
         raise NotImplementedError("Grouped rolling window not implemented")

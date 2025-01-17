@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -833,7 +833,7 @@ std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   // Lambda function to read and return 4 bytes as int32_t from the ipc message buffer and update
   // buffer pointer and size
   auto read_int32_from_ipc_message = [&]() {
-    int32_t bytes;
+    int32_t bytes = 0;
     std::memcpy(&bytes, message_buf, sizeof(int32_t));
     // Offset the message buf and reduce remaining size
     message_buf += sizeof(int32_t);
@@ -991,7 +991,7 @@ std::string aggregate_reader_metadata::get_pandas_index() const
     // One-liner regex:
     // "index_columns"\s*:\s*\[\s*((?:"(?:|(?:.*?(?![^\\]")).?)[^\\]?",?\s*)*)\]
     // Documented below.
-    std::regex index_columns_expr{
+    std::regex const index_columns_expr{
       R"("index_columns"\s*:\s*\[\s*)"  // match preamble, opening square bracket, whitespace
       R"(()"                            // Open first capturing group
       R"((?:")"                         // Open non-capturing group match opening quote
@@ -1013,12 +1013,12 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   std::vector<std::string> names;
   auto str = get_pandas_index();
   if (str.length() != 0) {
-    std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
+    std::regex const index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
     std::smatch sm;
     while (std::regex_search(str, sm, index_name_expr)) {
       if (sm.size() == 2) {  // 2 = whole match, first item
         if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
-          std::regex esc_quote{R"(\\")"};
+          std::regex const esc_quote{R"(\\")"};
           names.emplace_back(std::regex_replace(sm[1].str(), esc_quote, R"(")"));
         }
       }
@@ -1030,6 +1030,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
@@ -1042,7 +1043,7 @@ aggregate_reader_metadata::select_row_groups(
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
     filtered_row_group_indices = filter_row_groups(
-      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+      sources, row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
@@ -1362,8 +1363,8 @@ aggregate_reader_metadata::select_columns(
     std::vector<path_info> all_paths;
     std::function<void(std::string, int)> add_path = [&](std::string path_till_now,
                                                          int schema_idx) {
-      auto const& schema_elem = get_schema(schema_idx);
-      std::string curr_path   = path_till_now + schema_elem.name;
+      auto const& schema_elem     = get_schema(schema_idx);
+      std::string const curr_path = path_till_now + schema_elem.name;
       all_paths.push_back({curr_path, schema_idx});
       for (auto const& child_idx : schema_elem.children_idx) {
         add_path(curr_path + ".", child_idx);
@@ -1376,7 +1377,7 @@ aggregate_reader_metadata::select_columns(
     // Find which of the selected paths are valid and get their schema index
     std::vector<path_info> valid_selected_paths;
     // vector reference pushback (*use_names). If filter names passed.
-    std::vector<std::reference_wrapper<std::vector<std::string> const>> column_names{
+    std::vector<std::reference_wrapper<std::vector<std::string> const>> const column_names{
       *use_names, *filter_columns_names};
     for (auto const& used_column_names : column_names) {
       for (auto const& selected_path : used_column_names.get()) {
@@ -1408,7 +1409,7 @@ aggregate_reader_metadata::select_columns(
 
     std::vector<column_name_info> selected_columns;
     if (include_index) {
-      std::vector<std::string> index_names = get_pandas_index_names();
+      std::vector<std::string> const index_names = get_pandas_index_names();
       std::transform(index_names.cbegin(),
                      index_names.cend(),
                      std::back_inserter(selected_columns),
@@ -1457,7 +1458,7 @@ aggregate_reader_metadata::select_columns(
     }
     for (auto& col : selected_columns) {
       auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
-      bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
+      bool const valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
       if (valid_column) {
         output_column_schemas.push_back(top_level_col_schema_idx);
 

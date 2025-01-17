@@ -32,6 +32,7 @@ class Sort(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (column,)
+        self.is_pointwise = False
 
     def do_evaluate(
         self,
@@ -71,6 +72,7 @@ class SortBy(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (column, *by)
+        self.is_pointwise = False
 
     def do_evaluate(
         self,

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import datetime
 import functools
 import locale
 import re
+import warnings
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -17,17 +18,18 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
 from cudf import _lib as libcudf
-from cudf._lib.search import search_sorted
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
+from cudf.core._internals.search import search_sorted
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
     get_tz_data,
 )
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import (
@@ -36,7 +38,7 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -210,6 +212,8 @@ class DatetimeColumn(column.ColumnBase):
         "__rsub__",
     }
 
+    _PANDAS_NA_REPR = str(pd.NaT)
+
     def __init__(
         self,
         data: Buffer,
@@ -267,43 +271,60 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def quarter(self) -> ColumnBase:
-        return libcudf.datetime.extract_quarter(self)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
+            )
 
     @property
     def year(self) -> ColumnBase:
-        return self.get_dt_field("year")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.YEAR)
 
     @property
     def month(self) -> ColumnBase:
-        return self.get_dt_field("month")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.MONTH)
 
     @property
     def day(self) -> ColumnBase:
-        return self.get_dt_field("day")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.DAY)
 
     @property
     def hour(self) -> ColumnBase:
-        return self.get_dt_field("hour")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.HOUR)
 
     @property
     def minute(self) -> ColumnBase:
-        return self.get_dt_field("minute")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.MINUTE)
 
     @property
     def second(self) -> ColumnBase:
-        return self.get_dt_field("second")
+        return self._get_dt_field(plc.datetime.DatetimeComponent.SECOND)
+
+    @property
+    def millisecond(self) -> ColumnBase:
+        return self._get_dt_field(plc.datetime.DatetimeComponent.MILLISECOND)
+
+    @property
+    def microsecond(self) -> ColumnBase:
+        return self._get_dt_field(plc.datetime.DatetimeComponent.MICROSECOND)
+
+    @property
+    def nanosecond(self) -> ColumnBase:
+        return self._get_dt_field(plc.datetime.DatetimeComponent.NANOSECOND)
 
     @property
     def weekday(self) -> ColumnBase:
-        return self.get_dt_field("weekday")
-
-    @property
-    def dayofyear(self) -> ColumnBase:
-        return self.get_dt_field("day_of_year")
+        # pandas counts Monday-Sunday as 0-6
+        # while libcudf counts Monday-Sunday as 1-7
+        result = self._get_dt_field(plc.datetime.DatetimeComponent.WEEKDAY)
+        return result - result.dtype.type(1)
 
     @property
     def day_of_year(self) -> ColumnBase:
-        return self.get_dt_field("day_of_year")
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
+            )
 
     @property
     def is_month_start(self) -> ColumnBase:
@@ -311,8 +332,11 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def is_month_end(self) -> ColumnBase:
-        last_day_col = libcudf.datetime.last_day_of_month(self)
-        return (self.day == last_day_col.day).fillna(False)
+        with acquire_spill_lock():
+            last_day_col = type(self).from_pylibcudf(
+                plc.datetime.last_day_of_month(self.to_pylibcudf(mode="read"))
+            )
+        return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
 
     @property
     def is_quarter_end(self) -> ColumnBase:
@@ -329,15 +353,16 @@ class DatetimeColumn(column.ColumnBase):
         day_of_year = self.day_of_year
         leap_dates = self.is_leap_year
 
-        leap = day_of_year == cudf.Scalar(366)
-        non_leap = day_of_year == cudf.Scalar(365)
-        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
-            False
-        )
+        leap = day_of_year == 366
+        non_leap = day_of_year == 365
+        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
     def is_leap_year(self) -> ColumnBase:
-        return libcudf.datetime.is_leap_year(self)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
+            )
 
     @property
     def is_year_start(self) -> ColumnBase:
@@ -345,7 +370,10 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def days_in_month(self) -> ColumnBase:
-        return libcudf.datetime.days_in_month(self)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
+            )
 
     @property
     def day_of_week(self) -> ColumnBase:
@@ -380,8 +408,16 @@ class DatetimeColumn(column.ColumnBase):
             return pd.Timestamp(result)
         return result
 
-    def get_dt_field(self, field: str) -> ColumnBase:
-        return libcudf.datetime.extract_datetime_component(self, field)
+    def _get_dt_field(
+        self, field: plc.datetime.DatetimeComponent
+    ) -> ColumnBase:
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.extract_datetime_component(
+                    self.to_pylibcudf(mode="read"),
+                    field,
+                )
+            )
 
     def _get_field_names(
         self,
@@ -395,7 +431,7 @@ class DatetimeColumn(column.ColumnBase):
                 "Results will be returned in your current locale."
             )
         col_labels = as_column(labels)
-        indices = self.get_dt_field(field)
+        indices = getattr(self, field)
         has_nulls = indices.has_nulls()
         if has_nulls:
             indices = indices.fillna(len(col_labels))
@@ -411,14 +447,58 @@ class DatetimeColumn(column.ColumnBase):
             "month", list(calendar.month_name), locale=locale
         )
 
+    def _round_dt(
+        self,
+        round_func: Callable[
+            [plc.Column, plc.datetime.RoundingFrequency], plc.Column
+        ],
+        freq: str,
+    ) -> ColumnBase:
+        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+        old_to_new_freq_map = {
+            "H": "h",
+            "N": "ns",
+            "T": "min",
+            "L": "ms",
+            "U": "us",
+            "S": "s",
+        }
+        if freq in old_to_new_freq_map:
+            warnings.warn(
+                f"{freq} is deprecated and will be "
+                "removed in a future version, please use "
+                f"{old_to_new_freq_map[freq]} instead.",
+                FutureWarning,
+            )
+            freq = old_to_new_freq_map[freq]
+        rounding_fequency_map = {
+            "D": plc.datetime.RoundingFrequency.DAY,
+            "h": plc.datetime.RoundingFrequency.HOUR,
+            "min": plc.datetime.RoundingFrequency.MINUTE,
+            "s": plc.datetime.RoundingFrequency.SECOND,
+            "ms": plc.datetime.RoundingFrequency.MILLISECOND,
+            "us": plc.datetime.RoundingFrequency.MICROSECOND,
+            "ns": plc.datetime.RoundingFrequency.NANOSECOND,
+        }
+        if (plc_freq := rounding_fequency_map.get(freq)) is None:
+            raise ValueError(f"Invalid resolution: '{freq}'")
+
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                round_func(
+                    self.to_pylibcudf(mode="read"),
+                    plc_freq,
+                )
+            )
+
     def ceil(self, freq: str) -> ColumnBase:
-        return libcudf.datetime.ceil_datetime(self, freq)
+        return self._round_dt(plc.datetime.ceil_datetimes, freq)
 
     def floor(self, freq: str) -> ColumnBase:
-        return libcudf.datetime.floor_datetime(self, freq)
+        return self._round_dt(plc.datetime.floor_datetimes, freq)
 
     def round(self, freq: str) -> ColumnBase:
-        return libcudf.datetime.round_datetime(self, freq)
+        return self._round_dt(plc.datetime.round_datetimes, freq)
 
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
@@ -428,7 +508,9 @@ class DatetimeColumn(column.ColumnBase):
             )
         }
 
-    def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
+    def normalize_binop_value(  # type: ignore[override]
+        self, other: DatetimeLikeScalar
+    ) -> cudf.Scalar | cudf.DateOffset | ColumnBase:
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
@@ -515,17 +597,20 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
+            names = column.column_empty(0, dtype="object")
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    self.to_pylibcudf(mode="read"),
+                    format,
+                    names.to_pylibcudf(mode="read"),
+                )
             )
-        return string._datetime_to_str_typecast_functions[self.dtype](
-            self, format, names
-        )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         format = _dtype_to_format_conversion.get(
@@ -537,21 +622,16 @@ class DatetimeColumn(column.ColumnBase):
             else:
                 sub_second_res_len = 0
 
-            has_nanos = (
-                self.time_unit in {"ns"}
-                and self.get_dt_field("nanosecond").any()
-            )
+            has_nanos = self.time_unit == "ns" and self.nanosecond.any()
             has_micros = (
-                self.time_unit in {"ns", "us"}
-                and self.get_dt_field("microsecond").any()
+                self.time_unit in {"ns", "us"} and self.microsecond.any()
             )
             has_millis = (
-                self.time_unit in {"ns", "us", "ms"}
-                and self.get_dt_field("millisecond").any()
+                self.time_unit in {"ns", "us", "ms"} and self.millisecond.any()
             )
-            has_seconds = self.get_dt_field("second").any()
-            has_minutes = self.get_dt_field("minute").any()
-            has_hours = self.get_dt_field("hour").any()
+            has_seconds = self.second.any()
+            has_minutes = self.minute.any()
+            has_hours = self.hour.any()
             if sub_second_res_len:
                 if has_nanos:
                     # format should be intact and rest of the
@@ -713,12 +793,12 @@ class DatetimeColumn(column.ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
+        result_col = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if out_dtype.kind != "b" and op == "__add__":
             return result_col
-        elif cudf.get_option(
-            "mode.pandas_compatible"
-        ) and out_dtype == cudf.dtype(np.bool_):
+        elif (
+            cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b"
+        ):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
@@ -938,7 +1018,7 @@ class DatetimeTZColumn(DatetimeColumn):
                 self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
             )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return pa.compute.assume_timezone(
             self._local_time.to_arrow(), str(self.dtype.tz)
         )
@@ -984,10 +1064,16 @@ class DatetimeTZColumn(DatetimeColumn):
             return casted.tz_convert(str(dtype.tz))
         return super().as_datetime_column(dtype)
 
-    def get_dt_field(self, field: str) -> ColumnBase:
-        return libcudf.datetime.extract_datetime_component(
-            self._local_time, field
-        )
+    def _get_dt_field(
+        self, field: plc.datetime.DatetimeComponent
+    ) -> ColumnBase:
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.datetime.extract_datetime_component(
+                    self._local_time.to_pylibcudf(mode="read"),
+                    field,
+                )
+            )
 
     def __repr__(self):
         # Arrow prints the UTC timestamps, but we want to print the

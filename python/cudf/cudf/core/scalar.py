@@ -1,11 +1,15 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
+import functools
 import operator
 from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa
+
+import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
@@ -16,6 +20,24 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+
+
+@functools.lru_cache(maxsize=128)
+def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
+    """
+    Cached conversion from a pyarrow.Scalar to pylibcudf.Scalar.
+
+    Intended to replace CachedScalarInstanceMeta in the future.
+
+    Parameters
+    ----------
+    pa_scalar: pa.Scalar
+
+    Returns
+    -------
+    plc.Scalar
+    """
+    return plc.interop.from_arrow(pa_scalar)
 
 
 # Note that the metaclass below can easily be generalized for use with
@@ -178,13 +200,13 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def is_valid(self):
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
+        return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        valid = not cudf._lib.scalar._is_null_host_scalar(value)
+        valid = not cudf.utils.utils._is_null_host_scalar(value)
 
         if isinstance(value, list):
             if dtype is not None:
@@ -304,7 +326,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         # https://github.com/numpy/numpy/issues/17552
         return (
             f"{self.__class__.__name__}"
-            f"({str(self.value)}, dtype={self.dtype})"
+            f"({self.value!s}, dtype={self.dtype})"
         )
 
     def _binop_result_dtype_or_error(self, other, op):

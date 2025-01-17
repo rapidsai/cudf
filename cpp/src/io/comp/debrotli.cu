@@ -63,8 +63,8 @@ THE SOFTWARE.
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
+
 constexpr uint32_t huffman_lookup_table_width      = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
@@ -2020,7 +2020,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
     results[block_id].status =
       (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     // Return ext heap used by last block (statistics)
-    results[block_id].reserved = s->fb_size;
   }
 }
 
@@ -2115,5 +2114,4 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
 #endif
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

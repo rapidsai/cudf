@@ -142,7 +142,7 @@ enum logicaltype_kind_e {
  *
  * @return true if the logical type is supported, false otherwise.
  */
-inline constexpr bool is_supported_logical_type(logicaltype_kind_e logical_kind)
+CUDF_HOST_DEVICE inline constexpr bool is_supported_logical_type(logicaltype_kind_e logical_kind)
 {
   switch (logical_kind) {
     case logicaltype_date: return true;

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -35,6 +35,10 @@ rapids-mamba-retry install \
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
 aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_MAJOR_MINOR}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
@@ -45,7 +49,7 @@ popd
 
 rapids-logger "Build Python docs"
 pushd docs/cudf
-make dirhtml
+make dirhtml O="-j 8"
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
 popd
@@ -58,3 +62,5 @@ mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 popd
 
 RAPIDS_VERSION_NUMBER="${RAPIDS_VERSION_MAJOR_MINOR}" rapids-upload-docs
+
+exit ${EXITCODE}

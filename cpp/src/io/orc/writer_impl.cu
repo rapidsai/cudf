@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include "cudf/detail/utilities/cuda_memcpy.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -28,10 +26,12 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -89,21 +89,8 @@ struct row_group_index_info {
 };
 
 namespace {
-
 /**
- * @brief Translates ORC compression to nvCOMP compression
- */
-auto to_nvcomp_compression_type(CompressionKind compression_kind)
-{
-  if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
-  if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
-  if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
-  if (compression_kind == LZ4) return nvcomp::compression_type::LZ4;
-  CUDF_FAIL("Unsupported compression type");
-}
-
-/**
- * @brief Translates cuDF compression to ORC compression
+ * @brief Translates cuDF compression to ORC compression.
  */
 orc::CompressionKind to_orc_compression(compression_type compression)
 {
@@ -119,19 +106,14 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 }
 
 /**
- * @brief Returns the block size for a given compression kind.
+ * @brief Returns the block size for a given compression format.
  */
-constexpr size_t compression_block_size(orc::CompressionKind compression)
+size_t compression_block_size(compression_type compression)
 {
-  if (compression == orc::CompressionKind::NONE) { return 0; }
-
-  auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
-                              ? std::nullopt
-                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
+  auto const comp_limit = compress_max_allowed_chunk_size(compression);
 
   constexpr size_t max_block_size = 256 * 1024;
-  return std::min(nvcomp_limit.value_or(max_block_size), max_block_size);
+  return std::min(comp_limit.value_or(max_block_size), max_block_size);
 }
 
 /**
@@ -506,7 +488,7 @@ size_t max_varint_size()
   return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
 }
 
-constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
+size_t RLE_stream_size(TypeKind kind, size_t count)
 {
   using cudf::util::div_rounding_up_unsafe;
   constexpr auto byte_rle_max_len = 128;
@@ -531,26 +513,6 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
   }
 }
 
-auto uncomp_block_alignment(CompressionKind compression_kind)
-{
-  if (compression_kind == NONE or
-      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
-    return 1ul;
-  }
-
-  return nvcomp::required_alignment(to_nvcomp_compression_type(compression_kind));
-}
-
-auto comp_block_alignment(CompressionKind compression_kind)
-{
-  if (compression_kind == NONE or
-      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
-    return 1ul;
-  }
-
-  return nvcomp::required_alignment(to_nvcomp_compression_type(compression_kind));
-}
-
 /**
  * @brief Builds up per-column streams.
  *
@@ -563,7 +525,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                            file_segmentation const& segmentation,
                            std::map<uint32_t, size_t> const& decimal_column_sizes,
                            bool enable_dictionary,
-                           CompressionKind compression_kind,
+                           compression_type compression,
                            single_write_mode write_mode)
 {
   // 'column 0' row index stream
@@ -607,7 +569,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
-        auto const max_alignment_padding = uncomp_block_alignment(compression_kind) - 1;
+        auto const max_alignment_padding = compress_required_chunk_alignment(compression) - 1;
         const auto base                  = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type]           = streams.size();
         streams.push_back(orc::Stream{
@@ -1386,28 +1348,33 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   // we know the size of each array. The number of stripes per column in a chunk array can
   // be calculated by dividing the number of chunks by the number of columns.
   // That many chunks need to be copied at a time to the proper destination.
-  size_t num_entries_seen = 0;
+  size_t num_entries_seen        = 0;
+  auto const num_buffers_to_copy = per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2;
+  auto h_srcs = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_dsts = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_lens = cudf::detail::make_empty_host_vector<size_t>(num_buffers_to_copy, stream);
+
   for (size_t i = 0; i < per_chunk_stats.stripe_stat_chunks.size(); ++i) {
     auto const stripes_per_col = per_chunk_stats.stripe_stat_chunks[i].size() / num_columns;
 
-    auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
-    auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
-                        per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
-                        chunk_bytes,
-                        cudaMemcpyDefault,
-                        stream.value()));
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
-                        per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
-                        merge_bytes,
-                        cudaMemcpyDefault,
-                        stream.value()));
+      h_srcs.push_back(per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col);
+      h_dsts.push_back(stat_chunks.data() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_chunk));
+
+      h_srcs.push_back(per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col);
+      h_dsts.push_back(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_merge_group));
     }
     num_entries_seen += stripes_per_col;
   }
+
+  auto const& mr    = cudf::get_current_device_resource_ref();
+  auto const d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
+  auto const d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);
+  auto const d_lens = cudf::detail::make_device_uvector_async(h_lens, stream, mr);
+  cudf::detail::batched_memcpy_async(
+    d_srcs.begin(), d_dsts.begin(), d_lens.begin(), d_srcs.size(), stream);
 
   auto file_stats_merge =
     cudf::detail::make_host_vector<statistics_merge_group>(num_file_blobs, stream);
@@ -1465,7 +1432,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
  * @param[in] rg_stats row group level statistics
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
- * @param[in] compression_kind The compression kind
+ * @param[in] compression The compression format
  * @param[in] compression_blocksize The block size used for compression
  * @param[in] out_sink Sink for writing data
  */
@@ -1479,7 +1446,7 @@ void write_index_stream(int32_t stripe_id,
                         host_span<ColStatsBlob const> rg_stats,
                         StripeInformation* stripe,
                         orc_streams* streams,
-                        CompressionKind compression_kind,
+                        compression_type compression,
                         size_t compression_blocksize,
                         std::unique_ptr<data_sink> const& out_sink)
 {
@@ -1493,7 +1460,7 @@ void write_index_stream(int32_t stripe_id,
     row_group_index_info record;
     if (stream.ids[type] > 0) {
       record.pos = 0;
-      if (compression_kind != NONE) {
+      if (compression != compression_type::NONE) {
         auto const& ss   = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
         record.blk_pos   = ss.first_block;
         record.comp_pos  = 0;
@@ -1533,7 +1500,7 @@ void write_index_stream(int32_t stripe_id,
     }
   }
 
-  ProtobufWriter pbw((compression_kind != NONE) ? 3 : 0);
+  ProtobufWriter pbw((compression != compression_type::NONE) ? 3 : 0);
 
   // Add row index entries
   auto const& rowgroups_range = segmentation.stripes[stripe_id];
@@ -1558,7 +1525,7 @@ void write_index_stream(int32_t stripe_id,
   });
 
   (*streams)[stream_id].length = pbw.size();
-  if (compression_kind != NONE) {
+  if (compression != compression_type::NONE) {
     uint32_t uncomp_ix_len = (uint32_t)((*streams)[stream_id].length - 3) * 2 + 1;
     pbw.buffer()[0]        = static_cast<uint8_t>(uncomp_ix_len >> 0);
     pbw.buffer()[1]        = static_cast<uint8_t>(uncomp_ix_len >> 8);
@@ -1577,7 +1544,7 @@ void write_index_stream(int32_t stripe_id,
  * @param[in,out] bounce_buffer Pinned memory bounce buffer for D2H data transfer
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
- * @param[in] compression_kind The compression kind
+ * @param[in] compression The compression format
  * @param[in] out_sink Sink for writing data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return An std::future that should be synchronized to ensure the writing is complete
@@ -1588,7 +1555,7 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     host_span<uint8_t> bounce_buffer,
                                     StripeInformation* stripe,
                                     orc_streams* streams,
-                                    CompressionKind compression_kind,
+                                    compression_type compression,
                                     std::unique_ptr<data_sink> const& out_sink,
                                     rmm::cuda_stream_view stream)
 {
@@ -1598,8 +1565,9 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
     return std::async(std::launch::deferred, [] {});
   }
 
-  auto const* stream_in = (compression_kind == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
-                                                     : (compressed_data + strm_desc.bfr_offset);
+  auto const* stream_in = (compression == compression_type::NONE)
+                            ? enc_stream.data_ptrs[strm_desc.stream_type]
+                            : (compressed_data + strm_desc.bfr_offset);
 
   auto write_task = [&]() {
     if (out_sink->is_device_write_preferred(length)) {
@@ -1619,15 +1587,15 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
 /**
  * @brief Insert 3-byte uncompressed block headers in a byte vector
  *
- * @param compression_kind The compression kind
+ * @param compression The compression kind
  * @param compression_blocksize The block size used for compression
  * @param v The destitation byte vector to write, which must include initial 3-byte header
  */
-void add_uncompressed_block_headers(CompressionKind compression_kind,
+void add_uncompressed_block_headers(compression_type compression,
                                     size_t compression_blocksize,
                                     std::vector<uint8_t>& v)
 {
-  if (compression_kind != NONE) {
+  if (compression != compression_type::NONE) {
     size_t uncomp_len = v.size() - 3, pos = 0, block_len;
     while (uncomp_len > compression_blocksize) {
       block_len  = compression_blocksize * 2 + 1;
@@ -2013,14 +1981,6 @@ std::map<uint32_t, size_t> decimal_column_sizes(
   return column_sizes;
 }
 
-size_t max_compression_output_size(CompressionKind compression_kind, uint32_t compression_blocksize)
-{
-  if (compression_kind == NONE) return 0;
-
-  return compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
-                                        compression_blocksize);
-}
-
 std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
 {
   auto table_meta = std::make_unique<table_input_metadata>(input);
@@ -2279,7 +2239,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
  * @param row_index_stride The row index stride
  * @param enable_dictionary Whether dictionary is enabled
  * @param sort_dictionaries Whether to sort the dictionaries
- * @param compression_kind The compression kind
+ * @param compression The compression format
  * @param compression_blocksize The block size used for compression
  * @param stats_freq Column statistics granularity type for parquet/orc writers
  * @param collect_compression_stats Flag to indicate if compression statistics should be collected
@@ -2294,7 +2254,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                size_type row_index_stride,
                                bool enable_dictionary,
                                bool sort_dictionaries,
-                               CompressionKind compression_kind,
+                               compression_type compression,
                                size_t compression_blocksize,
                                statistics_freq stats_freq,
                                bool collect_compression_stats,
@@ -2321,17 +2281,16 @@ auto convert_table_to_orc_data(table_view const& input,
   auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
-  auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
-  auto const compressed_block_align   = comp_block_alignment(compression_kind);
+  auto const block_align = compress_required_chunk_alignment(compression);
 
   auto streams  = create_streams(orc_table.columns,
                                 segmentation,
                                 decimal_column_sizes(dec_chunk_sizes.rg_sizes),
                                 enable_dictionary,
-                                compression_kind,
+                                compression,
                                 write_mode);
   auto enc_data = encode_columns(
-    orc_table, std::move(dec_chunk_sizes), segmentation, streams, uncompressed_block_align, stream);
+    orc_table, std::move(dec_chunk_sizes), segmentation, streams, block_align, stream);
 
   stripe_dicts.on_encode_complete(stream);
 
@@ -2363,16 +2322,15 @@ auto convert_table_to_orc_data(table_view const& input,
   size_t compressed_bfr_size   = 0;
   size_t num_compressed_blocks = 0;
 
-  auto const max_compressed_block_size =
-    max_compression_output_size(compression_kind, compression_blocksize);
+  auto const max_compressed_block_size = max_compressed_size(compression, compression_blocksize);
   auto const padded_max_compressed_block_size =
-    util::round_up_unsafe<size_t>(max_compressed_block_size, compressed_block_align);
+    util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
   auto const padded_block_header_size =
-    util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
+    util::round_up_unsafe<size_t>(block_header_size, block_align);
 
   for (auto& ss : strm_descs.host_view().flat_view()) {
     size_t stream_size = ss.stream_size;
-    if (compression_kind != NONE) {
+    if (compression != compression_type::NONE) {
       ss.first_block = num_compressed_blocks;
       ss.bfr_offset  = compressed_bfr_size;
 
@@ -2393,14 +2351,14 @@ auto convert_table_to_orc_data(table_view const& input,
                comp_results.d_begin(),
                comp_results.d_end(),
                compression_result{0, compression_status::FAILURE});
-  if (compression_kind != NONE) {
+  if (compression != compression_type::NONE) {
     strm_descs.host_to_device_async(stream);
     compression_stats = gpu::CompressOrcDataStreams(compressed_data,
                                                     num_compressed_blocks,
-                                                    compression_kind,
+                                                    compression,
                                                     compression_blocksize,
                                                     max_compressed_block_size,
-                                                    compressed_block_align,
+                                                    block_align,
                                                     collect_compression_stats,
                                                     strm_descs,
                                                     enc_data.streams,
@@ -2451,8 +2409,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   : _stream(stream),
     _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     _row_index_stride{options.get_row_index_stride()},
-    _compression_kind(to_orc_compression(options.get_compression())),
-    _compression_blocksize(compression_block_size(_compression_kind)),
+    _compression{options.get_compression()},
+    _compression_blocksize(compression_block_size(_compression)),
     _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
     _sort_dictionaries{options.get_enable_dictionary_sort()},
@@ -2472,8 +2430,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   : _stream(stream),
     _max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     _row_index_stride{options.get_row_index_stride()},
-    _compression_kind(to_orc_compression(options.get_compression())),
-    _compression_blocksize(compression_block_size(_compression_kind)),
+    _compression{options.get_compression()},
+    _compression_blocksize(compression_block_size(_compression)),
     _compression_statistics(options.get_compression_statistics()),
     _stats_freq(options.get_statistics_freq()),
     _sort_dictionaries{options.get_enable_dictionary_sort()},
@@ -2518,7 +2476,7 @@ void writer::impl::write(table_view const& input)
                                        _row_index_stride,
                                        _enable_dictionary,
                                        _sort_dictionaries,
-                                       _compression_kind,
+                                       _compression,
                                        _compression_blocksize,
                                        _stats_freq,
                                        _compression_statistics != nullptr,
@@ -2605,7 +2563,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                          rg_stats,
                          &stripe,
                          &streams,
-                         _compression_kind,
+                         _compression,
                          _compression_blocksize,
                          _out_sink);
     }
@@ -2619,7 +2577,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
         bounce_buffer,
         &stripe,
         &streams,
-        _compression_kind,
+        _compression,
         _out_sink,
         _stream));
     }
@@ -2637,16 +2595,30 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
           : 0;
       if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }
-    ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
+
+    ProtobufWriter pbw;
     pbw.write(sf);
-    stripe.footerLength = pbw.size();
-    if (_compression_kind != NONE) {
-      uint32_t uncomp_sf_len = (stripe.footerLength - 3) * 2 + 1;
-      pbw.buffer()[0]        = static_cast<uint8_t>(uncomp_sf_len >> 0);
-      pbw.buffer()[1]        = static_cast<uint8_t>(uncomp_sf_len >> 8);
-      pbw.buffer()[2]        = static_cast<uint8_t>(uncomp_sf_len >> 16);
+    if (_compression == compression_type::NONE) {
+      _out_sink->host_write(pbw.data(), pbw.size());
+      stripe.footerLength = pbw.size();
+    } else {
+      std::size_t bytes_written  = 0;
+      std::size_t written_sf_len = 0;
+      while (written_sf_len < pbw.size()) {
+        auto const block_size = std::min(_compression_blocksize, pbw.size() - written_sf_len);
+        auto const header_val = block_size * 2 + 1;  // 1 means uncompressed
+        CUDF_EXPECTS(header_val >> 24 == 0, "Block length exceeds maximum size");
+        std::array const header{static_cast<uint8_t>(header_val >> 0),
+                                static_cast<uint8_t>(header_val >> 8),
+                                static_cast<uint8_t>(header_val >> 16)};
+
+        _out_sink->host_write(header.data(), header.size());
+        _out_sink->host_write(pbw.data() + written_sf_len, block_size);
+        written_sf_len += block_size;
+        bytes_written += header.size() + block_size;
+      }
+      stripe.footerLength = bytes_written;
     }
-    _out_sink->host_write(pbw.data(), pbw.size());
   }
   for (auto const& task : write_tasks) {
     task.wait();
@@ -2772,21 +2744,21 @@ void writer::impl::close()
 
   // Write statistics metadata
   if (not _orc_meta.stripeStats.empty()) {
-    ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
+    ProtobufWriter pbw((_compression != compression_type::NONE) ? 3 : 0);
     pbw.write(_orc_meta);
-    add_uncompressed_block_headers(_compression_kind, _compression_blocksize, pbw.buffer());
+    add_uncompressed_block_headers(_compression, _compression_blocksize, pbw.buffer());
     ps.metadataLength = pbw.size();
     _out_sink->host_write(pbw.data(), pbw.size());
   } else {
     ps.metadataLength = 0;
   }
-  ProtobufWriter pbw((_compression_kind != NONE) ? 3 : 0);
+  ProtobufWriter pbw((_compression != compression_type::NONE) ? 3 : 0);
   pbw.write(_footer);
-  add_uncompressed_block_headers(_compression_kind, _compression_blocksize, pbw.buffer());
+  add_uncompressed_block_headers(_compression, _compression_blocksize, pbw.buffer());
 
   // Write postscript metadata
   ps.footerLength         = pbw.size();
-  ps.compression          = _compression_kind;
+  ps.compression          = to_orc_compression(_compression);
   ps.compressionBlockSize = _compression_blocksize;
   ps.version              = {0, 12};  // Hive 0.12
   ps.writerVersion        = cudf_writer_version;

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Translate polars IR representation to ours."""
@@ -84,7 +84,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (4, 0):
+        if (version := self.visitor.version()) >= (4, 3):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -263,6 +263,7 @@ def _(
         translate_named_expr(translator, n=node.selection)
         if node.selection is not None
         else None,
+        translator.config.config.copy(),
     )
 
 
@@ -531,10 +532,16 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
-            return expr.StringFunction(dtype, name, options, column, chars)
+            return expr.StringFunction(
+                dtype,
+                expr.StringFunction.Name.from_polars(name),
+                options,
+                column,
+                chars,
+            )
         return expr.StringFunction(
             dtype,
-            name,
+            expr.StringFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -551,7 +558,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         return expr.BooleanFunction(
             dtype,
-            name,
+            expr.BooleanFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -571,7 +578,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }
         result_expr = expr.TemporalFunction(
             dtype,
-            name,
+            expr.TemporalFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -633,9 +640,10 @@ def _(node: pl_expr.Sort, translator: Translator, dtype: plc.DataType) -> expr.E
 
 @_translate_expr.register
 def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    options = node.sort_options
     return expr.SortBy(
         dtype,
-        node.sort_options,
+        (options[0], tuple(options[1]), tuple(options[2])),
         translator.translate_expr(n=node.expr),
         *(translator.translate_expr(n=n) for n in node.by),
     )

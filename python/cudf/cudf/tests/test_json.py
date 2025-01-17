@@ -58,12 +58,14 @@ def gdf(pdf):
 @pytest.fixture(params=[0, 1, 10, 100])
 def gdf_writer_types(request):
     # datetime64[us], datetime64[ns] are unsupported due to a bug in parser
-    types = (
-        NUMERIC_TYPES
-        + ["datetime64[s]", "datetime64[ms]"]
-        + TIMEDELTA_TYPES
-        + ["bool", "str"]
-    )
+    types = [
+        *NUMERIC_TYPES,
+        "datetime64[s]",
+        "datetime64[ms]",
+        *TIMEDELTA_TYPES,
+        "bool",
+        "str",
+    ]
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param
@@ -276,6 +278,12 @@ def test_cudf_json_writer_read(gdf_writer_types):
         (
             """{"a":{"L": [{"M": null}, {}]}, "b":1.1}\n""",
             """{"a":{"L": [{}, {}]}, "b":1.1}\n""",
+        ),
+        # empty structs
+        ("""{"A": null}\n {"A": {}}\n {}""", """{}\n{"A":{}}\n{}\n"""),
+        (
+            """{"A": {"B": null}}\n {"A": {"B": {}}}\n {"A": {}}""",
+            """{"A":{}}\n{"A":{"B":{}}}\n{"A":{}}\n""",
         ),
     ],
 )
@@ -1445,3 +1453,12 @@ def test_chunked_json_reader():
     with cudf.option_context("io.json.low_memory", True):
         gdf = cudf.read_json(buf, lines=True)
     assert_eq(df, gdf)
+
+
+@pytest.mark.parametrize("compression", ["gzip", None])
+def test_roundtrip_compression(compression, tmp_path):
+    expected = cudf.DataFrame({"a": 1, "b": "2"})
+    fle = BytesIO()
+    expected.to_json(fle, engine="cudf", compression=compression)
+    result = cudf.read_json(fle, engine="cudf", compression=compression)
+    assert_eq(result, expected)

@@ -13,9 +13,11 @@ jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
     needs:
+      - check-nightly-ci
       - changed-files
       - checks
       - conda-cpp-build
+      - cpp-linters
       - conda-cpp-checks
       - conda-cpp-tests
       - conda-python-build
@@ -51,7 +53,20 @@ jobs:
       OTEL_SERVICE_NAME: 'pr-cudf'
     steps:
       - name: Telemetry setup
+        if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
+  check-nightly-ci:
+    # Switch to ubuntu-latest once it defaults to a version of Ubuntu that
+    # provides at least Python 3.11 (see
+    # https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat)
+    runs-on: ubuntu-24.04
+    env:
+      RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check if nightly CI is passing
+        uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
+        with:
+          repo: cudf
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -60,6 +75,7 @@ jobs:
       files_yaml: |
         test_cpp:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -70,6 +86,7 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!docs/**'
@@ -78,6 +95,7 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -87,12 +105,14 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
           - '!java/**'
         test_python:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -113,6 +133,13 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.02
     with:
       build_type: pull-request
+  cpp-linters:
+    secrets: inherit
+    needs: checks
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
+    with:
+      build_type: pull-request
+      run_script: "ci/cpp_linters.sh"
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
@@ -159,7 +186,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   static-configure:
     needs: checks
@@ -180,7 +207,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
@@ -190,7 +217,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -314,16 +341,11 @@ jobs:
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
 
   telemetry-summarize:
-    runs-on: ubuntu-latest
+    # This job must use a self-hosted runner to record telemetry traces.
+    runs-on: linux-amd64-cpu4
     needs: pr-builder
-    if: always()
+    if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
     continue-on-error: true
     steps:
-      - name: Load stashed telemetry env vars
-        uses: rapidsai/shared-actions/telemetry-dispatch-load-base-env-vars@main
-        with:
-            load_service_name: true
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-write-summary@main
-        with:
-          cert_concat: "${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main

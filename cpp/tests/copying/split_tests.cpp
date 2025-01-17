@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1394,7 +1394,8 @@ std::vector<cudf::packed_table> do_chunked_pack(cudf::table_view const& input)
   auto bounce_buff_span =
     cudf::device_span<uint8_t>(static_cast<uint8_t*>(bounce_buff.data()), bounce_buff.size());
 
-  auto chunked_pack = cudf::chunked_pack::create(input, bounce_buff_span.size(), mr);
+  auto chunked_pack =
+    cudf::chunked_pack::create(input, bounce_buff_span.size(), cudf::get_default_stream(), mr);
 
   // right size the final buffer
   rmm::device_buffer final_buff(

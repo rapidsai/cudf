@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -606,7 +606,7 @@ def normalized_equals(value1, value2):
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 100000:
@@ -681,7 +681,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 200000:
@@ -1970,3 +1970,31 @@ def test_row_group_alignment(datadir):
     got = cudf.read_orc(buffer)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "inputfile",
+    [
+        # These sample data have a single column my_timestamp of the TIMESTAMP type,
+        # 2660 rows, and 1536 rows per row group.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+        # These two data are the same with the above, except that every 100 rows start
+        # with a null value.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.hasNull.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.hasNull.orc",
+    ],
+)
+def test_orc_reader_desynced_timestamp(datadir, inputfile):
+    # Test a special case where the DATA stream (second) in a TIMESTAMP column
+    # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
+    # group. In this case, the "run cache manager" in the decoder kernel is used to
+    # orchestrate the dual-stream processing.
+    # For more information, see https://github.com/rapidsai/cudf/issues/17155.
+
+    path = datadir / inputfile
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_frame_equal(cudf.from_pandas(expect), got)

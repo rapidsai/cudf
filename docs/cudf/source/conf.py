@@ -439,6 +439,8 @@ _names_to_skip_in_cpp = {
     # Sphinx doesn't know how to distinguish between the ORC and Parquet
     # definitions because Breathe doesn't to preserve namespaces for enums.
     "TypeKind",
+    # Span subclasses access base class members
+    "base::",
 }
 
 _domain_objects = None
@@ -594,6 +596,8 @@ nitpick_ignore = [
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
+    ("py:class", "np.uint32"),
+    ("py:class", "np.uint64"),
 ]
 
 

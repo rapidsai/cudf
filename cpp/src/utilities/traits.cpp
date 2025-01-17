@@ -127,6 +127,22 @@ struct is_index_type_impl {
  */
 bool is_index_type(data_type type) { return cudf::type_dispatcher(type, is_index_type_impl{}); }
 
+struct is_signed_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_signed<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a signed numeric `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is signed numeric
+ */
+bool is_signed(data_type type) { return cudf::type_dispatcher(type, is_signed_impl{}); }
+
 struct is_unsigned_impl {
   template <typename T>
   constexpr bool operator()()
