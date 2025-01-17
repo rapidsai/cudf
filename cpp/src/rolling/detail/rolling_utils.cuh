@@ -82,7 +82,7 @@ enum class direction : bool {
   FOLLOWING,
 };
 
-template <typename Grouping, direction Direction>
+template <direction Direction, typename Grouping>
 struct fixed_window_clamper {
   Grouping groups;
   cudf::size_type delta;
@@ -113,7 +113,7 @@ template <direction Direction, typename Grouping>
 [[nodiscard]] auto inline make_clamped_window_iterator(cudf::size_type delta, Grouping grouper)
 {
   return cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0}, fixed_window_clamper<Grouping, Direction>{grouper, delta});
+    cudf::size_type{0}, fixed_window_clamper<Direction, Grouping>{grouper, delta});
 }
 }  // namespace detail::rolling
 }  // namespace cudf
