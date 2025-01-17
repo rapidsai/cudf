@@ -117,4 +117,4 @@ jobs:
       SHARED_ACTIONS_REF: 'extract-run-attempt-from-trace-id'
     steps:
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@extract-run-attempt-from-trace-id
