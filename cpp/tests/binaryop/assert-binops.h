@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -81,7 +81,7 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto lhs_h    = static_cast<ScalarType const&>(lhs).operator TypeLhs();
+  auto lhs_h    = static_cast<ScalarType const&>(lhs).get_value(cudf::get_default_stream());
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);
   auto rhs_data = rhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
@@ -129,7 +129,7 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto rhs_h    = static_cast<ScalarType const&>(rhs).operator TypeRhs();
+  auto rhs_h    = static_cast<ScalarType const&>(rhs).get_value(cudf::get_default_stream());
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
