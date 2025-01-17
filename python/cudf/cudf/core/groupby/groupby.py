@@ -43,6 +43,7 @@ from cudf.core.dtypes import (
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, cudf_dtype_to_pa_type
 from cudf.utils.performance_tracking import _performance_tracking
@@ -855,7 +856,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
-                plc.interop.from_arrow(
+                pa_scalar_to_plc_scalar(
                     pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
                 )
                 for val, col in zip(fill_values, values)
