@@ -1042,8 +1042,14 @@ class DatetimeTZColumn(DatetimeColumn):
     def _local_time(self):
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
-        transition_times = transition_times.astype(_get_base_dtype(self.dtype))
-        indices = transition_times.searchsorted(self, side="right") - 1
+        base_dtype = _get_base_dtype(self.dtype)
+        transition_times = transition_times.astype(base_dtype)
+        indices = (
+            transition_times.searchsorted(
+                self.astype(base_dtype), side="right"
+            )
+            - 1
+        )
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 

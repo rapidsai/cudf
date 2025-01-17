@@ -841,7 +841,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def isnan(self) -> ColumnBase:
         """Identify NaN values in a Column."""
-        if self.dtype != "f":
+        if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
@@ -850,7 +850,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def notnan(self) -> ColumnBase:
         """Identify non-NaN values in a Column."""
-        if self.dtype != "f":
+        if self.dtype.kind != "f":
             return as_column(True, length=len(self))
         with acquire_spill_lock():
             return type(self).from_pylibcudf(
