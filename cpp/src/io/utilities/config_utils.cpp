@@ -30,7 +30,7 @@ namespace {
 /**
  * @brief Defines which cuFile usage to enable.
  */
-enum class usage_policy : uint8_t { OFF, KVIKIO };
+enum class usage_policy : uint8_t { KVIKIO };
 
 /**
  * @brief Get the current usage policy.
@@ -38,7 +38,6 @@ enum class usage_policy : uint8_t { OFF, KVIKIO };
 usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
-  if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "KVIKIO") return usage_policy::KVIKIO;
   CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
 }
