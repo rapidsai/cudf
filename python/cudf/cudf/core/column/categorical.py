@@ -12,7 +12,6 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -126,7 +125,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.Index":
+    def categories(self) -> cudf.Index:
         """
         The categories of this categorical.
         """
@@ -608,7 +607,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def categories(self) -> ColumnBase:
-        return self.dtype.categories._values
+        return self.dtype.categories._column
 
     @property
     def codes(self) -> NumericalColumn:
@@ -1010,12 +1009,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify missing values in a CategoricalColumn.
         """
-        result = unary.is_null(self)
+        result = super().isnull()
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = unary.is_nan(self.categories)
+            categories = self.categories.isnan()
             if categories.any():
                 code = self._encode(np.nan)
                 result = result | (self.codes == cudf.Scalar(code))
@@ -1026,12 +1025,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify non-missing values in a CategoricalColumn.
         """
-        result = unary.is_valid(self)
+        result = super().is_valid()
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = unary.is_nan(self.categories)
+            categories = self.categories.isnan()
             if categories.any():
                 code = self._encode(np.nan)
                 result = result & (self.codes != cudf.Scalar(code))
