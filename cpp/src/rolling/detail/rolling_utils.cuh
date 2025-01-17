@@ -89,6 +89,7 @@ struct fixed_window_clamper {
   [[nodiscard]] __device__ constexpr cudf::size_type operator()(cudf::size_type i) const
   {
     auto label = groups.label(i);
+    // i is contained in [start, end)
     auto start = groups.start(label);
     auto end   = groups.end(label);
     if constexpr (Direction == direction::PRECEDING) {
