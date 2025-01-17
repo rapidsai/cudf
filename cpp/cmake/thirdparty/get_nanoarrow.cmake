@@ -27,7 +27,7 @@ function(find_and_configure_nanoarrow)
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
-    GIT_TAG 1e2664a70ec14907409cadcceb14d79b9670bcdb
+    GIT_TAG 4bf5a9322626e95e3717e43de7616c0a256179eb
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf" ${_exclude_from_all}
   )

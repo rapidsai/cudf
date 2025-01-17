@@ -293,9 +293,10 @@ TEST_F(FromArrowTest, StructColumn)
   auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
     std::make_shared<arrow::Field>("string2", str2_array->type(), str2_array->null_count() > 0),
     std::make_shared<arrow::Field>("integral2", int2_array->type(), int2_array->null_count() > 0)};
-  std::shared_ptr<arrow::Buffer> mask_buffer = arrow::internal::BytesToBits({1, 1, 0}).ValueOrDie();
-  auto dtype2                                = std::make_shared<arrow::StructType>(fields2);
-  auto struct_array2                         = std::make_shared<arrow::StructArray>(
+  std::shared_ptr<arrow::Buffer> mask_buffer =
+    arrow::internal::BytesToBits(std::vector<uint8_t>({1, 1, 0})).ValueOrDie();
+  auto dtype2        = std::make_shared<arrow::StructType>(fields2);
+  auto struct_array2 = std::make_shared<arrow::StructArray>(
     dtype2, static_cast<int64_t>(expected_cudf_table.num_rows()), child_arrays2, mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Array>> child_arrays(
@@ -536,7 +537,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                   {true, true, true, true, true, true, false, false},
+                                        {true, true, true, true, true, true, false, false},
                                    scale_type{scale});
     auto const expected = cudf::table_view({col});
 

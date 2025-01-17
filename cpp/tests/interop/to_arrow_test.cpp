@@ -337,9 +337,10 @@ TEST_F(ToArrowTest, StructColumn)
   auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
     std::make_shared<arrow::Field>("string2", str2_array->type(), str2_array->null_count() > 0),
     std::make_shared<arrow::Field>("integral2", int2_array->type(), int2_array->null_count() > 0)};
-  auto dtype2                                = std::make_shared<arrow::StructType>(fields2);
-  std::shared_ptr<arrow::Buffer> mask_buffer = arrow::internal::BytesToBits({1, 1, 0}).ValueOrDie();
-  auto struct_array2                         = std::make_shared<arrow::StructArray>(
+  auto dtype2 = std::make_shared<arrow::StructType>(fields2);
+  std::shared_ptr<arrow::Buffer> mask_buffer =
+    arrow::internal::BytesToBits(std::vector<uint8_t>({1, 1, 0})).ValueOrDie();
+  auto struct_array2 = std::make_shared<arrow::StructArray>(
     dtype2, static_cast<int64_t>(input_view.num_rows()), child_arrays2, mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Array>> child_arrays(
