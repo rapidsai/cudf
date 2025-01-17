@@ -618,10 +618,16 @@ dependencies:
           - nbsphinx
           - numpydoc
           - pandoc
-          # https://github.com/pydata/pydata-sphinx-theme/issues/1539
-          - pydata-sphinx-theme!=0.14.2
+          # Minimum version for safe parallel writing again.
+          # https://github.com/pydata/pydata-sphinx-theme/pull/1859
+          # https://github.com/pydata/pydata-sphinx-theme/releases/tag/v0.15.4
+          - pydata-sphinx-theme>=0.15.4
           - scipy
-          - sphinx
+          # Needed for safe parallel writes as with the pydata-sphinx-theme pin above
+          # https://github.com/sphinx-doc/sphinx/issues/12409
+          # https://github.com/sphinx-doc/sphinx/pull/12888
+          # https://github.com/sphinx-doc/sphinx/releases/tag/v8.1.0
+          - sphinx>=8.1.0
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
@@ -688,7 +694,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.0.13,<0.0.18
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -747,7 +753,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.15
+          - polars>=1.11,<1.18
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -810,11 +816,11 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - *numba-cuda-dep
+              - numba-cuda==0.2.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - numba-cuda==0.0.15
+              - *numba-cuda-dep
               - pandas==2.2.3
           - matrix:
             packages:

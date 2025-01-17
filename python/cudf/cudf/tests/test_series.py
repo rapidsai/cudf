@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 import datetime
 import decimal
 import hashlib
@@ -3003,3 +3003,19 @@ def test_dtype_dtypes_equal():
     ser = cudf.Series([0])
     assert ser.dtype is ser.dtypes
     assert ser.dtypes is ser.to_pandas().dtypes
+
+
+def test_null_like_to_nan_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        ser = cudf.Series([1, 2, np.nan, 10, None])
+        pser = pd.Series([1, 2, np.nan, 10, None])
+
+        assert pser.dtype == ser.dtype
+        assert_eq(ser, pser)
+
+
+@pytest.mark.parametrize("ps", _series_na_data())
+def test_roundtrip_series_plc_column(ps):
+    expect = cudf.Series(ps)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)

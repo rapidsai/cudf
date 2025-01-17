@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba.np import numpy_support
 from typing_extensions import Self
 
@@ -21,6 +22,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -382,12 +384,8 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=cudf.Scalar(
-                    "True", dtype="str"
-                ).device_value.c_value,
-                false_string=cudf.Scalar(
-                    "False", dtype="str"
-                ).device_value.c_value,
+                true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
+                false_string=pa_scalar_to_plc_scalar(pa.scalar("False")),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers

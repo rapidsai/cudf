@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc  # noqa: TC002
+
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -1449,35 +1451,16 @@ class Series(SingleColumnFrame, IndexedFrame):
                 warnings.simplefilter("ignore", FutureWarning)
                 preprocess = cudf.concat([top, bottom])
         else:
-            preprocess = self.copy()
-        preprocess.index = preprocess.index._clean_nulls_from_index()
-        if (
-            preprocess.nullable
-            and not isinstance(
-                preprocess.dtype,
-                (
-                    cudf.CategoricalDtype,
-                    cudf.ListDtype,
-                    cudf.StructDtype,
-                    cudf.core.dtypes.DecimalDtype,
-                ),
-            )
-        ) or preprocess.dtype.kind == "m":
-            fill_value = (
-                str(cudf.NaT)
-                if preprocess.dtype.kind in "mM"
-                else str(cudf.NA)
-            )
-            output = repr(
-                preprocess.astype("str").fillna(fill_value).to_pandas()
-            )
-        elif isinstance(preprocess.dtype, cudf.CategoricalDtype):
+            preprocess = self
+        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
                 else pd.get_option("display.min_rows")
             )
             show_dimensions = pd.get_option("display.show_dimensions")
+            preprocess = preprocess.copy(deep=False)
+            preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
@@ -1502,7 +1485,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 na_rep=str(cudf.NA),
             )
         else:
-            output = repr(preprocess.to_pandas())
+            output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, cudf.CategoricalDtype):
@@ -3825,6 +3808,79 @@ class Series(SingleColumnFrame, IndexedFrame):
             inplace=inplace,
         )
 
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+        """
+        Convert this Series to a pylibcudf.Column.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        dict
+            Dict of metadata (includes name and series indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"name": self.name, "index": self.index}
+        return self._column.to_pylibcudf(mode="write"), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(
+        cls, col: plc.Column, metadata: dict | None = None
+    ) -> Self:
+        """
+        Create a Series from a pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The input Column.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+
+        Notes
+        -----
+        This function will generate a Series which contains a Column
+        pointing to the provided pylibcudf Column.  It will directly access
+        the data and mask buffers of the pylibcudf Column, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Column.
+        """
+        name = None
+        index = None
+        if metadata is not None:
+            if not (
+                isinstance(metadata, dict)
+                and 1 <= len(metadata) <= 2
+                and set(metadata).issubset({"name", "index"})
+            ):
+                raise ValueError(
+                    "Metadata dict must only contain name or index"
+                )
+            name = metadata.get("name")
+            index = metadata.get("index")
+        return cls._from_column(
+            cudf.core.column.ColumnBase.from_pylibcudf(
+                col, data_ptr_exposed=True
+            ),
+            name=name,
+            index=index,
+        )
+
 
 def make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
@@ -4125,8 +4181,8 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * cudf.Scalar(
-            1000, dtype="int32"
+        extra = self.series._column.millisecond.astype("int32") * np.int32(
+            1000
         )
         return self._return_result_like_self(micro + extra)
 
