@@ -615,7 +615,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
 
-  size_t constexpr alignment = 32;
+  using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+  size_t constexpr alignment =
+    policy_type::words_per_block * sizeof(typename policy_type::word_type);
   auto aligned_mr =
     rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(), alignment);
 
