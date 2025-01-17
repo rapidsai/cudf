@@ -88,10 +88,10 @@ struct fixed_window_clamper {
   cudf::size_type delta;
   [[nodiscard]] __device__ constexpr cudf::size_type operator()(cudf::size_type i) const
   {
-    auto label = groups.label(i);
+    auto const label = groups.label(i);
     // i is contained in [start, end)
-    auto start = groups.start(label);
-    auto end   = groups.end(label);
+    auto const start = groups.start(label);
+    auto const end   = groups.end(label);
     if constexpr (Direction == direction::PRECEDING) {
       return cuda::std::min(i + 1 - start, cuda::std::max(delta, i + 1 - end));
     } else {
