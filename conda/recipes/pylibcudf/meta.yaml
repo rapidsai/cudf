@@ -37,10 +37,8 @@ build:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
-    {% if cuda_major == "11" %}
-    - {{ compiler('cuda11') }}
-    {% else %}
     - {{ compiler('cuda') }}
+    {% if cuda_major != "11" %}
     - cuda-cudart-dev
     - libcufile-dev  # [linux64]
     {% endif %}
@@ -52,7 +50,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     {% if cuda_major == "11" %}
-    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    - {{ compiler('cuda') }} ={{ cuda_version }}
     {% else %}
     - {{ compiler('cuda') }}
     {% endif %}
