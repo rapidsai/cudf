@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,6 +196,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_uvector<uint32_t> offsets_per_tensor(strings_count + 1, stream);
   auto d_offsets_per_tensor = offsets_per_tensor.data();
 
+  nvtxRangePushA("build_tensor_data");
   thrust::transform_exclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -234,6 +235,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
         d_row2row_within_tensor[jdx + offset] = jdx;
       }
     });
+  stream.synchronize();
+  nvtxRangePop();
 
   // create output data columns
   auto tensor_token_ids = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT32},
@@ -254,6 +257,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                                    mr);
 
   // compute final-tensor, mask, and metadata
+  nvtxRangePushA("build_tensor_metadata");
   constexpr int block_size = 256;
   cudf::detail::grid_1d const grid{
     static_cast<cudf::size_type>(nrows_tensor_token_ids * max_sequence_length), block_size};
@@ -272,6 +276,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     tensor_token_ids->mutable_view().data<uint32_t>(),
     tensor_attention_mask->mutable_view().data<uint32_t>(),
     tensor_metadata->mutable_view().data<uint32_t>());
+  stream.synchronize();
+  nvtxRangePop();
 
   return tokenizer_result{nrows_tensor_token_ids,
                           max_sequence_length,
