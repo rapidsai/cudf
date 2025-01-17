@@ -393,6 +393,16 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref aligned_mr)
 {
+  // Using `cuco::arrow_filter_policy` with a temporary `cuda::std::byte` key type to extract bloom
+  // filter properties
+  using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+  auto constexpr filter_block_alignment =
+    alignof(cuco::bloom_filter_ref<cuda::std::byte,
+                                   cuco::extent<std::size_t>,
+                                   cuco::thread_scope_thread,
+                                   policy_type>::filter_block_type);
+  auto constexpr words_per_block = policy_type::words_per_block;
+
   // Read tasks for bloom filter data
   std::vector<std::future<size_t>> read_tasks;
 
@@ -425,12 +435,6 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       CompactProtocolReader cp{buffer->data(), buffer->size()};
       cp.read(&header);
 
-      // Using `cuco::arrow_filter_policy` with a temporary `cuda::std::byte` key type to get
-      // `words_per_block`
-      auto constexpr words_per_block =
-        cuco::arrow_filter_policy<cuda::std::byte,
-                                  cudf::hashing::detail::XXHash_64>::words_per_block;
-
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
         (header.num_bytes % words_per_block) == 0 and
@@ -453,6 +457,11 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
         bloom_filter_data[chunk] = rmm::device_buffer{
           buffer->data() + bloom_filter_header_size, bitset_size, stream, aligned_mr};
+        // The allocated bloom filter buffer must be aligned
+        CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(bloom_filter_data[chunk].data()) %
+                         filter_block_alignment ==
+                       0,
+                     "Encountered misaligned bloom filter block");
       }
       // Read the bitset from datasource.
       else {
@@ -460,6 +469,11 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
         // Directly read to device if preferred
         if (source->is_device_read_preferred(bitset_size)) {
           bloom_filter_data[chunk] = rmm::device_buffer{bitset_size, stream, aligned_mr};
+          // The allocated bloom filter buffer must be aligned
+          CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(bloom_filter_data[chunk].data()) %
+                           filter_block_alignment ==
+                         0,
+                       "Encountered misaligned bloom filter block");
           auto future_read_size =
             source->device_read_async(bitset_offset,
                                       bitset_size,
@@ -471,6 +485,11 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
           buffer = source->host_read(bitset_offset, bitset_size);
           bloom_filter_data[chunk] =
             rmm::device_buffer{buffer->data(), buffer->size(), stream, aligned_mr};
+          // The allocated bloom filter buffer must be aligned
+          CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(bloom_filter_data[chunk].data()) %
+                           filter_block_alignment ==
+                         0,
+                       "Encountered misaligned bloom filter block");
         }
       }
     });
