@@ -229,13 +229,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = []() {
-    if constexpr (std::is_same_v<T, int64_t>)
-      return 18;
-    else
-      return cudf::detail::max_precision<T>();
-  }();
-
+  auto const precision = get_decimal_precision<T>();
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
     auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
@@ -285,13 +279,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = []() {
-    if constexpr (std::is_same_v<T, int64_t>)
-      return 18;
-    else
-      return cudf::detail::max_precision<T>();
-  }();
-
+  auto const precision = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
@@ -344,13 +332,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = []() {
-    if constexpr (std::is_same_v<T, int64_t>)
-      return 18;
-    else
-      return cudf::detail::max_precision<T>();
-  }();
-
+  auto const precision = get_decimal_precision<T>();
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
@@ -400,13 +382,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = []() {
-    if constexpr (std::is_same_v<T, int64_t>)
-      return 18;
-    else
-      return cudf::detail::max_precision<T>();
-  }();
-
+  auto const precision = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
