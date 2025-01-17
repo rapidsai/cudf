@@ -194,6 +194,11 @@ def test_struct_scalar_host_construction_no_dtype_inference(data, dtype):
     assert slr.value == data
 
 
+def test_struct_scalar_null():
+    slr = cudf.Scalar(cudf.NA, dtype=cudf.StructDtype)
+    assert cudf.Scalar.from_pylibcudf(slr.device_value).value is cudf.NA
+
+
 def test_struct_explode():
     s = cudf.Series([], dtype=cudf.StructDtype({}))
     expect = cudf.DataFrame({})

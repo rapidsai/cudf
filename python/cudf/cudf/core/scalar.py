@@ -365,6 +365,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             self._device_value_to_host()
         return self._host_value
 
+    # TODO: change to @functools.cached_property
     @property
     def dtype(self):
         if self._host_dtype is not None:
