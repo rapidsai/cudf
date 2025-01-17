@@ -587,7 +587,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"),
                 idx,
             )
-        return cudf.Scalar.from_device_scalar(plc_scalar).value
+        return cudf.Scalar.from_pylibcudf(plc_scalar).value
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride

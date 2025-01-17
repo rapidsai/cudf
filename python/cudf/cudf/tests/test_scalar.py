@@ -149,7 +149,7 @@ def test_scalar_device_initialization(value):
             column.to_pylibcudf(mode="read"),
             0,
         )
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -173,7 +173,7 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
             column.to_pylibcudf(mode="read"),
             0,
         )
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current

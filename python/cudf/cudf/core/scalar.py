@@ -334,16 +334,16 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             )
 
     @classmethod
-    def from_device_scalar(cls, device_scalar: plc.Scalar) -> Self:
-        if not isinstance(device_scalar, plc.Scalar):
+    def from_pylibcudf(cls, scalar: plc.Scalar) -> Self:
+        if not isinstance(scalar, plc.Scalar):
             raise TypeError(
                 "Expected an instance of pylibcudf.Scalar, "
-                f"got {type(device_scalar).__name__}"
+                f"got {type(scalar).__name__}"
             )
         obj = object.__new__(cls)
         obj._host_value = None
         obj._host_dtype = None
-        obj._device_value = device_scalar
+        obj._device_value = scalar
         return obj
 
     @property
