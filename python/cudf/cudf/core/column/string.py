@@ -6369,13 +6369,13 @@ class StringColumn(column.ColumnBase):
     def wordpiece_tokenize(
         self,
         vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
-        max_tokens_per_row: int,
+        max_words_per_row: int,
     ) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
                 self.to_pylibcudf(mode="read"),
                 vocabulary,
-                max_tokens_per_row,
+                max_words_per_row,
             )
         )
 

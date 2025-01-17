@@ -32,7 +32,7 @@ cdef class WordPieceVocabulary:
 cpdef Column wordpiece_tokenize(
     Column input,
     WordPieceVocabulary vocabulary,
-    size_type max_tokens_per_row
+    size_type max_words_per_row
 ):
     """
     Returns the token ids for the input string by looking
@@ -46,8 +46,8 @@ cpdef Column wordpiece_tokenize(
         Strings column to tokenize
     vocabulary : WordPieceVocabulary
         Used to lookup tokens within ``input``
-    max_tokens_per_row : size_type
-        Maximum number of tokens to generate per input row
+    max_words_per_row : size_type
+        Maximum number of words to tokenize per input row
 
     Returns
     -------
@@ -60,7 +60,7 @@ cpdef Column wordpiece_tokenize(
         c_result = cpp_wordpiece_tokenize(
             input.view(),
             dereference(vocabulary.c_obj.get()),
-            max_tokens_per_row
+            max_words_per_row
         )
 
     return Column.from_libcudf(move(c_result))

@@ -22,21 +22,21 @@ class WordPieceVocabulary:
             vocabulary._column.to_pylibcudf(mode="read")
         )
 
-    def tokenize(self, text, max_tokens_per_row: int) -> cudf.Series:
+    def tokenize(self, text, max_words_per_row: int) -> cudf.Series:
         """
         Parameters
         ----------
         text : cudf string series
             The strings to be tokenized.
-        max_tokens_per_row : int
-            Maximum number of tokens per output row
+        max_words_per_row : int
+            Maximum number of words to tokenize per row
 
         Returns
         -------
         Token values
         """
         result = text._column.wordpiece_tokenize(
-            self.vocabulary, max_tokens_per_row
+            self.vocabulary, max_words_per_row
         )
 
         return cudf.Series._from_column(result)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,30 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
 
 /**
  * @brief Returns the token ids for the input string by using a word-piece
+ * tokenizer with the given vocabulary limited by a specified maximum number
+ * of words per row
+ *
+ * ```
+ * [['I', 'have', 'a', 'new', 'GP', '##U', '!', '[PAD]']]
+ * ```
+ * Any null row entry results in a corresponding null entry in the output
+ *
+ * @param input Strings column to tokenize
+ * @param vocabulary Used to lookup tokens within `input`
+ * @param max_words_per_row Maximum number of words to tokenize for each row
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Lists column of token ids
+ */
+std::unique_ptr<cudf::column> wordpiece_tokenize(
+  cudf::strings_column_view const& input,
+  wordpiece_vocabulary const& vocabulary,
+  cudf::size_type max_words_per_row,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns the token ids for the input string by using a word-piece
  * tokenizer with the given vocabulary
  *
  * ```
@@ -84,7 +108,6 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
  *
  * @param input Strings column to tokenize
  * @param vocabulary Used to lookup tokens within `input`
- * @param max_tokens_per_row Maximum number of tokens to produce for each row
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Lists column of token ids
@@ -92,7 +115,6 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
 std::unique_ptr<cudf::column> wordpiece_tokenize(
   cudf::strings_column_view const& input,
   wordpiece_vocabulary const& vocabulary,
-  cudf::size_type max_tokens_per_row,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -8,5 +8,5 @@ class WordPieceVocabulary:
 def wordpiece_tokenize(
     input: Column,
     vocabulary: WordPieceVocabulary,
-    max_tokens_per_row: int,
+    max_words_per_row: int,
 ) -> Column: ...

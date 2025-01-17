@@ -11,5 +11,5 @@ cdef class WordPieceVocabulary:
 cpdef Column wordpiece_tokenize(
     Column input,
     WordPieceVocabulary vocabulary,
-    size_type max_tokens_per_row
+    size_type max_words_per_row
 )
