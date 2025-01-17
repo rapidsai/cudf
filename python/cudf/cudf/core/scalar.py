@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import decimal
+import functools
 import operator
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
@@ -201,6 +202,24 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
         )
         plc_scalar = plc.copying.get_element(plc_column, 0)
     return plc_scalar
+
+
+@functools.lru_cache(maxsize=128)
+def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
+    """
+    Cached conversion from a pyarrow.Scalar to pylibcudf.Scalar.
+
+    Intended to replace CachedScalarInstanceMeta in the future.
+
+    Parameters
+    ----------
+    pa_scalar: pa.Scalar
+
+    Returns
+    -------
+    plc.Scalar
+    """
+    return plc.interop.from_arrow(pa_scalar)
 
 
 # Note that the metaclass below can easily be generalized for use with

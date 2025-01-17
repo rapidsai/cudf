@@ -56,6 +56,7 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
@@ -253,10 +254,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
             ),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
             ),
         )
@@ -1989,10 +1990,10 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.start, type=pa.int64())
                     ),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.step, type=pa.int64())
                     ),
                 )
@@ -2409,7 +2410,11 @@ def as_column(
                 and pa.types.is_integer(arbitrary.type)
                 and arbitrary.null_count > 0
             ):
+                # TODO: Need to re-visit this cast and fill_null
+                # calls while addressing the following issue:
+                # https://github.com/rapidsai/cudf/issues/14149
                 arbitrary = arbitrary.cast(pa.float64())
+                arbitrary = pc.fill_null(arbitrary, np.nan)
             if (
                 cudf.get_option("default_integer_bitwidth")
                 and pa.types.is_integer(arbitrary.type)
