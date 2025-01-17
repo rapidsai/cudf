@@ -422,8 +422,8 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       CompactProtocolReader cp{buffer->data(), buffer->size()};
       cp.read(&header);
 
-      // Get the hardcoded words_per_block value from `cuco::arrow_filter_policy` using a temporary
-      // `std::byte` key type.
+      // Using `cuco::arrow_filter_policy` with a temporary `cuda::std::byte` key type to get
+      // `words_per_block`
       auto constexpr words_per_block =
         cuco::arrow_filter_policy<cuda::std::byte,
                                   cudf::hashing::detail::XXHash_64>::words_per_block;
@@ -615,9 +615,15 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
 
+  // Using `cuco::arrow_filter_policy` with a temporary `cuda::std::byte` key type to get alignment
   using policy_type = cuco::arrow_filter_policy<cuda::std::byte, cudf::hashing::detail::XXHash_64>;
+
+  // Required alignment to satisfy
+  // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
   size_t constexpr alignment =
     policy_type::words_per_block * sizeof(typename policy_type::word_type);
+
+  // Aligned resource adaptor to allocate bloom filter buffers with
   auto aligned_mr =
     rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(), alignment);
 
