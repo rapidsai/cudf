@@ -32,6 +32,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
 
 #include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
@@ -378,6 +379,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  * @param bloom_filter_sizes Bloom filter sizes for all chunks
  * @param chunk_source_map Association between each column chunk and its source
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
  */
 void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources,
                             size_t num_chunks,
@@ -385,7 +387,8 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
                             cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
                             cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
                             std::vector<size_type> const& chunk_source_map,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref aligned_mr)
 {
   // Read tasks for bloom filter data
   std::vector<std::future<size_t>> read_tasks;
@@ -397,7 +400,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
       if (not bloom_filter_offsets[chunk].has_value()) {
-        bloom_filter_data[chunk] = {};
+        bloom_filter_data[chunk] = rmm::device_buffer{0, stream, aligned_mr};
         return;
       }
       // Read bloom filter iff present
@@ -434,7 +437,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
-        bloom_filter_data[chunk] = {};
+        bloom_filter_data[chunk] = rmm::device_buffer{0, stream, aligned_mr};
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
         return;
       }
@@ -453,7 +456,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
         auto const bitset_offset = bloom_filter_offset + bloom_filter_header_size;
         // Directly read to device if preferred
         if (source->is_device_read_preferred(bitset_size)) {
-          bloom_filter_data[chunk] = rmm::device_buffer{bitset_size, stream};
+          bloom_filter_data[chunk] = rmm::device_buffer{bitset_size, stream, aligned_mr};
           auto future_read_size =
             source->device_read_async(bitset_offset,
                                       bitset_size,
@@ -462,8 +465,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
           read_tasks.emplace_back(std::move(future_read_size));
         } else {
-          buffer                   = source->host_read(bitset_offset, bitset_size);
-          bloom_filter_data[chunk] = rmm::device_buffer{buffer->data(), buffer->size(), stream};
+          buffer = source->host_read(bitset_offset, bitset_size);
+          bloom_filter_data[chunk] =
+            rmm::device_buffer{buffer->data(), buffer->size(), stream, aligned_mr};
         }
       }
     });
@@ -481,7 +485,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<int const> column_schemas,
   size_type total_row_groups,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref aligned_mr) const
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = column_schemas.size();
@@ -540,7 +545,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
                          bloom_filter_offsets,
                          bloom_filter_sizes,
                          chunk_source_map,
-                         stream);
+                         stream,
+                         aligned_mr);
 
   // Return bloom filter data
   return bloom_filter_data;
@@ -609,10 +615,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
 
+  size_t constexpr alignment = 32;
+  auto aligned_mr =
+    rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(), alignment);
+
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
   auto bloom_filter_data = read_bloom_filters(
-    sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream);
+    sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream, aligned_mr);
 
   // No bloom filter buffers, return the original row group indices
   if (bloom_filter_data.empty()) { return std::nullopt; }
