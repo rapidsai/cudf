@@ -414,7 +414,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
       if (not bloom_filter_offsets[chunk].has_value()) {
-        bloom_filter_data[chunk] = {};
+        bloom_filter_data[chunk] = rmm::device_buffer{0, stream, aligned_mr};
         return;
       }
       // Read bloom filter iff present
@@ -445,7 +445,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
-        bloom_filter_data[chunk] = {};
+        bloom_filter_data[chunk] = rmm::device_buffer{0, stream, aligned_mr};
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
         return;
       }
@@ -456,8 +456,8 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
-        bloom_filter_data[chunk] = rmm::device_buffer{
-          buffer->data() + bloom_filter_header_size, bitset_size, stream, aligned_mr};
+        bloom_filter_data[chunk] =
+          rmm::device_buffer{buffer->data() + bloom_filter_header_size, bitset_size, stream};
       }
       // Read the bitset from datasource.
       else {
