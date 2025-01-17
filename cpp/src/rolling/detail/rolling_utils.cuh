@@ -60,8 +60,8 @@ struct ungrouped {
  * construction.
  */
 struct grouped {
-  cudf::size_type const* labels;
-  cudf::size_type const* offsets;
+  cudf::device_span<size_type const> const& labels;
+  cudf::device_span<size_type const> const& offsets;
 
   [[nodiscard]] __device__ constexpr cudf::size_type label(cudf::size_type i) const noexcept
   {
