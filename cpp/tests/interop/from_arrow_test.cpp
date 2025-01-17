@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -481,7 +481,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = get_decimal_precision<T>();
+  auto const precision        = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
@@ -514,7 +514,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                        {true, true, true, true, true, true, false, false},
+                                   {true, true, true, true, true, true, false, false},
                                    scale_type{scale});
     auto const expected = cudf::table_view({col});
 
@@ -537,7 +537,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNullsLarge)
   using T = TypeParam;
   using namespace numeric;
 
-  auto const precision = get_decimal_precision<T>();
+  auto const precision        = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
