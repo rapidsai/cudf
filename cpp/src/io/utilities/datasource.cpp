@@ -52,14 +52,10 @@ class file_source : public datasource {
   explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
     detail::force_init_cuda_context();
-    if (cufile_integration::is_kvikio_enabled()) {
-      cufile_integration::set_up_kvikio();
-      _kvikio_file = kvikio::FileHandle(filepath);
-      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
-                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
-    } else {
-      _cufile_in = detail::make_cufile_input(filepath);
-    }
+    cufile_integration::set_up_kvikio();
+    _kvikio_file = kvikio::FileHandle(filepath);
+    CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
+                  _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -88,19 +84,11 @@ class file_source : public datasource {
 
   ~file_source() override = default;
 
-  [[nodiscard]] bool supports_device_read() const override
-  {
-    return !_kvikio_file.closed() || _cufile_in != nullptr;
-  }
+  [[nodiscard]] bool supports_device_read() const override { return !_kvikio_file.closed(); }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (!supports_device_read()) { return false; }
-
-    // Always prefer device reads if kvikio is enabled
-    if (!_kvikio_file.closed()) { return true; }
-
-    return size >= _gds_read_preferred_threshold;
+    return supports_device_read();
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -111,8 +99,7 @@ class file_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, _file.size() - offset);
-    if (!_kvikio_file.closed()) { return _kvikio_file.pread(dst, read_size, offset); }
-    return _cufile_in->read_async(offset, read_size, dst, stream);
+    return _kvikio_file.pread(dst, read_size, offset);
   }
 
   size_t device_read(size_t offset,
@@ -140,10 +127,7 @@ class file_source : public datasource {
   detail::file_wrapper _file;
 
  private:
-  std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
-  // The read size above which GDS is faster then posix-read + h2d-copy
-  static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**

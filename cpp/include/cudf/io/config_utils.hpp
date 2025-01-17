@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,6 @@
 namespace CUDF_EXPORT cudf {
 namespace io {
 namespace cufile_integration {
-
-/**
- * @brief Returns true if cuFile and its compatibility mode are enabled.
- */
-bool is_always_enabled();
-
-/**
- * @brief Returns true if only direct IO through cuFile is enabled (compatibility mode is disabled).
- */
-bool is_gds_enabled();
 
 /**
  * @brief Returns true if KvikIO is enabled.

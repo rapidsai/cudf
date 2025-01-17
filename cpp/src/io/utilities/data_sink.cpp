@@ -41,14 +41,10 @@ class file_sink : public data_sink {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
-    if (cufile_integration::is_kvikio_enabled()) {
-      cufile_integration::set_up_kvikio();
-      _kvikio_file = kvikio::FileHandle(filepath, "w");
-      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
-                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
-    } else {
-      _cufile_out = detail::make_cufile_output(filepath);
-    }
+    cufile_integration::set_up_kvikio();
+    _kvikio_file = kvikio::FileHandle(filepath, "w");
+    CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
+                  _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
   }
 
   // Marked as NOLINT because we are calling a virtual method in the destructor
@@ -65,19 +61,11 @@ class file_sink : public data_sink {
 
   size_t bytes_written() override { return _bytes_written; }
 
-  [[nodiscard]] bool supports_device_write() const override
-  {
-    return !_kvikio_file.closed() || _cufile_out != nullptr;
-  }
+  [[nodiscard]] bool supports_device_write() const override { return !_kvikio_file.closed(); }
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (!supports_device_write()) { return false; }
-
-    // Always prefer device writes if kvikio is enabled
-    if (!_kvikio_file.closed()) { return true; }
-
-    return size >= _gds_write_preferred_threshold;
+    return supports_device_write();
   }
 
   std::future<void> device_write_async(void const* gpu_data,
@@ -89,14 +77,11 @@ class file_sink : public data_sink {
     size_t const offset = _bytes_written;
     _bytes_written += size;
 
-    if (!_kvikio_file.closed()) {
-      // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
-      // to `std::future<void>`
-      return std::async(std::launch::deferred, [this, gpu_data, size, offset] {
-        _kvikio_file.pwrite(gpu_data, size, offset).get();
-      });
-    }
-    return _cufile_out->write_async(gpu_data, offset, size);
+    // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
+    // to `std::future<void>`
+    return std::async(std::launch::deferred, [this, gpu_data, size, offset] {
+      _kvikio_file.pwrite(gpu_data, size, offset).get();
+    });
   }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
@@ -107,10 +92,7 @@ class file_sink : public data_sink {
  private:
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
-  std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
-  // The write size above which GDS is faster then d2h-copy + posix-write
-  static constexpr size_t _gds_write_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**

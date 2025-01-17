@@ -92,15 +92,11 @@ SDK is available for download
 included in CUDA Toolkit 11.4 and higher.
 
 Use of GPUDirect Storage in cuDF is disabled by default, but can be
-enabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
+enabled through the environment variable `LIBCUDF_CUFILE_POLICY` and `KVIKIO_COMPAT_MODE`.
 This variable also controls the GDS compatibility mode.
 
-There are four valid values for the environment variable:
+There are two valid values for the environment variable:
 
-- "GDS": Enable GDS use. If the cuFile library cannot be properly loaded,
-fall back to the GDS compatibility mode.
-- "ALWAYS": Enable GDS use. If the cuFile library cannot be properly loaded,
-throw an exception.
 - "KVIKIO": Enable GDS compatibility mode through [KvikIO](https://github.com/rapidsai/kvikio).
 Note that KvikIO also provides the environment variable `KVIKIO_COMPAT_MODE` for GDS
 control that may alter the effect of "KVIKIO" option in cuDF:
@@ -112,18 +108,12 @@ control that may alter the effect of "KVIKIO" option in cuDF:
     configuration check, and will error out if GDS requirements are not met. The
     only exceptional case is that if the system does not support files being
     opened with the `O_DIRECT` flag, the GDS compatibility mode will be used.
-- "OFF": Completely disable GDS and kvikIO use.
+- "OFF": Completely disable GDS and KvikIO use.
 
 If no value is set, behavior will be the same as the "KVIKIO" option.
 
 This environment variable also affects how cuDF treats GDS errors.
 
-- When `LIBCUDF_CUFILE_POLICY` is set to "GDS" and a GDS API call
-  fails for any reason, cuDF falls back to the internal implementation
-  with bounce buffers.
-- When `LIBCUDF_CUFILE_POLICY` is set to "ALWAYS" and a GDS API call
-fails for any reason (unlikely, given that the compatibility mode is
-on), cuDF throws an exception to propagate the error to the user.
 - When `LIBCUDF_CUFILE_POLICY` is set to "KVIKIO" and a KvikIO API
   call fails for any reason (unlikely, given that KvikIO implements
   its own compatibility mode) cuDF throws an exception to propagate
