@@ -3260,12 +3260,14 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = ColumnBase.from_pylibcudf(plc_column)
-        result = copying.scatter(
-            [cudf.Scalar(False)],
-            distinct,  # type: ignore[arg-type]
-            [as_column(True, length=len(self), dtype=bool)],
-            bounds_check=False,
-        )[0]
+        result = ColumnBase.from_pylibcudf(
+            copying.scatter(
+                [cudf.Scalar(False)],
+                distinct,  # type: ignore[arg-type]
+                [as_column(True, length=len(self), dtype=bool)],
+                bounds_check=False,
+            )[0]
+        )
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking

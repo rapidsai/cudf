@@ -144,9 +144,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         else:
             no_nans = self.nans_to_nulls()
             # get sorted indices and exclude nulls
-            indices = no_nans.argsort(
-                ascending=True, na_position="first"
-            ).slice(no_nans.null_count, len(no_nans))
+            indices = (
+                no_nans.argsort(ascending=True, na_position="first")
+                .slice(no_nans.null_count, len(no_nans))
+                .astype(np.dtype(np.int32))
+            )
             with acquire_spill_lock():
                 plc_column = plc.quantiles.quantile(
                     no_nans.to_pylibcudf(mode="read"),

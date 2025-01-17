@@ -346,18 +346,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if not self.base_children:
                 self._children = ()  # type: ignore[assignment]
             else:
-                self._children = self.base_children  # type: ignore[assignment]
-                # children = Column.from_unique_ptr(
-                #     move(make_unique[column](self.view()))
-                # ).base_children
-                # dtypes = [
-                #     base_child.dtype for base_child in self.base_children
-                # ]
-                # self._children = tuple(
-                #     child._with_type_metadata(dtype) for child, dtype in zip(
-                #         children, dtypes
-                #     )
-                # )
+                # Compute children from the column view (children factoring self.size)
+                children = ColumnBase.from_pylibcudf(
+                    self.to_pylibcudf(mode="read").column_from_self_view()
+                ).base_children
+                dtypes = (
+                    base_child.dtype for base_child in self.base_children
+                )
+                self._children = tuple(  # type: ignore[assignment]
+                    child._with_type_metadata(dtype)
+                    for child, dtype in zip(children, dtypes)
+                )
         return self._children  # type: ignore[return-value]
 
     def set_base_children(self, value: tuple[ColumnBase, ...]) -> None:

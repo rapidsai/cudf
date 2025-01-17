@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
@@ -172,6 +172,10 @@ cdef class Column:
             0,
             children,
         )
+
+    cpdef Column column_from_self_view(self):
+        """Return a new column from self.view()."""
+        return Column.from_libcudf(move(make_unique[column](self.view())))
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.
@@ -463,3 +467,10 @@ def is_c_contiguous(
             return False
         cumulative_stride *= dim
     return True
+
+
+cpdef Column column_from_column_view(Column col):
+    """
+    Return a new Column from a Column.view().
+    """
+    return Column.from_libcudf(move(make_unique[column](col.view())))

@@ -1945,11 +1945,14 @@ class BaseIndex(Serializable):
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
         return self._from_columns_like_self(
-            drop_duplicates(
-                list(self._columns),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in drop_duplicates(
+                    list(self._columns),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                )
+            ],
             self._column_names,
         )
 

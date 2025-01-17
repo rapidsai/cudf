@@ -1365,7 +1365,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
             indices = ColumnBase.from_pylibcudf(right_plc)
-        result = copying.scatter([indices], scatter_map, [result])[0]
+        result = ColumnBase.from_pylibcudf(
+            copying.scatter([indices], scatter_map, [result])[0]
+        )
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:

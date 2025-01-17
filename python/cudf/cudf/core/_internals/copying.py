@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from cudf import Scalar
 
     # ruff does not identify that there's a relative import in use
-    from cudf.core.column import ColumnBase  # noqa: TC004
+    from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
 
@@ -81,7 +81,7 @@ def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
 ) -> list[list[plc.Column]]:
     return [
-        [ColumnBase.from_pylibcudf(col) for col in plc_tbl.columns()]
+        plc_tbl.columns()
         for plc_tbl in plc.copying.split(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in input_columns]
