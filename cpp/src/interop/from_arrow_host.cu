@@ -20,7 +20,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
