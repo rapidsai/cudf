@@ -7,15 +7,10 @@ from dask.dataframe import from_delayed
 import cudf
 
 from . import backends, io  # noqa: F401
+from ._expr import collection  # noqa: F401
 from ._expr.expr import _patch_dask_expr
 from ._version import __git_commit__, __version__  # noqa: F401
 from .core import DataFrame, Index, Series, _deprecated_api, concat, from_cudf
-
-if not (QUERY_PLANNING_ON := dd._dask_expr_enabled()):
-    raise ValueError(
-        "The legacy DataFrame API is not supported in dask_cudf>24.12. "
-        "Please enable query-planning, or downgrade to dask_cudf<=24.12"
-    )
 
 
 def read_csv(*args, **kwargs):
