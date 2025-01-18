@@ -28,32 +28,8 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
-
 // Call before any cuFile API calls to ensure the CUDA context is initialized.
 void force_init_cuda_context();
-
-/**
- * @brief Class that provides RAII for file handling.
- */
-class file_wrapper {
-  int fd       = -1;
-  size_t _size = 0;
-
- public:
-  explicit file_wrapper(std::string const& filepath, int flags, mode_t mode = 0);
-  ~file_wrapper();
-  [[nodiscard]] auto size() const { return _size; }
-  [[nodiscard]] auto desc() const { return fd; }
-};
-
-/**
- * @brief Byte range to be read/written in a single operation.
- */
-CUDF_EXPORT struct file_io_slice {
-  size_t offset;
-  size_t size;
-};
 
 }  // namespace detail
 }  // namespace io

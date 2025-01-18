@@ -25,8 +25,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <fstream>
-
 namespace cudf {
 namespace io {
 
@@ -38,9 +36,6 @@ class file_sink : public data_sink {
   explicit file_sink(std::string const& filepath)
   {
     detail::force_init_cuda_context();
-    _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-    if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
-
     cufile_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "w");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
@@ -52,12 +47,14 @@ class file_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override
   {
-    _output_stream.seekp(_bytes_written);
-    _output_stream.write(static_cast<char const*>(data), size);
+    _kvikio_file.pwrite(data, size, _bytes_written).get();
     _bytes_written += size;
   }
 
-  void flush() override { _output_stream.flush(); }
+  void flush() override
+  {
+    // NOOP. _kvikio_file write is unbuffered and does not need flush.
+  }
 
   size_t bytes_written() override { return _bytes_written; }
 
@@ -90,7 +87,6 @@ class file_sink : public data_sink {
   }
 
  private:
-  std::ofstream _output_stream;
   size_t _bytes_written = 0;
   kvikio::FileHandle _kvikio_file;
 };
