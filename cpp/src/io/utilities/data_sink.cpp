@@ -53,7 +53,8 @@ class file_sink : public data_sink {
 
   void flush() override
   {
-    // NOOP. _kvikio_file write is unbuffered and does not need flush.
+    // KvikIO's pwrite() is a system call that reaches the kernel buffer. Flushing the application
+    // buffer is therefore not needed.
   }
 
   size_t bytes_written() override { return _bytes_written; }
