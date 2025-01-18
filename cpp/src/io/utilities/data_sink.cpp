@@ -36,7 +36,7 @@ class file_sink : public data_sink {
   explicit file_sink(std::string const& filepath)
   {
     detail::force_init_cuda_context();
-    cufile_integration::set_up_kvikio();
+    kvikio_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "w");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
                   _kvikio_file.is_compat_mode_preferred() ? "on" : "off");

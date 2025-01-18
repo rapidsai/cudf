@@ -52,7 +52,7 @@ class file_source : public datasource {
   explicit file_source(char const* filepath)
   {
     detail::force_init_cuda_context();
-    cufile_integration::set_up_kvikio();
+    kvikio_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "r");
     CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
                   _kvikio_file.is_compat_mode_preferred() ? "on" : "off");

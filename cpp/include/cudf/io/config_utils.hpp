@@ -19,12 +19,7 @@
 
 namespace CUDF_EXPORT cudf {
 namespace io {
-namespace cufile_integration {
-
-/**
- * @brief Returns true if KvikIO is enabled.
- */
-bool is_kvikio_enabled();
+namespace kvikio_integration {
 
 /**
  * @brief Set KvikIO parameters, including:
@@ -35,7 +30,7 @@ bool is_kvikio_enabled();
  */
 void set_up_kvikio();
 
-}  // namespace cufile_integration
+}  // namespace kvikio_integration
 
 namespace nvcomp_integration {
 
