@@ -112,7 +112,7 @@ char const* string_scalar::data() const { return static_cast<char const*>(_data.
 
 std::string string_scalar::get_value(rmm::cuda_stream_view stream) const
 {
-  return this->to_string(cudf::get_default_stream());
+  return this->to_string(stream);
 }
 
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
