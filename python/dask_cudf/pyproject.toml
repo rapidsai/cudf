@@ -39,7 +39,7 @@ classifiers = [
 ]
 
 [project.entry-points."dask.dataframe.backends"]
-cudf = "dask_cudf.backends:LegacyCudfBackendEntrypoint"
+cudf = "dask_cudf.backends:CudfBackendEntrypoint"
 
 [project.entry-points."dask_expr.dataframe.backends"]
 cudf = "dask_cudf.backends:CudfBackendEntrypoint"
