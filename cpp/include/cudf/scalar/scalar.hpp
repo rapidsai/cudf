@@ -182,7 +182,7 @@ class fixed_width_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return The value of the scalar
    */
-  [[nodiscard]] T get_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  T get_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Get the value of the scalar.
@@ -411,7 +411,7 @@ class fixed_point_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return The value of the scalar
    */
-  [[nodiscard]] T get_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  T get_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
@@ -527,8 +527,7 @@ class string_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @return The value of the scalar
    */
-  [[nodiscard]] std::string get_value(
-    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+  std::string get_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Get the value of the scalar in a host std::string.
