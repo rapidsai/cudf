@@ -258,7 +258,7 @@ TEST_F(ToArrowTest, NestedList)
 
   auto list_arr = get_arrow_list_array<int64_t>({6, 7, 8, 9}, {0, 1, 4}, {1, 0, 1, 1});
   std::vector<int32_t> offset{0, 0, 2};
-  auto mask_buffer     = arrow::internal::BytesToBits({0, 1}).ValueOrDie();
+  auto mask_buffer     = arrow::internal::BytesToBits(std::vector<uint8_t>({0, 1})).ValueOrDie();
   auto nested_list_arr = std::make_shared<arrow::ListArray>(
     arrow::list(arrow::field("element", arrow::list(arrow::int64()), false)),
     offset.size() - 1,
