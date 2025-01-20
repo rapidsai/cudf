@@ -60,8 +60,9 @@ struct ungrouped {
  * construction.
  */
 struct grouped {
-  cudf::device_span<size_type const> const& labels;
-  cudf::device_span<size_type const> const& offsets;
+  // Taking raw pointers here to avoid stealing two registers for the sizes which are never needed.
+  cudf::size_type const* labels;
+  cudf::size_type const* offsets;
 
   [[nodiscard]] __device__ constexpr cudf::size_type label(cudf::size_type i) const noexcept
   {
