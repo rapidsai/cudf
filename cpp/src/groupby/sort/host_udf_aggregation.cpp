@@ -21,7 +21,7 @@ namespace cudf {
 
 namespace detail {
 
-host_udf_aggregation::host_udf_aggregation(std::unique_ptr<host_udf_base> raw_udf_ptr_)
+host_udf_aggregation::host_udf_aggregation(host_udf_base* raw_udf_ptr_)
   : aggregation{HOST_UDF}, udf_ptr(raw_udf_ptr_)
 {
   CUDF_EXPECTS(raw_udf_ptr_ != nullptr, "Invalid host_udf_base instance.");
@@ -43,7 +43,7 @@ size_t host_udf_aggregation::do_hash() const
 
 std::unique_ptr<aggregation> host_udf_aggregation::clone() const
 {
-  return std::make_unique<host_udf_aggregation>(udf_ptr->clone());
+  return std::make_unique<host_udf_aggregation>(udf_ptr->clone().get());
 }
 
 }  // namespace detail
