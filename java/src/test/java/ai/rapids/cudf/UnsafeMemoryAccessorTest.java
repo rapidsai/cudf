@@ -67,6 +67,24 @@ public class UnsafeMemoryAccessorTest {
   }
 
   @Test
+  public void setAndGetInts() {
+    int numInts = 289;
+    long address = UnsafeMemoryAccessor.allocate(numInts * 4);
+    try {
+      for (int i = 0; i < numInts; i++) {
+        UnsafeMemoryAccessor.setInt(address + i * 4, i);
+      }
+      int[] ints = new int[numInts];
+      UnsafeMemoryAccessor.getInts(ints, 0, address, numInts);
+      for (int i = 0; i < numInts; i++) {
+        assertEquals(i, ints[i]);
+      }
+    } finally {
+      UnsafeMemoryAccessor.free(address);
+    }
+  }
+
+  @Test
   public void setMemoryValue() {
     long address = UnsafeMemoryAccessor.allocate(4);
     try {

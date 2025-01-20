@@ -155,6 +155,19 @@ class UnsafeMemoryAccessor {
   }
 
   /**
+   * Copy out an array of ints.
+   * @param dst       where to write the data
+   * @param dstIndex  index into values to start writing at.
+   * @param address   src memory address
+   * @param count     the number of longs to copy
+   * @throws IndexOutOfBoundsException
+   */
+  public static void getInts(int[] dst, long dstIndex, long address, int count) {
+    copyMemory(null, address,
+            dst, UnsafeMemoryAccessor.INT_ARRAY_OFFSET + (dstIndex * 4), count * 4);
+  }
+
+  /**
    * Sets the Integer value at that address
    * @param address - memory address
    * @param value   - value to be set
