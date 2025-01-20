@@ -113,7 +113,7 @@ std::string_view remove_quotes(std::string_view str, char quotechar)
   size_t const first_quote = str.find(quotechar);
   if (first_quote != string::npos) { str = str.substr(first_quote + 1); }
   size_t const last_quote = str.rfind(quotechar);
-  if (last_quote != string::npos) { str.substr(0, last_quote); }
+  if (last_quote != string::npos) { str = str.substr(0, last_quote); }
 
   return str;
 }
