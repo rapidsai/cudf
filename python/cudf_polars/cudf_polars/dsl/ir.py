@@ -1257,7 +1257,9 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        how: str
         how, join_nulls, zlice, suffix, coalesce, _ = options
+        how = how.lower()
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps

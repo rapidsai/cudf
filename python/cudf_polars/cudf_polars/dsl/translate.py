@@ -84,7 +84,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (4, 3):
+        if (version := self.visitor.version()) >= (5, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -308,7 +308,8 @@ def _(
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
         right_on = [translate_named_expr(translator, n=e) for e in node.right_on]
-    if (how := node.options[0]) in {
+    how: str | tuple = node.options[0]
+    if isinstance(how, str) and how.lower() in {
         "inner",
         "left",
         "right",
@@ -319,8 +320,8 @@ def _(
     }:
         return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
     else:
-        how, op1, op2 = how
-        if how != "ie_join":
+        how, op1, op2 = node.options[0]
+        if how not in {"ie_join", "IEJoin"}:
             raise NotImplementedError(
                 f"Unsupported join type {how}"
             )  # pragma: no cover; asof joins not yet exposed

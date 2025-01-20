@@ -13,7 +13,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_112, POLARS_VERSION_LT_113
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_112,
+    POLARS_VERSION_LT_113,
+    POLARS_VERSION_LT_119,
+)
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -118,6 +122,7 @@ def test_cross_join(left, right, zlice):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.xfail(POLARS_VERSION_LT_119, reason="Not supported until polars==1.19")
 @pytest.mark.parametrize(
     "left_on,right_on",
     [
@@ -125,10 +130,9 @@ def test_cross_join(left, right, zlice):
         (pl.lit(2, dtype=pl.Int64), pl.col("a")),
     ],
 )
-def test_join_literal_key_unsupported(left, right, left_on, right_on):
+def test_join_literal_key(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
-
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
