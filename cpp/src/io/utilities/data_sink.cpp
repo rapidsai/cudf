@@ -53,8 +53,9 @@ class file_sink : public data_sink {
 
   void flush() override
   {
-    // KvikIO's pwrite() is a system call that reaches the kernel buffer. Flushing the application
-    // buffer is therefore not needed.
+    // kvikio::FileHandle::pwrite() makes system calls that reach the kernel buffer cache. This
+    // process does not involve application buffer. Therefore calls to ::fflush() or
+    // ofstream::flush() do not apply.
   }
 
   size_t bytes_written() override { return _bytes_written; }
@@ -77,7 +78,7 @@ class file_sink : public data_sink {
 
     // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
     // to `std::future<void>`
-    return std::async(std::launch::deferred, [this, gpu_data, size, offset] {
+    return std::async(std::launch::deferred, [this, gpu_data, size, offset]() -> void {
       _kvikio_file.pwrite(gpu_data, size, offset).get();
     });
   }
@@ -141,7 +142,7 @@ class void_sink : public data_sink {
                                        rmm::cuda_stream_view stream) override
   {
     _bytes_written += size;
-    return std::async(std::launch::deferred, [] {});
+    return std::async(std::launch::deferred, []() -> void {});
   }
 
   void flush() override {}
