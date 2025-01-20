@@ -30,7 +30,12 @@ package ai.rapids.cudf;
 public abstract class HostUDFWrapper implements AutoCloseable {
   public final long udfNativeHandle;
 
-  public HostUDFWrapper(long udfNativeHandle) {
-    this.udfNativeHandle = udfNativeHandle;
-  }
+  /**
+   * Call into JNI and create a derived UDF C++ instance.
+   * Note: This function should only be called in HostUDFAggregation.createNativeInstance,
+   * Then the instance created by `HostUDFAggregation.createNativeInstance` owns this UDFinstance.
+   * The instance created by `HostUDFAggregation.createNativeInstance` is managed by framework. In
+   * this way, we can simplify the resource management.
+   */
+  abstract long createUDFInstance();
 }

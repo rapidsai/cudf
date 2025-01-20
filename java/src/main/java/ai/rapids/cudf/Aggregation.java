@@ -396,7 +396,9 @@ abstract class Aggregation {
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createHostUDFAgg(wrapper.udfNativeHandle);
+            // The created host Agg instance owns an unique ptr which holds the the UDF instance.
+            // When a host Agg instance is released, the UDF instance is also released.
+            return Aggregation.createHostUDFAgg(wrapper.createUDFInstance());
         }
 
         @Override

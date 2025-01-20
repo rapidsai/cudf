@@ -308,7 +308,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv*
   try {
     cudf::jni::auto_set_device(env);
     auto const udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(udf_native_handle);
-    auto output        = cudf::make_host_udf_aggregation(udf_ptr->clone());
+    auto output        = cudf::make_host_udf_aggregation(udf_ptr);
     return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
