@@ -33,8 +33,8 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
-template <typename TypeOut, typename TypeIn>
-CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
+template <typename... column_types>
+CUDF_KERNEL void kernel(cudf::size_type num_rows, column_types*... columns)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -42,8 +42,8 @@ CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
 
-  for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
-    GENERIC_UNARY_OP(&out_data[i], in_data[i]);
+  for (auto row = start; row < static_cast<thread_index_type>(num_rows); row += stride) {
+    GENERIC_TRANSFORM_OP(static_cast<cudf::size_type>(row), columns...);
   }
 }
 

@@ -51,7 +51,7 @@ namespace CUDF_EXPORT cudf {
  *                      every element of the input
  */
 std::unique_ptr<column> transform(
-  column_view const& input,
+  host_span<column_view const> inputs,
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
