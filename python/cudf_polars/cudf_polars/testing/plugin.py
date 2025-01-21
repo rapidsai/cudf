@@ -14,6 +14,8 @@ from packaging import version
 
 import polars
 
+from cudf_polars.utils.versions import POLARS_VERSION_LT_120
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -196,7 +198,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
     "tests/unit/io/test_spreadsheet.py::test_write_excel_bytes[calamine]": (
         "Fails when fastexcel version >= 0.12.1. tracking issue: https://github.com/pola-rs/polars/issues/20698",
-        version.parse(fastexcel.__version__) >= version.parse("0.12.1"),
+        version.parse(fastexcel.__version__) >= version.parse("0.12.1")
+        and POLARS_VERSION_LT_120,
     ),
 }
 
