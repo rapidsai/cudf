@@ -628,7 +628,7 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
-def dtype_from_pylibcudf_column(col: plc.Column):
+def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
     type_ = col.type()
     tid = type_.id()
 
