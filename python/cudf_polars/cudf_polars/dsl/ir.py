@@ -1142,11 +1142,6 @@ class Join(IR):
         # TODO: Implement maintain_order
         if options[5] != "none":
             raise NotImplementedError("maintain_order not implemented yet")
-        if any(
-            isinstance(e.value, expr.Literal)
-            for e in itertools.chain(self.left_on, self.right_on)
-        ):
-            raise NotImplementedError("Join with literal as join key.")
 
     @staticmethod
     @cache

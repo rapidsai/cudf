@@ -303,12 +303,12 @@ def _(
     # right inputs, so these must be translated with the relevant
     # input active.
     def adjust_literal_dtype(literal: expr.Literal) -> expr.Literal:
-        arrow_type = plc.interop.to_arrow(literal.dtype)
-        if arrow_type == pa.int32():
-            new_arrow_type = pa.int64()
-            new_dtype = plc.interop.from_arrow(new_arrow_type)
-            new_value = pa.scalar(literal.value.as_py(), type=new_arrow_type)
-            return expr.Literal(new_dtype, new_value)
+        if literal.dtype.id() == plc.types.TypeId.INT32:
+            plc_int64 = plc.types.DataType(plc.types.TypeId.INT64)
+            return expr.Literal(
+                plc_int64,
+                pa.scalar(literal.value.as_py(), type=plc.interop.to_arrow(plc_int64)),
+            )
         return literal
 
     def maybe_adjust_binop(e) -> None:

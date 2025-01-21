@@ -236,4 +236,5 @@ def pytest_collection_modifyitems(
                         reason=EXPECTED_FAILURES[item.nodeid][0],
                     ),
                 )
-            item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))
+            else:
+                item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))

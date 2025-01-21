@@ -139,7 +139,7 @@ def test_join_literal_key(left, right, left_on, right_on):
     "conditions",
     [
         [pl.col("a") < pl.col("a_right")],
-        [pl.col("a_right") <= pl.col("a") * 2],
+        [pl.col("a_right") <= pl.col("a") * 2, pl.col("a_right") <= 2 * pl.col("a")],
         [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
         pytest.param(
             [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
