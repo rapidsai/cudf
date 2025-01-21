@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -322,6 +323,8 @@ std::unique_ptr<column> grouped_rolling_window(
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column.
  *
+ * @deprecated Since 25.02, to be removed in 25.04
+ *
  * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
  *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
@@ -403,7 +406,8 @@ std::unique_ptr<column> grouped_rolling_window(
  *
  * @returns   A nullable output column containing the rolling window results
  */
-std::unique_ptr<column> grouped_time_range_rolling_window(
+[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
+grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
   cudf::order const& timestamp_order,
@@ -418,6 +422,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column,.
+ *
+ * @deprecated Since 25.02, to be removed in 25.04
  *
  * @details @copydetails grouped_time_range_rolling_window(
  *                table_view const& group_keys,
@@ -434,7 +440,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * The `preceding_window_in_days` and `following_window_in_days` are specified as a `window_bounds`
  * and supports "unbounded" windows, if set to `window_bounds::unbounded()`.
  */
-std::unique_ptr<column> grouped_time_range_rolling_window(
+[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
+grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
   cudf::order const& timestamp_order,
