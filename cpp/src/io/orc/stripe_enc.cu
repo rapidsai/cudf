@@ -1312,10 +1312,9 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(encode_block_size, 1);  // `encode_block_size` threads per chunk
   auto const num_blocks = chunks.size().first * chunks.size().second;
   gpuEncodeOrcColumnData<encode_block_size>
-    <<<num_blocks, dim_block, 0, stream.value()>>>(chunks, streams);
+    <<<num_blocks, encode_block_size, 0, stream.value()>>>(chunks, streams);
 }
 
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
@@ -1326,10 +1325,10 @@ void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per dictionary
+  constexpr int block_size = 512;  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
-  gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
+  gpuEncodeStringDictionaries<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
@@ -1347,11 +1346,10 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
 
-  dim3 dim_block(compact_streams_block_size, 1);
   auto const num_blocks =
     cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size) *
     strm_desc.size().second;
-  gpuInitBatchedMemcpy<<<num_blocks, dim_block, 0, stream.value()>>>(
+  gpuInitBatchedMemcpy<<<num_blocks, compact_streams_block_size, 0, stream.value()>>>(
     strm_desc, enc_streams, srcs, dsts, lengths);
 
   // Copy streams in a batched manner.
@@ -1375,22 +1373,20 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
 
-  dim3 dim_block_init(256, 1);
   size_t const num_blocks = strm_desc.size().first * strm_desc.size().second;
-  gpuInitCompressionBlocks<<<num_blocks, dim_block_init, 0, stream.value()>>>(strm_desc,
-                                                                              enc_streams,
-                                                                              comp_in,
-                                                                              comp_out,
-                                                                              comp_res,
-                                                                              compressed_data,
-                                                                              comp_blk_size,
-                                                                              max_comp_blk_size,
-                                                                              comp_block_align);
+  gpuInitCompressionBlocks<<<num_blocks, 256, 0, stream.value()>>>(strm_desc,
+                                                                   enc_streams,
+                                                                   comp_in,
+                                                                   comp_out,
+                                                                   comp_res,
+                                                                   compressed_data,
+                                                                   comp_blk_size,
+                                                                   max_comp_blk_size,
+                                                                   comp_block_align);
 
   cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
 
-  dim3 dim_block_compact(1024, 1);
-  gpuCompactCompressedBlocks<<<num_blocks, dim_block_compact, 0, stream.value()>>>(
+  gpuCompactCompressedBlocks<<<num_blocks, 1024, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 
   if (collect_statistics) {

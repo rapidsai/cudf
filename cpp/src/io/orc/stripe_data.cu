@@ -2057,10 +2057,9 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                int64_t first_row,
                                                rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid(num_columns * num_stripes, 2);
 
-  gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+  gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, num_columns, num_stripes, first_row);
 }
 
@@ -2092,9 +2091,8 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
-  gpuDecodeOrcColumnData<block_size><<<num_blocks, dim_block, 0, stream.value()>>>(
+  gpuDecodeOrcColumnData<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 

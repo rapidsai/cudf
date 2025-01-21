@@ -564,9 +564,7 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    dim3 dim_block(128, 1);
-    dim3 dim_grid(num_blocks, 1);
-    gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
+    gpuParseCompressedStripeData<<<num_blocks, 128, 0, stream.value()>>>(
       strm_info, num_streams, compression_block_size, log2maxcr);
   }
 }
@@ -577,9 +575,7 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    dim3 dim_block(128, 1);
-    gpuPostDecompressionReassemble<<<num_blocks, dim_block, 0, stream.value()>>>(strm_info,
-                                                                                 num_streams);
+    gpuPostDecompressionReassemble<<<num_blocks, 128, 0, stream.value()>>>(strm_info, num_streams);
   }
 }
 
@@ -592,9 +588,8 @@ void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  bool use_base_stride,
                                  rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);  // 1 block per stripe
   auto const num_blocks = num_columns * num_stripes;
-  gpuParseRowGroupIndex<<<num_blocks, dim_block, 0, stream.value()>>>(
+  gpuParseRowGroupIndex<<<num_blocks, 128, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
 }
 
@@ -603,10 +598,10 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
                                     device_2dspan<cudf::size_type> valid_counts,
                                     rmm::cuda_stream_view stream)
 {
-  auto const num_blocks = columns.size() * rowgroups.size().first;  // 1 block per rowgroup
-  dim3 dim_block(128, 1);
-  gpu_reduce_pushdown_masks<128>
-    <<<num_blocks, dim_block, 0, stream.value()>>>(columns, rowgroups, valid_counts);
+  auto const num_blocks    = columns.size() * rowgroups.size().first;  // 1 block per rowgroup
+  constexpr int block_size = 128;
+  gpu_reduce_pushdown_masks<block_size>
+    <<<num_blocks, block_size, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
 }  // namespace gpu
