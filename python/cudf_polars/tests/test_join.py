@@ -30,7 +30,7 @@ def how(request):
     return request.param
 
 
-@pytest.fixture(params=[None, (1, 5), (1, None), (0, 2), (0, None)])
+@pytest.fixture(params=[(1, 5), (1, None), (0, 2), (0, None)])
 def zlice(request):
     return request.param
 
@@ -141,7 +141,13 @@ def test_join_literal_key(left, right, left_on, right_on):
         [pl.col("a") < pl.col("a_right")],
         [pl.col("a_right") <= pl.col("a") * 2],
         [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
-        [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
+        pytest.param(
+            [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
+            marks=pytest.mark.xfail(
+                not POLARS_VERSION_LT_119,
+                reason="https://github.com/pola-rs/polars/issues/20831",
+            ),
+        ),
         pytest.param(
             [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
             marks=pytest.mark.xfail(

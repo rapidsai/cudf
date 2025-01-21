@@ -302,12 +302,39 @@ def _(
     # Join key dtypes are dependent on the schema of the left and
     # right inputs, so these must be translated with the relevant
     # input active.
+    def adjust_literal_dtype(literal: expr.Literal) -> expr.Literal:
+        arrow_type = plc.interop.to_arrow(literal.dtype)
+        if arrow_type == pa.int32():
+            new_arrow_type = pa.int64()
+            new_dtype = plc.interop.from_arrow(new_arrow_type)
+            new_value = pa.scalar(literal.value.as_py(), type=new_arrow_type)
+            return expr.Literal(new_dtype, new_value)
+        return literal
+
+    def maybe_adjust_binop(e) -> None:
+        if not isinstance(e.value, expr.BinOp):
+            return
+
+        left, right = e.value.children
+
+        if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
+            e.value.children = (left, adjust_literal_dtype(right))
+
+        elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
+            e.value.children = (adjust_literal_dtype(left), right)
+
+    def translate_expr_and_maybe_fix_binop_args(translator, exprs):
+        translated = [translate_named_expr(translator, n=e) for e in exprs]
+        for t in translated:
+            maybe_adjust_binop(t)
+        return translated
+
     with set_node(translator.visitor, node.input_left):
         inp_left = translator.translate_ir(n=None)
-        left_on = [translate_named_expr(translator, n=e) for e in node.left_on]
+        left_on = translate_expr_and_maybe_fix_binop_args(translator, node.left_on)
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
-        right_on = [translate_named_expr(translator, n=e) for e in node.right_on]
+        right_on = translate_expr_and_maybe_fix_binop_args(translator, node.right_on)
     how: str | tuple = node.options[0]
     if isinstance(how, str) and how.lower() in {
         "inner",
