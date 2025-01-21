@@ -349,7 +349,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 # Compute children from the column view (children factoring self.size)
                 children = ColumnBase.from_pylibcudf(
-                    self.to_pylibcudf(mode="read").column_from_self_view()
+                    self.to_pylibcudf(mode="read").copy()
                 ).base_children
                 dtypes = (
                     base_child.dtype for base_child in self.base_children
