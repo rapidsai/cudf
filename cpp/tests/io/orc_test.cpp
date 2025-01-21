@@ -2068,6 +2068,7 @@ TEST_P(OrcCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
                         OrcCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));
@@ -2256,6 +2257,25 @@ TEST_F(OrcWriterTest, DISABLE_Over65kColumns)
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
       .compression(cudf::io::compression_type::NONE);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
+{
+  std::vector<std::string> vals_col(8, "a");
+  str_col col{vals_col.begin(), vals_col.end()};
+  cudf::column_view col_view = col;
+  table_view expected(std::vector<cudf::column_view>{6400, col_view});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  // Write with compression on (default)
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
