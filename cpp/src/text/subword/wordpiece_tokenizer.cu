@@ -458,6 +458,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
 
   cudf::detail::grid_1d const grid_init{static_cast<cudf::size_type>(num_code_points),
                                         THREADS_PER_BLOCK};
+  nvtxRangePushA("sb_init_data_and_mark");
   detail::init_data_and_mark_word_start_and_ends<<<grid_init.num_blocks,
                                                    grid_init.num_threads_per_block,
                                                    0,
@@ -468,9 +469,12 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                                      device_token_ids.data(),
                                                                      device_tokens_per_word.data());
   CUDF_CHECK_CUDA(stream.value());
+  stream.synchronize();
+  nvtxRangePop();
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
+  nvtxRangePushA("sb_mark_strings");
   detail::mark_string_start_and_ends<<<grid_mark.num_blocks,
                                        grid_mark.num_threads_per_block,
                                        0,
@@ -480,23 +484,31 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                          device_end_word_indices,
                                                          num_strings);
   CUDF_CHECK_CUDA(stream.value());
+  stream.synchronize();
+  nvtxRangePop();
 
   // check for special tokens and adjust indices
+  nvtxRangePushA("sb_special_tokens");
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_t>(0),
     num_code_points,
     mark_special_tokens{
       device_code_points, device_start_word_indices, device_end_word_indices, num_code_points});
+  stream.synchronize();
+  nvtxRangePop();
 
   // Now start_word_indices has the word starts scattered throughout the array. We need to select
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
+  nvtxRangePushA("sb_remove_non_words");
   auto itr_end = thrust::remove(rmm::exec_policy(stream),
                                 device_word_indices.begin(),
                                 device_word_indices.end(),
                                 cuda::std::numeric_limits<uint32_t>::max());
+  stream.synchronize();
+  nvtxRangePop();
 
   // The number of tokens selected will be double the number of words since we
   // select from both the start and end index arrays.
@@ -506,6 +518,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   device_end_word_indices = device_start_word_indices + num_words;
 
   if (num_words > 0) {
+    nvtxRangePushA("sb_kernel_wpt");
     cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
     detail::kernel_wordpiece_tokenizer<<<grid.num_blocks,
                                          grid.num_threads_per_block,
@@ -526,6 +539,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       device_token_ids.data(),
       device_tokens_per_word.data());
     CUDF_CHECK_CUDA(stream.value());
+    stream.synchronize();
+    nvtxRangePop();
   }
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
@@ -536,6 +551,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                    static_cast<std::size_t>(cuda::std::numeric_limits<int>::max()));
   auto ids_itr       = device_token_ids.begin();
   auto const ids_end = device_token_ids.end();
+  nvtxRangePushA("sb_wpt_cleanup");
   while (ids_itr != ids_end) {
     auto const copy_end  = (static_cast<std::size_t>(std::distance(ids_itr, ids_end)) <= copy_size)
                              ? ids_end
@@ -559,6 +575,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                      thrust::make_counting_iterator<uint32_t>(1),
                      num_strings,
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});
+  stream.synchronize();
+  nvtxRangePop();
 }
 
 }  // namespace detail
