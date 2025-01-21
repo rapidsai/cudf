@@ -140,8 +140,8 @@ struct HostUDFReductionExampleTest : cudf::test::BaseFixture {};
 TEST_F(HostUDFReductionExampleTest, SimpleInput)
 {
   auto const vals = doubles_col{0.0, 1.0, 2.0, 3.0, 4.0, 5.0};
-  auto const agg =
-    cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(new host_udf_reduction_example());
+  auto const agg  = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
+    std::make_unique<host_udf_reduction_example>());
   auto const reduced = cudf::reduce(vals,
                                     *agg,
                                     cudf::data_type{cudf::type_id::INT64},
@@ -158,8 +158,8 @@ TEST_F(HostUDFReductionExampleTest, SimpleInput)
 TEST_F(HostUDFReductionExampleTest, EmptyInput)
 {
   auto const vals = doubles_col{};
-  auto const agg =
-    cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(new host_udf_reduction_example());
+  auto const agg  = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
+    std::make_unique<host_udf_reduction_example>());
   auto const reduced = cudf::reduce(vals,
                                     *agg,
                                     cudf::data_type{cudf::type_id::INT64},
@@ -324,7 +324,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
                                       {true, false, true, true, false, true, false, false, true, true}};
   auto const offsets    = int32s_col{0, 3, 5, 10}.release();
   auto const agg        = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
-    new host_udf_segmented_reduction_example());
+    std::make_unique<host_udf_segmented_reduction_example>());
 
   // Test without init value.
   {
@@ -388,7 +388,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptySegments)
   auto const vals    = doubles_col{};
   auto const offsets = int32s_col{0, 0, 0, 0}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
-    new host_udf_segmented_reduction_example());
+    std::make_unique<host_udf_segmented_reduction_example>());
   auto const result = cudf::segmented_reduce(
     vals,
     cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
@@ -407,7 +407,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptyInput)
   auto const vals    = doubles_col{};
   auto const offsets = int32s_col{}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
-    new host_udf_segmented_reduction_example());
+    std::make_unique<host_udf_segmented_reduction_example>());
   auto const result = cudf::segmented_reduce(
     vals,
     cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),

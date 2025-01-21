@@ -610,7 +610,7 @@ class host_udf_base;
  * @return A HOST_UDF aggregation object
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_host_udf_aggregation(host_udf_base* host_udf);
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
 
 /**
  * @brief Factory to create a MERGE_LISTS aggregation.

@@ -978,7 +978,7 @@ class host_udf_aggregation final : public groupby_aggregation,
 
   // Need to define the constructor and destructor in a separate source file where we have the
   // complete declaration of `host_udf_base`.
-  explicit host_udf_aggregation(host_udf_base* raw_udf_ptr_);
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_);
   ~host_udf_aggregation() override;
 
   [[nodiscard]] bool is_equal(aggregation const& _other) const override;

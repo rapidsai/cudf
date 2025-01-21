@@ -140,7 +140,7 @@ TEST_F(HostUDFTest, GroupbyBuiltinInput)
   auto const keys = int32s_col{0, 1, 2};
   auto const vals = int32s_col{0, 1, 2};
   auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    new host_udf_groupby_test(__LINE__, &test_run, /*test_other_agg*/ false));
+    std::make_unique<host_udf_groupby_test>(__LINE__, &test_run, /*test_other_agg*/ false));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
@@ -163,7 +163,7 @@ TEST_F(HostUDFTest, GroupbyWithCallingOtherAggregations)
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
     bool test_run = false;
     auto agg      = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-      new host_udf_groupby_test(__LINE__, &test_run, /*test_other_agg*/ true));
+      std::make_unique<host_udf_groupby_test>(__LINE__, &test_run, /*test_other_agg*/ true));
 
     std::vector<cudf::groupby::aggregation_request> requests;
     requests.emplace_back();
