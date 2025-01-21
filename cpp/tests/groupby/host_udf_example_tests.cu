@@ -175,8 +175,8 @@ TEST_F(HostUDFGroupbyExampleTest, SimpleInput)
   auto const keys       = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
   auto const vals       = doubles_col{{0.0, null, 2.0, 3.0, null, 5.0, null, null, 8.0, 9.0},
                                       {true, false, true, true, false, true, false, false, true, true}};
-  auto agg              = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<host_udf_groupby_example>());
+  auto agg =
+    cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(new host_udf_groupby_example());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
@@ -202,8 +202,8 @@ TEST_F(HostUDFGroupbyExampleTest, EmptyInput)
 {
   auto const keys = int32s_col{};
   auto const vals = doubles_col{};
-  auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<host_udf_groupby_example>());
+  auto agg =
+    cudf::make_host_udf_aggregation < cudf::groupby_aggregation >> (new host_udf_groupby_example());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
