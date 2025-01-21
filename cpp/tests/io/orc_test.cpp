@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2068,6 +2068,7 @@ TEST_P(OrcCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
                         OrcCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));
@@ -2193,6 +2194,25 @@ TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
 
   EXPECT_NO_THROW(writer.close());
   EXPECT_EQ(out_buffer.size(), 0);
+}
+
+TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
+{
+  std::vector<std::string> vals_col(8, "a");
+  str_col col{vals_col.begin(), vals_col.end()};
+  cudf::column_view col_view = col;
+  table_view expected(std::vector<cudf::column_view>{6400, col_view});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  // Write with compression on (default)
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

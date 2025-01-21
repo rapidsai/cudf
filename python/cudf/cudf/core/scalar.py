@@ -1,11 +1,15 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
+import functools
 import operator
 from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa
+
+import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
@@ -16,6 +20,24 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+
+
+@functools.lru_cache(maxsize=128)
+def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
+    """
+    Cached conversion from a pyarrow.Scalar to pylibcudf.Scalar.
+
+    Intended to replace CachedScalarInstanceMeta in the future.
+
+    Parameters
+    ----------
+    pa_scalar: pa.Scalar
+
+    Returns
+    -------
+    plc.Scalar
+    """
+    return plc.interop.from_arrow(pa_scalar)
 
 
 # Note that the metaclass below can easily be generalized for use with

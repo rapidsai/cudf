@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -268,6 +268,7 @@ TEST_P(ParquetCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(ParquetCompressionTest,
                         ParquetCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));
