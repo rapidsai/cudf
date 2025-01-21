@@ -24,18 +24,19 @@ package ai.rapids.cudf;
  * <p>
  * A new host UDF aggregation implementation must extend this class and override the
  * {@code hashCode} and {@code equals} methods for such purposes.
- * In addition, since this class implements {@code AutoCloseable}, the {@code close} method must
- * also be overridden to automatically delete the native UDF instance upon class destruction.
+ *
  */
-public abstract class HostUDFWrapper implements AutoCloseable {
-  public final long udfNativeHandle;
+public abstract class HostUDFWrapper {
 
   /**
-   * Call into JNI and create a derived UDF C++ instance.
-   * Note: This function should only be called in HostUDFAggregation.createNativeInstance,
-   * Then the instance created by `HostUDFAggregation.createNativeInstance` owns this UDFinstance.
-   * The instance created by `HostUDFAggregation.createNativeInstance` is managed by framework. In
-   * this way, we can simplify the resource management.
+   * Call into native code and create a derived host UDF instance.
+   * Note: This function MUST only be called in `HostUDFAggregation.createNativeInstance`,
+   * Then the aggregation instance created by `HostUDFAggregation.createNativeInstance` owns this UDF
+   * instance. This host UDF instance will be deleted when the aggregation instance is deleted. The
+   * aggregation instance is responsible for the lifetime of the host UDF instance. The lifetime of
+   * the aggregation instance is handle by the framework, e.g.: in the finally block of
+   * Table.aggregate, it calls `Aggregation.close(aggOperationInstances)`
+   *
    */
   abstract long createUDFInstance();
 }

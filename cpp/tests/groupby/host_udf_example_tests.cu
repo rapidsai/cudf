@@ -203,7 +203,7 @@ TEST_F(HostUDFGroupbyExampleTest, EmptyInput)
   auto const keys = int32s_col{};
   auto const vals = doubles_col{};
   auto agg =
-    cudf::make_host_udf_aggregation < cudf::groupby_aggregation >> (new host_udf_groupby_example());
+    cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(new host_udf_groupby_example());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
