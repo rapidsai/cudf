@@ -709,7 +709,7 @@ dependencies:
         packages:
           - cachetools
           - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0
-          - &numba-dep numba>=0.59.1,<0.61.0
+          - &numba-dep numba>=0.59.1,<0.61.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
