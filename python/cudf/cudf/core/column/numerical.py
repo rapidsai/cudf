@@ -449,7 +449,7 @@ class NumericalColumn(NumericalBaseColumn):
     @functools.cached_property
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
-            return 0
+            return super().nan_count
         return self.isnan().sum()
 
     def _process_values_for_isin(

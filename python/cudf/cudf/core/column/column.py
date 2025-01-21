@@ -891,6 +891,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return result
 
+    @cached_property
+    def nan_count(self) -> int:
+        return 0
+
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
