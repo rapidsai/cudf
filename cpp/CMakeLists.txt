@@ -338,7 +338,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
 )
 
-set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES "60-virtual")
+set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES "70-virtual")
 
 add_library(
   cudf
