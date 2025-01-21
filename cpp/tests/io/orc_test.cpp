@@ -2196,10 +2196,10 @@ TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
   EXPECT_EQ(out_buffer.size(), 0);
 }
 
-// tests whether Y dimension of grid sizes depends on the number of row groups
+// Tests whether Y dimension of grid sizes depends on the number of row groups
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
 TEST_F(OrcReaderTest, DISABLE_Over65kRowGroups)
 {
-  using cudf::test::iterators::no_nulls;
   auto constexpr row_group_size = 512;
   constexpr auto num_rows       = (1 << 16) * row_group_size + 1;
 
@@ -2220,10 +2220,10 @@ TEST_F(OrcReaderTest, DISABLE_Over65kRowGroups)
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
 }
 
-// tests whether Y dimension of grid sizes depends on the number of stripes
+// Tests whether Y dimension of grid sizes depends on the number of stripes
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
 TEST_F(OrcReaderTest, DISABLE_Over65kStripes)
 {
-  using cudf::test::iterators::no_nulls;
   auto constexpr stripe_size = 512;
   constexpr auto num_rows    = (1 << 16) * stripe_size + 1;
 
@@ -2245,7 +2245,8 @@ TEST_F(OrcReaderTest, DISABLE_Over65kStripes)
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
 }
 
-// tests whether Y dimension of grid sizes depends on the number of columns
+// Tests whether Y dimension of grid sizes depends on the number of columns
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
 TEST_F(OrcWriterTest, DISABLE_Over65kColumns)
 {
   auto vals_col = random_values<int32_t>(8);
