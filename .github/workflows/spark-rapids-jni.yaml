@@ -1,0 +1,20 @@
+name: spark-rapids-jni
+
+on:
+  workflow_dispatch:
+
+jobs:
+  spark-rapids-jni-build:
+    runs-on: linux-amd64-cpu8
+    container:
+      image: ubuntu:24.04 # TODO
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: NVIDIA/spark-rapids-jni
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          path: thirdparty/cudf
+      - run: |
+          git status
