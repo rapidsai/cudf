@@ -267,7 +267,7 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
 namespace detail {
 namespace {
 
-constexpr int block_size    = 64;
+constexpr int block_size    = 128;
 constexpr auto no_token     = cuda::std::numeric_limits<cudf::size_type>::max();
 constexpr int max_word_size = 128;
 
@@ -512,7 +512,7 @@ CUDF_KERNEL void find_words_kernel4(cudf::column_device_view const d_strings,
                                     int64_t* starts,
                                     cudf::size_type* sizes)
 {
-  // string per block
+  // string per warp
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / tile_size;
   if (str_idx >= d_strings.size()) { return; }
