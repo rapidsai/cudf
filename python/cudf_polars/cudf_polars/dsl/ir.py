@@ -764,8 +764,10 @@ class DataFrameScan(IR):
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
         if predicate is not None:
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
-            return df.filter(mask)
+            (mask,) = broadcast(
+                predicate.evaluate(df), target_length=df.num_rows
+            )  # pragma: no cover
+            return df.filter(mask)  # pragma: no cover
         else:
             return df
 
@@ -1180,7 +1182,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)
+        assert_never(how)  # pragma: no cover
 
     @staticmethod
     def _reorder_maps(
@@ -1312,10 +1314,15 @@ class Join(IR):
             )
             if coalesce and how != "inner":
                 left = left.with_columns(
-                    (
+                    tuple(
                         Column(
-                            plc.replace.replace_nulls(left_col.obj, right_col.obj),
-                            name=left_col.name,
+                            plc.replace.replace_nulls(
+                                left_col.obj,
+                                right_col.obj.astype(left_col.obj.type())
+                                if left_col.obj.type().id() != right_col.obj.type().id()
+                                else right_col.obj,
+                            ),
+                            name=left_col.name or right_col.name,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
@@ -1767,7 +1774,7 @@ class Union(IR):
         self.children = children
         schema = self.children[0].schema
         if not all(s.schema == schema for s in self.children[1:]):
-            raise NotImplementedError("Schema mismatch")
+            raise NotImplementedError("Schema mismatch")  # pragma: no cover
 
     @classmethod
     def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:

@@ -311,23 +311,19 @@ def _(
             )
         return literal
 
-    def maybe_adjust_binop(e) -> None:
-        if not isinstance(e.value, expr.BinOp):
-            return
-
-        left, right = e.value.children
-
-        if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
-            e.value.children = (left, adjust_literal_dtype(right))
-
-        elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
-            e.value.children = (adjust_literal_dtype(left), right)
+    def maybe_adjust_binop(e) -> expr.Expr:
+        if isinstance(e.value, expr.BinOp):
+            left, right = e.value.children
+            if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
+                e.value.children = (left, adjust_literal_dtype(right))
+            elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
+                e.value.children = (adjust_literal_dtype(left), right)
+        return e
 
     def translate_expr_and_maybe_fix_binop_args(translator, exprs):
-        translated = [translate_named_expr(translator, n=e) for e in exprs]
-        for t in translated:
-            maybe_adjust_binop(t)
-        return translated
+        return [
+            maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
+        ]
 
     with set_node(translator.visitor, node.input_left):
         inp_left = translator.translate_ir(n=None)
