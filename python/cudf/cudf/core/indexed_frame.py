@@ -3665,6 +3665,9 @@ class IndexedFrame(Frame):
             by_columns = by_in_index
         else:
             raise KeyError(by)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
