@@ -46,25 +46,30 @@ public abstract class HostUDFWrapper {
    * </pre>
    *
    */
-  abstract long createUDFInstance();
+  public abstract long createUDFInstance();
 
   /**
-  * Close the UDF instance created by `createUDFInstance`
+  * Close the derived UDF instance created by `createUDFInstance`.
   * @param hostUDFInstance the UDF instance
   */
-  static native void closeUDFInstance(long hostUDFInstance);
+  public static void closeUDFInstance(long hostUDFInstance) {
+    close(hostUDFInstance);
+  }
 
-  abstract int computeHashCode();
+  public abstract int computeHashCode();
 
   @Override
   public int hashCode() {
       return computeHashCode();
   }
 
-  abstract boolean isEqual(Object obj);
+  public abstract boolean isEqual(Object obj);
 
   @Override
   public boolean equals(Object obj) {
       return isEqual(obj);
   }
+
+  static native void close(long hostUDFInstance);
 }
+

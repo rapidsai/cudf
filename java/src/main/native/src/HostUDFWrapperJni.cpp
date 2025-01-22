@@ -20,9 +20,9 @@
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_HostUDFWrapper_closeUDFInstance(JNIEnv* env,
-                                                                           jclass class_object,
-                                                                           jlong ptr)
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_HostUDFWrapper_close(JNIEnv* env,
+                                                                jclass class_object,
+                                                                jlong ptr)
 {
   try {
     auto to_del = reinterpret_cast<cudf::host_udf_base*>(ptr);
