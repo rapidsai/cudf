@@ -759,10 +759,8 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  /*if (max_words_per_row == 0)*/ {
-    return detail::wordpiece_tokenize(input, vocabulary, stream, mr);
-  }
-  // return detail::wordpiece_tokenize(input, vocabulary, max_words_per_row, stream, mr);
+  if (max_words_per_row == 0) { return detail::wordpiece_tokenize(input, vocabulary, stream, mr); }
+  return detail::wordpiece_tokenize(input, vocabulary, max_words_per_row, stream, mr);
 }
 
 }  // namespace nvtext
