@@ -5,9 +5,7 @@ on:
 
 jobs:
   spark-rapids-jni-build:
-    runs-on: linux-amd64-cpu8
-    container:
-      image: ubuntu:24.04 # TODO
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
