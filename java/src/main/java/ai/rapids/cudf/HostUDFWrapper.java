@@ -72,4 +72,3 @@ public abstract class HostUDFWrapper {
 
   static native void close(long hostUDFInstance);
 }
-
