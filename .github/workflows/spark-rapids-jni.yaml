@@ -16,3 +16,4 @@ jobs:
           path: thirdparty/cudf
       - run: |
           git status
+          git diff thirdparty/cudf
