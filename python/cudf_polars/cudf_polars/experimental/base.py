@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 
 
 class PartitionInfo:
-    """
-    Partitioning information.
-
-    This class only tracks the partition count (for now).
-    """
+    """Partitioning information."""
 
     __slots__ = ("count", "partitioned_on")
+    count: int
+    """Partition count."""
+    partitioned_on: tuple[NamedExpr, ...]
+    """Columns the data is hash-partitioned on."""
 
     def __init__(
         self,

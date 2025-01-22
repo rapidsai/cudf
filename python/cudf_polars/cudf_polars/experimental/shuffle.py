@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 class Shuffle(IR):
     """
-    Suffle multi-partition data.
+    Shuffle multi-partition data.
 
     Notes
     -----
@@ -206,7 +206,7 @@ def _(
         )
 
     # Check if we are already shuffled or update partition_info
-    if ir.keys == pi.partitioned_on:
+    if len(children) == 1 and ir.keys == pi.partitioned_on:
         # Already shuffled!
         new_node = children[0]
     else:
