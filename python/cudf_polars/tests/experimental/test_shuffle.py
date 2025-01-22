@@ -61,6 +61,6 @@ def test_hash_shuffle(df, engine):
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that Dask evaluation works
-    result = evaluate_dask(qir3)
-    expect = qir.collect(engine="cpu")
+    result = evaluate_dask(qir3).to_polars()
+    expect = df.collect(engine="cpu")
     assert_frame_equal(result, expect, check_column_order=False)
