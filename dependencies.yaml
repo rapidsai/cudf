@@ -717,7 +717,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0a0
+          - &numba-dep numba>=0.59.1,<0.61.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -844,6 +845,7 @@ dependencies:
           - matrix: {dependencies: "latest"}
             packages:
               - *numba-cuda-dep
+              - *numba-dep
               - pandas==2.2.3
           - matrix:
             packages:
@@ -926,6 +928,7 @@ dependencies:
         packages:
           - dask-cuda==25.2.*,>=0.0.0a0
           - *numba-cuda-dep
+          - *numba-dep
     specific:
       - output_types: [conda, requirements]
         matrices:
