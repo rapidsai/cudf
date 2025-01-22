@@ -146,8 +146,6 @@ TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
   EXPECT_EQ(tables.size(), 2);
 }
 
-// Disabled as the test is too brittle and depends on empirically set `pass_read_limit`,
-// encoding type, and the currently used `ZSTD` scratch space size.
 TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
 {
   using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;

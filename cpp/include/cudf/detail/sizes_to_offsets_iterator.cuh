@@ -276,7 +276,7 @@ auto sizes_to_offsets(SizesIterator begin,
   // This function uses the type of the initialization parameter as the accumulator type
   // when computing the individual scan output elements.
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
+    rmm::exec_policy_nosync(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
   return last_element.value(stream);
 }
 

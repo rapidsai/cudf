@@ -580,14 +580,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Convert string sizes to offsets if this is not a large string column.
-  if (not s->col.is_large_string_col) {
-    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
-  }  // For large strings, update the initial string buffer offset to be used during large string
-     // column construction
-  else {
+  // For large strings, update the initial string buffer offset to be used during large string
+  // column construction. Otherwise, convert string sizes to final offsets.
+  if (s->col.is_large_string_col) {
     compute_initial_large_strings_offset(
-      s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+      s, initial_str_offsets[pages[page_idx].chunk_idx], has_repetition);
+  } else {
+    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
   }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -740,14 +739,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // Convert string sizes to offsets if this is not a large string column.
-  if (not s->col.is_large_string_col) {
-    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
-  }  // For large strings, update the initial string buffer offset to be used during large string
-     // column construction
-  else {
+  // For large strings, update the initial string buffer offset to be used during large string
+  // column construction. Otherwise, convert string sizes to final offsets.
+  if (s->col.is_large_string_col) {
     compute_initial_large_strings_offset(
-      s, initial_str_offsets, pages[page_idx].chunk_idx, has_repetition);
+      s, initial_str_offsets[pages[page_idx].chunk_idx], has_repetition);
+  } else {
+    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
   }
 
   // finally, copy the string data into place

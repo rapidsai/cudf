@@ -211,20 +211,18 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  // A hostdevice vector to compute and store initial str offsets from decoders to build nested
-  // large string columns. For non-nested large strign columns, the initial string offset is always
-  // zero.
-  auto initial_str_offsets =
-    cudf::detail::hostdevice_vector<size_t>{_input_columns.size(), _stream};
+  // Create an empty device vector to store the initial str offset for large string columns from for
+  // string decoders.
+  auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
 
   pass.chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
   if (has_strings) {
-    std::fill(
-      initial_str_offsets.begin(), initial_str_offsets.end(), std::numeric_limits<size_t>::max());
+    // Initialize the initial string offsets vector.
+    initial_str_offsets = cudf::detail::make_device_uvector_async(
+      std::vector<size_t>(_input_columns.size(), std::numeric_limits<size_t>::max()), _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
-    initial_str_offsets.host_to_device_async(_stream);
   }
 
   // create this before we fork streams
@@ -232,7 +230,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // create a device span of initial string offsets vector
   auto initial_str_offsets_span =
-    cudf::device_span<size_t>{initial_str_offsets.d_begin(), initial_str_offsets.size()};
+    cudf::device_span<size_t>{initial_str_offsets.begin(), initial_str_offsets.size()};
 
   // get the number of streams we need from the pool and tell them to wait on the H2D copies
   int const nkernels = std::bitset<32>(kernel_mask).count();
@@ -417,8 +415,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // synchronize the streams
   cudf::detail::join_streams(streams, _stream);
 
-  // Sync here to use the offsets below
-  initial_str_offsets.device_to_host_sync(_stream);
+  // Sync stream here to use the offsets below
+  auto h_initial_str_offsets = cudf::detail::make_host_vector_sync(initial_str_offsets, _stream);
 
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
@@ -464,9 +462,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
-          CUDF_EXPECTS(static_cast<int64_t>(initial_str_offsets[idx]) >= int64_t{0},
+          CUDF_EXPECTS(static_cast<int64_t>(h_initial_str_offsets[idx]) >= int64_t{0},
                        "Initial string offset must be >= 0");
-          out_buf.set_initial_string_offset(initial_str_offsets[idx]);
+          out_buf.set_initial_string_offset(h_initial_str_offsets[idx]);
         }
       }
     }

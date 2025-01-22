@@ -129,11 +129,9 @@ __device__ void convert_small_string_lengths_to_offsets(page_state_s const* cons
  * @brief Atomically update the initial string offset to be used during large string column
  * construction
  */
-inline __device__ void compute_initial_large_strings_offset(
-  page_state_s const* const state,
-  cudf::device_span<size_t> initial_str_offsets,
-  int32_t chunk_idx,
-  bool has_lists)
+inline __device__ void compute_initial_large_strings_offset(page_state_s const* const state,
+                                                            size_t& initial_str_offset,
+                                                            bool has_lists)
 {
   // Values decoded by this page.
   int value_count = state->nesting_info[state->col.max_nesting_depth - 1].value_count;
@@ -144,10 +142,10 @@ inline __device__ void compute_initial_large_strings_offset(
 
   // Atomically update the initial string offset if this is a large string column. This initial
   // offset will be used to compute (64-bit) offsets during large string column construction.
-  if (value_count > 0 and !threadIdx.x) {
+  if (value_count > 0 and threadIdx.x == 0) {
     auto const initial_value = state->page.str_offset;
     cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
-      initial_str_offsets[chunk_idx]};
+      initial_str_offset};
     initial_str_offsets_ref.fetch_min(initial_value, cuda::std::memory_order_relaxed);
   }
 }
