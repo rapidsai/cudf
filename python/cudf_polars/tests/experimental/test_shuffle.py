@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
+from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
@@ -60,4 +61,6 @@ def test_hash_shuffle(df, engine):
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that Dask evaluation works
-    evaluate_dask(qir3)
+    result = evaluate_dask(qir3)
+    expect = qir.collect(engine="cpu")
+    assert_frame_equal(result, expect, check_column_order=False)
