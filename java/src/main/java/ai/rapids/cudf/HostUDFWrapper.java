@@ -19,24 +19,52 @@ package ai.rapids.cudf;
 /**
  * A wrapper around native host UDF aggregations.
  * <p>
- * This class is used to store the native handle of a host UDF aggregation and is used as
+ * This class is used to create the native handle of a host UDF aggregation and is used as
  * a proxy object to compute hash code and compare two host UDF aggregations for equality.
  * <p>
  * A new host UDF aggregation implementation must extend this class and override the
- * {@code hashCode} and {@code equals} methods for such purposes.
+ * {@code computeHashCode} and {@code isEqual} methods for such purposes.
  *
  */
 public abstract class HostUDFWrapper {
 
   /**
-   * Call into native code and create a derived host UDF instance.
-   * Note: This function MUST only be called in `HostUDFAggregation.createNativeInstance`,
-   * Then the aggregation instance created by `HostUDFAggregation.createNativeInstance` owns this UDF
-   * instance. This host UDF instance will be deleted when the aggregation instance is deleted. The
-   * aggregation instance is responsible for the lifetime of the host UDF instance. The lifetime of
-   * the aggregation instance is handle by the framework, e.g.: in the finally block of
-   * Table.aggregate, it calls `Aggregation.close(aggOperationInstances)`
+   * Create a derived host UDF native instance.
+   * The instance created by this function MUST be closed by `closeUDFInstance`
+   * <p>Typical usage, refer to Aggregation.java:</p>
+   * <pre>
+   * long udf = 0;
+   * try {
+   *     udf = wrapper.createUDFInstance();
+   *     return Aggregation.createHostUDFAgg(udf);
+   * } finally {
+   *     // a new UDF is cloned in `createHostUDFAgg`, here should close the UDF instance.
+   *     if (udf != 0) {
+   *         HostUDFWrapper.closeUDFInstance(udf);
+   *     }
+   * }
+   * </pre>
    *
    */
   abstract long createUDFInstance();
+
+  /**
+  * Close the UDF instance created by `createUDFInstance`
+  * @param hostUDFInstance the UDF instance
+  */
+  static native void closeUDFInstance(long hostUDFInstance);
+
+  abstract int computeHashCode();
+
+  @Override
+  public int hashCode() {
+      return computeHashCode();
+  }
+
+  abstract boolean isEqual(Object obj);
+
+  @Override
+  public boolean equals(Object obj) {
+      return isEqual(obj);
+  }
 }

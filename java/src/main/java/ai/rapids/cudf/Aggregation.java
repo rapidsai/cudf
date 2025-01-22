@@ -396,9 +396,16 @@ abstract class Aggregation {
 
         @Override
         long createNativeInstance() {
-            // The created host Agg instance takes the ownership of the passed in UDF instance.
-            // When a host Agg instance is released, the UDF instance in it is also released.
-            return Aggregation.createHostUDFAgg(wrapper.createUDFInstance());
+            long udf = 0;
+            try {
+                udf = wrapper.createUDFInstance();
+                return Aggregation.createHostUDFAgg(udf);
+            } finally {
+                // a new UDF is cloned in `createHostUDFAgg`, here should close the UDF instance.
+                if (udf != 0) {
+                    HostUDFWrapper.closeUDFInstance(udf);
+                }
+            }
         }
 
         @Override
