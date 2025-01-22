@@ -36,6 +36,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
@@ -425,53 +426,67 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   // recursive lambda to construct schema_element. Here, we assume that the table from the
   // first batch contains all the columns in the concatenated table, and that the partial tables
   // from all following batches contain the same set of columns
-  std::function<schema_element(cudf::host_span<column const> cols,
+  std::function<schema_element(cudf::host_span<column_view const> cols,
                                cudf::host_span<column_name_info const> names,
                                schema_element & schema)>
     construct_schema;
   schema_element schema{data_type{cudf::type_id::STRUCT}};
-  construct_schema = [&construct_schema](cudf::host_span<column const> children,
+  construct_schema = [&construct_schema](cudf::host_span<column_view const> children,
                                          cudf::host_span<column_name_info const> children_props,
                                          schema_element& schema) -> schema_element {
-    CUDF_EXPECTS(children.size() == children_props.size(), "Something's fishy");
+    CUDF_EXPECTS(
+      children.size() == children_props.size(),
+      "Mismatch in the number of children columns and children column properties received");
 
-    std::vector<std::string> col_order;
-    for (size_t i = 0; i < children.size(); i++) {
-      if (schema.type == data_type{cudf::type_id::LIST} && children_props[i].name == "offsets")
-        continue;
-      col_order.push_back(children_props[i].name);
-    }
-    schema.column_order = std::move(col_order);
-
-    for (auto i = 0ul; i < children.size(); i++) {
-      if (schema.type == data_type{cudf::type_id::LIST} && children_props[i].name == "offsets")
-        continue;
-      schema_element child_schema{children[i].type()};
-      std::vector<column> grandchildren_cols;
-      for (size_type j = 0; j < children[i].num_children(); j++)
-        grandchildren_cols.emplace_back(children[i].child(j));
-      schema.child_types[children_props[i].name] =
-        construct_schema(grandchildren_cols, children_props[i].children, child_schema);
+    if (schema.type == data_type{cudf::type_id::LIST}) {
+      schema.column_order = {"element"};
+      CUDF_EXPECTS(children.size() == 2, "List should have two children");
+      auto element_idx = children_props[0].name == "element" ? 0 : 1;
+      schema_element child_schema{children[element_idx].type()};
+      std::vector<column_view> grandchildren_cols;
+      std::transform(children[element_idx].child_begin(),
+                     children[element_idx].child_end(),
+                     std::back_inserter(grandchildren_cols),
+                     [](auto& gc) { return gc; });
+      schema.child_types["element"] =
+        construct_schema(grandchildren_cols, children_props[element_idx].children, child_schema);
+    } else {
+      std::vector<std::string> col_order;
+      std::transform(children_props.begin(),
+                     children_props.end(),
+                     std::back_inserter(col_order),
+                     [](auto& c_prop) { return c_prop.name; });
+      schema.column_order = std::move(col_order);
+      for (auto i = 0ul; i < children.size(); i++) {
+        schema_element child_schema{children[i].type()};
+        std::vector<column_view> grandchildren_cols;
+        std::transform(children[i].child_begin(),
+                       children[i].child_end(),
+                       std::back_inserter(grandchildren_cols),
+                       [](auto& gc) { return gc; });
+        schema.child_types[children_props[i].name] =
+          construct_schema(grandchildren_cols, children_props[i].children, child_schema);
+      }
     }
 
     return schema;
   };
-  // Dispatch individual batches to read_batch and push the resulting table into
-  // partial_tables array. Note that the reader options need to be updated for each
-  // batch to adjust byte range offset and byte range size.
   batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
   batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
   partial_tables.emplace_back(
     read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
 
   auto& tbl = partial_tables.back().tbl;
-  std::vector<column> children;
+  std::vector<column_view> children;
   for (size_type j = 0; j < tbl->num_columns(); j++)
     children.emplace_back(tbl->get_column(j));
   batched_reader_opts.set_dtypes(
     construct_schema(children, partial_tables.back().metadata.schema_info, schema));
   batched_reader_opts.enable_prune_columns(true);
 
+  // Dispatch individual batches to read_batch and push the resulting table into
+  // partial_tables array. Note that the reader options need to be updated for each
+  // batch to adjust byte range offset and byte range size.
   for (std::size_t i = 1; i < batch_offsets.size() - 1; i++) {
     batched_reader_opts.set_byte_range_offset(batch_offsets[i]);
     batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
