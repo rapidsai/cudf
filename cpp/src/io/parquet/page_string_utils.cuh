@@ -150,36 +150,6 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
            : ((threads_log2 >= block_size_log2) ? block_size_log2 : threads_log2);
 }
 
-template <int block_size, int sMaxBatchSize = block_size>
-__device__ inline int calc_threads_per_string_log2_OLD_WORKS(int avg)  // returns log2(M)
-{
-  // From testing, performance is best when copying an average of B = 4 bytes at once.
-  // So #-threads-per-string M = avg_string_length / 4
-  // Help the compiler make the code fast by keeping everything a power of 2
-  // For avg length < 4/8/16/..., length power-of-2 = 2/3/4/.../. Divide by 4: 0/1/...
-  // This is the target (log2) for M, but we need to clamp its range
-
-  // Clamp M (#-threads-per-string):
-  // For T threads: clamp #-strings-at-once N btw 1 & 32 (cache miss if larger)
-  // So, clamp #-threads-per-string M = T / N between T (all in block) & T/32 (cache miss)
-  // So, clamp log2(#-threads-per-string) between log2(T) (all in block) & log2(T) - 5 (cache miss)
-
-  static constexpr int sLog2BlockSize    = log2_int<block_size>();     // 7 for 128
-  static constexpr int sLog2MaxBatchSize = log2_int<sMaxBatchSize>();  // 5 for 32
-
-  static constexpr int sLog2MaxStringsAtOnce =
-    sLog2MaxBatchSize > 5 ? 5 : sLog2MaxBatchSize;  // 32, else blows out shared memory
-  static constexpr int sLog2MinThreadsPerString =
-    (sLog2BlockSize <= sLog2MaxStringsAtOnce) ? 1 : sLog2BlockSize - sLog2MaxStringsAtOnce;  // 2
-  static constexpr int sLog2TargetAvgCharCopy = 2;  // 4bytes
-
-  int target_log2 = 32 - sLog2TargetAvgCharCopy - __clz(avg - 1);  // 30 -> 11110 -> 27 -> 3
-  int values[3]   = {sLog2MinThreadsPerString, target_log2, sLog2BlockSize};
-  int index       = (target_log2 > sLog2MinThreadsPerString) + (target_log2 > sLog2BlockSize);
-
-  return values[index];
-}
-
 /**
  * @brief Function for copying strings from the parquet page into column memory.
  *
