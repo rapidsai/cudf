@@ -2416,13 +2416,19 @@ class StringMethods(ColumnMethods):
         2    f
         dtype: object
         """
+        str_lens = self.len()
         if i < 0:
             next_index = i - 1
             step = -1
+            to_mask = str_lens < abs(i)  # type: ignore[operator]
         else:
             next_index = i + 1
             step = 1
-        return self.slice(i, next_index, step)
+            to_mask = str_lens <= i  # type: ignore[operator]
+        result = self.slice(i, next_index, step)
+        if to_mask.any():  # type: ignore[union-attr]
+            result[to_mask] = cudf.NA  # type: ignore[index]
+        return result
 
     def get_json_object(
         self,

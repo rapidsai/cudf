@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import json
 import re
@@ -3539,3 +3539,16 @@ def test_string_reduction_error():
         lfunc_args_and_kwargs=([], {"skipna": False}),
         rfunc_args_and_kwargs=([], {"skipna": False}),
     )
+
+
+def test_getitem_out_of_bounds():
+    data = ["123", "12", "1"]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    expected = pd_ser.str[2]
+    result = cudf_ser.str[2]
+    assert_eq(result, expected)
+
+    expected = pd_ser.str[-2]
+    result = cudf_ser.str[-2]
+    assert_eq(result, expected)
