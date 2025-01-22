@@ -373,7 +373,9 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   std::size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
   std::size_t const batch_size_upper_bound = get_batch_size_upper_bound();
   std::size_t const batch_size =
-    batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
+    batch_size_upper_bound < (max_subchunks_prealloced * size_per_subchunk)
+      ? batch_size_upper_bound
+      : batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 
   /*
    * Identify the position (zero-indexed) of starting source file from which to begin
