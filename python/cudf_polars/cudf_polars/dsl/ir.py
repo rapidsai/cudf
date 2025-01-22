@@ -1318,7 +1318,7 @@ class Join(IR):
                         Column(
                             plc.replace.replace_nulls(
                                 left_col.obj,
-                                right_col.obj.astype(left_col.obj.type())
+                                right_col.astype(left_col.obj.type()).obj
                                 if left_col.obj.type().id() != right_col.obj.type().id()
                                 else right_col.obj,
                             ),
