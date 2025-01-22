@@ -474,7 +474,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=14.0.0,<=19.0.0
+          - pyarrow>=14.0.0,<20.0.0a0
       - output_types: [requirements, pyproject]
         packages:
           # pyarrow 17.0.0 wheels have a subtle issue around threading that
