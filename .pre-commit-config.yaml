@@ -177,6 +177,12 @@ repos:
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning"]
+        files: ^ci/
 
 default_language_version:
       python: python3

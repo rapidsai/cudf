@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -38,7 +38,8 @@ else
     fi
 fi
 
-DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
+# Reusing a variable defined as an array as a string
+DESELECTED_TEST_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 python -m pytest \
        --import-mode=importlib \
        --cache-clear \
@@ -46,6 +47,6 @@ python -m pytest \
        -p cudf_polars.testing.plugin \
        -v \
        --tb=native \
-       ${DESELECTED_TESTS} \
+       "${DESELECTED_TEST_STR}" \
        "$@" \
        py-polars/tests
