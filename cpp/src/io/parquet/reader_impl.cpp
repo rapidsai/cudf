@@ -415,12 +415,12 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // synchronize the streams
   cudf::detail::join_streams(streams, _stream);
 
-  // Sync stream here to use the offsets below
-  auto h_initial_str_offsets = cudf::detail::make_host_vector_sync(initial_str_offsets, _stream);
-
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
+
+  // Copy over initial string offsets from device
+  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
