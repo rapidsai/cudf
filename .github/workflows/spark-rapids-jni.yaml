@@ -1,7 +1,7 @@
 name: spark-rapids-jni
 
 on:
-  workflow_dispatch:
+  workflow_call:
 
 jobs:
   spark-rapids-jni-build:
