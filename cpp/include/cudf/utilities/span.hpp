@@ -402,7 +402,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
    * @param idx the index of the element to access
    * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
    */
-  CUDF_HOST_DEVICE constexpr typename base::reference operator[](size_type idx) const
+  __device__ constexpr typename base::reference operator[](size_type idx) const
   {
     return this->_data[idx];
   }
