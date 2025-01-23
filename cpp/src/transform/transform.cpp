@@ -55,8 +55,6 @@ void transform_operation(mutable_column_view output,
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
       .instantiate(template_args);
 
-  std::cout << "instd" << std::endl;
-
   std::map<unsigned int, std::string> arg_types;
 
   {
