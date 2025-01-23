@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,8 +57,6 @@
  */
 
 // altered: applying clang-format for libcudf on this file.
-
-#error "This error is for spark-rapids-jni"
 
 #include "base64_utilities.hpp"
 
