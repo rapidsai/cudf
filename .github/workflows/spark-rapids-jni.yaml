@@ -17,8 +17,6 @@ jobs:
         with:
           path: thirdparty/cudf
       - run: |
-          id
-          pwd
-          ls -laR
+          git config --global safe.directory $(pwd)
           git status
           git diff thirdparty/cudf
