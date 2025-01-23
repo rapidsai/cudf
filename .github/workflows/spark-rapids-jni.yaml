@@ -19,6 +19,6 @@ jobs:
       - run: |
           id
           pwd
-          ls -l
+          ls -laR
           git status
           git diff thirdparty/cudf
