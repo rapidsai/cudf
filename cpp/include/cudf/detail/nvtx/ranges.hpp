@@ -41,6 +41,46 @@ struct libcudf_domain {
  */
 using scoped_range = ::nvtx3::scoped_range_in<libcudf_domain>;
 
+namespace detail {
+constexpr uint32_t cudf_nvtx_default_color{0xffbf00};
+
+/**
+ * @brief
+ *
+ */
+class nvtx_event_attr {
+ public:
+  nvtx_event_attr(const nvtxStringHandle_t string_handle, uint32_t color)
+  {
+    std::memset(&_attr, 0, NVTX_EVENT_ATTRIB_STRUCT_SIZE);
+    _attr.version            = NVTX_VERSION;
+    _attr.size               = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+    _attr.colorType          = nvtxColorType_t::NVTX_COLOR_ARGB;
+    _attr.color              = color;
+    _attr.messageType        = nvtxMessageType_t::NVTX_MESSAGE_TYPE_REGISTERED;
+    _attr.message.registered = string_handle;
+  }
+
+  const nvtxEventAttributes_t& get() const { return _attr; }
+
+ private:
+  nvtxEventAttributes_t _attr;
+};
+
+class nvtx_scoped_range {
+ public:
+  nvtx_scoped_range(const nvtx_event_attr& event_attr, nvtxDomainHandle_t domain) : _domain(domain)
+  {
+    nvtxDomainRangePushEx(_domain, &event_attr.get());
+  }
+
+  ~nvtx_scoped_range() { nvtxDomainRangePop(_domain); }
+
+ private:
+  nvtxDomainHandle_t _domain{};
+};
+}  // namespace detail
+
 }  // namespace cudf
 
 /**
@@ -59,3 +99,53 @@ using scoped_range = ::nvtx3::scoped_range_in<libcudf_domain>;
  * ```
  */
 #define CUDF_FUNC_RANGE() NVTX3_FUNC_RANGE_IN(cudf::libcudf_domain)
+
+/**
+ * @brief
+ *
+ */
+#define GET_EVENT_ATTR(range_name, color)                                                     \
+  [](const char* range_name_var, uint32_t color_var) -> cudf::detail::nvtx_event_attr& {      \
+    static auto* string_handle =                                                              \
+      nvtxDomainRegisterString(::nvtx3::domain::get<cudf::libcudf_domain>(), range_name_var); \
+    static cudf::detail::nvtx_event_attr event_attr(string_handle, color_var);                \
+    return event_attr;                                                                        \
+  }(range_name, color)
+
+/**
+ * @brief
+ *
+ */
+#define CUDF_RANGE_PUSH(range_name)                                   \
+  nvtxDomainRangePushEx(::nvtx3::domain::get<cudf::libcudf_domain>(), \
+                        &GET_EVENT_ATTR(range_name, cudf::detail::cudf_nvtx_default_color).get());
+
+/**
+ * @brief
+ *
+ */
+#define CUDF_RANGE_PUSH_COLOR(range_name, color)                      \
+  nvtxDomainRangePushEx(::nvtx3::domain::get<cudf::libcudf_domain>(), \
+                        &GET_EVENT_ATTR(range_name, color).get());
+
+/**
+ * @brief
+ *
+ */
+#define CUDF_RANGE_POP() nvtxDomainRangePop(::nvtx3::domain::get<cudf::libcudf_domain>());
+
+/**
+ * @brief
+ *
+ */
+#define CONCAT2(x, y)   x##y
+#define CONCAT(x, y)    CONCAT2(x, y)
+#define UNIQUE_VAR(var) CONCAT(var, __LINE__)
+
+/**
+ * @brief
+ *
+ */
+// clang-format off
+#define CUDF_SCOPED_RANGE(range_name) cudf::detail::nvtx_scoped_range UNIQUE_VAR(nvtx_scoped_range_var)(GET_EVENT_ATTR(range_name, cudf::detail::cudf_nvtx_default_color), ::nvtx3::domain::get<cudf::libcudf_domain>());
+// clang-format on
