@@ -278,10 +278,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    * @param idx the index of the element to access
    * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
    */
-  CUDF_HOST_DEVICE constexpr typename base::reference operator[](size_type idx) const
-  {
-    return this->_data[idx];
-  }
+  constexpr typename base::reference operator[](size_type idx) const { return this->_data[idx]; }
 
   // not noexcept due to undefined behavior when size = 0
   /**
