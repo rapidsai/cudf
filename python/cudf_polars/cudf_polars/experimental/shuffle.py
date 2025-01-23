@@ -167,25 +167,13 @@ def _(
     # be handled separately.
     from cudf_polars.experimental.parallel import PartitionInfo
 
-    # Check ir.keys
-    if not isinstance(ir.keys, tuple):  # pragma: no cover
-        raise NotImplementedError(
-            f"Default hash Shuffle does not support NamedExpr keys argument. Got {ir.keys}"
-        )
-
     # Extract child partitioning
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
     pi = partition_info[children[0]]
 
-    # Check child count
-    if len(children) > 1:  # pragma: no cover
-        raise NotImplementedError(
-            f"Default hash Shuffle does not support multiple children. Got {children}"
-        )
-
     # Check if we are already shuffled or update partition_info
-    if len(children) == 1 and ir.keys == pi.partitioned_on:
+    if ir.keys == pi.partitioned_on:
         # Already shuffled!
         new_node = children[0]
     else:
