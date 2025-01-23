@@ -132,3 +132,11 @@ NVBENCH_BENCH_TYPES(bench_row_variable_rolling_sum,
   .add_int64_power_of_two_axis("num_rows", {14, 22, 28})
   .add_int64_axis("preceding_size", {10, 100})
   .add_int64_axis("following_size", {2});
+
+NVBENCH_BENCH_TYPES(bench_row_fixed_rolling_sum,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t>))
+  .set_name("row_fixed_rolling_sum_large_windows")
+  .add_int64_power_of_two_axis("num_rows", {28})
+  .add_int64_axis("preceding_size", {10'000, 40'000})
+  .add_int64_axis("following_size", {0})
+  .add_int64_axis("min_periods", {1});
