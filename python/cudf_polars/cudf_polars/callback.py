@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import time
 import warnings
 from functools import cache, partial
 from typing import TYPE_CHECKING, Literal
@@ -195,14 +194,7 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "pylibcudf":
-            if node_timer:
-                start = time.perf_counter_ns()
-                df = ir.evaluate(cache={}).to_polars()
-                stop = time.perf_counter_ns()
-                node_timer.store("GPU callback", start, stop)
-                return df
-            else:
-                return ir.evaluate(cache={}).to_polars()
+            return ir.evaluate(cache={}, node_timer=node_timer).to_polars()
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 
