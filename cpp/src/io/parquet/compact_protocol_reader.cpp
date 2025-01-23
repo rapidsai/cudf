@@ -503,24 +503,6 @@ class parquet_field_optional : public parquet_field {
 };
 
 /**
- * @brief functor to wrap functors for optional fields
- */
-template <typename T, typename FieldFunctor>
-class parquet_field_device_optional : public parquet_field {
-  cuda::std::optional<T>& val;
-
- public:
-  parquet_field_device_optional(int f, cuda::std::optional<T>& v) : parquet_field(f), val(v) {}
-
-  inline void operator()(CompactProtocolReader* cpr, int field_type)
-  {
-    T v;
-    FieldFunctor{field(), v}(cpr, field_type);
-    val = v;
-  }
-};
-
-/**
  * @brief Skips the number of bytes according to the specified struct type
  *
  * @param[in] t Struct type enumeration
@@ -581,7 +563,7 @@ void CompactProtocolReader::read(SchemaElement* s)
   using optional_converted_type =
     parquet_field_optional<ConvertedType, parquet_field_enum<ConvertedType>>;
   using optional_logical_type =
-    parquet_field_device_optional<LogicalType, parquet_field_struct<LogicalType>>;
+    parquet_field_optional<LogicalType, parquet_field_struct<LogicalType>>;
   auto op = std::make_tuple(parquet_field_enum<Type>(1, s->type),
                             parquet_field_int32(2, s->type_length),
                             parquet_field_enum<FieldRepetitionType>(3, s->repetition_type),
