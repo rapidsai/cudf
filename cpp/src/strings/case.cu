@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,7 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
     u_char const chr = static_cast<u_char>(d_input_chars[i]);
     mb_count += ((chr & 0x80) > 0);
   }
-  auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cub::Sum());
+  auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cuda::std::plus());
 
   if ((lane_idx == 0) && (mb_total > 0)) {
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1010,7 +1010,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
  * @param[out] output_valid_count Output count of valid values
  * @param[in] device_operator The operator used to perform a single window operation
  * @param[in] preceding_window_begin Rolling window size iterator, accumulates from
- *            in_col[i-preceding_window] to in_col[i] inclusive
+ *            in_col[i-preceding_window + 1] to in_col[i] inclusive
  * @param[in] following_window_begin Rolling window size iterator in the forward
  *            direction, accumulates from in_col[i] to in_col[i+following_window] inclusive
  */
@@ -1034,28 +1034,27 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
   size_type warp_valid_count{0};
 
-  auto active_threads = __ballot_sync(0xffff'ffffu, i < input.size());
-  while (i < input.size()) {
-    // to prevent overflow issues when computing bounds use int64_t
-    int64_t const preceding_window = preceding_window_begin[i];
-    int64_t const following_window = following_window_begin[i];
+  auto const num_rows = input.size();
+  auto active_threads = __ballot_sync(0xffff'ffffu, i < num_rows);
+  while (i < num_rows) {
+    // The caller is required to provide window bounds that will
+    // result in indexing that is in-bounds for the column. Therefore all
+    // of these calculations cannot overflow and we can do everything
+    // in size_type arithmetic. Moreover, we require that start <=
+    // end, i.e., the window is never "reversed" though it may be empty.
+    auto const preceding_window = preceding_window_begin[i];
+    auto const following_window = following_window_begin[i];
 
-    // compute bounds
-    auto const start = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(int64_t{0}, i - preceding_window + 1)));
-    auto const end = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(int64_t{0}, i + following_window + 1)));
-    auto const start_index = min(start, end);
-    auto const end_index   = max(start, end);
+    size_type const start = i - preceding_window + 1;
+    size_type const end   = i + following_window + 1;
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    volatile bool output_is_valid = false;
-    output_is_valid               = device_operator.template operator()<OutputType, has_nulls>(
-      input, default_outputs, output, start_index, end_index, i);
+    bool const output_is_valid = device_operator.template operator()<OutputType, has_nulls>(
+      input, default_outputs, output, start, end, i);
 
     // set the mask
     cudf::bitmask_type const result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -1068,7 +1067,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
     // process next element
     i += stride;
-    active_threads = __ballot_sync(active_threads, i < input.size());
+    active_threads = __ballot_sync(active_threads, i < num_rows);
   }
 
   // sum the valid counts across the whole block
