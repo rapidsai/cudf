@@ -1068,6 +1068,10 @@ class StringMethods(ColumnMethods):
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
+        pa_repl = pa.scalar(repl)
+        if not pa.types.is_string(pa_repl.type):
+            raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
+
         # Pandas forces non-regex replace when pat is a single-character
         with acquire_spill_lock():
             if regex is True and len(pat) > 1:
@@ -1076,14 +1080,14 @@ class StringMethods(ColumnMethods):
                     plc.strings.regex_program.RegexProgram.create(
                         pat, plc.strings.regex_flags.RegexFlags.DEFAULT
                     ),
-                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa_repl),
                     n,
                 )
             else:
                 plc_result = plc.strings.replace.replace(
                     self._column.to_pylibcudf(mode="read"),
                     pa_scalar_to_plc_scalar(pa.scalar(pat)),
-                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa_repl),
                     n,
                 )
             result = Column.from_pylibcudf(plc_result)

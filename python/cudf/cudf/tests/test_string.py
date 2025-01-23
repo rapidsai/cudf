@@ -3569,3 +3569,9 @@ def test_index_int64_pandas_compat(method):
         result = getattr(cudf.Series(data).str, method)("E", 4, 8)
     expected = getattr(pd.Series(data).str, method)("E", 4, 8)
     assert_eq(result, expected)
+
+
+def test_replace_invalid_scalar_repl():
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        ser.str.replace("1", 2)
