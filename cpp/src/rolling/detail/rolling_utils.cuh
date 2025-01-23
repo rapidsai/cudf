@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
 
@@ -36,6 +37,8 @@ namespace detail::rolling {
 struct ungrouped {
   cudf::size_type num_rows;
 
+  static constexpr bool has_nulls{false};
+
   [[nodiscard]] __device__ constexpr cudf::size_type label(cudf::size_type) const noexcept
   {
     return 0;
@@ -47,6 +50,20 @@ struct ungrouped {
   [[nodiscard]] __device__ constexpr cudf::size_type end(cudf::size_type) const noexcept
   {
     return num_rows;
+  }
+
+  /**
+   * @brief Return information about the current row.
+   *
+   * @param i The row
+   * @returns Tuple of `(null_count, group_start, group_end, null_start,
+   * null_end, non_null_start, non_null_end)`
+   */
+  [[nodiscard]] __device__ constexpr cuda::std::
+    tuple<size_type, size_type, size_type, size_type, size_type, size_type, size_type>
+    row_info(size_type i) const noexcept
+  {
+    return {0, 0, num_rows, 0, 0, 0, num_rows};
   }
 };
 
@@ -64,6 +81,8 @@ struct grouped {
   cudf::size_type const* labels;
   cudf::size_type const* offsets;
 
+  static constexpr bool has_nulls{false};
+
   [[nodiscard]] __device__ constexpr cudf::size_type label(cudf::size_type i) const noexcept
   {
     return labels[i];
@@ -76,6 +95,19 @@ struct grouped {
   {
     return offsets[label + 1];
   }
+
+  /**
+   * @copydoc ungrouped::row_info
+   */
+  [[nodiscard]] __device__ constexpr cuda::std::
+    tuple<size_type, size_type, size_type, size_type, size_type, size_type, size_type>
+    row_info(size_type i) const noexcept
+  {
+    auto const label       = labels[i];
+    auto const group_start = offsets[label];
+    auto const group_end   = offsets[label + 1];
+    return {0, group_start, group_end, group_start, group_start, group_start, group_end};
+  }
 };
 
 enum class direction : bool {
@@ -87,6 +119,10 @@ template <direction Direction, typename Grouping>
 struct fixed_window_clamper {
   Grouping groups;
   cudf::size_type delta;
+  static_assert(cuda::std::is_same_v<Grouping, ungrouped> ||
+                  cuda::std::is_same_v<Grouping, grouped>,
+                "Invalid grouping descriptor");
+
   [[nodiscard]] __device__ constexpr cudf::size_type operator()(cudf::size_type i) const
   {
     auto const label = groups.label(i);

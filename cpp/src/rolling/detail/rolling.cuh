@@ -36,6 +36,7 @@
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -67,23 +68,6 @@
 namespace cudf {
 
 namespace detail {
-
-/// Helper function to materialize preceding/following offsets.
-template <typename Calculator>
-std::unique_ptr<column> expand_to_column(Calculator const& calc,
-                                         size_type const& num_rows,
-                                         rmm::cuda_stream_view stream)
-{
-  auto window_column = cudf::make_numeric_column(
-    cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
-
-  auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
-
-  thrust::copy_n(
-    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
-
-  return window_column;
-}
 
 /**
  * @brief Operator for applying a generic (non-specialized) rolling aggregation on a single window.
