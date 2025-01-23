@@ -31,8 +31,8 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> transform(column_view const& input,
-                                  std::string const& unary_udf,
+std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
+                                  std::string_view unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
                                   rmm::cuda_stream_view stream,

@@ -43,7 +43,7 @@ CUDF_KERNEL void kernel(cudf::size_type num_rows, column_types*... columns)
   thread_index_type const stride = block_size * gridDim.x;
 
   for (auto row = start; row < static_cast<thread_index_type>(num_rows); row += stride) {
-    GENERIC_TRANSFORM_OP(static_cast<cudf::size_type>(row), columns...);
+    GENERIC_TRANSFORM_OP(row, columns...);
   }
 }
 

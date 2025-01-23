@@ -51,8 +51,8 @@ namespace CUDF_EXPORT cudf {
  *                      every element of the input
  */
 std::unique_ptr<column> transform(
-  host_span<column_view const> inputs,
-  std::string const& unary_udf,
+  std::vector<column_view> const& inputs,
+  std::string_view unary_udf,
   data_type output_type,
   bool is_ptx,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
