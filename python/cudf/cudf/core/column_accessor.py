@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -129,6 +129,7 @@ class ColumnAccessor(abc.MutableMapping):
                 data = dict(data)
             self._data = data
 
+            rangeindex = rangeindex or len(data) == 0
             if rangeindex and multiindex:
                 raise ValueError(
                     f"{rangeindex=} and {multiindex=} cannot both be True."
