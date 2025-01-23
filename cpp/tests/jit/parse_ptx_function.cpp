@@ -31,7 +31,7 @@ TEST_F(JitParseTest, PTXNoFunction)
   ret;
 })";
 
-  EXPECT_THROW(cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", "float", {0}),
+  EXPECT_THROW(cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", {{0, "float *"}}),
                cudf::logic_error);
 }
 
@@ -73,7 +73,7 @@ __device__ __inline__ void GENERIC_OP(
 )";
 
   std::string cuda_source =
-    cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", "float", {0});
+    cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", {{0, "float *"}});
 
   EXPECT_TRUE(ptx_equal(cuda_source, expected));
 }
@@ -118,7 +118,7 @@ __device__ __inline__ void EmptyKern(){
  asm volatile ("RETTGT:}");}
 )";
 
-  std::string cuda_source = cudf::jit::parse_single_function_ptx(raw_ptx, "EmptyKern", "void", {0});
+  std::string cuda_source = cudf::jit::parse_single_function_ptx(raw_ptx, "EmptyKern", {});
   EXPECT_TRUE(ptx_equal(cuda_source, expected));
 }
 
@@ -211,8 +211,7 @@ __device__ __inline__ void LongKernel(){
   asm volatile ("RETTGT:}");}
  )";
 
-  std::string cuda_source =
-    cudf::jit::parse_single_function_ptx(raw_ptx, "LongKernel", "void", {0});
+  std::string cuda_source = cudf::jit::parse_single_function_ptx(raw_ptx, "LongKernel", {});
   EXPECT_TRUE(ptx_equal(cuda_source, expected));
 }
 
