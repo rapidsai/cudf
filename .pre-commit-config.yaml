@@ -1,4 +1,12 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ci:
+  autofix_commit_msg: "[pre-commit.ci] auto code formatting"
+  autofix_prs: false
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: quarterly
+  skip: ["verify-alpha-spec"]
+  submodules: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
