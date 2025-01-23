@@ -25,7 +25,6 @@ import rmm
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -58,11 +57,14 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     get_time_unit,
     is_column_like,
@@ -253,10 +255,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
             ),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
             ),
         )
@@ -874,7 +876,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             value = as_column(value, dtype=self.dtype, length=1)
         mask = value.contains(self)
         return apply_boolean_mask(  # type: ignore[return-value]
-            [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
+            [as_column(range(0, len(self)), dtype=SIZE_TYPE_DTYPE)], mask
         )[0]
 
     def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
@@ -954,7 +956,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if indices.dtype.kind not in {"u", "i"}:
-            indices = indices.astype(libcudf.types.size_type_dtype)
+            indices = indices.astype(SIZE_TYPE_DTYPE)
         GatherMap(indices, len(self), nullify=not check_bounds or nullify)
         gathered = copying.gather([self], indices, nullify=nullify)  # type: ignore[arg-type]
         return gathered[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
@@ -1743,9 +1745,7 @@ def column_empty(
     elif isinstance(dtype, ListDtype):
         data = None
         children = (
-            as_column(
-                0, length=row_count + 1, dtype=libcudf.types.size_type_dtype
-            ),
+            as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif isinstance(dtype, CategoricalDtype):
@@ -1754,21 +1754,16 @@ def column_empty(
             cudf.core.column.NumericalColumn(
                 data=as_buffer(
                     rmm.DeviceBuffer(
-                        size=row_count
-                        * cudf.dtype(libcudf.types.size_type_dtype).itemsize
+                        size=row_count * cudf.dtype(SIZE_TYPE_DTYPE).itemsize
                     )
                 ),
                 size=None,
-                dtype=libcudf.types.size_type_dtype,
+                dtype=SIZE_TYPE_DTYPE,
             ),
         )
     elif dtype.kind in "OU" and not isinstance(dtype, DecimalDtype):
         data = as_buffer(rmm.DeviceBuffer(size=0))
-        children = (
-            as_column(
-                0, length=row_count + 1, dtype=libcudf.types.size_type_dtype
-            ),
-        )
+        children = (as_column(0, length=row_count + 1, dtype=SIZE_TYPE_DTYPE),)
     else:
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
@@ -1999,10 +1994,10 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.start, type=pa.int64())
                     ),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.step, type=pa.int64())
                     ),
                 )
@@ -2419,7 +2414,11 @@ def as_column(
                 and pa.types.is_integer(arbitrary.type)
                 and arbitrary.null_count > 0
             ):
+                # TODO: Need to re-visit this cast and fill_null
+                # calls while addressing the following issue:
+                # https://github.com/rapidsai/cudf/issues/14149
                 arbitrary = arbitrary.cast(pa.float64())
+                arbitrary = pc.fill_null(arbitrary, np.nan)
             if (
                 cudf.get_option("default_integer_bitwidth")
                 and pa.types.is_integer(arbitrary.type)
@@ -2552,10 +2551,9 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         )
 
     newsize = sum(map(len, objs))
-    if newsize > np.iinfo(libcudf.types.size_type_dtype).max:
+    if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
         raise MemoryError(
-            f"Result of concat cannot have "
-            f"size > {libcudf.types.size_type_dtype}_MAX"
+            f"Result of concat cannot have " f"size > {SIZE_TYPE_DTYPE}_MAX"
         )
     elif newsize == 0:
         return column_empty(0, head.dtype)

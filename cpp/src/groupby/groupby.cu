@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,8 +145,11 @@ struct empty_column_constructor {
     }
 
     if constexpr (k == aggregation::Kind::HOST_UDF) {
-      auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-      return std::get<std::unique_ptr<column>>(udf_ptr->get_empty_output(std::nullopt, stream, mr));
+      auto const& udf_base_ptr =
+        dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+      auto const udf_ptr = dynamic_cast<groupby_host_udf const*>(udf_base_ptr.get());
+      CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
+      return udf_ptr->get_empty_output(stream, mr);
     }
 
     return make_empty_column(target_type(values.type(), k));

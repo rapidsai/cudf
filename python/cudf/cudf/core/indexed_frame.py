@@ -60,6 +60,7 @@ from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -3034,7 +3035,7 @@ class IndexedFrame(Frame):
                         NumericalColumn,
                         as_column(
                             range(start, stop, stride),
-                            dtype=libcudf.types.size_type_dtype,
+                            dtype=SIZE_TYPE_DTYPE,
                         ),
                     ),
                     len(self),
@@ -3658,6 +3659,9 @@ class IndexedFrame(Frame):
             by_columns = by_in_index
         else:
             raise KeyError(by)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(

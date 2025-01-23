@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import functools
@@ -20,6 +20,7 @@ from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 import rmm
 
 from cudf._lib import strings_udf
+from cudf._lib.column import Column
 from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
@@ -43,6 +44,11 @@ from cudf.utils.utils import initfunc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import pylibcudf as plc
+
+    from cudf.core.buffer.buffer import Buffer
+    from cudf.core.indexed_frame import IndexedFrame
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
@@ -298,12 +304,14 @@ def _get_kernel(kernel_string, globals_, sig, func):
     return kernel
 
 
-def _get_input_args_from_frame(fr):
-    args = []
+def _get_input_args_from_frame(fr: IndexedFrame) -> list:
+    args: list[Buffer | tuple[Buffer, Buffer]] = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
         if col.dtype == _cudf_str_dtype:
-            data = column_to_string_view_array_init_heap(col)
+            data = column_to_string_view_array_init_heap(
+                col.to_pylibcudf(mode="read")
+            )
         else:
             data = col.data
         if col.mask is not None:
@@ -325,7 +333,9 @@ def _return_arr_from_dtype(dtype, size):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return strings_udf.column_from_udf_string_array(col)
+        return Column.from_pylibcudf(
+            strings_udf.column_from_udf_string_array(col)
+        )
     return as_column(col, retty)
 
 
@@ -365,7 +375,7 @@ def set_malloc_heap_size(size=None):
         _heap_size = size
 
 
-def column_to_string_view_array_init_heap(col):
+def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
     return strings_udf.column_to_string_view_array(col)
 

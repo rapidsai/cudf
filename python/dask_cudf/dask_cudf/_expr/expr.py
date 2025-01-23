@@ -1,12 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import functools
 
-import dask_expr._shuffle as _shuffle_module
-from dask_expr import new_collection
-from dask_expr._cumulative import CumulativeBlockwise
-from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
-from dask_expr._reductions import Reduction, Var
-
 from dask.dataframe.dispatch import (
     is_categorical_dtype,
     make_meta,
@@ -16,6 +10,18 @@ from dask.typing import no_default
 from dask.utils import is_dataframe_like
 
 import cudf
+
+from dask_cudf._expr import (
+    CumulativeBlockwise,
+    Elemwise,
+    Expr,
+    Reduction,
+    RenameAxis,
+    Var,
+    VarColumns,
+    _shuffle_module,
+    new_collection,
+)
 
 ##
 ## Custom expressions

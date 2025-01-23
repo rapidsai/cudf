@@ -19,16 +19,19 @@ import cudf
 import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import can_convert_to_column
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    can_convert_to_column,
+    dtype_to_pylibcudf_type,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -302,8 +305,8 @@ class StringMethods(ColumnMethods):
             with acquire_spill_lock():
                 plc_column = plc.strings.combine.join_strings(
                     self._column.to_pylibcudf(mode="read"),
-                    plc.interop.from_arrow(pa.scalar(sep)),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(pa.scalar(sep)),
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(na_rep, type=pa.string())
                     ),
                 )
@@ -361,8 +364,8 @@ class StringMethods(ColumnMethods):
                             )
                         ]
                     ),
-                    plc.interop.from_arrow(pa.scalar(sep)),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(pa.scalar(sep)),
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(na_rep, type=pa.string())
                     ),
                 )
@@ -526,9 +529,9 @@ class StringMethods(ColumnMethods):
             with acquire_spill_lock():
                 plc_column = plc.strings.combine.join_list_elements(
                     strings_column.to_pylibcudf(mode="read"),
-                    plc.interop.from_arrow(pa.scalar(sep)),
-                    plc.interop.from_arrow(pa.scalar(string_na_rep)),
-                    plc.interop.from_arrow(pa.scalar("")),
+                    pa_scalar_to_plc_scalar(pa.scalar(sep)),
+                    pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+                    pa_scalar_to_plc_scalar(pa.scalar("")),
                     plc.strings.combine.SeparatorOnNulls.YES,
                     plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
                 )
@@ -549,8 +552,8 @@ class StringMethods(ColumnMethods):
                 plc_column = plc.strings.combine.join_list_elements(
                     strings_column.to_pylibcudf(mode="read"),
                     sep_column.to_pylibcudf(mode="read"),
-                    plc.interop.from_arrow(pa.scalar(sep_na_rep)),
-                    plc.interop.from_arrow(pa.scalar(string_na_rep)),
+                    pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
+                    pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
                     plc.strings.combine.SeparatorOnNulls.YES,
                     plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
                 )
@@ -809,7 +812,7 @@ class StringMethods(ColumnMethods):
                 with acquire_spill_lock():
                     plc_result = plc.strings.find.contains(
                         input_column.to_pylibcudf(mode="read"),
-                        plc.interop.from_arrow(pa.scalar(pat_normed)),
+                        pa_scalar_to_plc_scalar(pa.scalar(pat_normed)),
                     )
                     result_col = Column.from_pylibcudf(plc_result)
         else:
@@ -894,8 +897,8 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.strings.contains.like(
                 self._column.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar(pat)),
-                plc.interop.from_arrow(pa.scalar(esc)),
+                pa_scalar_to_plc_scalar(pa.scalar(pat)),
+                pa_scalar_to_plc_scalar(pa.scalar(esc)),
             )
             result = Column.from_pylibcudf(plc_result)
 
@@ -1073,14 +1076,14 @@ class StringMethods(ColumnMethods):
                     plc.strings.regex_program.RegexProgram.create(
                         pat, plc.strings.regex_flags.RegexFlags.DEFAULT
                     ),
-                    plc.interop.from_arrow(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
                     n,
                 )
             else:
                 plc_result = plc.strings.replace.replace(
                     self._column.to_pylibcudf(mode="read"),
-                    plc.interop.from_arrow(pa.scalar(pat)),
-                    plc.interop.from_arrow(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa.scalar(pat)),
+                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
                     n,
                 )
             result = Column.from_pylibcudf(plc_result)
@@ -1200,9 +1203,9 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.strings.slice.slice_strings(
                 self._column.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar(start, param_dtype)),
-                plc.interop.from_arrow(pa.scalar(stop, param_dtype)),
-                plc.interop.from_arrow(pa.scalar(step, param_dtype)),
+                pa_scalar_to_plc_scalar(pa.scalar(start, param_dtype)),
+                pa_scalar_to_plc_scalar(pa.scalar(stop, param_dtype)),
+                pa_scalar_to_plc_scalar(pa.scalar(step, param_dtype)),
             )
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
@@ -2176,7 +2179,7 @@ class StringMethods(ColumnMethods):
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALPHANUM,
-                plc.interop.from_arrow(pa.scalar(repl, type=pa.string())),
+                pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
                 plc.strings.char_types.StringCharacterTypes.ALPHANUM
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
@@ -2320,7 +2323,7 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.strings.replace.replace_slice(
                 self._column.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar(repl, type=pa.string())),
+                pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
                 start,
                 stop,
             )
@@ -2501,7 +2504,7 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.json.get_json_object(
                 self._column.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar(json_path)),
+                pa_scalar_to_plc_scalar(pa.scalar(json_path)),
                 options,
             )
             result = Column.from_pylibcudf(plc_result)
@@ -2660,7 +2663,7 @@ class StringMethods(ColumnMethods):
                     data = self._column.split_re(pat, n)
                 else:
                     data = self._column.split(
-                        plc.interop.from_arrow(
+                        pa_scalar_to_plc_scalar(
                             pa.scalar(pat, type=pa.string())
                         ),
                         n,
@@ -2674,7 +2677,8 @@ class StringMethods(ColumnMethods):
                 result_table = self._column.split_record_re(pat, n)
             else:
                 result_table = self._column.split_record(
-                    plc.interop.from_arrow(pa.scalar(pat, type=pa.string())), n
+                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    n,
                 )
 
         return self._return_or_inplace(result_table, expand=expand)
@@ -2837,7 +2841,7 @@ class StringMethods(ColumnMethods):
                     data = self._column.rsplit_re(pat, n)
                 else:
                     data = self._column.rsplit(
-                        plc.interop.from_arrow(
+                        pa_scalar_to_plc_scalar(
                             pa.scalar(pat, type=pa.string())
                         ),
                         n,
@@ -2851,7 +2855,8 @@ class StringMethods(ColumnMethods):
                 result_table = self._column.rsplit_record_re(pat, n)
             else:
                 result_table = self._column.rsplit_record(
-                    plc.interop.from_arrow(pa.scalar(pat, type=pa.string())), n
+                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    n,
                 )
 
         return self._return_or_inplace(result_table, expand=expand)
@@ -2937,7 +2942,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(
             self._column.partition(
-                plc.interop.from_arrow(pa.scalar(sep, type=pa.string()))
+                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
             ),
             expand=expand,
         )
@@ -3004,7 +3009,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(
             self._column.rpartition(
-                plc.interop.from_arrow(pa.scalar(sep, type=pa.string()))
+                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
             ),
             expand=expand,
         )
@@ -3319,7 +3324,7 @@ class StringMethods(ColumnMethods):
             plc_result = plc.strings.strip.strip(
                 self._column.to_pylibcudf(mode="read"),
                 side,
-                plc.interop.from_arrow(pa.scalar(to_strip, type=pa.string())),
+                pa_scalar_to_plc_scalar(pa.scalar(to_strip, type=pa.string())),
             )
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
@@ -3936,7 +3941,7 @@ class StringMethods(ColumnMethods):
                 f"{type(pat).__name__}"
             )
         elif is_scalar(pat):
-            plc_pat = plc.interop.from_arrow(pa.scalar(pat, type=pa.string()))
+            plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
         else:
             plc_pat = column.as_column(pat, dtype="str").to_pylibcudf(
                 mode="read"
@@ -4136,7 +4141,7 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = method(
                 self._column.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar(sub, type=pa.string())),
+                pa_scalar_to_plc_scalar(pa.scalar(sub, type=pa.string())),
                 start,
                 end,
             )
@@ -4619,7 +4624,7 @@ class StringMethods(ColumnMethods):
                 plc.strings.translate.FilterType.KEEP
                 if keep
                 else plc.strings.translate.FilterType.REMOVE,
-                plc.interop.from_arrow(pa.scalar(repl, type=pa.string())),
+                pa_scalar_to_plc_scalar(pa.scalar(repl, type=pa.string())),
             )
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
@@ -5128,7 +5133,9 @@ class StringMethods(ColumnMethods):
             self._column.replace_tokens(
                 targets_column,  # type: ignore[arg-type]
                 replacements_column,  # type: ignore[arg-type]
-                plc.interop.from_arrow(pa.scalar(delimiter, type=pa.string())),
+                pa_scalar_to_plc_scalar(
+                    pa.scalar(delimiter, type=pa.string())
+                ),
             ),
         )
 
@@ -5197,10 +5204,12 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(
             self._column.filter_tokens(
                 min_token_length,
-                plc.interop.from_arrow(
+                pa_scalar_to_plc_scalar(
                     pa.scalar(replacement, type=pa.string())
                 ),
-                plc.interop.from_arrow(pa.scalar(delimiter, type=pa.string())),
+                pa_scalar_to_plc_scalar(
+                    pa.scalar(delimiter, type=pa.string())
+                ),
             ),
         )
 
@@ -5524,7 +5533,7 @@ def _massage_string_arg(
         return value
 
     if isinstance(value, str):
-        return plc.interop.from_arrow(pa.scalar(value, type=pa.string()))
+        return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
 
     allowed_types = ["Scalar"]
 
@@ -5611,7 +5620,7 @@ class StringColumn(column.ColumnBase):
         if len(children) == 0 and size != 0:
             # all nulls-column:
             offsets = column.as_column(
-                0, length=size + 1, dtype=size_type_dtype
+                0, length=size + 1, dtype=SIZE_TYPE_DTYPE
             )
 
             children = (offsets,)
@@ -5765,8 +5774,8 @@ class StringColumn(column.ColumnBase):
             with acquire_spill_lock():
                 plc_column = plc.strings.combine.join_strings(
                     result_col.to_pylibcudf(mode="read"),
-                    plc.interop.from_arrow(pa.scalar("")),
-                    plc.interop.from_arrow(pa.scalar(None, type=pa.string())),
+                    pa_scalar_to_plc_scalar(pa.scalar("")),
+                    pa_scalar_to_plc_scalar(pa.scalar(None, type=pa.string())),
                 )
                 return Column.from_pylibcudf(plc_column).element_indexing(0)
         else:
@@ -5888,7 +5897,7 @@ class StringColumn(column.ColumnBase):
     ) -> cudf.core.column.DecimalBaseColumn:
         plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
             self.to_pylibcudf(mode="read"),
-            libcudf.types.dtype_to_pylibcudf_type(dtype),
+            dtype_to_pylibcudf_type(dtype),
         )
         result = Column.from_pylibcudf(plc_column)
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
@@ -6051,8 +6060,8 @@ class StringColumn(column.ColumnBase):
                                 rhs.to_pylibcudf(mode="read"),
                             ]
                         ),
-                        plc.interop.from_arrow(pa.scalar("")),
-                        plc.interop.from_arrow(
+                        pa_scalar_to_plc_scalar(pa.scalar("")),
+                        pa_scalar_to_plc_scalar(
                             pa.scalar(None, type=pa.string())
                         ),
                     )
@@ -6186,7 +6195,7 @@ class StringColumn(column.ColumnBase):
             plc.nvtext.byte_pair_encode.byte_pair_encoding(
                 self.to_pylibcudf(mode="read"),
                 merge_pairs,
-                plc.interop.from_arrow(pa.scalar(separator)),
+                pa_scalar_to_plc_scalar(pa.scalar(separator)),
             )
         )
 
@@ -6351,7 +6360,7 @@ class StringColumn(column.ColumnBase):
             plc.nvtext.tokenize.tokenize_with_vocabulary(
                 self.to_pylibcudf(mode="read"),
                 vocabulary,
-                plc.interop.from_arrow(pa.scalar(delimiter)),
+                pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
                 default_id,
             )
         )

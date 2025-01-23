@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -53,6 +52,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -1002,7 +1002,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=size_type_dtype)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)
 
     def isin(self, values, level=None):
         if level is not None and level > 0:
@@ -1348,7 +1348,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = as_column(
             -1,
             length=len(needle),
-            dtype=libcudf.types.size_type_dtype,
+            dtype=SIZE_TYPE_DTYPE,
         )
 
         if not len(self):
