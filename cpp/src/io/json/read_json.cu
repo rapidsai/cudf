@@ -480,8 +480,9 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
   auto& tbl = partial_tables.back().tbl;
   std::vector<column_view> children;
-  for (size_type j = 0; j < tbl->num_columns(); j++)
+  for (size_type j = 0; j < tbl->num_columns(); j++) {
     children.emplace_back(tbl->get_column(j));
+  }
   batched_reader_opts.set_dtypes(
     construct_schema(children, partial_tables.back().metadata.schema_info, schema));
   batched_reader_opts.enable_prune_columns(true);

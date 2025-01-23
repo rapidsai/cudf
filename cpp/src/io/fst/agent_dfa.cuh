@@ -19,6 +19,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/std/array>
+#include <cuda/std/functional>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -897,7 +898,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
     __syncthreads();
 
     using OffsetPrefixScanCallbackOpT_ =
-      cub::TilePrefixCallbackOp<OffsetT, cub::Sum, OutOffsetScanTileState>;
+      cub::TilePrefixCallbackOp<OffsetT, cuda::std::plus<>, OutOffsetScanTileState>;
 
     using OutOffsetBlockScan =
       cub::BlockScan<OffsetT, BLOCK_THREADS, cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
@@ -915,7 +916,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
         .ExclusiveScan(count_chars_callback_op.out_count,
                        thread_out_offset,
                        static_cast<OffsetT>(0),
-                       cub::Sum{},
+                       cuda::std::plus{},
                        block_aggregate);
       tile_out_count = block_aggregate;
       if (threadIdx.x == 0 /*and not IS_LAST_TILE*/) {
@@ -927,10 +928,11 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
       }
     } else {
       auto prefix_op = OffsetPrefixScanCallbackOpT_(
-        offset_tile_state, prefix_callback_temp_storage, cub::Sum{}, tile_idx);
+        offset_tile_state, prefix_callback_temp_storage, cuda::std::plus{}, tile_idx);
 
       OutOffsetBlockScan(scan_temp_storage)
-        .ExclusiveScan(count_chars_callback_op.out_count, thread_out_offset, cub::Sum{}, prefix_op);
+        .ExclusiveScan(
+          count_chars_callback_op.out_count, thread_out_offset, cuda::std::plus{}, prefix_op);
       tile_out_offset = prefix_op.GetExclusivePrefix();
       tile_out_count  = prefix_op.GetBlockAggregate();
       if (tile_idx == gridDim.x - 1 && threadIdx.x == 0) {
