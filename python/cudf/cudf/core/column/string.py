@@ -4304,6 +4304,8 @@ class StringMethods(ColumnMethods):
 
         if (result == -1).any():
             raise ValueError("substring not found")
+        elif cudf.get_option("mode.pandas_compatible"):
+            return result.astype(np.dtype(np.int64))
         else:
             return result
 
@@ -4364,6 +4366,8 @@ class StringMethods(ColumnMethods):
 
         if (result == -1).any():
             raise ValueError("substring not found")
+        elif cudf.get_option("mode.pandas_compatible"):
+            return result.astype(np.dtype(np.int64))
         else:
             return result
 

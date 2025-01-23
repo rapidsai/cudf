@@ -3560,3 +3560,12 @@ def test_startsendwith_invalid_pat(method, pat):
     ser = cudf.Series(["1"])
     with pytest.raises(TypeError):
         getattr(ser.str, method)(pat)
+
+
+@pytest.mark.parametrize("method", ["rindex", "index"])
+def test_index_int64_pandas_compat(method):
+    data = ["ABCDEFG", "BCDEFEF", "DEFGHIJEF", "EFGHEF"]
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(cudf.Series(data).str, method)("E", 4, 8)
+    expected = getattr(pd.Series(data).str, method)("E", 4, 8)
+    assert_eq(result, expected)
