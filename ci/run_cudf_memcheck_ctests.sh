@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -uo pipefail
 
@@ -10,6 +10,7 @@ trap "EXITCODE=1" ERR
 cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/gtests/libcudf/";
 
 export GTEST_CUDF_RMM_MODE=cuda
+export GTEST_BRIEF=1
 # compute-sanitizer bug 4553815
 export LIBCUDF_MEMCHECK_ENABLED=1
 for gt in ./*_TEST ; do
@@ -18,6 +19,7 @@ for gt in ./*_TEST ; do
   echo "Running compute-sanitizer on $test_name"
   compute-sanitizer --tool memcheck ${gt} "$@"
 done
+unset GTEST_BRIEF
 unset GTEST_CUDF_RMM_MODE
 unset LIBCUDF_MEMCHECK_ENABLED
 
