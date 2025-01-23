@@ -99,10 +99,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     _PANDAS_NA_REPR = str(pd.NA)
 
-    @cached_property
-    def nan_count(self) -> int:
-        return 0
-
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
     ) -> "cuda.devicearray.DeviceNDArray":
