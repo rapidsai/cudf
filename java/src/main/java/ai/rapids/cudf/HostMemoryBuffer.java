@@ -372,7 +372,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param dst       destination int array
    * @param dstIndex  starting index within the destination array
    * @param srcOffset starting offset within this buffer
-   * @param count     number of longs to copy
+   * @param count     number of ints to copy
    */
   public final void getInts(int[] dst, long dstIndex, long srcOffset, int count) {
     assert count >= 0;

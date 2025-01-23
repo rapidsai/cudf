@@ -159,7 +159,7 @@ class UnsafeMemoryAccessor {
    * @param dst       where to write the data
    * @param dstIndex  index into values to start writing at.
    * @param address   src memory address
-   * @param count     the number of longs to copy
+   * @param count     the number of ints to copy
    * @throws IndexOutOfBoundsException
    */
   public static void getInts(int[] dst, long dstIndex, long address, int count) {
