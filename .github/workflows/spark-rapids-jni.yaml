@@ -17,6 +17,4 @@ jobs:
         with:
           path: thirdparty/cudf
       - run: |
-          git config --global safe.directory $(pwd)
-          git status
-          git diff thirdparty/cudf
+          GPU_ARCHS=89-real LIBCUDF_DEPENDENCY_MODE=latest scl enable gcc-toolset-11 build/buildcpp.sh
