@@ -179,22 +179,11 @@ TEST_P(JsonLargeReaderTest, MultiBatchWithNulls)
       reinterpret_cast<uint8_t const*>(json_string.data()) + json_string.size());
 
   constexpr int num_sources = 2;
-  std::vector<cudf::host_span<std::byte>> hostbufs(
-    num_sources,
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(json_string.data()),
-                               json_string.size()));
   std::vector<cudf::host_span<std::byte>> chostbufs(
     num_sources,
     cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(cdata.data()), cdata.size()));
 
   // Initialize parsing options (reading json lines)
-  cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{
-        cudf::host_span<cudf::host_span<std::byte>>(hostbufs.data(), hostbufs.size())})
-      .lines(true)
-      .compression(cudf::io::compression_type::NONE)
-      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
   cudf::io::json_reader_options cjson_lines_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{
