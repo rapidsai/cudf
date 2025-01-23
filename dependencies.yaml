@@ -438,12 +438,21 @@ dependencies:
         matrices:
           - matrix:
               cuda: "12.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu12==4.1.0.6
           - matrix:
               cuda: "11.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu11==4.1.0.6
+          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
+          # (e.g. for DLFW and pip devcontainers)
+          - matrix:
+              use_cuda_wheels: "false"
+            packages:
+          # if no matching matrix selectors passed, list the unsuffixed packages
+          # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
               - nvidia-nvcomp==4.1.0.6
