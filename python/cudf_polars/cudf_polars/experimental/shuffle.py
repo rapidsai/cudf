@@ -33,23 +33,12 @@ class Shuffle(IR):
 
     Notes
     -----
-    A Shuffle node may have either one or two children. In both
-    cases, the first child corresponds to the DataFrame we are
-    shuffling. The optional second child corresponds to a distinct
-    DataFrame to extract the shuffle keys from. For example, it
-    may be useful to reference a distinct DataFrame in the case
-    of sorting.
-
-    The type of argument `keys` controls whether or not hash
-    partitioning will be applied. If `keys` is a tuple, we
-    assume that the corresponding columns must be hashed. If
-    `keys` is a `NamedExpr`, we assume that the corresponding
-    column already contains a direct partition mapping.
+    Only hash-based partitioning is supported (for now).
     """
 
     __slots__ = ("keys", "options")
     _non_child = ("schema", "keys", "options")
-    keys: tuple[NamedExpr, ...] | NamedExpr
+    keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     options: dict[str, Any]
     """Shuffling options."""
@@ -57,17 +46,15 @@ class Shuffle(IR):
     def __init__(
         self,
         schema: Schema,
-        keys: tuple[NamedExpr, ...] | NamedExpr,
+        keys: tuple[NamedExpr, ...],
         options: dict[str, Any],
-        *children: IR,
+        df: IR,
     ):
         self.schema = schema
         self.keys = keys
         self.options = options
         self._non_child_args = ()
-        self.children = children
-        if len(children) > 2:  # pragma: no cover
-            raise ValueError(f"Expected a maximum of two children, got {children}")
+        self.children = (df,)
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
@@ -88,22 +75,22 @@ class Shuffle(IR):
 
 def _partition_dataframe(
     df: DataFrame,
-    index: DataFrame | None,
-    keys: tuple[NamedExpr, ...] | NamedExpr,
+    keys: tuple[NamedExpr, ...],
     count: int,
 ) -> dict[int, DataFrame]:
     """
     Partition an input DataFrame for shuffling.
 
+    Notes
+    -----
+    This utility only supports hash partitioning (for now).
+
     Parameters
     ----------
     df
         DataFrame to partition.
-    index
-        Optional DataFrame from which to extract partitioning
-        keys. If None, keys will be extracted from `df`.
     keys
-        Shuffle key(s) to extract from index or df.
+        Shuffle key(s).
     count
         Total number of output partitions.
 
@@ -112,22 +99,16 @@ def _partition_dataframe(
     A dictionary mapping between int partition indices and
     DataFrame fragments.
     """
-    # Extract output-partition mapping
-    if isinstance(keys, tuple):
-        # Hash the specified keys to calculate the output
-        # partition for each row (partition_map)
-        partition_map = plc.binaryop.binary_operation(
-            plc.hashing.murmurhash3_x86_32(
-                DataFrame([expr.evaluate(index or df) for expr in keys]).table
-            ),
-            plc.interop.from_arrow(pa.scalar(count, type="uint32")),
-            plc.binaryop.BinaryOperator.PYMOD,
-            plc.types.DataType(plc.types.TypeId.UINT32),
-        )
-    else:  # pragma: no cover
-        # Specified key column already contains the
-        # output-partition index in each row
-        partition_map = keys.evaluate(index or df).obj
+    # Hash the specified keys to calculate the output
+    # partition for each row
+    partition_map = plc.binaryop.binary_operation(
+        plc.hashing.murmurhash3_x86_32(
+            DataFrame([expr.evaluate(df) for expr in keys]).table
+        ),
+        plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+        plc.binaryop.BinaryOperator.PYMOD,
+        plc.types.DataType(plc.types.TypeId.UINT32),
+    )
 
     # Apply partitioning
     t, offsets = plc.partitioning.partition(
@@ -149,8 +130,7 @@ def _partition_dataframe(
 def _simple_shuffle_graph(
     name_out: str,
     name_in: str,
-    name_index: str | None,
-    keys: tuple[NamedExpr, ...] | NamedExpr,
+    keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
 ) -> MutableMapping[Any, Any]:
@@ -165,7 +145,6 @@ def _simple_shuffle_graph(
             graph[(split_name, part_in)] = (
                 _partition_dataframe,
                 (name_in, part_in),
-                None if name_index is None else (name_index, part_in),
                 keys,
                 count_out,
             )
@@ -228,18 +207,10 @@ def _(
     # Use a simple all-to-all shuffle graph.
 
     # TODO: Optionally use rapidsmp.
-    if len(ir.children) > 1:  # pragma: no cover
-        child_ir, index_ir = ir.children
-        index_name = get_key_name(index_ir)
-    else:
-        child_ir = ir.children[0]
-        index_name = None
-
     return _simple_shuffle_graph(
         get_key_name(ir),
-        get_key_name(child_ir),
-        index_name,
+        get_key_name(ir.children[0]),
         ir.keys,
-        partition_info[child_ir].count,
+        partition_info[ir.children[0]].count,
         partition_info[ir].count,
     )
