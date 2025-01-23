@@ -1260,7 +1260,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
         cudf::jit::parse_single_function_ptx(udf_agg._source,
                                              udf_agg._function_name,
                                              {{0, cudf::type_to_name(udf_agg._output_type) + " *"},
-                                              {5, "void *"}});  // args 0 and 5 are pointers.
+                                              {5, "void const *"}});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
       cuda_source += cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
