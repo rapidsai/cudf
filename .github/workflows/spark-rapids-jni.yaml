@@ -17,4 +17,5 @@ jobs:
         with:
           path: thirdparty/cudf
       - run: |
+          mkdir target
           GPU_ARCHS=89-real LIBCUDF_DEPENDENCY_MODE=latest scl enable gcc-toolset-11 build/buildcpp.sh
