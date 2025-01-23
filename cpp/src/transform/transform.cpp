@@ -46,10 +46,11 @@ void transform_operation(mutable_column_view output,
 {
   jitify2::StringVec template_args;
   template_args.push_back(cudf::type_to_name(output.type()));
-  std::transform(inputs.begin(),
-                 inputs.end(),
-                 std::back_inserter(template_args),
-                 [](cudf::column_view const& input) { return cudf::type_to_name(input.type()); });
+  std::transform(
+    inputs.begin(),
+    inputs.end(),
+    std::back_inserter(template_args),
+    [](cudf::column_view const& input) { return cudf::type_to_name(input.type()) + " const"; });
 
   std::string const kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
@@ -64,7 +65,7 @@ void transform_operation(mutable_column_view output,
     arg_types.emplace(arg++, index_type);
     arg_types.emplace(arg++, cudf::type_to_name(output.type()) + "* ");
     std::for_each(inputs.begin(), inputs.end(), [&arg, &arg_types](column_view const& input) {
-      arg_types.emplace(arg++, cudf::type_to_name(input.type()) + "* ");
+      arg_types.emplace(arg++, cudf::type_to_name(input.type()) + " const * ");
     });
   }
 
