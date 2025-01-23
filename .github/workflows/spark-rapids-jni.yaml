@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: thirdparty/cudf
-      - run: |
+      - name: "Build spark-rapids-jni"
+        run: |
           mkdir target
           GPU_ARCHS=89-real LIBCUDF_DEPENDENCY_MODE=latest scl enable gcc-toolset-11 build/buildcpp.sh
