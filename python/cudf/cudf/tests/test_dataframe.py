@@ -11253,3 +11253,10 @@ def test_dataframe_multiindex_column_names(names):
     df.columns.names = names
     assert_eq(df, pdf)
     assert_eq(df.columns.names, pdf.columns.names)
+
+
+@pytest.mark.parametrize("pdf", _dataframe_na_data())
+def test_roundtrip_dataframe_plc_table(pdf):
+    expect = cudf.DataFrame.from_pandas(pdf)
+    actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
