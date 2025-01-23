@@ -2048,26 +2048,26 @@ def test_string_starts_ends(data, pat):
     [
         (
             ["abc", "xyz", "a", "ab", "123", "097"],
-            ["abc", "x", "a", "b", "3", "7"],
+            ("abc", "x", "a", "b", "3", "7"),
         ),
-        (["A B", "1.5", "3,000"], ["A ", ".", ","]),
-        (["23", "³", "⅕", ""], ["23", "³", "⅕", ""]),
-        ([" ", "\t\r\n ", ""], ["d", "\n ", ""]),
+        (["A B", "1.5", "3,000"], ("A ", ".", ",")),
+        (["23", "³", "⅕", ""], ("23", "³", "⅕", "")),
+        ([" ", "\t\r\n ", ""], ("d", "\n ", "")),
         (
             ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-            ["$", "$", "a", "<", "(", "#"],
+            ("$", "$", "a", "<", "(", "#"),
         ),
         (
             ["line to be wrapped", "another line to be wrapped"],
-            ["another", "wrapped"],
+            ("another", "wrapped"),
         ),
         (
             ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            ["hsdjfk", None, "ll", "+", "-", "w", "-", "én"],
+            ("hsdjfk", "", "ll", "+", "-", "w", "-", "én"),
         ),
         (
             ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
-            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+            ("1. Ant.  ", "2. Bee!\n", "3. Cat?\t", ""),
         ),
     ],
 )
@@ -3552,3 +3552,11 @@ def test_getitem_out_of_bounds():
     expected = pd_ser.str[-2]
     result = cudf_ser.str[-2]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["startswith", "endswith"])
+@pytest.mark.parametrize("pat", [None, (1, 2), pd.Series([1])])
+def test_startsendwith_invalid_pat(method, pat):
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        getattr(ser.str, method)(pat)

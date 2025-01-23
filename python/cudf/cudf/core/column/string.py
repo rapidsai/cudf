@@ -3939,18 +3939,17 @@ class StringMethods(ColumnMethods):
     def _starts_ends_with(
         self,
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
-        pat: str | Sequence,
+        pat: str | tuple[str, ...],
     ) -> SeriesOrIndex:
-        if pat is None:
-            raise TypeError(
-                f"expected a string or a sequence-like object, not "
-                f"{type(pat).__name__}"
-            )
-        elif is_scalar(pat):
+        if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
-        else:
+        elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
             plc_pat = column.as_column(pat, dtype="str").to_pylibcudf(
                 mode="read"
+            )
+        else:
+            raise TypeError(
+                f"expected a string or tuple, not {type(pat).__name__}"
             )
         with acquire_spill_lock():
             plc_result = method(
@@ -3959,7 +3958,7 @@ class StringMethods(ColumnMethods):
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
 
-    def endswith(self, pat: str | Sequence) -> SeriesOrIndex:
+    def endswith(self, pat: str | tuple[str, ...]) -> SeriesOrIndex:
         """
         Test if the end of each string element matches a pattern.
 
@@ -4003,7 +4002,7 @@ class StringMethods(ColumnMethods):
         """
         return self._starts_ends_with(plc.strings.find.ends_with, pat)
 
-    def startswith(self, pat: str | Sequence) -> SeriesOrIndex:
+    def startswith(self, pat: str | tuple[str, ...]) -> SeriesOrIndex:
         """
         Test if the start of each string element matches a pattern.
 
