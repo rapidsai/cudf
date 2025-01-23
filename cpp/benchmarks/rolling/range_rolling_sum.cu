@@ -60,8 +60,8 @@ void bench_range_rolling_sum(nvbench::state& state)
   }();
 
   auto orderby = [&]() {
-    auto seq =
-      cudf::make_timestamp_column(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS}, num_rows);
+    auto seq = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<cudf::timestamp_ms>()},
+                                           num_rows);
     // Equally spaced rows separated by 1s
     thrust::transform(
       rmm::exec_policy(cudf::get_default_stream()),

@@ -66,12 +66,14 @@ void bench_grouped_range_rolling_sum(nvbench::state& state)
       data_profile_builder()
         .cardinality(cardinality)
         .no_validity()
-        .distribution(cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, num_rows);
-    auto keys = create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
+        .distribution(cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, num_rows);
+    auto keys =
+      create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{num_rows}, profile);
     return cudf::sort(cudf::table_view{{keys->view()}});
   }();
   auto orderby = [&]() {
-    auto seq = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
+    auto seq =
+      cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()}, num_rows);
     // Equally spaced rows separated by 1000 unit intervals
     thrust::transform(
       rmm::exec_policy(cudf::get_default_stream()),
