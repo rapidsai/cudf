@@ -789,6 +789,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     label_dtype=label_dtype,
                     verify=False,
                 )
+            else:
+                self._data.rangeindex = True
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.DataFrame._from_data for constructing a DataFrame from "
@@ -1120,6 +1122,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        elif columns is None:
+            self._data.rangeindex = True
+
         self._data._level_names = (
             tuple(columns.names)
             if isinstance(columns, pd.Index)
