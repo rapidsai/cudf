@@ -396,7 +396,16 @@ abstract class Aggregation {
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createHostUDFAgg(wrapper.udfNativeHandle);
+            long udf = 0;
+            try {
+                udf = wrapper.createUDFInstance();
+                return Aggregation.createHostUDFAgg(udf);
+            } finally {
+                // a new UDF is cloned in `createHostUDFAgg`, here should close the UDF instance.
+                if (udf != 0) {
+                    HostUDFWrapper.closeUDFInstance(udf);
+                }
+            }
         }
 
         @Override
