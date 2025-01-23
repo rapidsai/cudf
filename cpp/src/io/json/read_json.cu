@@ -16,6 +16,7 @@
 
 #include "io/comp/io_uncomp.hpp"
 #include "io/json/nested_json.hpp"
+#include "io/utilities/getenv_or.hpp"
 #include "read_json.hpp"
 
 #include <cudf/concatenate.hpp>
@@ -51,7 +52,9 @@ namespace pools {
 
 BS::thread_pool& tpool()
 {
-  static BS::thread_pool _tpool(std::thread::hardware_concurrency());
+  static std::size_t pool_size =
+    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", std::thread::hardware_concurrency());
+  static BS::thread_pool _tpool(pool_size);
   return _tpool;
 }
 
@@ -461,7 +464,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // delimiter.
   auto constexpr num_delimiter_chars = 1;
   std::vector<std::future<size_t>> thread_tasks;
-  auto stream_pool = cudf::detail::fork_streams(stream, pools::tpool().get_thread_count());
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
   std::vector<std::size_t> prefsum_source_sizes(sources.size());
@@ -478,6 +480,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
 
   auto const total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
+
+  size_t const num_streams =
+    std::min<std::size_t>({sources.size() - start_source + 1,
+                           cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
+                           pools::tpool().get_thread_count()});
+  auto stream_pool = cudf::detail::fork_streams(stream, num_streams);
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;
        i++) {

@@ -22,6 +22,7 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -383,8 +384,8 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=plc.interop.from_arrow(pa.scalar("True")),
-                false_string=plc.interop.from_arrow(pa.scalar("False")),
+                true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
+                false_string=pa_scalar_to_plc_scalar(pa.scalar("False")),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
