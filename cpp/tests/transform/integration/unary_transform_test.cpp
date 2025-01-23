@@ -52,7 +52,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32)
   std::string const cuda =
     R"***(
 __device__ inline void    fdsf   (
-       cudf::size_type i,
+       int64_t i,
        float* out,
        float * in
 )
@@ -76,22 +76,29 @@ out[i] = a*a*a*a;
 .target sm_70
 .address_size 64
 
-.func _Z5fdsf2iPfS_(
-        .param .b64 _Z5fdsf2iPfS__param_0,
-        .param .b32 _Z5fdsf2iPfS__param_1
+.func _Z4fdsflPfS_(
+        .param .b64 _Z4fdsflPfS__param_0,
+        .param .b64 _Z4fdsflPfS__param_1,
+        .param .b64 _Z4fdsflPfS__param_2
 )
 {
         .reg .f32       %f<5>;
-        .reg .b64       %rd<3>;
+        .reg .b64       %rd<9>;
 
 
-        ld.param.u64    %rd1, [_Z5fdsf2iPfS__param_0];
-        ld.param.f32    %f1, [_Z5fdsf2iPfS__param_1];
-        cvta.to.global.u64      %rd2, %rd1;
+        ld.param.u64    %rd1, [_Z4fdsflPfS__param_0];
+        ld.param.u64    %rd2, [_Z4fdsflPfS__param_1];
+        ld.param.u64    %rd3, [_Z4fdsflPfS__param_2];
+        cvta.to.global.u64      %rd4, %rd2;
+        cvta.to.global.u64      %rd5, %rd3;
+        shl.b64         %rd6, %rd1, 2;
+        add.s64         %rd7, %rd5, %rd6;
+        ld.global.f32   %f1, [%rd7];
         mul.f32         %f2, %f1, %f1;
-        mul.f32         %f3, %f2, %f1;
-        mul.f32         %f4, %f3, %f1;
-        st.global.f32   [%rd2], %f4;
+        mul.f32         %f3, %f1, %f2;
+        mul.f32         %f4, %f1, %f3;
+        add.s64         %rd8, %rd4, %rd6;
+        st.global.f32   [%rd8], %f4;
         ret;
 
 }
@@ -110,7 +117,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   // c = a * a - a
   std::string const cuda =
     R"***(
-    __device__ inline void f(cudf::size_type i, int* output ,int * input)
+    __device__ inline void f(int64_t i, int* output ,int * input)
     {
     output[i] = input[i] * input[i] - input[i];
     }
@@ -118,21 +125,28 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
 
   std::string const ptx =
     R"***(
-.func _Z2ffiPiS_(
-        .param .b64 _Z2ffiPiS__param_0,
-        .param .b32 _Z2ffiPiS__param_1
+.func _Z1flPiS_(
+        .param .b64 _Z1flPiS__param_0,
+        .param .b64 _Z1flPiS__param_1,
+        .param .b64 _Z1flPiS__param_2
 )
 {
         .reg .b32       %r<4>;
-        .reg .b64       %rd<3>;
+        .reg .b64       %rd<9>;
 
 
-        ld.param.u64    %rd1, [_Z2ffiPiS__param_0];
-        ld.param.u32    %r1, [_Z2ffiPiS__param_1];
-        cvta.to.global.u64      %rd2, %rd1;
+        ld.param.u64    %rd1, [_Z1flPiS__param_0];
+        ld.param.u64    %rd2, [_Z1flPiS__param_1];
+        ld.param.u64    %rd3, [_Z1flPiS__param_2];
+        cvta.to.global.u64      %rd4, %rd2;
+        cvta.to.global.u64      %rd5, %rd3;
+        shl.b64         %rd6, %rd1, 2;
+        add.s64         %rd7, %rd5, %rd6;
+        ld.global.u32   %r1, [%rd7];
         mul.lo.s32      %r2, %r1, %r1;
         sub.s32         %r3, %r2, %r1;
-        st.global.u32   [%rd2], %r3;
+        add.s64         %rd8, %rd4, %rd6;
+        st.global.u32   [%rd8], %r3;
         ret;
 
 }
@@ -154,7 +168,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
   std::string const cuda =
     R"***(
 __device__ inline void f(
-  cudf::size_type i,
+  int64_t i,
   signed char* output,
   signed char * input
 ){
@@ -170,27 +184,40 @@ __device__ inline void f(
 
   std::string const ptx =
     R"***(
-.func _Z2f3iPaS_(
-        .param .b64 _Z2f3iPaS__param_0,
-        .param .b32 _Z2f3iPaS__param_1
+.func _Z1flPaS_(
+        .param .b64 _Z1flPaS__param_0,
+        .param .b64 _Z1flPaS__param_1,
+        .param .b64 _Z1flPaS__param_2
 )
 {
-        .reg .pred      %p<2>;
-        .reg .b16       %rs<6>;
-        .reg .b64       %rd<3>;
-
-
-        ld.param.u8     %rs1, [_Z2f3iPaS__param_1];
-        ld.param.u64    %rd1, [_Z2f3iPaS__param_0];
-        cvta.to.global.u64      %rd2, %rd1;
-        add.s16         %rs2, %rs1, -97;
-        and.b16         %rs3, %rs2, 255;
-        setp.lt.u16     %p1, %rs3, 26;
-        add.s16         %rs4, %rs1, -32;
-        selp.b16        %rs5, %rs4, %rs1, %p1;
-        st.global.u8    [%rd2], %rs5;
-        ret;
-
+  .reg .pred      %p<2>;
+  .reg .b16       %rs<5>;
+  .reg .b64       %rd<8>;
+  
+  ld.param.u64    %rd2, [_Z1flPaS__param_0];
+  ld.param.u64    %rd3, [_Z1flPaS__param_1];
+  ld.param.u64    %rd4, [_Z1flPaS__param_2];
+  cvta.to.global.u64      %rd5, %rd3;
+  cvta.to.global.u64      %rd6, %rd4;
+  add.s64         %rd7, %rd6, %rd2;
+  ld.global.u8    %rs1, [%rd7];
+  add.s16         %rs2, %rs1, -97;
+  and.b16         %rs3, %rs2, 255;
+  setp.lt.u16     %p1, %rs3, 26;
+  add.s64         %rd1, %rd5, %rd2;
+  @%p1 bra        BB0_2;
+  bra.uni         BB0_1;
+  
+  BB0_2:
+  add.s16         %rs4, %rs1, -32;
+  st.global.u8    [%rd1], %rs4;
+  bra.uni         BB0_3;
+  
+  BB0_1:
+  st.global.u8    [%rd1], %rs1;
+  
+  BB0_3:
+  ret;
 }
 )***";
 
@@ -208,7 +235,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
 
   std::string const cuda =
     R"***(
-__device__ inline void f(cudf::size_type i, cudf::timestamp_us* output, cudf::timestamp_us * input)
+__device__ inline void f(int64_t i, cudf::timestamp_us* output, cudf::timestamp_us * input)
 {
   using dur = cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>;
   output[i] = static_cast<cudf::timestamp_us>(input[i] + dur{1});

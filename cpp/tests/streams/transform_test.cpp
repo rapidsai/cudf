@@ -32,8 +32,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
-  std::vector<cudf::column_view> inputs{in};
-  cudf::transform(inputs,
+  cudf::transform({in},
                   udf,
                   cudf::data_type(cudf::type_to_id<dtype>()),
                   is_ptx,
@@ -45,7 +44,7 @@ TEST_F(TransformTest, Transform)
   char const* cuda =
     R"***(
 __device__ inline void    fdsf   (
-       cudf::size_type i,
+       int64_t i,
        float* out,
        float * in
 )
@@ -69,22 +68,29 @@ __device__ inline void    fdsf   (
 .target sm_70
 .address_size 64
 
-.func _Z4fdsfiPfS_(
-        .param .b64 _Z4fdsfiPfS__param_0,
-        .param .b32 _Z4fdsfiPfS__param_1
+.func _Z4fdsflPfS_(
+        .param .b64 _Z4fdsflPfS__param_0,
+        .param .b64 _Z4fdsflPfS__param_1,
+        .param .b64 _Z4fdsflPfS__param_2
 )
 {
         .reg .f32       %f<5>;
-        .reg .b64       %rd<3>;
+        .reg .b64       %rd<9>;
 
 
-        ld.param.u64    %rd1, [_Z4fdsfiPfS__param_0];
-        ld.param.f32    %f1, [_Z4fdsfiPfS__param_1];
-        cvta.to.global.u64      %rd2, %rd1;
+        ld.param.u64    %rd1, [_Z4fdsflPfS__param_0];
+        ld.param.u64    %rd2, [_Z4fdsflPfS__param_1];
+        ld.param.u64    %rd3, [_Z4fdsflPfS__param_2];
+        cvta.to.global.u64      %rd4, %rd2;
+        cvta.to.global.u64      %rd5, %rd3;
+        shl.b64         %rd6, %rd1, 2;
+        add.s64         %rd7, %rd5, %rd6;
+        ld.global.f32   %f1, [%rd7];
         mul.f32         %f2, %f1, %f1;
-        mul.f32         %f3, %f2, %f1;
-        mul.f32         %f4, %f3, %f1;
-        st.global.f32   [%rd2], %f4;
+        mul.f32         %f3, %f1, %f2;
+        mul.f32         %f4, %f1, %f3;
+        add.s64         %rd8, %rd4, %rd6;
+        st.global.f32   [%rd8], %f4;
         ret;
 
 }
@@ -95,10 +101,8 @@ __device__ inline void    fdsf   (
   test_udf<float>(ptx, data_init, 500, true);
 }
 
-
-TEST_F(TransformTest, DecimalAdd)
-{
-  
+TEST_F(TransformTest, DecimalAdd) {
+  // TODO(lamarrr): implement
 }
 
 TEST_F(TransformTest, ComputeColumn)
