@@ -44,6 +44,8 @@ namespace CUDF_EXPORT cudf {
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  *
+ * @note Windows near the endpoints of the input are automatically clamped to be in-bounds.
+ *
  * Notes on return column types:
  * - The returned column for count aggregation always has `INT32` type.
  * - The returned column for VARIANCE/STD aggregations always has `FLOAT64` type.
@@ -593,6 +595,11 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * The returned column for count aggregation always has INT32 type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
+ *
+ * @note All entries in `preceding_window` and `following_window` must produce window extents that
+ * are in-bounds for the `input`. That is, for all `i`, it is required that the set of rows defined
+ * by the interval `[i - preceding_window[i] + 1, ..., i + following_window[i] + 1)` is a subset of
+ * `[0, input.size())`.
  *
  * @throws cudf::logic_error if window column type is not INT32
  *
