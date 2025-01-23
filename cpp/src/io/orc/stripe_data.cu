@@ -1288,9 +1288,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   } temp_storage;
 
   orcdec_state_s* const s = &state_g;
-  bool const is_nulldec   = (blockIdx.y >= num_stripes);
-  uint32_t const column   = blockIdx.x;
-  uint32_t const stripe   = (is_nulldec) ? blockIdx.y - num_stripes : blockIdx.y;
+  // Need the modulo because we have twice as many threads as columns*stripes
+  uint32_t const column   = blockIdx.x / num_stripes;
+  uint32_t const stripe   = blockIdx.x % num_stripes;
   uint32_t const chunk_id = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
@@ -1298,6 +1298,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   size_t const max_num_rows = s->chunk.column_num_rows - s->chunk.parent_validity_info.null_count;
 
+  bool const is_nulldec = (blockIdx.y == 0);
   if (is_nulldec) {
     uint32_t null_count = 0;
     // Decode NULLs
@@ -1576,7 +1577,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto num_rowgroups = row_groups.size().first;
 
   if (num_rowgroups > 0) {
-    if (t == 0) { s->top.data.index = row_groups[blockIdx.y][blockIdx.x]; }
+    if (t == 0) {
+      auto const rg_idx  = blockIdx.x % num_rowgroups;
+      auto const col_idx = blockIdx.x / num_rowgroups;
+      s->top.data.index  = row_groups[rg_idx][col_idx];
+    }
     __syncthreads();
     chunk_id = s->top.data.index.chunk_id;
   } else {
@@ -1601,10 +1606,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
         atomicAdd(error_count, 1);
       }
-      auto const ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
-      auto const ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
+      auto const ofs0       = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
+      auto const ofs1       = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
+      uint32_t const rg_idx = blockIdx.x % num_rowgroups;
       uint32_t rowgroup_rowofs =
-        (level == 0) ? (blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride
+        (level == 0) ? (rg_idx - cuda::std::min(s->chunk.rowgroup_id, rg_idx)) * rowidx_stride
                      : s->top.data.index.start_row;
       ;
       s->chunk.streams[CI_DATA] += ofs0;
@@ -2025,7 +2031,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
   if (t == 0 and (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)) {
     if (num_rowgroups > 0) {
-      row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
+      auto const rg_idx                          = blockIdx.x % num_rowgroups;
+      auto const col_idx                         = blockIdx.x / num_rowgroups;
+      row_groups[rg_idx][col_idx].num_child_rows = s->num_child_rows;
     }
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{chunks[chunk_id].num_child_rows};
     ref.fetch_add(s->num_child_rows, cuda::std::memory_order_relaxed);
@@ -2049,9 +2057,9 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                int64_t first_row,
                                                rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(block_size, 1);
-  dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
-  gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+  dim3 dim_grid(num_columns * num_stripes, 2);
+
+  gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, num_columns, num_stripes, first_row);
 }
 
@@ -2083,11 +2091,8 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
-  auto const num_chunks = num_columns * num_stripes;
-  dim3 dim_block(block_size, 1);  // 1024 threads per chunk
-  dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
-                (num_rowgroups > 0) ? num_rowgroups : 1);
-  gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
+  auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
+  gpuDecodeOrcColumnData<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 
