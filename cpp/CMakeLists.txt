@@ -761,6 +761,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/cuda.cpp
+  src/utilities/cuda_event.cpp
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
