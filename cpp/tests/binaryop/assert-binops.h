@@ -81,7 +81,15 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto lhs_h    = static_cast<ScalarType const&>(lhs).get_value(cudf::get_default_stream());
+  //auto lhs_h    = static_cast<ScalarType const&>(lhs).value(cudf::get_default_stream());
+  TypeLhs lhs_h;
+  if constexpr (std::is_same_v<ScalarType, cudf::scalar_type_t<std::string>>) {
+    auto sv = static_cast<ScalarType const&>(lhs).value(cudf::get_default_stream());
+    lhs_h    = std::string(sv.begin(), sv.end());
+  }
+  else {
+    lhs_h    = static_cast<ScalarType const&>(lhs).value(cudf::get_default_stream());
+  }
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);
   auto rhs_data = rhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
@@ -129,11 +137,18 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto rhs_h    = static_cast<ScalarType const&>(rhs).get_value(cudf::get_default_stream());
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
   auto out_data = out_h.first;
+  TypeRhs rhs_h;
+  if constexpr (std::is_same_v<ScalarType, cudf::scalar_type_t<std::string>>) {
+    auto sv = static_cast<ScalarType const&>(rhs).value(cudf::get_default_stream());
+    rhs_h    = std::string(sv.begin(), sv.end());
+  }
+  else {
+    rhs_h    = static_cast<ScalarType const&>(rhs).value(cudf::get_default_stream());
+  }
 
   ASSERT_EQ(out_data.size(), lhs_data.size());
   for (size_t i = 0; i < out_data.size(); ++i) {
