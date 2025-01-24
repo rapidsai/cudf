@@ -53,13 +53,13 @@ void bench_range_rolling_sum(nvbench::state& state)
     cudf::duration_ms{state.get_int64("following_range") * 1000}, true};
   auto const has_nulls = static_cast<bool>(state.get_int64("has_nulls"));
 
-  auto vals = [&]() {
+  auto vals = [&] {
     data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
       cudf::type_to_id<std::int32_t>(), distribution_id::UNIFORM, 0, 100);
     return create_random_column(cudf::type_to_id<std::int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto orderby = [&]() {
+  auto orderby = [&] {
     auto seq = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<cudf::timestamp_ms>()},
                                            num_rows);
     // Equally spaced rows separated by 1s
