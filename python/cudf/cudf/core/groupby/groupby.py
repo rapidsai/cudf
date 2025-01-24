@@ -19,7 +19,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-import cudf.core._internals
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_list_like,
@@ -27,7 +26,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import aggregation, sorting
+from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -594,9 +593,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         group_keys = [
             ColumnBase.from_pylibcudf(col)
-            for col in cudf.core._internals.stream_compaction.drop_duplicates(
-                group_keys
-            )
+            for col in stream_compaction.drop_duplicates(group_keys)
         ]
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)

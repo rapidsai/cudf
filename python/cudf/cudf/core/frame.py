@@ -21,8 +21,7 @@ import cudf
 # only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import copying, search, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1349,7 +1348,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search_sorted(
+        outcol = search.search_sorted(
             sources,
             values,
             side,

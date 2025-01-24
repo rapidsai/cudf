@@ -12,7 +12,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_integer, is_number
-from cudf.core._internals.aggregation import make_aggregation
+from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import Reducible
@@ -302,7 +302,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     pre,
                     fwd,
                     min_periods,
-                    make_aggregation(
+                    aggregation.make_aggregation(
                         agg_name,
                         {"dtype": source_column.dtype}
                         if callable(agg_name)

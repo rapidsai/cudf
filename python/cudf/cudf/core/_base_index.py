@@ -12,12 +12,7 @@ from typing_extensions import Self
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
-from cudf.core._internals import copying
-from cudf.core._internals.stream_compaction import (
-    apply_boolean_mask,
-    drop_duplicates,
-    drop_nulls,
-)
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.copy_types import GatherMap
@@ -1947,7 +1942,7 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in drop_duplicates(
+                for col in stream_compaction.drop_duplicates(
                     list(self._columns),
                     keep=keep,
                     nulls_are_equal=nulls_are_equal,
@@ -2037,7 +2032,7 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in drop_nulls(
+                for col in stream_compaction.drop_nulls(
                     data_columns,
                     how=how,
                 )
@@ -2116,7 +2111,7 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in apply_boolean_mask(
+                for col in stream_compaction.apply_boolean_mask(
                     list(self._columns), boolean_mask
                 )
             ],

@@ -29,8 +29,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import search
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -122,13 +121,13 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search_sorted(
+    lower_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="left",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
-    upper_bound = search_sorted(
+    upper_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="right",
@@ -1365,9 +1364,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
             indices = ColumnBase.from_pylibcudf(right_plc)
-        result = ColumnBase.from_pylibcudf(
-            copying.scatter([indices], scatter_map, [result])[0]
-        )
+        result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
@@ -3387,8 +3384,8 @@ def interval_range(
         bin_edges = ColumnBase.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=start.device_value,
+                step=freq.device_value,
             )
         )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)

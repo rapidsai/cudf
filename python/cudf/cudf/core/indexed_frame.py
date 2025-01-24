@@ -26,7 +26,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core
-import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -37,7 +36,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -3126,7 +3125,7 @@ class IndexedFrame(Frame):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in cudf.core._internals.stream_compaction.drop_duplicates(
+                for col in stream_compaction.drop_duplicates(
                     list(self._columns)
                     if ignore_index
                     else list(self.index._columns + self._columns),
@@ -3260,13 +3259,12 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = ColumnBase.from_pylibcudf(plc_column)
-        result = ColumnBase.from_pylibcudf(
-            copying.scatter(
-                [cudf.Scalar(False)],
-                distinct,  # type: ignore[arg-type]
-                [as_column(True, length=len(self), dtype=bool)],
-                bounds_check=False,
-            )[0]
+        result = as_column(
+            True, length=len(self), dtype=bool
+        )._scatter_by_column(
+            distinct,  # type: ignore[arg-type]
+            cudf.Scalar(False),
+            bounds_check=False,
         )
         return cudf.Series._from_column(result, index=self.index, name=name)
 
@@ -3665,6 +3663,9 @@ class IndexedFrame(Frame):
             by_columns = by_in_index
         else:
             raise KeyError(by)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
@@ -4386,7 +4387,7 @@ class IndexedFrame(Frame):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in cudf.core._internals.stream_compaction.drop_nulls(
+                for col in stream_compaction.drop_nulls(
                     [*self.index._columns, *data_columns],
                     how=how,
                     keys=self._positions_from_column_names(subset),
@@ -4412,7 +4413,7 @@ class IndexedFrame(Frame):
         return self._from_columns_like_self(
             [
                 ColumnBase.from_pylibcudf(col)
-                for col in cudf.core._internals.stream_compaction.apply_boolean_mask(
+                for col in stream_compaction.apply_boolean_mask(
                     list(self.index._columns + self._columns)
                     if keep_index
                     else list(self._columns),

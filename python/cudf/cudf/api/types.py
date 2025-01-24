@@ -16,8 +16,9 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
@@ -144,8 +145,8 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
-            DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            plc.Scalar,
             pa.Scalar,
         ),
     ) or (

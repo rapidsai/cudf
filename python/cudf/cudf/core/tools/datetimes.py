@@ -997,7 +997,7 @@ def date_range(
             res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
-                    start.device_value.c_value,
+                    start.device_value,
                     months,
                 )
             )
