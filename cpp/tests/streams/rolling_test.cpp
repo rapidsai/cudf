@@ -54,8 +54,8 @@ TEST_F(RollingTest, FixedSizeDefault)
 TEST_F(RollingTest, VariableSize)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> input({1, 2, 3, 4, 5, 6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> preceding({2, 2, 2, 2, 3, 3, 3, 3, 3});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> following({3, 3, 3, 3, 3, 2, 2, 2, 2});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> preceding({1, 2, 2, 2, 3, 3, 3, 3, 3});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> following({3, 3, 3, 3, 3, 2, 2, 1, 0});
 
   cudf::rolling_window(input,
                        preceding,

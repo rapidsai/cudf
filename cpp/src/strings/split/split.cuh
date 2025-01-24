@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -325,7 +326,7 @@ CUDF_KERNEL void count_delimiters_kernel(Tokenizer tokenizer,
   for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
     count += tokenizer.is_delimiter(i, d_offsets, chars_bytes);
   }
-  auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
+  auto const total = block_reduce(temp_storage).Reduce(count, cuda::std::plus());
 
   if ((lane_idx == 0) && (total > 0)) {
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
