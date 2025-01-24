@@ -2712,7 +2712,10 @@ class Series(SingleColumnFrame, IndexedFrame):
 
             Parameters currently not supported is `level`.
         """
-        return self.valid_count
+        valid_count = self.valid_count
+        if cudf.get_option("mode.pandas_compatible"):
+            return valid_count - self._column.nan_count
+        return valid_count
 
     @_performance_tracking
     def mode(self, dropna=True):
