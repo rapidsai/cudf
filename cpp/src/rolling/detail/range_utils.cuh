@@ -811,56 +811,59 @@ template <rolling::direction Direction>
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
-  using ret_t           = std::pair<rolling::window_tag, scalar const*>;
-  using tag_t           = rolling::window_tag;
-  auto [tag, row_delta] = std::visit(match{
-                                       [](bounded_closed win) -> ret_t {
-                                         return {tag_t::BOUNDED_CLOSED, &win.delta};
-                                       },
-                                       [](bounded_open win) -> ret_t {
-                                         return {tag_t::BOUNDED_OPEN, &win.delta};
-                                       },
-                                       [](unbounded) -> ret_t {
-                                         return {tag_t::UNBOUNDED, nullptr};
-                                       },
-                                       [](current_row) -> ret_t {
-                                         return {tag_t::CURRENT_ROW, nullptr};
-                                       },
-                                     },
-                                     window);
-
-  auto dispatch = [&, row_delta = row_delta](auto&& clamper) {
+  using tag_t   = rolling::window_tag;
+  auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
     return type_dispatcher(
       orderby.type(), clamper, orderby, grouping, nulls_at_start, row_delta, stream, mr);
   };
-  if (tag == tag_t::UNBOUNDED && order == order::ASCENDING) {
-    return dispatch(rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::ASCENDING>{});
-  } else if (tag == tag_t::UNBOUNDED && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::DESCENDING>{});
-  } else if (tag == tag_t::CURRENT_ROW && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::ASCENDING>{});
-  } else if (tag == tag_t::CURRENT_ROW && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::DESCENDING>{});
-  } else if (tag == tag_t::BOUNDED_OPEN && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::ASCENDING>{});
-  } else if (tag == tag_t::BOUNDED_OPEN && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::DESCENDING>{});
-  } else if (tag == tag_t::BOUNDED_CLOSED && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::ASCENDING>{});
-  } else if (tag == tag_t::BOUNDED_CLOSED && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::DESCENDING>{});
-  } else {
-    CUDF_FAIL(
-      "Unsupported window type and sorted order combination for range "
-      "window bounds");
-  }
+  return std::visit(
+    match{
+      [&](bounded_closed win) {
+        if (order == order::ASCENDING) {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::ASCENDING>{},
+            &win.delta);
+        } else {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::DESCENDING>{},
+            &win.delta);
+        }
+      },
+      [&](bounded_open win) {
+        if (order == order::ASCENDING) {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::ASCENDING>{},
+            &win.delta);
+        } else {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::DESCENDING>{},
+            &win.delta);
+        }
+      },
+      [&](unbounded) {
+        if (order == order::ASCENDING) {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::ASCENDING>{},
+            nullptr);
+        } else {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::DESCENDING>{},
+            nullptr);
+        }
+      },
+      [&](current_row) {
+        if (order == order::ASCENDING) {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::ASCENDING>{},
+            nullptr);
+        } else {
+          return dispatch(
+            rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::DESCENDING>{},
+            nullptr);
+        }
+      },
+    },
+    window);
 }
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
