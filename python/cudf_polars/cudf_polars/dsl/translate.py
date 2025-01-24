@@ -331,20 +331,20 @@ def _(
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
         right_on = translate_expr_and_maybe_fix_binop_args(translator, node.right_on)
-    how: str | tuple = node.options[0]
-    if isinstance(how, str) and how.lower() in {
-        "inner",
-        "left",
-        "right",
-        "full",
-        "cross",
-        "semi",
-        "anti",
+
+    if (how := node.options[0]) in {
+        "Inner",
+        "Left",
+        "Right",
+        "Full",
+        "Cross",
+        "Semi",
+        "Anti",
     }:
         return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
     else:
         how, op1, op2 = node.options[0]
-        if how not in {"ie_join", "IEJoin"}:
+        if how != "IEJoin":
             raise NotImplementedError(
                 f"Unsupported join type {how}"
             )  # pragma: no cover; asof joins not yet exposed

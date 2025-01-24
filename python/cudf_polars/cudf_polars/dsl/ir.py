@@ -31,7 +31,6 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
@@ -628,12 +627,7 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
-            if POLARS_VERSION_GT_112:
-                # If we sliced away some data from the start, that
-                # shifts the row index.
-                # But prior to 1.13, polars had this wrong, so we match behaviour
-                # https://github.com/pola-rs/polars/issues/19607
-                offset += skip_rows
+            offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
@@ -763,13 +757,7 @@ class DataFrameScan(IR):
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
-        if predicate is not None:
-            (mask,) = broadcast(
-                predicate.evaluate(df), target_length=df.num_rows
-            )  # pragma: no cover
-            return df.filter(mask)  # pragma: no cover
-        else:
-            return df
+        return df
 
 
 class Select(IR):
@@ -1314,7 +1302,7 @@ class Join(IR):
             )
             if coalesce and how != "inner":
                 left = left.with_columns(
-                    tuple(
+                    (
                         Column(
                             plc.replace.replace_nulls(
                                 left_col.obj,
@@ -1378,7 +1366,9 @@ class HStack(IR):
         """Evaluate and return a dataframe."""
         columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
-            columns = broadcast(*columns, target_length=df.num_rows)
+            columns = broadcast(
+                *columns, target_length=df.num_rows if df.num_columns != 0 else None
+            )
         else:
             # Polars ensures this is true, but let's make sure nothing
             # went wrong. In this case, the parent node is a
@@ -1773,8 +1763,6 @@ class Union(IR):
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
-        if not all(s.schema == schema for s in self.children[1:]):
-            raise NotImplementedError("Schema mismatch")  # pragma: no cover
 
     @classmethod
     def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:

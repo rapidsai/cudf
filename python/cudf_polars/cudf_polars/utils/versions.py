@@ -12,16 +12,12 @@ from polars import __version__
 
 POLARS_VERSION = parse(__version__)
 
-POLARS_VERSION_LT_111 = POLARS_VERSION < parse("1.11")
-POLARS_VERSION_LT_112 = POLARS_VERSION < parse("1.12")
-POLARS_VERSION_GT_112 = POLARS_VERSION > parse("1.12")
-POLARS_VERSION_LT_113 = POLARS_VERSION < parse("1.13")
 POLARS_VERSION_LT_119 = POLARS_VERSION < parse("1.19")
 POLARS_VERSION_LT_120 = POLARS_VERSION < parse("1.20")
 
 
 def _ensure_polars_version():
-    if POLARS_VERSION_LT_111:
+    if POLARS_VERSION_LT_120:
         raise ImportError(
-            "cudf_polars requires py-polars v1.11 or greater."
+            "cudf_polars requires py-polars v1.20 or greater."
         )  # pragma: no cover

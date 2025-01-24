@@ -8,13 +8,9 @@ from __future__ import annotations
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
-import fastexcel
 import pytest
-from packaging import version
 
 import polars
-
-from cudf_polars.utils.versions import POLARS_VERSION_LT_120
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -214,23 +210,14 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
-    "tests/unit/sql/test_literals.py::test_dollar_quoted_literals": "Empty polars schema from IR",
-    "tests/unit/sql/test_literals.py::test_intervals": "Empty polars schema from IR",
-    "tests/unit/sql/test_literals.py::test_select_literals_no_table": "Empty polars schema from IR",
     "tests/unit/sql/test_wildcard_opts.py::test_select_wildcard_errors": "Raises correctly but with different exception",
     "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics": "Debug output on stderr doesn't match",
-    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "Remove after https://github.com/pola-rs/polars/issues/20852 is resolved",
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
     "tests/unit/test_empty.py::test_empty_9137": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
     # Maybe flaky, order-dependent?
     "tests/unit/test_projections.py::test_schema_full_outer_join_projection_pd_13287": "Order-specific result check, query is correct but in different order",
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
-    "tests/unit/io/test_spreadsheet.py::test_write_excel_bytes[calamine]": (
-        "Fails when fastexcel version >= 0.12.1. tracking issue: https://github.com/pola-rs/polars/issues/20698",
-        version.parse(fastexcel.__version__) >= version.parse("0.12.1")
-        and POLARS_VERSION_LT_120,
-    ),
 }
 
 
@@ -244,6 +231,9 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # polars that the requested timezone is unknown.
     # Since this is random, just skip it, rather than xfailing.
     "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+    # The test may segfault with the legacy streaming engine. We should
+    # remove this skip when all polars tests use the new streaming engine.
+    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
 }
 
 
