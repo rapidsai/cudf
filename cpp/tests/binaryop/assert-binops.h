@@ -147,14 +147,6 @@ void ASSERT_BINOP(cudf::column_view const& out,
   auto lhs_data = lhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
   auto out_data = out_h.first;
-  TypeRhs rhs_h;
-  if constexpr (std::is_same_v<ScalarType, cudf::scalar_type_t<std::string>>) {
-    auto sv = static_cast<ScalarType const&>(rhs).value(cudf::get_default_stream());
-    rhs_h    = std::string(sv.begin(), sv.end());
-  }
-  else {
-    rhs_h    = static_cast<ScalarType const&>(rhs).value(cudf::get_default_stream());
-  }
 
   ASSERT_EQ(out_data.size(), lhs_data.size());
   for (size_t i = 0; i < out_data.size(); ++i) {

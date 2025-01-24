@@ -381,7 +381,7 @@ class fixed_point_scalar : public scalar {
                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
-   * @brief Get the unscaled value of the scalar.
+   * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
    * @return The value of the scalar
