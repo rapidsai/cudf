@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_119
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -122,22 +121,39 @@ def test_join_literal_key(left, right, left_on, right_on):
 
 
 @pytest.mark.parametrize(
-    "conditions",
+    "conditions, expr_id",
     [
-        [pl.col("a") < pl.col("a_right")],
-        [pl.col("a_right") <= pl.col("a") * 2, pl.col("a_right") <= 2 * pl.col("a")],
-        [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
-        pytest.param(
-            [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
-            marks=pytest.mark.xfail(
-                not POLARS_VERSION_LT_119,
-                reason="https://github.com/pola-rs/polars/issues/20831",
-            ),
+        ([pl.col("a") < pl.col("a_right")], "expr_0"),
+        (
+            [
+                pl.col("a_right") <= pl.col("a") * 2,
+                pl.col("a_right") <= 2 * pl.col("a"),
+            ],
+            "expr_1",
         ),
-        [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
+        (
+            [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
+            "expr_2",
+        ),
+        (
+            [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
+            "expr_3",
+        ),
+        (
+            [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
+            "expr_4",
+        ),
     ],
 )
-def test_join_where(left, right, conditions, zlice):
+@pytest.mark.parametrize("zlice", [None, (0, 5)])
+def test_join_where(request, left, right, conditions, zlice, expr_id):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(expr_id == "expr_3" and zlice is not None),
+            reason="Failing due to https://github.com/pola-rs/polars/issues/20831. Remove when we upgrade to polars>1.20",
+        )
+    )
+
     q = left.join_where(right, *conditions)
 
     assert_gpu_result_equal(q, check_row_order=False)
