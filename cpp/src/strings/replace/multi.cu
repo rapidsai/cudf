@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,7 +280,7 @@ CUDF_KERNEL void count_targets(replace_multi_parallel_fn fn, int64_t chars_bytes
   for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
     count += fn.has_target(i, chars_bytes);
   }
-  auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
+  auto const total = block_reduce(temp_storage).Reduce(count, cuda::std::plus());
 
   if ((lane_idx == 0) && (total > 0)) {
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
