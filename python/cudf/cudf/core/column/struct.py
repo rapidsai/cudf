@@ -267,13 +267,15 @@ class StructMethods(ColumnMethods):
         2  3  z
         3  4  a
         """
+        data = {
+            name: col.copy(deep=True)
+            for name, col in zip(
+                self._column.dtype.fields, self._column.children
+            )
+        }
+        rangeindex = len(data) == 0
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
-                {
-                    name: col.copy(deep=True)
-                    for name, col in zip(
-                        self._column.dtype.fields, self._column.children
-                    )
-                }
+                data, rangeindex=rangeindex
             )
         )
