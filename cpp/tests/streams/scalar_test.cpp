@@ -19,7 +19,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/string_view.hpp>
 
 template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {};
@@ -30,7 +29,7 @@ TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
   Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(7));
-  cudf::scalar_type_t<TypeParam> s(value);
+  cudf::scalar_type_t<TypeParam> s(value, true, cudf::test::get_default_stream());
   EXPECT_EQ(value, s.value(cudf::test::get_default_stream()));
 }
 
@@ -39,11 +38,6 @@ struct StringScalarTest : public cudf::test::BaseFixture {};
 TEST_F(StringScalarTest, DefaultValidity)
 {
   std::string value = "test string";
-  auto s = cudf::string_scalar(value);
-  auto sv = s.value(cudf::test::get_default_stream());
-  EXPECT_EQ(cudf::string_view(value.c_str(), value.size()), sv);
-  /*
-  auto expected_value = std::string(sv.data(), sv.size_bytes());
-  EXPECT_EQ(value, expected_value);
-  */
+  auto s            = cudf::string_scalar(value, true, cudf::test::get_default_stream());
+  EXPECT_EQ(value, s.to_string(cudf::test::get_default_stream()));
 }

@@ -110,13 +110,6 @@ size_type string_scalar::size() const { return _data.size(); }
 
 char const* string_scalar::data() const { return static_cast<char const*>(_data.data()); }
 
-/*
-std::string string_scalar::value(rmm::cuda_stream_view stream) const
-{
-  return this->to_string(stream);
-}
-*/
-
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result(size(), '\0');
@@ -188,15 +181,6 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
     numeric::scaled_integer<rep_type>{_data.value(stream), numeric::scale_type{type().scale()}}};
 }
 
-/*
-template <typename T>
-T fixed_point_scalar<T>::get_value(rmm::cuda_stream_view stream) const
-{
-  return this->fixed_point_value(stream);
-}
-*/
-
-template <typename T>
 typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data()
 {
   return _data.data();
@@ -272,14 +256,6 @@ T const* fixed_width_scalar<T>::data() const
 {
   return _data.data();
 }
-
-/*
-template <typename T>
-T fixed_width_scalar<T>::get_value(rmm::cuda_stream_view stream) const
-{
-  return this->value(stream);
-}
-*/
 
 /**
  * @brief These define the valid fixed-width scalar types.
