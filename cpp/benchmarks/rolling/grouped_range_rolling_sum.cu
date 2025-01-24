@@ -34,7 +34,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
+#include <thrust/tabulate.h>
 
 #include <nvbench/nvbench.cuh>
 
@@ -61,7 +61,7 @@ void bench_grouped_range_rolling_sum(nvbench::state& state)
       cudf::type_to_id<std::int32_t>(), distribution_id::UNIFORM, 0, 100);
     return create_random_column(cudf::type_to_id<std::int32_t>(), row_count{num_rows}, profile);
   }();
-  auto const keys = [&] {
+  auto const keys = [&]() {
     data_profile const profile =
       data_profile_builder()
         .cardinality(cardinality)
@@ -75,11 +75,10 @@ void bench_grouped_range_rolling_sum(nvbench::state& state)
     auto seq =
       cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()}, num_rows);
     // Equally spaced rows separated by 1000 unit intervals
-    thrust::transform(
+    thrust::tabulate(
       rmm::exec_policy(cudf::get_default_stream()),
-      thrust::make_counting_iterator(static_cast<cudf::size_type>(0)),
-      thrust::make_counting_iterator(static_cast<cudf::size_type>(num_rows)),
       seq->mutable_view().begin<cudf::size_type>(),
+      seq->mutable_view().end<cudf::size_type>(),
       [] __device__(cudf::size_type i) { return static_cast<cudf::size_type>(i) * 1000; });
     // Add some units of noise
     data_profile profile = data_profile_builder().cardinality(0).distribution(

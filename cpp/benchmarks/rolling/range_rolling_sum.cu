@@ -32,7 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
+#include <thrust/tabulate.h>
 
 #include <nvbench/nvbench.cuh>
 
@@ -63,11 +63,10 @@ void bench_range_rolling_sum(nvbench::state& state)
     auto seq = cudf::make_timestamp_column(cudf::data_type{cudf::type_to_id<cudf::timestamp_ms>()},
                                            num_rows);
     // Equally spaced rows separated by 1s
-    thrust::transform(
+    thrust::tabulate(
       rmm::exec_policy(cudf::get_default_stream()),
-      thrust::make_counting_iterator(static_cast<cudf::size_type>(0)),
-      thrust::make_counting_iterator(static_cast<cudf::size_type>(num_rows)),
       seq->mutable_view().begin<cudf::timestamp_ms>(),
+      seq->mutable_view().end<cudf::timestamp_ms>(),
       [] __device__(cudf::size_type i) {
         return cudf::timestamp_ms{cudf::duration_ms{static_cast<std::int64_t>(i) * 1000}};
       });
