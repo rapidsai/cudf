@@ -2198,7 +2198,7 @@ TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
 
 // Tests whether Y dimension of grid sizes depends on the number of row groups
 // Disabled because of the high execution time (especially compared to the likelihood of regression)
-TEST_F(OrcReaderTest, DISABLE_Over65kRowGroups)
+TEST_F(OrcReaderTest, DISABLED_Over65kRowGroups)
 {
   auto constexpr row_group_size = 512;
   constexpr auto num_rows       = (1 << 16) * row_group_size + 1;
@@ -2222,7 +2222,7 @@ TEST_F(OrcReaderTest, DISABLE_Over65kRowGroups)
 
 // Tests whether Y dimension of grid sizes depends on the number of stripes
 // Disabled because of the high execution time (especially compared to the likelihood of regression)
-TEST_F(OrcReaderTest, DISABLE_Over65kStripes)
+TEST_F(OrcReaderTest, DISABLED_Over65kStripes)
 {
   auto constexpr stripe_size = 512;
   constexpr auto num_rows    = (1 << 16) * stripe_size + 1;
@@ -2247,7 +2247,7 @@ TEST_F(OrcReaderTest, DISABLE_Over65kStripes)
 
 // Tests whether Y dimension of grid sizes depends on the number of columns
 // Disabled because of the high execution time (especially compared to the likelihood of regression)
-TEST_F(OrcWriterTest, DISABLE_Over65kColumns)
+TEST_F(OrcWriterTest, DISABLED_Over65kColumns)
 {
   auto vals_col = random_values<int32_t>(8);
   dec64_col col{vals_col.begin(), vals_col.end(), numeric::scale_type{2}};
