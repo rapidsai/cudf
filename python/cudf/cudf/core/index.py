@@ -3385,8 +3385,8 @@ def interval_range(
         bin_edges = libcudf.column.Column.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=start.device_value,
+                step=freq.device_value,
             )
         )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
