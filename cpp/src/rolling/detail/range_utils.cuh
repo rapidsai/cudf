@@ -798,7 +798,7 @@ match(Ts...) -> match<Ts...>;
 }  // namespace
 
 template <rolling::direction Direction>
-[[nodiscard]] inline std::unique_ptr<column> make_range_window_bound(
+[[nodiscard]] inline std::unique_ptr<column> make_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,

@@ -57,12 +57,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNoNullsZeroPrecedingFollowing
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1}};
@@ -73,12 +73,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNoNullsZeroPrecedingFollowing
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0}};
@@ -101,12 +101,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNoNullsPositivePrecedingFollo
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 4, 2, 3, 1, 2, 1, 1, 2, 1}};
@@ -117,12 +117,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNoNullsPositivePrecedingFollo
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 2, 1, 2, 1, 2, 1, 1, 2, 1}};
@@ -145,12 +145,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNoNullsNegativePrecedin
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0}};
@@ -161,12 +161,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNoNullsNegativePrecedin
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -2, -1, -1, 0, -1, 0, -1, 0, 0, -1, 0, 0}};
@@ -189,12 +189,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNoNullsNegativeFollowin
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 4, 5, 6, 3, 4, 2, 1, 2, 1}};
@@ -205,12 +205,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNoNullsNegativeFollowin
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 4, 3, 4, 3, 2, 1, 1, 2, 1}};
@@ -233,12 +233,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNoNullsZeroPrecedingFollowin
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 2, 1}};
@@ -249,12 +249,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNoNullsZeroPrecedingFollowin
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0}};
@@ -277,12 +277,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNoNullsPositivePrecedingFoll
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 2, 1, 2, 3, 2, 3, 4, 1}};
@@ -293,12 +293,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNoNullsPositivePrecedingFoll
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 2, 1, 2, 1, 2, 2, 3, 1}};
@@ -321,12 +321,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNoNullsNegativePrecedi
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0}};
@@ -337,12 +337,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNoNullsNegativePrecedi
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, -1, 0, -1, 0, -1, -2, -1, 0, 0}};
@@ -365,12 +365,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNoNullsNegativeFollowi
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 2, 2, 3, 4, 3, 4, 5, 6, 1}};
@@ -381,12 +381,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNoNullsNegativeFollowi
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 2, 2, 3, 3, 4, 3, 4, 1}};
@@ -410,12 +410,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 1, 1, 2, 1, 1, 1, 1, 2, 1}};
@@ -426,12 +426,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   // TODO: What does it mean to be a BOUNDED_OPEN window in presence of nulls?
   // Should the group of nulls be an empty window?
@@ -457,12 +457,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNullsPositivePrecedingFollowi
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 1, 2, 3, 1, 2, 1, 1, 2, 1}};
@@ -473,12 +473,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, AscendingNullsPositivePrecedingFollowi
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 1, 1, 2, 1, 2, 1, 1, 2, 1}};
@@ -502,12 +502,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNullsNegativePreceding)
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7}};
@@ -518,12 +518,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNullsNegativePreceding)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -2, -1, -1, 0, 0, 1, 2, 3, 4, 5, 6, 7}};
@@ -547,12 +547,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNullsNegativeFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6, 7}};
@@ -563,12 +563,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, AscendingNullsNegativeFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 3, 4, 3, 1, 2, 3, 4, 5, 6, 7}};
@@ -592,12 +592,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6}};
@@ -608,12 +608,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {0, -1, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6}};
@@ -637,12 +637,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNullsPositivePrecedingFollow
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 2, 1, 1, 2, 3, 4, 5, 6}};
@@ -653,12 +653,12 @@ TYPED_TEST(UngroupedIntegralRangeWindows, DescendingNullsPositivePrecedingFollow
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 1, 2, 1, 1, 2, 1, 1, 2, 3, 4, 5, 6}};
@@ -682,12 +682,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNullsNegativePreceding
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 5, 0, -1, 0, 0, 0, -1, 0, 0}};
@@ -698,12 +698,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNullsNegativePreceding
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 5, 0, -1, 0, -1, -2, -1, 0, 0}};
@@ -727,12 +727,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNullsNegativeFollowing
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 5, 1, 2, 3, 3, 4, 5, 6, 1}};
@@ -743,12 +743,12 @@ TYPED_TEST(UngroupedSignedIntegralRangeWindows, DescendingNullsNegativeFollowing
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     {1, 2, 3, 4, 5, 1, 2, 3, 3, 4, 3, 4, 1}};
@@ -790,12 +790,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNoNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -822,12 +822,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNoNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -885,12 +885,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNoNullsPositivePrecedingFollowi
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -917,12 +917,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNoNullsPositivePrecedingFollowi
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -980,12 +980,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNoNullsNegativePreceding)
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1012,12 +1012,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNoNullsNegativePreceding)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1075,12 +1075,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNoNullsNegativeFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1107,12 +1107,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNoNullsNegativeFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1170,12 +1170,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNoNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1202,12 +1202,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNoNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1265,12 +1265,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNoNullsPositivePrecedingFollow
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1297,12 +1297,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNoNullsPositivePrecedingFollow
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1360,12 +1360,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNoNullsNegativePreceding
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1392,12 +1392,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNoNullsNegativePreceding
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1455,12 +1455,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNoNullsNegativeFollowing
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1487,12 +1487,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNoNullsNegativeFollowing
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1557,12 +1557,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1589,12 +1589,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   // TODO: What does it mean to be a BOUNDED_OPEN window in presence of nulls?
   // Should the group of nulls be an empty window?
@@ -1662,12 +1662,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNullsPositivePrecedingFollowing
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1694,7 +1694,7 @@ TYPED_TEST(GroupedIntegralRangeWindows, AscendingNullsPositivePrecedingFollowing
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
                                           orderby,
                                           cudf::order::ASCENDING,
                                           cudf::null_order::BEFORE,
@@ -1764,12 +1764,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNullsNegativePreceding)
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1796,12 +1796,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNullsNegativePreceding)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1866,12 +1866,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNullsNegativeFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::ASCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::ASCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1898,12 +1898,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, AscendingNullsNegativeFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::ASCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::ASCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -1968,12 +1968,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNullsZeroPrecedingFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(0);
   auto foll = cudf::make_fixed_width_scalar<T>(0);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2000,12 +2000,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNullsZeroPrecedingFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2070,12 +2070,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNullsPositivePrecedingFollowin
   auto prec = cudf::make_fixed_width_scalar<T>(2);
   auto foll = cudf::make_fixed_width_scalar<T>(1);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::BEFORE,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::BEFORE,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2102,12 +2102,12 @@ TYPED_TEST(GroupedIntegralRangeWindows, DescendingNullsPositivePrecedingFollowin
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::BEFORE,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::BEFORE,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2172,12 +2172,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNullsNegativePreceding)
   auto prec = cudf::make_fixed_width_scalar<T>(-1);
   auto foll = cudf::make_fixed_width_scalar<T>(2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2204,12 +2204,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNullsNegativePreceding)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2274,12 +2274,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNullsNegativeFollowing)
   auto prec = cudf::make_fixed_width_scalar<T>(4);
   auto foll = cudf::make_fixed_width_scalar<T>(-2);
 
-  auto result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                               orderby,
-                                               cudf::order::DESCENDING,
-                                               cudf::null_order::AFTER,
-                                               cudf::bounded_closed{*prec},
-                                               cudf::bounded_closed{*foll});
+  auto result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                         orderby,
+                                         cudf::order::DESCENDING,
+                                         cudf::null_order::AFTER,
+                                         cudf::bounded_closed{*prec},
+                                         cudf::bounded_closed{*foll});
 
   auto expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off
@@ -2306,12 +2306,12 @@ TYPED_TEST(GroupedSignedIntegralRangeWindows, DescendingNullsNegativeFollowing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     std::get<1>(result)->view(), expect_following, cudf::test::debug_output_level::ALL_ERRORS);
 
-  result = cudf::make_range_window_bounds(cudf::table_view{{group_keys}},
-                                          orderby,
-                                          cudf::order::DESCENDING,
-                                          cudf::null_order::AFTER,
-                                          cudf::bounded_open{*prec},
-                                          cudf::bounded_open{*foll});
+  result = cudf::make_range_windows(cudf::table_view{{group_keys}},
+                                    orderby,
+                                    cudf::order::DESCENDING,
+                                    cudf::null_order::AFTER,
+                                    cudf::bounded_open{*prec},
+                                    cudf::bounded_open{*foll});
 
   expect_preceding = cudf::test::fixed_width_column_wrapper<cudf::size_type>{{
     // clang-format off

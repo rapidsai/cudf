@@ -89,7 +89,7 @@ using range_window_type = std::variant<unbounded, current_row, bounded_closed, b
  * @return pair of preceding and following columns that define the window bounds for each row,
  * suitable for passing to `rolling_window`.
  */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bounds(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   column_view const& orderby,
   order order,
@@ -119,7 +119,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bo
  * @return pair of preceding and following columns that define the window bounds for each row,
  * suitable for passing to `rolling_window`.
  */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bounds(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   column_view const& orderby,
   order order,

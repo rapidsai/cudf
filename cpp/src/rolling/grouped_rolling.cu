@@ -341,14 +341,14 @@ std::unique_ptr<table> grouped_range_rolling_window(
   }
   // OK, need to do the more complicated thing
   auto [preceding_column, following_column] =
-    make_range_window_bounds(group_keys,
-                             orderby,
-                             order,
-                             null_order,
-                             preceding,
-                             following,
-                             stream,
-                             cudf::get_current_device_resource_ref());
+    make_range_windows(group_keys,
+                       orderby,
+                       order,
+                       null_order,
+                       preceding,
+                       following,
+                       stream,
+                       cudf::get_current_device_resource_ref());
   auto const& preceding_view = preceding_column->view();
   auto const& following_view = following_column->view();
   std::transform(
@@ -417,13 +417,13 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
     }
   };
   auto [preceding_column, following_column] =
-    make_range_window_bounds(group_keys,
-                             order_by_column,
-                             order,
-                             get_window_type(preceding),
-                             get_window_type(following),
-                             stream,
-                             cudf::get_current_device_resource_ref());
+    make_range_windows(group_keys,
+                       order_by_column,
+                       order,
+                       get_window_type(preceding),
+                       get_window_type(following),
+                       stream,
+                       cudf::get_current_device_resource_ref());
 
   return detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);

@@ -91,7 +91,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * @param mr Device memory resource used for allocations.
  */
 template <rolling::direction Direction>
-[[nodiscard]] std::unique_ptr<column> make_range_window_bound(
+[[nodiscard]] std::unique_ptr<column> make_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,
@@ -100,7 +100,13 @@ template <rolling::direction Direction>
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-[[nodiscard]] std::unique_ptr<column> make_preceding_range_window_bound(
+/**
+ * @copydoc `make_range_window`
+ *
+ * This behaves as `make_range_window`, but template-specialised to `PRECEDING` windows. This way we
+ * can compile it in a separate translation unit from `make_following_range_window`.
+ */
+[[nodiscard]] std::unique_ptr<column> make_preceding_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,
@@ -109,7 +115,13 @@ template <rolling::direction Direction>
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-[[nodiscard]] std::unique_ptr<column> make_following_range_window_bound(
+/**
+ * @copydoc `make_range_window`
+ *
+ * This behaves as `make_range_window`, but template-specialised to `FOLLOWING` windows. This way we
+ * can compile it in a separate translation unit from `make_preceding_range_window`.
+ */
+[[nodiscard]] std::unique_ptr<column> make_following_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,

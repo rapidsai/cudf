@@ -30,7 +30,7 @@
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-[[nodiscard]] std::unique_ptr<column> make_preceding_range_window_bound(
+[[nodiscard]] std::unique_ptr<column> make_preceding_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,
@@ -39,7 +39,7 @@ namespace detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return make_range_window_bound<rolling::direction::PRECEDING>(
+  return make_range_window<rolling::direction::PRECEDING>(
     orderby, grouping, order, null_order, window, stream, mr);
 }
 
