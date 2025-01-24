@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -1707,9 +1707,9 @@ def test_notebook_slow_repr():
         "tbody",
         "</table>",
     }:
-        assert (
-            string in html_result
-        ), f"Expected string {string} not found in the output"
+        assert string in html_result, (
+            f"Expected string {string} not found in the output"
+        )
 
 
 def test_numpy_ndarray_isinstancecheck(array):

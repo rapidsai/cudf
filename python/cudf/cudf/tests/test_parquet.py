@@ -2077,9 +2077,9 @@ def test_parquet_writer_chunked_max_file_size(
     for each_file in all_files:
         # Validate file sizes with some extra 1000
         # bytes buffer to spare
-        assert os.path.getsize(each_file) <= (
-            max_file_size_in_bytes
-        ), "File exceeded max_file_size"
+        assert os.path.getsize(each_file) <= (max_file_size_in_bytes), (
+            "File exceeded max_file_size"
+        )
 
 
 def test_parquet_writer_chunked_max_file_size_error():
