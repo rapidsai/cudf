@@ -1097,7 +1097,7 @@ class Join(IR):
     right_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+        Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
         bool,
         tuple[int, int] | None,
         str,
@@ -1136,35 +1136,35 @@ class Join(IR):
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "right", "full", "semi", "anti"],
+        how: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
-        if how == "inner":
+        if how == "Inner":
             return (
                 plc.join.inner_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left" or how == "right":
+        elif how == "Left" or how == "Right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "full":
+        elif how == "Full":
             return (
                 plc.join.full_join,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "semi":
+        elif how == "Semi":
             return (
                 plc.join.left_semi_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        elif how == "anti":
+        elif how == "Anti":
             return (
                 plc.join.left_anti_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -1231,7 +1231,7 @@ class Join(IR):
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
-            Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+            Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
             tuple[int, int] | None,
             str,
@@ -1242,10 +1242,8 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how: str
         how, join_nulls, zlice, suffix, coalesce, _ = options
-        how = how.lower()
-        if how == "cross":
+        if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
@@ -1282,17 +1280,17 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
-            if how == "right":
+            if how == "Right":
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "left" or how == "right":
+            if how == "Left" or how == "Right":
                 # Order of left table is preserved
                 lg, rg = cls._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
-            if coalesce and how == "inner":
+            if coalesce and how == "Inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
@@ -1300,7 +1298,7 @@ class Join(IR):
             right = DataFrame.from_table(
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
-            if coalesce and how != "inner":
+            if coalesce and how != "Inner":
                 left = left.with_columns(
                     (
                         Column(
@@ -1321,7 +1319,7 @@ class Join(IR):
                     replace_only=True,
                 )
                 right = right.discard_columns(right_on.column_names_set)
-            if how == "right":
+            if how == "Right":
                 # Undo the swap for right join before gluing together.
                 left, right = right, left
             right = right.rename_columns(
