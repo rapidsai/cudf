@@ -626,6 +626,19 @@ class Series(SingleColumnFrame, IndexedFrame):
     ):
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
+
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                data = data.as_gpu_object()
+            except AttributeError:
+                pass
+            if index is None:
+                self.__dict__.update(data.__dict__)
+                return
+            try:
+                index = index.as_gpu_object()
+            except AttributeError:
+                pass
         index_from_data = None
         name_from_data = None
         if data is None:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -1889,5 +1889,5 @@ def test_dataframe_setitem():
 
 def test_dataframe_get_fast_slow_methods():
     df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
-    assert isinstance(df.get_cudf_pandas_fast_object(), cudf.DataFrame)
-    assert isinstance(df.get_cudf_pandas_slow_object(), pd.DataFrame)
+    assert isinstance(df.as_gpu_object(), cudf.DataFrame)
+    assert isinstance(df.as_cpu_object(), pd.DataFrame)

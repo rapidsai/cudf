@@ -707,9 +707,23 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
         super().__init__({}, index=cudf.Index([]))
+
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                data = data.as_gpu_object()
+            except AttributeError:
+                pass
+            try:
+                index = index.as_gpu_object()
+            except AttributeError:
+                pass
+            try:
+                columns = columns.as_cpu_object()
+            except AttributeError:
+                pass
         if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
 

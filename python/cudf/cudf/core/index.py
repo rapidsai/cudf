@@ -1067,6 +1067,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @_performance_tracking
     def __init__(self, data, **kwargs):
         name = _getdefault_name(data, name=kwargs.get("name"))
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                data = data.as_gpu_object()
+            except AttributeError:
+                pass
         super().__init__({name: data})
 
     @_performance_tracking

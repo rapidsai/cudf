@@ -147,15 +147,15 @@ provides a similar configuration-based plugin for Spark.
 
 When working with `cudf.pandas` proxy objects, it is important to access the real underlying objects to ensure compatibility with libraries that are `cudf` or `pandas` aware. You can use the following methods to retrieve the actual `cudf` or `pandas` objects:
 
-- `get_cudf_pandas_fast_object()`: This method returns the fast `cudf` object from the proxy.
-- `get_cudf_pandas_slow_object()`: This method returns the slow `pandas` object from the proxy.
+- `as_gpu_object()`: This method returns the fast `cudf` object from the proxy.
+- `as_cpu_object()`: This method returns the slow `pandas` object from the proxy.
 
 Here is an example of how to use these methods:
 
 ```python
 # Assuming `proxy_obj` is a cudf.pandas proxy object
-fast_obj = proxy_obj.get_cudf_pandas_fast_object()
-slow_obj = proxy_obj.get_cudf_pandas_slow_object()
+fast_obj = proxy_obj.as_gpu_object()
+slow_obj = proxy_obj.as_cpu_object()
 
 # Now you can use `fast_obj` and `slow_obj` with libraries that are cudf or pandas aware
 ```

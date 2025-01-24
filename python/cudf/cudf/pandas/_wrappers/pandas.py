@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
@@ -266,6 +266,10 @@ if ipython_shell:
     html_formatter.for_type(DataFrame, custom_repr_html)
 
 
+def _Series_dtype(self):
+    return self._fsproxy_wrapped.dtype
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -285,6 +289,7 @@ Series = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
+        "dtype": _Series_dtype,
     },
 )
 

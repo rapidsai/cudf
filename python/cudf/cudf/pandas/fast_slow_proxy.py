@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -204,10 +204,10 @@ def make_final_proxy_type(
             return fast_to_slow(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
-    def get_cudf_pandas_fast_object(self):
+    def as_gpu_object(self):
         return self._fsproxy_slow_to_fast()
 
-    def get_cudf_pandas_slow_object(self):
+    def as_cpu_object(self):
         return self._fsproxy_fast_to_slow()
 
     @property  # type: ignore
@@ -227,8 +227,8 @@ def make_final_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
-        "get_cudf_pandas_fast_object": get_cudf_pandas_fast_object,
-        "get_cudf_pandas_slow_object": get_cudf_pandas_slow_object,
+        "as_gpu_object": as_gpu_object,
+        "as_cpu_object": as_cpu_object,
         "_fsproxy_state": _fsproxy_state,
     }
 
