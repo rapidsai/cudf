@@ -380,8 +380,8 @@ struct scatter_fn {
   column_device_view _col;
   size_type* _d_strview_offsets;
   string_view* _d_strviews;
-  size_type* _labels;
-  size_type* _list_offsets;
+  size_type const* _labels;
+  size_type const* _list_offsets;
   column_device_view _d_strings_children;
   string_view _element_seperator;
   string_view _element_narep;
@@ -389,11 +389,11 @@ struct scatter_fn {
   scatter_fn(column_device_view col,
              size_type* d_strview_offsets,
              string_view* d_strviews,
-             size_type* labels,
-             size_type* list_offsets,
+             size_type const* labels,
+             size_type const* list_offsets,
              column_device_view d_strings_children,
-             string_view element_separator,
-             string_view element_narep) noexcept
+             string_view const element_separator,
+             string_view const element_narep) noexcept
     : _col{col},
       _d_strview_offsets{d_strview_offsets},
       _d_strviews{d_strviews},

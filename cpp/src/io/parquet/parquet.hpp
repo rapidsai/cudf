@@ -186,7 +186,7 @@ struct SchemaElement {
   // 9: save field_id from original schema
   std::optional<int32_t> field_id;
   // 10: replaces converted type
-  cuda::std::optional<LogicalType> logical_type;
+  std::optional<LogicalType> logical_type;
 
   // extra cudf specific fields
   bool output_as_byte_array = false;
