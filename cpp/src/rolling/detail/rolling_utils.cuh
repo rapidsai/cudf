@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/rolling.hpp>
 #include <cudf/types.hpp>
 
 #include <cuda/functional>
@@ -108,11 +109,6 @@ struct grouped {
     auto const group_end   = offsets[label + 1];
     return {0, group_start, group_end, group_start, group_start, group_start, group_end};
   }
-};
-
-enum class direction : bool {
-  PRECEDING,
-  FOLLOWING,
 };
 
 template <direction Direction, typename Grouping>

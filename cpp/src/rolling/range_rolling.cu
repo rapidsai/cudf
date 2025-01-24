@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include "detail/range_utils.cuh"
-#include "detail/rolling.hpp"
-#include "detail/rolling_utils.cuh"
-#include "thrust/functional.h"
-#include "thrust/reduce.h"
-
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -33,115 +27,20 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/binary_search.h>
+#include <cub/device/device_segmented_reduce.cuh>
+#include <thrust/functional.h>
+#include <thrust/reduce.h>
 
 #include <optional>
-#include <variant>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
-
-namespace {
-template <class... Ts>
-struct match : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-match(Ts...) -> match<Ts...>;
-}  // namespace
-/**
- * @brief Make a column representing the window offsets for a range-based window
- *
- * @tparam Direction Is this a preceding window or a following one.
- *
- * @param group_keys Table defining grouping of the windows. May be empty. If
- * non-empty, group keys must be sorted.
- * @param orderby Column use to define window ranges. If @p group_keys is empty,
- * must be sorted. If
- * @p group_keys is non-empty, must be sorted within each group. As well as
- * being sorted, must be sorted consistently with the @p order and @p null_order
- * parameters.
- * @param order The sort order of the @p orderby column.
- * @param null_order The sort order of nulls in the @p orderby column.
- * @param row_delta Pointer to scalar providing the delta for the window range.
- * May be null, but only if the @p window_type is @p CURRENT_ROW or @p
- * UNBOUNDED. Note that @p row_delta is always added to the current row value.
- * @param window_type The type of window we are computing bounds for.
- * @param stream CUDA stream used for device memory operations and kernel
- * launches.
- * @param mr Device memory resource used for allocations.
- */
-template <rolling::direction Direction>
-[[nodiscard]] std::unique_ptr<column> make_range_window_bound(
-  column_view const& orderby,
-  std::optional<rolling::preprocessed_group_info> const& grouping,
-  order order,
-  null_order null_order,
-  range_window_type window,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
-                              (order == order::DESCENDING && null_order == null_order::AFTER);
-
-  using ret_t           = std::pair<rolling::window_tag, scalar const*>;
-  using tag_t           = rolling::window_tag;
-  auto [tag, row_delta] = std::visit(match{
-                                       [](bounded_closed win) -> ret_t {
-                                         return {tag_t::BOUNDED_CLOSED, &win.delta};
-                                       },
-                                       [](bounded_open win) -> ret_t {
-                                         return {tag_t::BOUNDED_OPEN, &win.delta};
-                                       },
-                                       [](unbounded) -> ret_t {
-                                         return {tag_t::UNBOUNDED, nullptr};
-                                       },
-                                       [](current_row) -> ret_t {
-                                         return {tag_t::CURRENT_ROW, nullptr};
-                                       },
-                                     },
-                                     window);
-
-  auto dispatch = [&, row_delta = row_delta](auto&& clamper) {
-    return type_dispatcher(
-      orderby.type(), clamper, orderby, grouping, nulls_at_start, row_delta, stream, mr);
-  };
-  if (tag == tag_t::UNBOUNDED && order == order::ASCENDING) {
-    return dispatch(rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::ASCENDING>{});
-  } else if (tag == tag_t::UNBOUNDED && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::DESCENDING>{});
-  } else if (tag == tag_t::CURRENT_ROW && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::ASCENDING>{});
-  } else if (tag == tag_t::CURRENT_ROW && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::DESCENDING>{});
-  } else if (tag == tag_t::BOUNDED_OPEN && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::ASCENDING>{});
-  } else if (tag == tag_t::BOUNDED_OPEN && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::DESCENDING>{});
-  } else if (tag == tag_t::BOUNDED_CLOSED && order == order::ASCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::ASCENDING>{});
-  } else if (tag == tag_t::BOUNDED_CLOSED && order == order::DESCENDING) {
-    return dispatch(
-      rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::DESCENDING>{});
-  } else {
-    CUDF_FAIL(
-      "Unsupported window type and sorted order combination for range "
-      "window bounds");
-  }
-}
 
 /**
  * @brief Compute the number of nulls in each group.
@@ -250,12 +149,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bo
 {
   auto make_preceding = [&](std::optional<detail::rolling::preprocessed_group_info> const& grouping,
                             cudf::null_order null_order) {
-    return make_range_window_bound<rolling::direction::PRECEDING>(
+    return make_preceding_range_window_bound(
       orderby, grouping, order, null_order, preceding, stream, mr);
   };
   auto make_following = [&](std::optional<detail::rolling::preprocessed_group_info> const& grouping,
                             cudf::null_order null_order) {
-    return make_range_window_bound<rolling::direction::FOLLOWING>(
+    return make_following_range_window_bound(
       orderby, grouping, order, null_order, following, stream, mr);
   };
 

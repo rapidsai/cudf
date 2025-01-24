@@ -643,6 +643,8 @@ add_library(
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
   src/rolling/detail/optimized_unbounded_window.cpp
+  src/rolling/detail/range_following.cu
+  src/rolling/detail/range_preceding.cu
   src/rolling/detail/rolling_collect_list.cu
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
