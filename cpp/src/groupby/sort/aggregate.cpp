@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "groupby/sort/group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -208,10 +209,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
       operator()<aggregation::ARGMIN>(*argmin_agg);
       column_view const argmin_result = cache.get_result(values, *argmin_agg);
 
-      // We make a view of ARGMIN result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMIN result corresponding
-      // to null values was initialized to ARGMIN_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMIN result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
@@ -250,10 +248,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
       operator()<aggregation::ARGMAX>(*argmax_agg);
       column_view const argmax_result = cache.get_result(values, *argmax_agg);
 
-      // We make a view of ARGMAX result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMAX result corresponding
-      // to null values was initialized to ARGMAX_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMAX result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
@@ -793,6 +788,48 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               max_centroids,
                                                               stream,
                                                               mr));
+}
+
+template <>
+void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const& udf_base_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const udf_ptr       = dynamic_cast<groupby_host_udf*>(udf_base_ptr.get());
+  CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
+
+  if (!udf_ptr->callback_input_values) {
+    udf_ptr->callback_input_values = [&]() -> column_view { return values; };
+  }
+  if (!udf_ptr->callback_grouped_values) {
+    udf_ptr->callback_grouped_values = [&]() -> column_view { return get_grouped_values(); };
+  }
+  if (!udf_ptr->callback_sorted_grouped_values) {
+    udf_ptr->callback_sorted_grouped_values = [&]() -> column_view { return get_sorted_values(); };
+  }
+  if (!udf_ptr->callback_num_groups) {
+    udf_ptr->callback_num_groups = [&]() -> size_type { return helper.num_groups(stream); };
+  }
+  if (!udf_ptr->callback_group_offsets) {
+    udf_ptr->callback_group_offsets = [&]() -> device_span<size_type const> {
+      return helper.group_offsets(stream);
+    };
+  }
+  if (!udf_ptr->callback_group_labels) {
+    udf_ptr->callback_group_labels = [&]() -> device_span<size_type const> {
+      return helper.group_labels(stream);
+    };
+  }
+  if (!udf_ptr->callback_compute_aggregation) {
+    udf_ptr->callback_compute_aggregation =
+      [&](std::unique_ptr<aggregation> other_agg) -> column_view {
+      cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
+      return cache.get_result(values, *other_agg);
+    };
+  }
+
+  cache.add_result(values, agg, (*udf_ptr)(stream, mr));
 }
 
 }  // namespace detail

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ import pylibcudf as plc
 import cudf
 import cudf._lib as libcudf
 import cudf.core
-import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -38,7 +37,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -60,6 +59,7 @@ from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -1106,13 +1106,11 @@ class IndexedFrame(Frame):
             lhs = self.reindex(index=common, copy=False).values
             rhs = other.reindex(index=common, copy=False).values
             if isinstance(other, cudf.DataFrame):
-                result_index = other._data.to_pandas_index()
+                result_index = other._data.to_pandas_index
         elif isinstance(self, cudf.DataFrame) and isinstance(
             other, (cudf.Series, cudf.DataFrame)
         ):
-            common = self._data.to_pandas_index().union(
-                other.index.to_pandas()
-            )
+            common = self._data.to_pandas_index.union(other.index.to_pandas())
             if len(common) > self._num_columns or len(common) > len(
                 other.index
             ):
@@ -1124,7 +1122,7 @@ class IndexedFrame(Frame):
             rhs = other.reindex(index=common, copy=False).values
             lhs = lhs.values
             if isinstance(other, cudf.DataFrame):
-                result_cols = other._data.to_pandas_index()
+                result_cols = other._data.to_pandas_index
 
         elif isinstance(
             other, (cp.ndarray, np.ndarray)
@@ -2244,7 +2242,7 @@ class IndexedFrame(Frame):
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
         axis = self._get_axis_from_axis_arg(axis)
-        ax = self.index if axis == 0 else self._data.to_pandas_index()
+        ax = self.index if axis == 0 else self._data.to_pandas_index
 
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
@@ -2838,16 +2836,22 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        method : {'murmur3', 'md5', 'xxhash64'}, default 'murmur3'
+        method : {'murmur3', 'xxhash32', 'xxhash64', 'md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'}, default 'murmur3'
             Hash function to use:
 
             * murmur3: MurmurHash3 hash function
-            * md5: MD5 hash function
+            * xxhash32: xxHash32 hash function
             * xxhash64: xxHash64 hash function
+            * md5: MD5 hash function
+            * sha1: SHA-1 hash function
+            * sha224: SHA-224 hash function
+            * sha256: SHA-256 hash function
+            * sha384: SHA-384 hash function
+            * sha512: SHA-512 hash function
 
         seed : int, optional
             Seed value to use for the hash function. This parameter is only
-            supported for 'murmur3' and 'xxhash64'.
+            supported for 'murmur3', 'xxhash32', and 'xxhash64'.
 
 
         Returns
@@ -2902,7 +2906,7 @@ class IndexedFrame(Frame):
         2    fe061786ea286a515b772d91b0dfcd70
         dtype: object
         """
-        seed_hash_methods = {"murmur3", "xxhash64"}
+        seed_hash_methods = {"murmur3", "xxhash32", "xxhash64"}
         if seed is None:
             seed = 0
         elif method not in seed_hash_methods:
@@ -2916,6 +2920,8 @@ class IndexedFrame(Frame):
             )
             if method == "murmur3":
                 plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
+            elif method == "xxhash32":
+                plc_column = plc.hashing.xxhash_32(plc_table, seed)
             elif method == "xxhash64":
                 plc_column = plc.hashing.xxhash_64(plc_table, seed)
             elif method == "md5":
@@ -3028,7 +3034,7 @@ class IndexedFrame(Frame):
                         NumericalColumn,
                         as_column(
                             range(start, stop, stride),
-                            dtype=libcudf.types.size_type_dtype,
+                            dtype=SIZE_TYPE_DTYPE,
                         ),
                     ),
                     len(self),
@@ -3115,7 +3121,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_duplicates(
+            stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3248,12 +3254,13 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
-        result = copying.scatter(
-            [cudf.Scalar(False, dtype=bool)],
+        result = as_column(
+            True, length=len(self), dtype=bool
+        )._scatter_by_column(
             distinct,
-            [as_column(True, length=len(self), dtype=bool)],
+            cudf.Scalar(False),
             bounds_check=False,
-        )[0]
+        )
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
@@ -3652,6 +3659,9 @@ class IndexedFrame(Frame):
             by_columns = by_in_index
         else:
             raise KeyError(by)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
@@ -4371,7 +4381,7 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_nulls(
+            stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(subset),
@@ -4394,7 +4404,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.apply_boolean_mask(
+            stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),
@@ -4403,6 +4413,12 @@ class IndexedFrame(Frame):
             column_names=self._column_names,
             index_names=self.index.names if keep_index else None,
         )
+
+    def _pandas_repr_compatible(self) -> Self:
+        """Return Self but with columns prepared for a pandas-like repr."""
+        result = super()._pandas_repr_compatible()
+        result.index = self.index._pandas_repr_compatible()
+        return result
 
     def take(self, indices, axis=0):
         """Return a new frame containing the rows specified by *indices*.
@@ -6770,7 +6786,7 @@ def _drop_rows_by_labels(
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
-                columns=obj._data.to_pandas_index(),
+                columns=obj._data.to_pandas_index,
             )
 
     else:

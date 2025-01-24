@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
+#include <cuda/std/functional>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/gather.h>
@@ -50,6 +51,9 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 using ::cudf::detail::device_2dspan;
+
+using cudf::io::detail::compression_result;
+using cudf::io::detail::compression_status;
 
 constexpr int encode_block_size = 128;
 constexpr int rle_buffer_size   = 2 * encode_block_size;
@@ -338,7 +342,7 @@ void __device__ generate_def_level_histogram(uint32_t* hist,
   }
 }
 
-// operator to use with warp_reduce. stolen from cub::Sum
+// operator to use with warp_reduce. stolen from cuda::std::plus
 struct BitwiseOr {
   /// Binary OR operator, returns <tt>a | b</tt>
   template <typename T>
@@ -2453,7 +2457,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       // calculate offsets into output
       size_type s_off, total;
       block_scan(temp_storage.scan_storage)
-        .ExclusiveScan(suff_len, s_off, str_data_len, cub::Sum(), total);
+        .ExclusiveScan(suff_len, s_off, str_data_len, cuda::std::plus(), total);
 
       if (t_idx < s->page.num_valid) {
         auto const dst = strings_ptr + s_off;

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -12,13 +12,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import min_unsigned_type
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
@@ -431,8 +430,9 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 
@@ -689,7 +689,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -1273,7 +1273,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:
@@ -1332,10 +1332,10 @@ def _one_hot_encode_column(
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
-    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
+    if column.size * categories.size >= np.iinfo(SIZE_TYPE_DTYPE).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            f"np.iinfo({SIZE_TYPE_DTYPE}).max. Consider reducing "
             "size of category"
         )
     result_labels = (

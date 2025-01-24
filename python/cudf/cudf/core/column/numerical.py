@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba.np import numpy_support
 from typing_extensions import Self
 
@@ -15,12 +16,13 @@ import pylibcudf as plc
 import cudf
 import cudf.core.column.column as column
 from cudf.api.types import is_integer, is_scalar
-from cudf.core._internals import binaryop, unary
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -41,6 +43,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
+    from cudf.core.column import DecimalBaseColumn
 
 _unaryop_map = {
     "ASIN": "ARCSIN",
@@ -128,8 +131,7 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            nan_col = unary.is_nan(self)
-            return nan_col.indices_of(True)
+            return self.isnan().indices_of(True)
         else:
             return super().indices_of(value)
 
@@ -151,7 +153,7 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.Scalar(
                 value,
                 dtype=self.dtype
-                if cudf._lib.scalar._is_null_host_scalar(value)
+                if cudf.utils.utils._is_null_host_scalar(value)
                 else None,
             )
             if is_scalar(value)
@@ -201,7 +203,12 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
         unaryop = plc.unary.UnaryOperator[unaryop]
-        return unary.unary_operation(self, unaryop)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.unary.unary_operation(
+                    self.to_pylibcudf(mode="read"), unaryop
+                )
+            )
 
     def __invert__(self):
         if self.dtype.kind in "ui":
@@ -382,12 +389,8 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=cudf.Scalar(
-                    "True", dtype="str"
-                ).device_value.c_value,
-                false_string=cudf.Scalar(
-                    "False", dtype="str"
-                ).device_value.c_value,
+                true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
+                false_string=pa_scalar_to_plc_scalar(pa.scalar("False")),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
@@ -423,16 +426,14 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(
-        self, dtype: Dtype
-    ) -> "cudf.core.column.DecimalBaseColumn":
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
@@ -448,9 +449,8 @@ class NumericalColumn(NumericalBaseColumn):
     @functools.cached_property
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
-            return 0
-        nan_col = unary.is_nan(self)
-        return nan_col.sum()
+            return super().nan_count
+        return self.isnan().sum()
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -789,7 +789,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
+            if cudf.utils.utils._is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column

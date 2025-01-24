@@ -1,6 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
+from dask_cudf.core import _deprecated_api
 
 from . import csv, json, orc, parquet, text  # noqa: F401
 
@@ -15,20 +15,13 @@ read_orc = _deprecated_api(
 )
 to_orc = _deprecated_api(
     "dask_cudf.io.to_orc",
-    new_api="dask_cudf._legacy.io.to_orc",
+    new_api="dask_cudf.io.orc.to_orc",
     rec="Please use the DataFrame.to_orc method instead.",
 )
 read_text = _deprecated_api(
     "dask_cudf.io.read_text", new_api="dask_cudf.read_text"
 )
-if QUERY_PLANNING_ON:
-    read_parquet = parquet.read_parquet
-else:
-    read_parquet = _deprecated_api(
-        "The legacy dask_cudf.io.read_parquet API",
-        new_api="dask_cudf.read_parquet",
-        rec="",
-    )
+read_parquet = parquet.read_parquet
 to_parquet = _deprecated_api(
     "dask_cudf.io.to_parquet",
     new_api="dask_cudf._legacy.io.parquet.to_parquet",

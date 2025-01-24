@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
 
 
 class StructColumn(ColumnBase):
@@ -50,6 +51,16 @@ class StructColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
 
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
@@ -109,7 +120,7 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return dict(zip(self.dtype.fields, result.values()))
+        return self.dtype._recursively_replace_fields(result)
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

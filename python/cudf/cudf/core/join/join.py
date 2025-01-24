@@ -1,13 +1,13 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.copy_types import GatherMap
@@ -17,6 +17,7 @@ from cudf.core.join._join_helpers import (
     _IndexIndexer,
     _match_join_keys,
 )
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 
 class Merge:
@@ -188,6 +189,23 @@ class Merge:
             self._using_right_index = any(
                 isinstance(idx, _IndexIndexer) for idx in self._right_keys
             )
+            if self.how in {"left", "right"} and not (
+                all(
+                    isinstance(idx, _IndexIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+                or all(
+                    isinstance(idx, _ColumnIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+            ):
+                # For left/right merges, joining on an index and column should result in a RangeIndex
+                self._using_left_index = False
+                self._using_right_index = False
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
@@ -243,7 +261,7 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            cudf.core.column.as_column(range(n), dtype=size_type_dtype).take(
+            cudf.core.column.as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
                 map_, nullify=null, check_bounds=False
             )
             for map_, n, null in zip(maps, lengths, nullify)

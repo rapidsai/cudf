@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -31,8 +30,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import search
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -53,6 +51,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -123,13 +122,13 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search_sorted(
+    lower_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="left",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
-    upper_bound = search_sorted(
+    upper_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="right",
@@ -339,7 +338,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column.column_empty(0, dtype=self.dtype)
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     def _is_numeric(self) -> bool:
@@ -842,14 +841,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
         )
 
     @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
@@ -857,7 +856,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._as_int_index()._split(splits), name=self.name
         )
 
@@ -1002,7 +1001,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=size_type_dtype)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)
 
     def isin(self, values, level=None):
         if level is not None and level > 0:
@@ -1127,15 +1126,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             out.name = name
         return out
 
-    @classmethod
     @_performance_tracking
-    def _from_data_like_self(
-        cls, data: MutableMapping, name: Any = no_default
-    ) -> Self:
-        out = _index_from_data(data, name)
-        if name is not no_default:
-            out.name = name
-        return out
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
+        return _index_from_data(data, self.name)
 
     @classmethod
     @_performance_tracking
@@ -1354,7 +1347,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = as_column(
             -1,
             length=len(needle),
-            dtype=libcudf.types.size_type_dtype,
+            dtype=SIZE_TYPE_DTYPE,
         )
 
         if not len(self):
@@ -1372,7 +1365,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = copying.scatter([indices], scatter_map, [result])[0]
+        result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
@@ -1494,7 +1487,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             if isinstance(self._values, StringColumn):
                 output = repr(self.to_pandas(nullable=True))
             else:
-                output = repr(self._clean_nulls_from_index().to_pandas())
+                output = repr(self._pandas_repr_compatible().to_pandas())
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1649,20 +1642,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
-
-    def _clean_nulls_from_index(self) -> Index:
-        if self._values.has_nulls():
-            fill_value = (
-                str(cudf.NaT)
-                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
-                else str(cudf.NA)
-            )
-            return cudf.Index._from_column(
-                self._column.astype("str").fillna(fill_value),
-                name=self.name,
-            )
-
-        return self
 
     def any(self) -> bool:
         return self._column.any()
@@ -2347,8 +2326,7 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
+                self._column.millisecond.astype("int32") * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
@@ -2964,13 +2942,13 @@ class TimedeltaIndex(Index):
     def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
         return self._column.std(skipna=skipna, ddof=ddof)
 
-    def total_seconds(self) -> cupy.ndarray:
+    def total_seconds(self) -> Index:
         """
         Return total duration of each element expressed in seconds.
 
         This method is currently not implemented.
         """
-        return self._column.total_seconds().values
+        return Index._from_column(self._column.total_seconds(), name=self.name)
 
     def ceil(self, freq: str) -> Self:
         """
@@ -3407,8 +3385,8 @@ def interval_range(
         bin_edges = libcudf.column.Column.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=start.device_value,
+                step=freq.device_value,
             )
         )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
@@ -3615,7 +3593,7 @@ class IntervalIndex(Index):
     def _is_boolean(self) -> bool:
         return False
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     @property

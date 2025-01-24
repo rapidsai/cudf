@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -457,7 +457,9 @@ CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_g
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s* const s = &state_g;
-  uint32_t chunk_id         = blockIdx.y * num_columns + blockIdx.x;
+  auto const col_idx        = blockIdx.x / num_stripes;
+  auto const stripe_idx     = blockIdx.x % num_stripes;
+  uint32_t chunk_id         = stripe_idx * num_columns + col_idx;
   int t                     = threadIdx.x;
 
   if (t == 0) {
@@ -496,19 +498,18 @@ CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_g
     for (int i = t32; i < num_rowgroups; i += 32) {
       auto const num_rows =
         (use_base_stride) ? rowidx_stride
-                          : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
+                          : row_groups[(s->rowgroup_start + i) * num_columns + col_idx].num_rows;
       auto const start_row =
-        (use_base_stride)
-          ? i * rowidx_stride
-          : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
+        (use_base_stride) ? i * rowidx_stride
+                          : row_groups[(s->rowgroup_start + i) * num_columns + col_idx].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
-        ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
+        ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + col_idx])[j] =
           ((uint32_t*)&s->rowgroups[i])[j];
       }
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows = num_rows;
+      row_groups[(s->rowgroup_start + i) * num_columns + col_idx].num_rows = num_rows;
       // Updating in case of struct
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_child_rows = num_rows;
-      row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row      = start_row;
+      row_groups[(s->rowgroup_start + i) * num_columns + col_idx].num_child_rows = num_rows;
+      row_groups[(s->rowgroup_start + i) * num_columns + col_idx].start_row      = start_row;
     }
     __syncthreads();
     if (t == 0) { s->rowgroup_start += num_rowgroups; }
@@ -525,8 +526,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
-  auto const column_id   = blockIdx.x;
-  auto const rowgroup_id = blockIdx.y;
+  auto const column_id   = blockIdx.x / rowgroup_bounds.size().first;
+  auto const rowgroup_id = blockIdx.x % rowgroup_bounds.size().first;
   auto const column      = orc_columns[column_id];
   auto const t           = threadIdx.x;
 
@@ -563,9 +564,7 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    dim3 dim_block(128, 1);
-    dim3 dim_grid(num_blocks, 1);
-    gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
+    gpuParseCompressedStripeData<<<num_blocks, 128, 0, stream.value()>>>(
       strm_info, num_streams, compression_block_size, log2maxcr);
   }
 }
@@ -576,10 +575,7 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    dim3 dim_block(128, 1);
-    dim3 dim_grid(num_blocks, 1);
-    gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream.value()>>>(strm_info,
-                                                                               num_streams);
+    gpuPostDecompressionReassemble<<<num_blocks, 128, 0, stream.value()>>>(strm_info, num_streams);
   }
 }
 
@@ -592,9 +588,8 @@ void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  bool use_base_stride,
                                  rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
-  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(
+  auto const num_blocks = num_columns * num_stripes;
+  gpuParseRowGroupIndex<<<num_blocks, 128, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
 }
 
@@ -603,10 +598,10 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
                                     device_2dspan<cudf::size_type> valid_counts,
                                     rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid(columns.size(), rowgroups.size().first);  // 1 rowgroup per block
-  gpu_reduce_pushdown_masks<128>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(columns, rowgroups, valid_counts);
+  auto const num_blocks    = columns.size() * rowgroups.size().first;  // 1 block per rowgroup
+  constexpr int block_size = 128;
+  gpu_reduce_pushdown_masks<block_size>
+    <<<num_blocks, block_size, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
 }  // namespace gpu

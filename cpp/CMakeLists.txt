@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -274,12 +274,9 @@ endif()
 # add third party dependencies using CPM
 rapids_cpm_init()
 
-# Not using rapids-cmake since we never want to find, always download.
-CPMAddPackage(
-  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW FALSE GIT_TAG
-  c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55 VERSION c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55
-)
-rapids_make_logger(cudf EXPORT_SET cudf-exports)
+include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
+rapids_cpm_rapids_logger()
+rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
@@ -339,6 +336,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/Add.cu
@@ -446,7 +444,6 @@ add_library(
   src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
-  src/groupby/sort/scan.cpp
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
@@ -454,6 +451,8 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/host_udf_aggregation.cpp
+  src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
@@ -463,6 +462,7 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
+  src/hash/xxhash_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
@@ -478,13 +478,13 @@ add_library(
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
   src/io/comp/comp.cpp
+  src/io/comp/comp.cu
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -516,6 +516,7 @@ add_library(
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
+  src/io/parquet/bloom_filter_reader.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
