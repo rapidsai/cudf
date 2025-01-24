@@ -273,6 +273,8 @@ To have each worker in dask print spill statistics, do something like:
 
 ## The Cython layer
 
+> **_NOTE:_** Most of the functionality in the Cython layer has been moved to pylibcudf. All that remains is the Column layer which will be removed in a future release.
+
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
 The Cython layer is composed of two components: C++ bindings and Cython wrappers.
 The first component consists of [`.pxd` files](https://cython.readthedocs.io/en/latest/src/tutorial/pxd_files.html),
