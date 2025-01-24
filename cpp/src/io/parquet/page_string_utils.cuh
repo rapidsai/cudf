@@ -145,9 +145,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
   static constexpr int min_threads_log2 = block_size_log2 > 5 ? block_size_log2 - 5 : 1;
 
   // Clamp log2(M) (between 2 and 7 for block_size = 128)
-  return (threads_log2 <= min_threads_log2)
-           ? min_threads_log2
-           : ((threads_log2 >= block_size_log2) ? block_size_log2 : threads_log2);
+  return cuda::std::max(min_threads_log2, cuda::std::min(block_size_log2, threads_log2));
 }
 
 /**
