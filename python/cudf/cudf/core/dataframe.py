@@ -6409,7 +6409,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise NotImplementedError("Only axis=0 is currently supported.")
         length = len(self)
         return Series._from_column(
-            as_column([length - col.null_count for col in self._columns]),
+            as_column(
+                [
+                    length
+                    - (
+                        col.null_count
+                        + (
+                            col.nan_count
+                            if cudf.get_option("mode.pandas_compatible")
+                            else 0
+                        )
+                    )
+                    for col in self._columns
+                ]
+            ),
             index=cudf.Index(self._column_names),
         )
 
