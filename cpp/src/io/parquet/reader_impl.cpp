@@ -463,8 +463,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
-          CUDF_EXPECTS(static_cast<int64_t>(h_initial_str_offsets[idx]) >= int64_t{0},
-                       "Initial string offset must be >= 0");
+          CUDF_EXPECTS(h_initial_str_offsets[idx] != std::numeric_limits<size_t>::max(),
+                       "Encountered invalid initial offset for large string column");
           out_buf.set_initial_string_offset(h_initial_str_offsets[idx]);
         }
       }
