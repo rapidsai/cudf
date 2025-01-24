@@ -181,10 +181,7 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
     numeric::scaled_integer<rep_type>{_data.value(stream), numeric::scale_type{type().scale()}}};
 }
 
-typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data()
-{
-  return _data.data();
-}
+typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data() { return _data.data(); }
 
 template <typename T>
 typename fixed_point_scalar<T>::rep_type const* fixed_point_scalar<T>::data() const
