@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import operator
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
@@ -15,23 +16,30 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR
 from cudf_polars.experimental.base import _concat, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks
+from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
 
 
 class Shuffle(IR):
-    """Suffle multi-partition data."""
+    """
+    Shuffle multi-partition data.
+
+    Notes
+    -----
+    Only hash-based partitioning is supported (for now).
+    """
 
     __slots__ = ("keys", "options")
     _non_child = ("schema", "keys", "options")
     keys: tuple[NamedExpr, ...]
-    """Columns to shuffle on."""
+    """Keys to shuffle on."""
     options: dict[str, Any]
     """Shuffling options."""
 
@@ -55,6 +63,7 @@ class Shuffle(IR):
             tuple(self.schema.items()),
             self.keys,
             json.dumps(self.options),
+            self.children,
         )
 
     @classmethod
@@ -64,16 +73,37 @@ class Shuffle(IR):
         return df
 
 
-def _split_on_columns(
+def _partition_dataframe(
     df: DataFrame,
-    on: tuple[NamedExpr, ...],
+    keys: tuple[NamedExpr, ...],
     count: int,
 ) -> dict[int, DataFrame]:
-    # Use murmurhash % count to choose the
-    # destination partition id for each row.
+    """
+    Partition an input DataFrame for shuffling.
+
+    Notes
+    -----
+    This utility only supports hash partitioning (for now).
+
+    Parameters
+    ----------
+    df
+        DataFrame to partition.
+    keys
+        Shuffle key(s).
+    count
+        Total number of output partitions.
+
+    Returns
+    -------
+    A dictionary mapping between int partition indices and
+    DataFrame fragments.
+    """
+    # Hash the specified keys to calculate the output
+    # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
-            DataFrame([expr.evaluate(df) for expr in on]).table
+            DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
         plc.interop.from_arrow(pa.scalar(count, type="uint32")),
         plc.binaryop.BinaryOperator.PYMOD,
@@ -100,12 +130,11 @@ def _split_on_columns(
 def _simple_shuffle_graph(
     name_out: str,
     name_in: str,
-    on: tuple[NamedExpr, ...],
+    keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
 ) -> MutableMapping[Any, Any]:
     """Make a simple all-to-all shuffle graph."""
-    # Simple all-to-all shuffle (for now)
     split_name = f"split-{name_out}"
     inter_name = f"inter-{name_out}"
 
@@ -114,9 +143,9 @@ def _simple_shuffle_graph(
         _concat_list = []
         for part_in in range(count_in):
             graph[(split_name, part_in)] = (
-                _split_on_columns,
+                _partition_dataframe,
                 (name_in, part_in),
-                on,
+                keys,
                 count_out,
             )
             _concat_list.append((inter_name, part_out, part_in))
@@ -129,15 +158,47 @@ def _simple_shuffle_graph(
     return graph
 
 
+@lower_ir_node.register(Shuffle)
+def _(
+    ir: Shuffle, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Simple lower_ir_node handling for the default hash-based shuffle.
+    # More-complex logic (e.g. joining and sorting) should
+    # be handled separately.
+    from cudf_polars.experimental.parallel import PartitionInfo
+
+    # Extract child partitioning
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+    pi = partition_info[children[0]]
+
+    # Check if we are already shuffled or update partition_info
+    if ir.keys == pi.partitioned_on:
+        # Already shuffled!
+        new_node = children[0]
+    else:
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(
+            # Default shuffle preserves partition count
+            count=pi.count,
+            # Add partitioned_on info
+            partitioned_on=ir.keys,
+        )
+
+    return new_node, partition_info
+
+
 @generate_ir_tasks.register(Shuffle)
 def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    child_ir = ir.children[0]
+    # Use a simple all-to-all shuffle graph.
+
+    # TODO: Optionally use rapidsmp.
     return _simple_shuffle_graph(
         get_key_name(ir),
-        get_key_name(child_ir),
+        get_key_name(ir.children[0]),
         ir.keys,
-        partition_info[child_ir].count,
+        partition_info[ir.children[0]].count,
         partition_info[ir].count,
     )

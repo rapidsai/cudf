@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from cudf_polars.dsl.ir import Join
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
-from cudf_polars.experimental.shuffle import Shuffle, _split_on_columns
+from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -235,7 +235,7 @@ def _(
         for part_out in range(out_size):
             if how != "inner":
                 graph[(split_name, part_out)] = (
-                    _split_on_columns,
+                    _partition_dataframe,
                     (other_name, part_out),
                     other_on,
                     bcast_size,
