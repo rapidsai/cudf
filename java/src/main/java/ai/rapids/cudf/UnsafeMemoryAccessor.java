@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -152,6 +152,19 @@ class UnsafeMemoryAccessor {
    */
   public static int getInt(long address) {
     return UNSAFE.getInt(address);
+  }
+
+  /**
+   * Copy out an array of ints.
+   * @param dst       where to write the data
+   * @param dstIndex  index into values to start writing at.
+   * @param address   src memory address
+   * @param count     the number of ints to copy
+   * @throws IndexOutOfBoundsException
+   */
+  public static void getInts(int[] dst, long dstIndex, long address, int count) {
+    copyMemory(null, address,
+            dst, UnsafeMemoryAccessor.INT_ARRAY_OFFSET + (dstIndex * 4), count * 4);
   }
 
   /**
