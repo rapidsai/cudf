@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -474,8 +474,16 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                  .second;
 
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
-  thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
+  auto key_offset_iter         = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [num_unique_keys, key_offsets = key_offsets.begin()] __device__(size_type i) {
+        return i >= num_unique_keys ? 0 : key_offsets[i];
+      }));
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         key_offset_iter,
+                         key_offset_iter + num_unique_keys + 1,
+                         key_offsets.begin());
 
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
