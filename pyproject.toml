@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -115,16 +115,6 @@ ignore = [
     "RUF012",
 ]
 fixable = ["ALL"]
-exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
-]
-
-[tool.ruff.format]
-exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
-]
 
 [tool.ruff.lint.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
