@@ -28,7 +28,7 @@
 namespace cudf::io::parquet::detail {
 
 struct page_state_s {
-  CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
+  CUDF_HOST_DEVICE page_state_s() noexcept {}
   uint8_t const* data_start{};
   uint8_t const* data_end{};
   uint8_t const* lvl_end{};
