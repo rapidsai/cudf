@@ -27,7 +27,6 @@ import pylibcudf as plc
 import cudf
 import cudf._lib as libcudf
 import cudf.core
-import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -38,7 +37,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -3122,7 +3121,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_duplicates(
+            stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3255,12 +3254,13 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
-        result = copying.scatter(
-            [cudf.Scalar(False)],
+        result = as_column(
+            True, length=len(self), dtype=bool
+        )._scatter_by_column(
             distinct,
-            [as_column(True, length=len(self), dtype=bool)],
+            cudf.Scalar(False),
             bounds_check=False,
-        )[0]
+        )
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
@@ -4381,7 +4381,7 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_nulls(
+            stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(subset),
@@ -4404,7 +4404,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.apply_boolean_mask(
+            stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),
