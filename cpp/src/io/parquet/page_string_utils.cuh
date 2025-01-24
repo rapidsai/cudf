@@ -142,7 +142,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
   // So, clamp #-threads-per-string M = T / N between: T (all) & T/32 (cache miss)
   // So, clamp log2(#-threads-per-string) between log2(T) & log2(T) - 5 (min 1)
   static constexpr int block_size_log2  = log2_int<block_size>();  // 7 for block_size = 128
-  static constexpr int min_threads_log2 = block_size_log2 > 5 ? block_size_log2 - 5 : 1;
+  static constexpr int min_threads_log2 = cuda::std::max(block_size_log2 - 5, 1);
 
   // Clamp log2(M) (between 2 and 7 for block_size = 128)
   return cuda::std::max(min_threads_log2, cuda::std::min(block_size_log2, threads_log2));
