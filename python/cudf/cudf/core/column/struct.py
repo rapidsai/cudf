@@ -120,7 +120,7 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return dict(zip(self.dtype.fields, result.values()))
+        return self.dtype._recursively_replace_fields(result)
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

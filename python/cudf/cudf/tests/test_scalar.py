@@ -145,14 +145,11 @@ def test_scalar_host_initialization(value):
 def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
     with acquire_spill_lock():
-        dev_slr = cudf._lib.scalar.DeviceScalar.from_pylibcudf(
-            plc.copying.get_element(
-                column.to_pylibcudf(mode="read"),
-                0,
-            ),
-            dtype=column.dtype,
+        dev_slr = plc.copying.get_element(
+            column.to_pylibcudf(mode="read"),
+            0,
         )
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -188,14 +185,11 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
     dtype = decimal_type._from_decimal(value)
     column = cudf.Series([str(value)]).astype(dtype)._column
     with acquire_spill_lock():
-        dev_slr = cudf._lib.scalar.DeviceScalar.from_pylibcudf(
-            plc.copying.get_element(
-                column.to_pylibcudf(mode="read"),
-                0,
-            ),
-            dtype=column.dtype,
+        dev_slr = plc.copying.get_element(
+            column.to_pylibcudf(mode="read"),
+            0,
         )
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
