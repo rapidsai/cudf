@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf.core._internals import sorting
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
@@ -145,9 +144,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         else:
             no_nans = self.nans_to_nulls()
             # get sorted indices and exclude nulls
-            indices = sorting.order_by(
-                [no_nans], [True], "first", stable=True
-            ).slice(no_nans.null_count, len(no_nans))
+            indices = (
+                no_nans.argsort(ascending=True, na_position="first")
+                .slice(no_nans.null_count, len(no_nans))
+                .astype(np.dtype(np.int32))
+            )
             with acquire_spill_lock():
                 plc_column = plc.quantiles.quantile(
                     no_nans.to_pylibcudf(mode="read"),
