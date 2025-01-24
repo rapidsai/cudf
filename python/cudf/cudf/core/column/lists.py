@@ -111,6 +111,13 @@ class ListColumn(ColumnBase):
             )
         return n
 
+    def element_indexing(self, index: int) -> list:
+        result = super().element_indexing(index)
+        if isinstance(result, list):
+            return self.dtype._recursively_replace_fields(result)
+        else:
+            return result
+
     def __setitem__(self, key, value):
         if isinstance(value, list):
             value = cudf.Scalar(value)
