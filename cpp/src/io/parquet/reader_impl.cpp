@@ -222,7 +222,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     // Host vector to initialize the initial string offsets
     auto host_offsets_vector =
       cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
-    thrust::fill(
+    std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
     initial_str_offsets =
