@@ -4,6 +4,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column import ColumnBase
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 
 
@@ -54,4 +55,5 @@ def read_avro(
             strict=True,
         )
     }
-    return cudf.DataFrame._from_data(data)
+    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
+    return cudf.DataFrame._from_data(ca)
