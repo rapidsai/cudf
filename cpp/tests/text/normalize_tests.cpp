@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
@@ -98,22 +99,12 @@ TEST_F(TextNormalizeTest, SomeNullStrings)
 TEST_F(TextNormalizeTest, NormalizeCharacters)
 {
   // These include punctuation, accents, whitespace, and CJK characters
-  std::vector<char const*> h_strings{"abc£def",
-                                     nullptr,
-                                     "éè â îô\taeio",
-                                     "\tĂĆĖÑ  Ü",
-                                     "ACEN U",
-                                     "P^NP",
-                                     "$41.07",
-                                     "[a,b]",
-                                     "丏丟",
-                                     ""};
-  auto validity =
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
-  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
-  cudf::strings_column_view strings_view(strings);
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc£def", "", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟", ""},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto sv = cudf::strings_column_view(input);
   {
-    auto results = nvtext::normalize_characters(strings_view, true);
+    auto results = nvtext::normalize_characters(sv, true);
     cudf::test::strings_column_wrapper expected({"abc£def",
                                                  "",
                                                  "ee a io aeio",
@@ -124,11 +115,11 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
                                                  " [ a , b ] ",
                                                  " 丏  丟 ",
                                                  ""},
-                                                validity);
+                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = nvtext::normalize_characters(strings_view, false);
+    auto results = nvtext::normalize_characters(sv, false);
     cudf::test::strings_column_wrapper expected({"abc£def",
                                                  "",
                                                  "éè â îô aeio",
@@ -139,7 +130,50 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
                                                  " [ a , b ] ",
                                                  " 丏  丟 ",
                                                  ""},
-                                                validity);
+                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(TextNormalizeTest, NormalizeCharactersNew)
+{
+  // These include punctuation, accents, whitespace, and CJK characters
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc£def", "", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟", ""},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto sv = cudf::strings_column_view(input);
+  {
+    auto normalizer = nvtext::create_character_normalizer(true);
+    auto results    = nvtext::normalize_characters(sv, *normalizer);
+    cudf::test::print(results->view());
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "ee a io aeio",
+                                                 " acen  u",
+                                                 "acen u",
+                                                 "p ^ np",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto normalizer = nvtext::create_character_normalizer(false);
+    auto results    = nvtext::normalize_characters(sv, *normalizer);
+    cudf::test::print(results->view());
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "éè â îô aeio",
+                                                 " ĂĆĖÑ  Ü",
+                                                 "ACEN U",
+                                                 "P ^ NP",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
