@@ -631,11 +631,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
         if cudf.get_option("mode.pandas_compatible"):
-            data, _ = _extract_from_proxy(data)
+            data, data_extracted = _extract_from_proxy(data)
             index, _ = _extract_from_proxy(index)
 
             if (
-                index is None
+                data_extracted
+                and index is None
                 and dtype is None
                 and name is None
                 and copy is False
