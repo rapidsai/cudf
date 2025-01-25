@@ -427,7 +427,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
         else decimal_type._from_decimal(value)
     )
 
-    s = cudf._lib.scalar.DeviceScalar(value, dtype)
+    s = cudf.Scalar(value, dtype)
 
     assert s.value == value or np.isnan(s.value) and np.isnan(value)
     if isinstance(
