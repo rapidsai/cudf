@@ -57,7 +57,11 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _warn_no_dask_cudf, search_range
+from cudf.utils.utils import (
+    _extract_from_proxy,
+    _warn_no_dask_cudf,
+    search_range,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -1068,10 +1072,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __init__(self, data, **kwargs):
         name = _getdefault_name(data, name=kwargs.get("name"))
         if cudf.get_option("mode.pandas_compatible"):
-            try:
-                data = data.as_gpu_object()
-            except AttributeError:
-                pass
+            data, data_extracted = _extract_from_proxy(data)
+            if data_extracted and len(kwargs) == 0:
+                self.__dict__.update(data.__dict__)
+                return
+
         super().__init__({name: data})
 
     @_performance_tracking

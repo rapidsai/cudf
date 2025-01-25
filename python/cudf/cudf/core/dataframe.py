@@ -96,6 +96,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
     GetAttrGetItemMixin,
     _external_only_api,
+    _extract_from_proxy,
     _is_null_host_scalar,
 )
 
@@ -712,18 +713,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
         if cudf.get_option("mode.pandas_compatible"):
-            try:
-                data = data.as_gpu_object()
-            except AttributeError:
-                pass
-            try:
-                index = index.as_gpu_object()
-            except AttributeError:
-                pass
-            try:
-                columns = columns.as_cpu_object()
-            except AttributeError:
-                pass
+            data, data_extracted = _extract_from_proxy(data)
+            index, index_extracted = _extract_from_proxy(index)
+            columns, columns_extracted = _extract_from_proxy(
+                columns, fast=False
+            )
+            if (
+                (data is None or data_extracted)
+                and (index is None or index_extracted)
+                and (columns is None or columns_extracted)
+            ) and (dtype is None and copy is None):
+                self.__dict__.update(data.__dict__)
+                return
         if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
 
