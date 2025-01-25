@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from libcpp cimport bool
@@ -33,6 +33,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         ALL
         SUM_OF_SQUARES
         MEAN
+        M2
         VARIANCE
         STD
         MEDIAN
@@ -41,13 +42,25 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         ARGMIN
         NUNIQUE
         NTH_ELEMENT
+        ROW_NUMBER
+        EWMA
         RANK
         COLLECT_LIST
         COLLECT_SET
+        LEAD
+        LAG
         PTX
         CUDA
-        CORRELATION
+        HOST_UDF
+        MERGE_LISTS
+        MERGE_SETS
+        MERGE_M2
         COVARIANCE
+        CORRELATION
+        TDIGEST
+        MERGE_TDIGEST
+        HISTOGRAM
+        MERGE_HISTOGRAM
 
     cdef cppclass aggregation:
         Kind kind
@@ -104,7 +117,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_max_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_count_aggregation[T](
-        null_policy
+        null_policy null_handling
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_any_aggregation[T]() except +libcudf_exception_handler
@@ -170,3 +183,28 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         null_policy null_handling,
         null_order null_precedence,
         rank_percentage percentage) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_tdigest_aggregation[T](
+        int max_centroids
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_merge_tdigest_aggregation[T](
+        int max_centroids
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_histogram_aggregation[T]() except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_merge_histogram_aggregation[T](
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_merge_lists_aggregation[T](
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_merge_sets_aggregation[T](
+        null_equality nulls_equal,
+        nan_equality nans_equal,
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_merge_m2_aggregation[T]() except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_m2_aggregation[T]() except +libcudf_exception_handler

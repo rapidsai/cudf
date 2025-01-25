@@ -235,15 +235,49 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    streams[s_idx++]);
   };
 
-  // launch string decoder
+  // launch string decoder for plain encoded flat columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
-    DecodeStringPageData(subpass.pages,
-                         pass.chunks,
-                         num_rows,
-                         skip_rows,
-                         level_type_size,
-                         error_code.data(),
-                         streams[s_idx++]);
+    decode_data(decode_kernel_mask::STRING);
+  }
+
+  // launch string decoder for plain encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_NESTED);
+  }
+
+  // launch string decoder for plain encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_LIST);
+  }
+
+  // launch string decoder for dictionary encoded flat columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT);
+  }
+
+  // launch string decoder for dictionary encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT_NESTED);
+  }
+
+  // launch string decoder for dictionary encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT_LIST);
+  }
+
+  // launch string decoder for byte-stream-split encoded flat columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT);
+  }
+
+  // launch string decoder for byte-stream-split encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
+  }
+
+  // launch string decoder for byte-stream-split encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
   }
 
   // launch delta byte array decoder

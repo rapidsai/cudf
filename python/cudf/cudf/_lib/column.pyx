@@ -33,7 +33,11 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
-from pylibcudf cimport DataType as plc_DataType, Column as plc_Column
+from pylibcudf cimport (
+    DataType as plc_DataType,
+    Column as plc_Column,
+    Scalar as plc_Scalar,
+)
 cimport pylibcudf.libcudf.copying as cpp_copying
 cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
@@ -43,10 +47,7 @@ from pylibcudf.libcudf.column.column_factories cimport (
 )
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
-from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-
-from cudf._lib.scalar cimport DeviceScalar
 
 
 cdef get_element(column_view col_view, size_type index):
@@ -56,10 +57,8 @@ cdef get_element(column_view col_view, size_type index):
         c_output = move(
             cpp_copying.get_element(col_view, index)
         )
-
-    return DeviceScalar.from_unique_ptr(
-        move(c_output), dtype=dtype_from_column_view(col_view)
-    )
+    plc_scalar = plc_Scalar.from_libcudf(move(c_output))
+    return pylibcudf.interop.to_arrow(plc_scalar).as_py()
 
 
 def dtype_from_pylibcudf_column(plc_Column col not None):
@@ -346,7 +345,15 @@ cdef class Column:
     @property
     def null_count(self):
         if self._null_count is None:
-            self._null_count = self.compute_null_count()
+            if not self.nullable or self.size == 0:
+                self._null_count = 0
+            else:
+                with acquire_spill_lock():
+                    self._null_count = pylibcudf.null_mask.null_count(
+                        self.base_mask.get_ptr(mode="read"),
+                        self.offset,
+                        self.offset + self.size
+                    )
         return self._null_count
 
     @property
@@ -409,18 +416,6 @@ cdef class Column:
             self.set_base_mask(other_col.base_mask)
         else:
             return other_col
-
-    cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        with acquire_spill_lock():
-            if not self.nullable:
-                return 0
-            return cpp_null_count(
-                <libcudf_types.bitmask_type*><uintptr_t>(
-                    self.base_mask.get_ptr(mode="read")
-                ),
-                self.offset,
-                self.offset + self.size
-            )
 
     cdef mutable_column_view mutable_view(self) except *:
         if isinstance(self.dtype, cudf.CategoricalDtype):
@@ -772,7 +767,7 @@ cdef class Column:
                     base_nbytes = 0
                 else:
                     chars_size = get_element(
-                        offset_child_column, offset_child_column.size()-1).value
+                        offset_child_column, offset_child_column.size()-1)
                     base_nbytes = chars_size
 
         if data_ptr:
@@ -913,6 +908,6 @@ cdef class Column:
     def from_scalar(py_val, size_type size):
         return Column.from_pylibcudf(
             pylibcudf.Column.from_scalar(
-                py_val.device_value.c_value, size
+                py_val.device_value, size
             )
         )

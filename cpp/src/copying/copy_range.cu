@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ struct out_of_place_copy_range_dispatch {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
-    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
+    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
       p_ret->set_null_mask(
         cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
     }
