@@ -143,22 +143,28 @@ blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-d
 provides a similar configuration-based plugin for Spark.
 
 
-## Recommendation for libraries that are type aware.
+## How can I access the underlying GPU or CPU objects?
 
-When working with `cudf.pandas` proxy objects, it is important to access the real underlying objects to ensure compatibility with libraries that are `cudf` or `pandas` aware. You can use the following methods to retrieve the actual `cudf` or `pandas` objects:
+When working with `cudf.pandas` proxy objects, it is sometimes necessary to get true `cudf` or `pandas` objects that reside on GPU or CPU.
+For example, this can be used to ensure that GPU-aware libraries that support both `cudf` and `pandas` can use the `cudf`-optimized code paths that keep data on GPU when processing `cudf.pandas` objects.
+Otherwise, the library might use less-optimized CPU code because it thinks that the `cudf.pandas` object is a plain `pandas` dataframe.
 
-- `as_gpu_object()`: This method returns the fast `cudf` object from the proxy.
-- `as_cpu_object()`: This method returns the slow `pandas` object from the proxy.
+The following methods can be used to retrieve the actual `cudf` or `pandas` objects:
+
+- `as_gpu_object()`: This method returns the `cudf` object from the proxy.
+- `as_cpu_object()`: This method returns the `pandas` object from the proxy.
 
 Here is an example of how to use these methods:
 
 ```python
 # Assuming `proxy_obj` is a cudf.pandas proxy object
-fast_obj = proxy_obj.as_gpu_object()
-slow_obj = proxy_obj.as_cpu_object()
+cudf_obj = proxy_obj.as_gpu_object()
+pandas_obj = proxy_obj.as_cpu_object()
 
-# Now you can use `fast_obj` and `slow_obj` with libraries that are cudf or pandas aware
+# Now you can use `cudf_obj` and `pandas_obj` with libraries that are cudf or pandas aware
 ```
+
+Be aware that if `cudf.pandas` objects are converted to their underlying `cudf` or `pandas` types, the `cudf.pandas` proxy no longer controls them. This means that automatic conversion between GPU and CPU types and automatic fallback from GPU to CPU functionality will not occur.
 
 (are-there-any-known-limitations)=
 ## Are there any known limitations?
