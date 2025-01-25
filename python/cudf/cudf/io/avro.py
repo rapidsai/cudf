@@ -1,9 +1,10 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 
 
@@ -54,4 +55,5 @@ def read_avro(
             strict=True,
         )
     }
-    return cudf.DataFrame._from_data(data)
+    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
+    return cudf.DataFrame._from_data(ca)
