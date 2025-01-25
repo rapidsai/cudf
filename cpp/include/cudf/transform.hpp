@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,17 +32,25 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Creates a new column by applying a unary function against every
+ * @brief Creates a new column by applying a transform function against every
  * element of an input column.
+ * The first input column is the primary column that determines the size of the output column.
  *
  * Computes:
- * `out[i] = F(in[i])`
+ * `F(i, out, in...)` for i: [0, in[0].size())
  *
- * The output null mask is the same is the input null mask so if input[i] is
- * null then output[i] is also null
+ * i.e. for a columnar add, the UDF will be: `F(i, out, in0, in1, in2) -> out[i] = in0[i] + in1[i] +
+ * in2[i]`
  *
- * @param input         An immutable view of the input column to transform
- * @param unary_udf     The PTX/CUDA string of the unary function to apply
+ * and for a broadcast add with a scalar, the UDF will be: `F(i, out, in0, in1, scalar) -> out[i] =
+ * in0[i] + in1[i] + scalar[0]`
+ *
+ * The output null mask is the same is the input null mask of the first input column so if
+ * inputs[0][i] is null then output[0][i] is also null.
+ *
+ *
+ * @param inputs        Immutable views of the input columns to transform
+ * @param transform_udf     The PTX/CUDA string of the transform function to apply
  * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param stream        CUDA stream used for device memory operations and kernel launches
@@ -52,7 +60,7 @@ namespace CUDF_EXPORT cudf {
  */
 std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
-  std::string_view unary_udf,
+  std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),

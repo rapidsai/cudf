@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,13 +106,13 @@ void transform_operation(mutable_column_view output,
 
 namespace detail {
 std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
-                                  std::string_view unary_udf,
+                                  std::string_view transform_udf,
                                   data_type output_type,
                                   bool is_ptx,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!inputs.empty(), "Number of input columns must be atleast 1");
+  CUDF_EXPECTS(!inputs.empty(), "Number of input columns must be at least 1");
   CUDF_EXPECTS(
     std::all_of(
       inputs.begin(), inputs.end(), [](auto view) { return is_fixed_width(view.type()); }),
@@ -133,7 +133,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 
   // transform
   transformation::jit::transform_operation(
-    output_view, inputs, unary_udf, output_type, is_ptx, stream);
+    output_view, inputs, transform_udf, output_type, is_ptx, stream);
 
   return output;
 }
@@ -141,14 +141,14 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 }  // namespace detail
 
 std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
-                                  std::string_view unary_udf,
+                                  std::string const& transform_udf,
                                   data_type output_type,
                                   bool is_ptx,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(inputs, unary_udf, output_type, is_ptx, stream, mr);
+  return detail::transform(inputs, transform_udf, output_type, is_ptx, stream, mr);
 }
 
 }  // namespace cudf
