@@ -5931,9 +5931,7 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise TypeError(
-            "String arrays are not supported by cupy"
-        )
+        raise TypeError("String arrays are not supported by cupy")
 
     def to_pandas(
         self,
