@@ -267,6 +267,8 @@ if ipython_shell:
 
 
 def _Series_dtype(self):
+    # Fast-path to extract dtype from the current
+    # object without round-tripping through the slow<->fast
     return self._fsproxy_wrapped.dtype
 
 
