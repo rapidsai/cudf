@@ -20,4 +20,14 @@ namespace cudf {
 
 std::string type_to_name(data_type type) { return type_dispatcher(type, type_to_name_impl{}); }
 
+std::string device_storage_type_name(data_type type)
+{
+  switch (type.id()) {
+    case cudf::type_id::DECIMAL32: return "int32_t";
+    case cudf::type_id::DECIMAL64: return "int64_t";
+    case cudf::type_id::DECIMAL128: return "__int128_t";
+    default: return cudf::type_to_name(type);
+  };
+}
+
 }  // namespace cudf

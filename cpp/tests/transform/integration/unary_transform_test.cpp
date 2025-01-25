@@ -277,6 +277,56 @@ TEST_F(TransformTest, MultiColumnAndScalarCUDA)
   test_multi_input_cuda_udf_integral<double>();
 }
 
+template <typename T>
+void test_multi_input_cuda_udf_decimal()
+{
+  cudf::data_type data_type{cudf::type_to_id<T>()};
+  auto const type_name        = cudf::type_to_name(data_type);
+  auto const device_type_name = cudf::device_storage_type_name(data_type);
+
+  auto parameters = device_type_name + " * out, " + device_type_name + " const * c0, " +
+                    device_type_name + " const * c1, " + device_type_name + " const * c2, " +
+                    device_type_name + " const * scalar";
+
+  auto const cuda_udf =
+    R"***(
+__device__ inline void transform(int64_t i,)***" +
+    parameters + R"***()
+{
+  using T = )***" +
+    type_name + R"***(;
+  auto sum = T{c0[i]} + T{c1[i]} + T{c2[i]};
+  out[i] = (T{*scalar} * sum).value();
+}
+)***";
+
+  T const C0   = 1;
+  T const C1   = 2;
+  T const C2   = 3;
+  T const S0   = 4;
+  T const EXPR = S0 * (C0 + C1 + C2);
+
+  cudf::test::fixed_width_column_wrapper<T> c0{C0, C0, C0, C0};
+  cudf::test::fixed_width_column_wrapper<T> c1{C1, C1, C1, C1};
+  cudf::test::fixed_width_column_wrapper<T> c2{C2, C2, C2, C2};
+  cudf::test::fixed_width_column_wrapper<T> s0{S0};
+  cudf::test::fixed_width_column_wrapper<T> expr{EXPR, EXPR, EXPR, EXPR};
+
+  std::vector<cudf::column_view> views{c0, c1, c2, s0};
+
+  auto result =
+    cudf::transform(views, cuda_udf, data_type, false, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expr);
+}
+
+TEST_F(TransformTest, DecimalCUDA)
+{
+  test_multi_input_cuda_udf_decimal<numeric::decimal32>();
+  test_multi_input_cuda_udf_decimal<numeric::decimal64>();
+  test_multi_input_cuda_udf_decimal<numeric::decimal128>();
+}
+
 TEST_F(TransformTest, MultiColumnAndScalarPTX)
 {
   auto const ptx_udf =

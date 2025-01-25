@@ -624,5 +624,13 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) double_type_dispatcher
  */
 std::string type_to_name(data_type type);
 
+/**
+ * @brief Return a device storage type name for a given data type
+ *
+ * @param type The `data_type`
+ * @return Name of the device-side representation type
+ */
+std::string device_storage_type_name(data_type type);
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
