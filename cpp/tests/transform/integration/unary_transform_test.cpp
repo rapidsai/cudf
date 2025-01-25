@@ -29,6 +29,8 @@
 namespace transformation {
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
+struct TransformTest : public cudf::test::BaseFixture {};
+
 template <class dtype, class Op, class Data>
 void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
 {
@@ -38,10 +40,8 @@ void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
 
-  std::vector<cudf::column_view> inputs{in};
-
   std::unique_ptr<cudf::column> out =
-    cudf::transform(inputs, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
+    cudf::transform({in}, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
@@ -53,8 +53,8 @@ TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32)
     R"***(
 __device__ inline void    fdsf   (
        int64_t i,
-       float* out,
-       float * in
+       float * out,
+       float const* in
 )
 {
 float const a = in[i];
@@ -76,19 +76,19 @@ out[i] = a*a*a*a;
 .target sm_70
 .address_size 64
 
-.func _Z4fdsflPfS_(
-        .param .b64 _Z4fdsflPfS__param_0,
-        .param .b64 _Z4fdsflPfS__param_1,
-        .param .b64 _Z4fdsflPfS__param_2
+.func _Z4fdsflPfPKf(
+        .param .b64 _Z4fdsflPfPKf_param_0,
+        .param .b64 _Z4fdsflPfPKf_param_1,
+        .param .b64 _Z4fdsflPfPKf_param_2
 )
 {
         .reg .f32       %f<5>;
         .reg .b64       %rd<9>;
 
 
-        ld.param.u64    %rd1, [_Z4fdsflPfS__param_0];
-        ld.param.u64    %rd2, [_Z4fdsflPfS__param_1];
-        ld.param.u64    %rd3, [_Z4fdsflPfS__param_2];
+        ld.param.u64    %rd1, [_Z4fdsflPfPKf_param_0];
+        ld.param.u64    %rd2, [_Z4fdsflPfPKf_param_1];
+        ld.param.u64    %rd3, [_Z4fdsflPfPKf_param_2];
         cvta.to.global.u64      %rd4, %rd2;
         cvta.to.global.u64      %rd5, %rd3;
         shl.b64         %rd6, %rd1, 2;
@@ -117,7 +117,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   // c = a * a - a
   std::string const cuda =
     R"***(
-    __device__ inline void f(int64_t i, int* output ,int * input)
+    __device__ inline void f(int64_t i, int* output, int const* input)
     {
     output[i] = input[i] * input[i] - input[i];
     }
@@ -170,7 +170,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
 __device__ inline void f(
   int64_t i,
   signed char* output,
-  signed char * input
+  signed char const * input
 ){
   signed char in = input[i];
 
@@ -184,40 +184,42 @@ __device__ inline void f(
 
   std::string const ptx =
     R"***(
-.func _Z1flPaS_(
-        .param .b64 _Z1flPaS__param_0,
-        .param .b64 _Z1flPaS__param_1,
-        .param .b64 _Z1flPaS__param_2
+.func _Z1flPaPKa(
+        .param .b64 _Z1flPaPKa_param_0,
+        .param .b64 _Z1flPaPKa_param_1,
+        .param .b64 _Z1flPaPKa_param_2
 )
 {
-  .reg .pred      %p<2>;
-  .reg .b16       %rs<5>;
-  .reg .b64       %rd<8>;
-  
-  ld.param.u64    %rd2, [_Z1flPaS__param_0];
-  ld.param.u64    %rd3, [_Z1flPaS__param_1];
-  ld.param.u64    %rd4, [_Z1flPaS__param_2];
-  cvta.to.global.u64      %rd5, %rd3;
-  cvta.to.global.u64      %rd6, %rd4;
-  add.s64         %rd7, %rd6, %rd2;
-  ld.global.u8    %rs1, [%rd7];
-  add.s16         %rs2, %rs1, -97;
-  and.b16         %rs3, %rs2, 255;
-  setp.lt.u16     %p1, %rs3, 26;
-  add.s64         %rd1, %rd5, %rd2;
-  @%p1 bra        BB0_2;
-  bra.uni         BB0_1;
-  
-  BB0_2:
-  add.s16         %rs4, %rs1, -32;
-  st.global.u8    [%rd1], %rs4;
-  bra.uni         BB0_3;
-  
-  BB0_1:
-  st.global.u8    [%rd1], %rs1;
-  
-  BB0_3:
-  ret;
+        .reg .pred      %p<2>;
+        .reg .b16       %rs<5>;
+        .reg .b64       %rd<8>;
+
+
+        ld.param.u64    %rd2, [_Z1flPaPKa_param_0];
+        ld.param.u64    %rd3, [_Z1flPaPKa_param_1];
+        ld.param.u64    %rd4, [_Z1flPaPKa_param_2];
+        cvta.to.global.u64      %rd5, %rd3;
+        cvta.to.global.u64      %rd6, %rd4;
+        add.s64         %rd7, %rd6, %rd2;
+        ld.global.u8    %rs1, [%rd7];
+        add.s16         %rs2, %rs1, -97;
+        and.b16         %rs3, %rs2, 255;
+        setp.lt.u16     %p1, %rs3, 26;
+        add.s64         %rd1, %rd5, %rd2;
+        @%p1 bra        $L__BB0_2;
+        bra.uni         $L__BB0_1;
+
+$L__BB0_2:
+        add.s16         %rs4, %rs1, -32;
+        st.global.u8    [%rd1], %rs4;
+        bra.uni         $L__BB0_3;
+
+$L__BB0_1:
+        st.global.u8    [%rd1], %rs1;
+
+$L__BB0_3:
+        ret;
+
 }
 )***";
 
@@ -229,13 +231,122 @@ __device__ inline void f(
   test_udf<dtype>(ptx.c_str(), op, data_init, 500, true);
 }
 
+template <typename T>
+void test_multi_input_cuda_udf_integral()
+{
+  auto type_name = cudf::type_to_name(cudf::data_type{cudf::type_to_id<T>()});
+  auto column_parameters =
+    type_name + " const * c0, " + type_name + " const * c1, " + type_name + " const * c2";
+
+  auto const cuda_udf =
+    R"***(
+__device__ inline void transform(int64_t i, double * out, )***" +
+    column_parameters + R"***(, double const * scalar)
+{
+  out[i] = *scalar * (c0[i] + c1[i] + c2[i]);
+}
+)***";
+
+  T const C0                  = 1;
+  T const C1                  = 2;
+  T const C2                  = 3;
+  double const S0             = 4;
+  double const EXPR           = S0 * (C0 + C1 + C2);
+  auto const output_data_type = cudf::data_type(cudf::type_to_id<double>());
+
+  cudf::test::fixed_width_column_wrapper<T> c0{C0, C0, C0, C0};
+  cudf::test::fixed_width_column_wrapper<T> c1{C1, C1, C1, C1};
+  cudf::test::fixed_width_column_wrapper<T> c2{C2, C2, C2, C2};
+  cudf::test::fixed_width_column_wrapper<double> s0{S0};
+  cudf::test::fixed_width_column_wrapper<double> expr{EXPR, EXPR, EXPR, EXPR};
+
+  std::vector<cudf::column_view> views{c0, c1, c2, s0};
+
+  auto result =
+    cudf::transform(views, cuda_udf, output_data_type, false, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expr);
+}
+
+TEST_F(TransformTest, MultiColumnAndScalarCUDA)
+{
+  test_multi_input_cuda_udf_integral<int8_t>();
+  test_multi_input_cuda_udf_integral<int16_t>();
+  test_multi_input_cuda_udf_integral<int32_t>();
+  test_multi_input_cuda_udf_integral<float>();
+  test_multi_input_cuda_udf_integral<double>();
+}
+
+TEST_F(TransformTest, MultiColumnAndScalarPTX)
+{
+  auto const ptx_udf =
+    R"***(
+.visible .func _Z9transformlPfPKiS1_S1_PKf(
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_0,
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_1,
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_2,
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_3,
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_4,
+        .param .b64 _Z9transformlPfPKiS1_S1_PKf_param_5
+)
+{
+        .reg .f32       %f<4>;
+        .reg .b32       %r<6>;
+        .reg .b64       %rd<12>;
+
+
+        ld.param.u64    %rd1, [_Z9transformlPfPKiS1_S1_PKf_param_0];
+        ld.param.u64    %rd2, [_Z9transformlPfPKiS1_S1_PKf_param_1];
+        ld.param.u64    %rd3, [_Z9transformlPfPKiS1_S1_PKf_param_2];
+        ld.param.u64    %rd4, [_Z9transformlPfPKiS1_S1_PKf_param_3];
+        ld.param.u64    %rd5, [_Z9transformlPfPKiS1_S1_PKf_param_4];
+        ld.param.u64    %rd6, [_Z9transformlPfPKiS1_S1_PKf_param_5];
+        ld.f32  %f1, [%rd6];
+        shl.b64         %rd7, %rd1, 2;
+        add.s64         %rd8, %rd3, %rd7;
+        ld.u32  %r1, [%rd8];
+        add.s64         %rd9, %rd4, %rd7;
+        ld.u32  %r2, [%rd9];
+        add.s32         %r3, %r2, %r1;
+        add.s64         %rd10, %rd5, %rd7;
+        ld.u32  %r4, [%rd10];
+        add.s32         %r5, %r3, %r4;
+        cvt.rn.f32.s32  %f2, %r5;
+        mul.f32         %f3, %f1, %f2;
+        add.s64         %rd11, %rd2, %rd7;
+        st.f32  [%rd11], %f3;
+        ret;
+
+}
+)***";
+
+  int const C0         = 1;
+  int const C1         = 2;
+  int const C2         = 3;
+  float const S0       = 4;
+  auto const EXPR      = S0 * (C0 + C1 + C2);
+  auto const data_type = cudf::data_type(cudf::type_to_id<float>());
+
+  cudf::test::fixed_width_column_wrapper<int> c0{C0, C0, C0, C0};
+  cudf::test::fixed_width_column_wrapper<int> c1{C1, C1, C1, C1};
+  cudf::test::fixed_width_column_wrapper<int> c2{C2, C2, C2, C2};
+  cudf::test::fixed_width_column_wrapper<float> s0{S0};
+  cudf::test::fixed_width_column_wrapper<float> expr{EXPR, EXPR, EXPR, EXPR};
+
+  std::vector<cudf::column_view> views{c0, c1, c2, s0};
+
+  auto result = cudf::transform(views, ptx_udf, data_type, true, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expr);
+}
+
 TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
 {
   // Add one day to timestamp in microseconds
 
   std::string const cuda =
     R"***(
-__device__ inline void f(int64_t i, cudf::timestamp_us* output, cudf::timestamp_us * input)
+__device__ inline void f(int64_t i, cudf::timestamp_us* output, cudf::timestamp_us const * input)
 {
   using dur = cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>;
   output[i] = static_cast<cudf::timestamp_us>(input[i] + dur{1});

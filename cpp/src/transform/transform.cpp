@@ -63,7 +63,7 @@ void transform_operation(mutable_column_view output,
 
     unsigned int arg = 0;
     arg_types.emplace(arg++, index_type);
-    arg_types.emplace(arg++, cudf::type_to_name(output.type()) + "* ");
+    arg_types.emplace(arg++, cudf::type_to_name(output.type()) + " * ");
     std::for_each(inputs.begin(), inputs.end(), [&arg, &arg_types](column_view const& input) {
       arg_types.emplace(arg++, cudf::type_to_name(input.type()) + " const * ");
     });
@@ -90,7 +90,7 @@ void transform_operation(mutable_column_view output,
   std::transform(device_data.begin(),
                  device_data.end(),
                  std::back_inserter(args),
-                 [](device_data_t& device_data) -> void* { return &device_data; });
+                 [](device_data_t& data) -> void* { return &data; });
 
   cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(

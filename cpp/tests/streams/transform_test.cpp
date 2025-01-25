@@ -45,8 +45,8 @@ TEST_F(TransformTest, Transform)
     R"***(
 __device__ inline void    fdsf   (
        int64_t i,
-       float* out,
-       float * in
+       float * out,
+       float const* in
 )
 {
   float const a = in[i];
@@ -68,19 +68,19 @@ __device__ inline void    fdsf   (
 .target sm_70
 .address_size 64
 
-.func _Z4fdsflPfS_(
-        .param .b64 _Z4fdsflPfS__param_0,
-        .param .b64 _Z4fdsflPfS__param_1,
-        .param .b64 _Z4fdsflPfS__param_2
+.func _Z4fdsflPfPKf(
+        .param .b64 _Z4fdsflPfPKf_param_0,
+        .param .b64 _Z4fdsflPfPKf_param_1,
+        .param .b64 _Z4fdsflPfPKf_param_2
 )
 {
         .reg .f32       %f<5>;
         .reg .b64       %rd<9>;
 
 
-        ld.param.u64    %rd1, [_Z4fdsflPfS__param_0];
-        ld.param.u64    %rd2, [_Z4fdsflPfS__param_1];
-        ld.param.u64    %rd3, [_Z4fdsflPfS__param_2];
+        ld.param.u64    %rd1, [_Z4fdsflPfPKf_param_0];
+        ld.param.u64    %rd2, [_Z4fdsflPfPKf_param_1];
+        ld.param.u64    %rd3, [_Z4fdsflPfPKf_param_2];
         cvta.to.global.u64      %rd4, %rd2;
         cvta.to.global.u64      %rd5, %rd3;
         shl.b64         %rd6, %rd1, 2;
@@ -99,10 +99,6 @@ __device__ inline void    fdsf   (
   auto data_init = [](cudf::size_type row) { return row % 3; };
   test_udf<float>(cuda, data_init, 500, false);
   test_udf<float>(ptx, data_init, 500, true);
-}
-
-TEST_F(TransformTest, DecimalAdd) {
-  // TODO(lamarrr): implement
 }
 
 TEST_F(TransformTest, ComputeColumn)
