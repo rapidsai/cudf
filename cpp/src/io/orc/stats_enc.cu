@@ -22,6 +22,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
+
 namespace cudf::io::orc::gpu {
 
 using strings::detail::fixed_point_string_size;
@@ -212,7 +214,7 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
 }
 
 // Splits a nanosecond timestamp into milliseconds and nanoseconds
-__device__ std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
+__device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
 {
   auto const ns           = cuda::std::chrono::nanoseconds(nano_count);
   auto const ms_floor     = cuda::std::chrono::floor<cuda::std::chrono::milliseconds>(ns);
