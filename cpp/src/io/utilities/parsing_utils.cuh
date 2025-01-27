@@ -30,7 +30,10 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/limits>
 #include <cuda/std/optional>
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
@@ -158,7 +161,7 @@ __device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escape
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, bool as_hex = false>
-constexpr uint8_t decode_digit(char c, bool* valid_flag)
+__device__ constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
   if constexpr (as_hex and std::is_integral_v<T>) {
@@ -210,9 +213,9 @@ CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__host__ __device__ cuda::std::optional<T> parse_numeric(char const* begin,
-                                                         char const* end,
-                                                         parse_options_view const& opts)
+CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
+                                                      char const* end,
+                                                      parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;
@@ -222,8 +225,8 @@ __host__ __device__ cuda::std::optional<T> parse_numeric(char const* begin,
   int32_t sign = (*begin == '-') ? -1 : 1;
 
   // Handle infinity
-  if (std::is_floating_point_v<T> && is_infinity(begin, end)) {
-    return sign * std::numeric_limits<T>::infinity();
+  if (cuda::std::is_floating_point_v<T> && is_infinity(begin, end)) {
+    return sign * cuda::std::numeric_limits<T>::infinity();
   }
   if (*begin == '-' || *begin == '+') begin++;
 
@@ -244,7 +247,7 @@ __host__ __device__ cuda::std::optional<T> parse_numeric(char const* begin,
     ++begin;
   }
 
-  if (std::is_floating_point_v<T>) {
+  if (cuda::std::is_floating_point_v<T>) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (begin < end) {
@@ -449,7 +452,7 @@ __inline__ __device__ It skip_character(It const& it, char ch)
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces_quotes(
   char const* begin, char const* end, char quotechar = '\0')
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
@@ -471,8 +474,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
-                                                                           char const* end)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                                 char const* end)
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
 
@@ -495,9 +498,9 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char 
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
-                                                                      char const* end,
-                                                                      char quotechar)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                            char const* end,
+                                                                            char quotechar)
 {
   if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
        *thrust::prev(end) == quotechar)) {
