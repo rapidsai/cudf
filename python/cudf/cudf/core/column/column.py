@@ -524,7 +524,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @classmethod
     def from_scalar(cls, slr: cudf.Scalar, size: int) -> Self:
         return cls.from_pylibcudf(
-            plc.Column.from_scalar(slr.device_value.c_value, size)
+            plc.Column.from_scalar(slr.device_value, size)
         )
 
     def data_array_view(
