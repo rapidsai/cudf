@@ -68,8 +68,7 @@ class Shuffle(IR):
     @classmethod
     def do_evaluate(cls, df: DataFrame):  # pragma: no cover
         """Evaluate and return a dataframe."""
-        # Single-partition logic is a no-op
-        return df
+        raise NotImplementedError("Shuffle.do_evaluate is not supported.")
 
 
 def _partition_dataframe(
@@ -169,7 +168,7 @@ def _(
     (child,) = ir.children
 
     new_child, pi = rec(child)
-    if ir.keys == pi[new_child].partitioned_on:
+    if pi[new_child].count == 1 or ir.keys == pi[new_child].partitioned_on:
         # Already shuffled
         return new_child, pi
     new_node = ir.reconstruct([new_child])
