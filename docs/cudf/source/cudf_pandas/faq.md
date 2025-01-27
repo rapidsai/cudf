@@ -156,7 +156,7 @@ else:
     print("The object is not a cudf.pandas proxy object.")
 ```
 
-There are various APIs to detect `Series`, `DataFrame`, `Index` and `ndarray`'s separately:
+There are APIs to detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately:
 
 * `is_cudf_pandas_series`: Detects if the object is a `cudf.pandas` proxy `Series`.
 * `is_cudf_pandas_dataframe`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
@@ -174,7 +174,7 @@ The following methods can be used to retrieve the actual `cudf` or `pandas` obje
 - `as_gpu_object()`: This method returns the `cudf` object from the proxy.
 - `as_cpu_object()`: This method returns the `pandas` object from the proxy.
 
-If, `as_gpu_object()` is called on a proxy array, it will return a `cupy` array and `as_cpu_object` will return a `numpy` array.
+If `as_gpu_object()` is called on a proxy array, it will return a `cupy` array and `as_cpu_object` will return a `numpy` array.
 
 Here is an example of how to use these methods:
 
