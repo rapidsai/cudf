@@ -13,6 +13,7 @@ import cudf
 from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
 from cudf.utils.dtypes import dtype_to_pylibcudf_type
@@ -267,7 +268,7 @@ def read_orc(
             # When `columns=[]`, index needs to be
             # established, but not the columns.
             nrows = tbl_w_meta.tbl.num_rows()
-            data = {}
+            ca = ColumnAccessor({})
             index = cudf.RangeIndex(nrows)
         else:
             names = tbl_w_meta.column_names(include_children=False)
@@ -367,8 +368,9 @@ def read_orc(
                     data.items(), child_name_values
                 )
             }
+            ca = ColumnAccessor(data, rangeindex=len(data) == 0)
 
-        return cudf.DataFrame._from_data(data, index=index)
+        return cudf.DataFrame._from_data(ca, index=index)
     else:
         from pyarrow import orc
 
