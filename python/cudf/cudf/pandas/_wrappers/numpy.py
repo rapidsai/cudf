@@ -178,5 +178,5 @@ _ndarray_flags = make_intermediate_proxy_type(
 )
 
 
-def is_cudf_pandas_nd_array(obj):
+def is_cudf_pandas_ndarray(obj):
     return is_proxy_object(obj) and isinstance(obj, ndarray)

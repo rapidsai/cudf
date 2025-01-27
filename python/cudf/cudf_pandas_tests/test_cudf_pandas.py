@@ -68,7 +68,7 @@ from pandas.tseries.holiday import (
 from cudf.pandas import (
     is_cudf_pandas_dataframe,
     is_cudf_pandas_index,
-    is_cudf_pandas_nd_array,
+    is_cudf_pandas_ndarray,
     is_cudf_pandas_obj,
     is_cudf_pandas_series,
 )
@@ -1913,7 +1913,7 @@ def test_is_cudf_pandas():
     assert is_cudf_pandas_series(s)
     assert is_cudf_pandas_dataframe(df)
     assert is_cudf_pandas_index(index)
-    assert is_cudf_pandas_nd_array(index.values)
+    assert is_cudf_pandas_ndarray(index.values)
 
     for obj in [s, df, index, index.values]:
         assert not is_cudf_pandas_obj(obj._fsproxy_slow)

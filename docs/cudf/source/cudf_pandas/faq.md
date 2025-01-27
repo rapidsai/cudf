@@ -161,7 +161,7 @@ There are APIs to detect `Series`, `DataFrame`, `Index`, and `ndarray` objects s
 * `is_cudf_pandas_series`: Detects if the object is a `cudf.pandas` proxy `Series`.
 * `is_cudf_pandas_dataframe`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
 * `is_cudf_pandas_index`: Detects if the object is a `cudf.pandas` proxy `Index`.
-* `is_cudf_pandas_nd_array`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
+* `is_cudf_pandas_ndarray`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
 
 ## How can I access the underlying GPU or CPU objects?
 
