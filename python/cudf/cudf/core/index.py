@@ -51,6 +51,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     find_common_type,
@@ -1725,12 +1726,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == cudf.dtype("object")
+                        if this.dtype == CUDF_STRING_DTYPE
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
+                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )

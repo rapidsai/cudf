@@ -287,13 +287,13 @@ class NumericalColumn(NumericalBaseColumn):
                     and tmp.dtype.kind != "b"
                 ):
                     if isinstance(tmp, NumericalColumn) and 0 in tmp:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
                     elif isinstance(tmp, cudf.Scalar):
                         if tmp.is_valid() and tmp == 0:
                             # tmp == 0 can return NA
-                            out_dtype = cudf.dtype("float64")
+                            out_dtype = np.dtype(np.float64)
                     elif is_scalar(tmp) and tmp == 0:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other.dtype.kind == "f":

@@ -616,7 +616,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
                 range(start, stop, stride),
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             )
             return self.take(gather_map)
 
@@ -696,7 +696,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             cudf.core.column.NumericalColumn,
             as_column(
                 rng,
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             ),
         )
 
@@ -1800,9 +1800,7 @@ def column_empty(
         children = (
             cudf.core.column.NumericalColumn(
                 data=as_buffer(
-                    rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype(SIZE_TYPE_DTYPE).itemsize
-                    )
+                    rmm.DeviceBuffer(size=row_count * SIZE_TYPE_DTYPE.itemsize)
                 ),
                 size=None,
                 dtype=SIZE_TYPE_DTYPE,
@@ -2267,7 +2265,7 @@ def as_column(
             and np.isnan(arbitrary)
         ):
             if dtype is None:
-                dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
+                dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
         arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
         if length == 0:
