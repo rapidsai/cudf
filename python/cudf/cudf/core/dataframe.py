@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
+from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -788,6 +789,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     label_dtype=label_dtype,
                     verify=False,
                 )
+            else:
+                self._data.rangeindex = True
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.DataFrame._from_data for constructing a DataFrame from "
@@ -1119,6 +1122,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        elif columns is None:
+            self._data.rangeindex = True
+
         self._data._level_names = (
             tuple(columns.names)
             if isinstance(columns, pd.Index)
@@ -5562,6 +5568,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif hasattr(dataframe, "__dataframe__"):
             # TODO: Probably should be handled in the constructor as
             # this isn't pandas specific
+            assert version.parse(cudf.__version__) < version.parse("25.04.00")
+            warnings.warn(
+                "Support for loading dataframes via the `__dataframe__` interchange "
+                "protocol is deprecated",
+                FutureWarning,
+            )
             return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
@@ -6402,7 +6414,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise NotImplementedError("Only axis=0 is currently supported.")
         length = len(self)
         return Series._from_column(
-            as_column([length - col.null_count for col in self._columns]),
+            as_column(
+                [
+                    length
+                    - (
+                        col.null_count
+                        + (
+                            col.nan_count
+                            if cudf.get_option("mode.pandas_compatible")
+                            else 0
+                        )
+                    )
+                    for col in self._columns
+                ]
+            ),
             index=cudf.Index(self._column_names),
         )
 
@@ -7709,6 +7734,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def __dataframe__(
         self, nan_as_null: bool = False, allow_copy: bool = True
     ):
+        assert version.parse(cudf.__version__) < version.parse("25.04.00")
+        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
         return df_protocol.__dataframe__(
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
@@ -8078,6 +8105,83 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result.index = MultiIndex._from_data(result.index._data)
         result.name = "proportion" if normalize else "count"
         return result
+
+    @_performance_tracking
+    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+        """
+        Convert this DataFrame to a pylibcudf.Table.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Table
+            A pylibcudf.Table referencing the same data.
+        dict
+            Dict of metadata (includes column names and dataframe indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"index": self.index, "columns": self._data.to_pandas_index}
+        return plc.Table(
+            [col.to_pylibcudf(mode="write") for col in self._columns]
+        ), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(cls, table: plc.Table, metadata: dict) -> Self:
+        """
+        Create a DataFrame from a pylibcudf.Table.
+
+        Parameters
+        ----------
+        table : pylibcudf.Table
+            The input Table.
+        metadata : dict
+            Metadata necessary to reconstruct the dataframe
+
+        Returns
+        -------
+        table : cudf.DataFrame
+            A cudf.DataFrame referencing the columns in the pylibcudf.Table.
+        metadata : list[str]
+            Dict of metadata (includes column names and dataframe indices)
+
+        Notes
+        -----
+        This function will generate a DataFrame which contains a tuple of columns
+        pointing to the same columns the input table points to.  It will directly access
+        the data and mask buffers of the pylibcudf columns, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Table.
+        """
+        if not (
+            isinstance(metadata, dict)
+            and 1 <= len(metadata) <= 2
+            and "columns" in metadata
+            and (len(metadata) != 2 or {"columns", "index"} == set(metadata))
+        ):
+            raise ValueError(
+                "Must at least pass metadata dict with column names and optionally indices only"
+            )
+        columns = table.columns()
+        df = cls._from_data(
+            {
+                name: cudf.core.column.ColumnBase.from_pylibcudf(
+                    col, data_ptr_exposed=True
+                )
+                for name, col in zip(metadata["columns"], columns)
+            },
+            index=metadata.get("index"),
+        )
+        return df
 
 
 def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
