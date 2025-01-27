@@ -19,7 +19,7 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 30000},
+        executor_options={"max_rows_per_partition": 4},
     )
 
 
@@ -63,4 +63,4 @@ def test_hash_shuffle(df, engine):
     # Check that Dask evaluation works
     result = evaluate_dask(qir3).to_polars()
     expect = df.collect(engine="cpu")
-    assert_frame_equal(result, expect, check_column_order=False)
+    assert_frame_equal(result, expect, check_row_order=False)
