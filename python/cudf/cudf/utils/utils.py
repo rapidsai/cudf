@@ -453,7 +453,7 @@ def _datetime_timedelta_find_and_replace(
     return result_col  # type: ignore
 
 
-def _extract_from_proxy(proxy, fast=True):
+def _extract_from_proxy(proxy: Any, fast: bool=True) -> tuple[Any, bool]:
     """
     Extract the object from a proxy object.
     """
