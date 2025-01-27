@@ -6,7 +6,7 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["verify-alpha-spec"]
+  skip: ["verify-alpha-spec", "nbqa-isort"]
   submodules: false
 
 repos:
@@ -164,7 +164,7 @@ repos:
           )
       - id: verify-alpha-spec
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.16.0
+    rev: v1.17.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
