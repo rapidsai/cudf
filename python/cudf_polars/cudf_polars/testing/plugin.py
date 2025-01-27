@@ -124,6 +124,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_csv-write_csv]": "Need to add include_file_path to IR",
     "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_parquet-write_parquet]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_csv-write_csv]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_ndjson-write_ndjson]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_ndjson-write_ndjson]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[read_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[<lambda>-write_csv]": "Need to add include_file_path to IR",
