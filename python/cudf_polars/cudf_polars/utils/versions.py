@@ -12,7 +12,6 @@ from polars import __version__
 
 POLARS_VERSION = parse(__version__)
 
-POLARS_VERSION_LT_119 = POLARS_VERSION < parse("1.19")
 POLARS_VERSION_LT_120 = POLARS_VERSION < parse("1.20")
 
 

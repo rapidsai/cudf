@@ -1290,25 +1290,27 @@ class Join(IR):
                 lg, rg = cls._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
-            if coalesce and how == "Inner":
-                right = right.discard_columns(right_on.column_names_set)
+            if coalesce:
+                if how == "Full":
+                    # In this case, keys must be column references,
+                    # possibly with dtype casting. We should use them in
+                    # preference to the columns from the original tables.
+                    left = left.with_columns(left_on.columns, replace_only=True)
+                    right = right.with_columns(right_on.columns, replace_only=True)
+                else:
+                    right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
             right = DataFrame.from_table(
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
-            if coalesce and how != "Inner":
+            if coalesce and how == "Full":
                 left = left.with_columns(
                     (
                         Column(
-                            plc.replace.replace_nulls(
-                                left_col.obj,
-                                right_col.astype(left_col.obj.type()).obj
-                                if left_col.obj.type().id() != right_col.obj.type().id()
-                                else right_col.obj,
-                            ),
-                            name=left_col.name or right_col.name,
+                            plc.replace.replace_nulls(left_col.obj, right_col.obj),
+                            name=left_col.name,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),

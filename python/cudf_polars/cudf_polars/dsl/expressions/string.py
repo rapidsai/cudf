@@ -41,7 +41,7 @@ class StringFunction(Expr):
         ConcatHorizontal = auto()
         ConcatVertical = auto()
         Contains = auto()
-        ContainsMany = auto()
+        ContainsAny = auto()
         CountMatches = auto()
         EndsWith = auto()
         EscapeRegex = auto()
