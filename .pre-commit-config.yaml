@@ -1,34 +1,36 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+
+ci:
+  autofix_commit_msg: "[pre-commit.ci] auto code formatting"
+  autofix_prs: false
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: quarterly
+  skip: ["verify-alpha-spec", "nbqa-isort"]
+  submodules: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        # Use the config file specific to each subproject so that each
-        # project can specify its own first/third-party packages.
-        args: ["--config-root=python/", "--resolve-all-configs"]
-        files: python/.*
-        types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.0
+    rev: v0.16.6
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.3.0'
+    rev: 'v1.13.0'
     hooks:
       - id: mypy
         additional_dependencies: [types-cachetools]
@@ -36,10 +38,11 @@ repos:
                "python/cudf/cudf",
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
+               "python/cudf_polars/cudf_polars",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.7.1
+    rev: 1.9.1
     hooks:
       - id: nbqa-isort
         # Use the cudf_kafka isort orderings in notebooks so that dask
@@ -51,12 +54,20 @@ repos:
       - id: clang-format
         types_or: [c, c++, cuda]
         args: ["-fallback-style=none", "-style=file", "-i"]
+        exclude: |
+          (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
+            ^cpp/include/cudf_test/cxxopts.hpp
+          )
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.6.3
+    rev: 0.6.7
     hooks:
       - id: fix-smartquotes
         exclude: |
           (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
             ^cpp/include/cudf_test/cxxopts.hpp|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
             ^python/cudf/cudf/tests/text/test_text_methods.py
@@ -82,6 +93,16 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: no-unseeded-default-rng
+        name: no-unseeded-default-rng
+        description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
+        entry: |
+          # Check for usage of default_rng without seeding
+          default_rng\(\)|
+          # Check for usage of np.random.seed (NPY002 only disallows this being called)
+          np.random.seed
+        language: pygrep
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -93,6 +114,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: cmake-lint
         name: cmake-lint
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -104,6 +129,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
@@ -113,7 +142,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+    rev: v2.3.0
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -123,26 +152,31 @@ repos:
             .*test.*|
             ^CHANGELOG.md$
           )
-  - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.8.0
-    hooks:
-      - id: rapids-dependency-file-generator
-        args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.4
+    rev: v0.8.0
     hooks:
       - id: ruff
+        args: ["--fix"]
         files: python/.*$
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.0.3
+    rev: v0.4.0
     hooks:
       - id: verify-copyright
         exclude: |
-          (?x)
-              cpp/include/cudf_test/cxxopts[.]hpp$
-
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp$|
+            cpp/src/io/parquet/ipc/Message_generated[.]h$|
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
+      - id: verify-alpha-spec
+  - repo: https://github.com/rapidsai/dependency-file-generator
+    rev: v1.17.0
+    hooks:
+      - id: rapids-dependency-file-generator
+        args: ["--clean"]
 
 default_language_version:
       python: python3

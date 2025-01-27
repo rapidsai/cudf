@@ -19,13 +19,16 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/label_bins.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -110,7 +113,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& left_edges,
                                    column_view const& right_edges,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   auto output = make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
@@ -176,7 +179,7 @@ struct bin_type_dispatcher {
     column_view const& right_edges,
     inclusive right_inclusive,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
       return label_bins<T, thrust::less_equal<T>, thrust::less_equal<T>>(
@@ -204,11 +207,13 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE()
-  CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
-               "The input and edge columns must have the same types.");
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
+    "The input and edge columns must have the same types.",
+    cudf::data_type_error);
   CUDF_EXPECTS(left_edges.size() == right_edges.size(),
                "The left and right edge columns must be of the same length.");
   CUDF_EXPECTS(!left_edges.has_nulls() && !right_edges.has_nulls(),
@@ -237,7 +242,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::label_bins(

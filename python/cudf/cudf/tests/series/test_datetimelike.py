@@ -1,13 +1,15 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+import datetime
 import os
+import zoneinfo
 
 import pandas as pd
 import pytest
 
 import cudf
 from cudf import date_range
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def _get_all_zones():
@@ -55,7 +57,7 @@ def test_localize_ambiguous(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(
             condition=(zone_name == "America/Metlakatla"),
-            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",  # noqa: E501
+            reason="https://www.timeanddate.com/news/time/metlakatla-quits-dst.html",
         )
     )
     s = cudf.Series(
@@ -70,7 +72,7 @@ def test_localize_ambiguous(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -81,7 +83,7 @@ def test_localize_nonexistent(request, unit, zone_name):
     request.applymarker(
         pytest.mark.xfail(
             condition=(zone_name == "America/Grand_Turk"),
-            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",  # noqa: E501
+            reason="https://www.worldtimezone.com/dst_news/dst_news_turkscaicos03.html",
         )
     )
     s = cudf.Series(
@@ -96,7 +98,7 @@ def test_localize_nonexistent(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -130,6 +132,9 @@ def test_delocalize_naive():
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
+    from_tz = zoneinfo.ZoneInfo(from_tz)
+    if to_tz is not None:
+        to_tz = zoneinfo.ZoneInfo(to_tz)
     ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
@@ -169,6 +174,8 @@ def test_convert_from_naive():
     ],
 )
 def test_convert_edge_cases(data, original_timezone, target_timezone):
+    original_timezone = zoneinfo.ZoneInfo(original_timezone)
+    target_timezone = zoneinfo.ZoneInfo(target_timezone)
     ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
         original_timezone
     )
@@ -218,3 +225,66 @@ def test_contains_tz_aware(item, expected):
     dti = cudf.date_range("2020", periods=2, freq="D").tz_localize("UTC")
     result = item in dti
     assert result == expected
+
+
+def test_tz_convert_naive_typeerror():
+    with pytest.raises(TypeError):
+        cudf.date_range("2020", periods=2, freq="D").tz_convert(None)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz = zoneinfo.ZoneInfo("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware_unsupported(klass):
+    tz = datetime.timezone(datetime.timedelta(hours=1))
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_pandas_compatible_non_zoneinfo_raises(klass):
+    pytz = pytest.importorskip("pytz")
+    tz = pytz.timezone("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pandas_obj)
+
+
+def test_astype_naive_to_aware_raises():
+    ser = cudf.Series([datetime.datetime(2020, 1, 1)])
+    with pytest.raises(TypeError):
+        ser.astype("datetime64[ns, UTC]")
+    with pytest.raises(TypeError):
+        ser.to_pandas().astype("datetime64[ns, UTC]")
+
+
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_astype_aware_to_aware(unit):
+    ser = cudf.Series(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    )
+    result = ser.astype(f"datetime64[{unit}, US/Pacific]")
+    expected = ser.to_pandas().astype(f"datetime64[{unit}, US/Pacific]")
+    zoneinfo_type = pd.DatetimeTZDtype(
+        expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
+    )
+    expected = ser.astype(zoneinfo_type)
+    assert_eq(result, expected)

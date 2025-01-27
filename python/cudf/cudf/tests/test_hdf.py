@@ -8,14 +8,15 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES
 
 pytest.importorskip("tables")
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = set(NUMERIC_TYPES + ["datetime64[ns]"] + ["bool"]) - set(
+    types = set([*NUMERIC_TYPES, "datetime64[ns]", "bool"]) - set(
         UNSIGNED_TYPES
     )
     typer = {"col_" + val: val for val in types}

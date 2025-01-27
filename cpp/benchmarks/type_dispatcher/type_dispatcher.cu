@@ -60,13 +60,15 @@ constexpr int block_size = 256;
 template <FunctorType functor_type, class T>
 CUDF_KERNEL void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
 {
-  using F               = Functor<T, functor_type>;
-  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
-  while (index < n_rows) {
+  using F           = Functor<T, functor_type>;
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  while (tidx < n_rows) {
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (int c = 0; c < n_cols; c++) {
       A[c][index] = F::f(A[c][index]);
     }
-    index += blockDim.x * gridDim.x;
+    tidx += stride;
   }
 }
 
@@ -74,12 +76,14 @@ CUDF_KERNEL void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size
 template <FunctorType functor_type, class T>
 CUDF_KERNEL void host_dispatching_kernel(cudf::mutable_column_device_view source_column)
 {
-  using F               = Functor<T, functor_type>;
-  T* A                  = source_column.data<T>();
-  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
-  while (index < source_column.size()) {
-    A[index] = F::f(A[index]);
-    index += blockDim.x * gridDim.x;
+  using F           = Functor<T, functor_type>;
+  T* A              = source_column.data<T>();
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  while (tidx < source_column.size()) {
+    auto const index = static_cast<cudf::size_type>(tidx);
+    A[index]         = F::f(A[index]);
+    tidx += stride;
   }
 }
 
@@ -127,14 +131,15 @@ template <FunctorType functor_type>
 CUDF_KERNEL void device_dispatching_kernel(cudf::mutable_table_device_view source)
 {
   cudf::size_type const n_rows = source.num_rows();
-  cudf::size_type index        = threadIdx.x + blockIdx.x * blockDim.x;
-
-  while (index < n_rows) {
+  auto tidx                    = cudf::detail::grid_1d::global_thread_id();
+  auto const stride            = cudf::detail::grid_1d::grid_stride();
+  while (tidx < n_rows) {
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (cudf::size_type i = 0; i < source.num_columns(); i++) {
       cudf::type_dispatcher(
         source.column(i).type(), RowHandle<functor_type>{}, source.column(i), index);
     }
-    index += blockDim.x * gridDim.x;
+    tidx += stride;
   }  // while
 }
 

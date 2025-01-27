@@ -18,13 +18,20 @@
 
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/types.hpp>
 
 #include <rmm/device_uvector.hpp>
 
-using cudf::io::io_type;
+// IO types supported in the benchmarks
+enum class io_type {
+  FILEPATH,       // Input/output are both files
+  HOST_BUFFER,    // Input/output are both host buffers (pageable)
+  PINNED_BUFFER,  // Input is a pinned host buffer, output is a host buffer (pageable)
+  DEVICE_BUFFER,  // Input is a device buffer, output is a host buffer (pageable)
+  VOID
+};
 
 std::string random_file_in_dir(std::string const& dir_path);
 
@@ -39,6 +46,10 @@ class cuio_source_sink_pair {
     // delete the temporary file
     std::remove(file_name.c_str());
   }
+  // move constructor
+  cuio_source_sink_pair(cuio_source_sink_pair&& ss)            = default;
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) = default;
+
   /**
    * @brief Created a source info of the set type
    *
@@ -68,6 +79,7 @@ class cuio_source_sink_pair {
 
   io_type const type;
   std::vector<char> h_buffer;
+  cudf::detail::host_vector<char> pinned_buffer;
   rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
   std::unique_ptr<cudf::io::data_sink> void_sink;
@@ -140,7 +152,7 @@ void try_drop_l3_cache();
  *
  * @return The io_type enum value
  */
-cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
+io_type retrieve_io_type_enum(std::string_view io_string);
 
 /**
  * @brief Convert a string to the corresponding compression_type enum value.

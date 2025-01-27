@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -48,20 +47,20 @@ struct serialized_column {
       null_count(_null_count),
       data_offset(_data_offset),
       null_mask_offset(_null_mask_offset),
-      num_children(_num_children),
-      pad(0)
+      num_children(_num_children)
+
   {
   }
 
   data_type type;
-  size_type size;
-  size_type null_count;
-  int64_t data_offset;       // offset into contiguous data buffer, or -1 if column data is null
-  int64_t null_mask_offset;  // offset into contiguous data buffer, or -1 if column data is null
-  size_type num_children;
+  size_type size{};
+  size_type null_count{};
+  int64_t data_offset{};       // offset into contiguous data buffer, or -1 if column data is null
+  int64_t null_mask_offset{};  // offset into contiguous data buffer, or -1 if column data is null
+  size_type num_children{};
   // Explicitly pad to avoid uninitialized padding bits, allowing `serialized_column` to be bit-wise
   // comparable
-  int pad;
+  int pad{};
 };
 
 /**
@@ -137,6 +136,34 @@ void build_column_metadata(metadata_builder& mb,
     });
 }
 
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
+{
+  // gpu data can be null if everything is empty but the metadata must always be valid
+  CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
+  auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
+  uint8_t const* base_ptr = gpu_data;
+  // first entry is a stub where size == the total # of top level columns (see pack_metadata above)
+  auto const num_columns = serialized_columns[0].size;
+  size_t current_index   = 1;
+
+  std::function<std::vector<column_view>(size_type)> get_columns;
+  get_columns = [&serialized_columns, &current_index, base_ptr, &get_columns](size_t num_columns) {
+    std::vector<column_view> cols;
+    for (size_t i = 0; i < num_columns; i++) {
+      auto serial_column = serialized_columns[current_index];
+      current_index++;
+
+      std::vector<column_view> const children = get_columns(serial_column.num_children);
+
+      cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
+    }
+
+    return cols;
+  };
+
+  return table_view{get_columns(num_columns)};
+}
+
 }  // anonymous namespace
 
 /**
@@ -144,7 +171,7 @@ void build_column_metadata(metadata_builder& mb,
  */
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
 {
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
@@ -180,7 +207,7 @@ class metadata_builder_impl {
       col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
   }
 
-  std::vector<uint8_t> build() const
+  [[nodiscard]] std::vector<uint8_t> build() const
   {
     auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
     std::memcpy(output.data(), metadata.data(), output.size());
@@ -197,37 +224,6 @@ class metadata_builder_impl {
  private:
   std::vector<detail::serialized_column> metadata;
 };
-
-/**
- * @copydoc cudf::detail::unpack
- */
-table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
-{
-  // gpu data can be null if everything is empty but the metadata must always be valid
-  CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
-  auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
-  uint8_t const* base_ptr = gpu_data;
-  // first entry is a stub where size == the total # of top level columns (see pack_metadata above)
-  auto const num_columns = serialized_columns[0].size;
-  size_t current_index   = 1;
-
-  std::function<std::vector<column_view>(size_type)> get_columns;
-  get_columns = [&serialized_columns, &current_index, base_ptr, &get_columns](size_t num_columns) {
-    std::vector<column_view> cols;
-    for (size_t i = 0; i < num_columns; i++) {
-      auto serial_column = serialized_columns[current_index];
-      current_index++;
-
-      std::vector<column_view> children = get_columns(serial_column.num_children);
-
-      cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
-    }
-
-    return cols;
-  };
-
-  return table_view{get_columns(num_columns)};
-}
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
   : impl(std::make_unique<metadata_builder_impl>(num_root_columns +
@@ -260,10 +256,12 @@ void metadata_builder::clear() { return impl->clear(); }
 /**
  * @copydoc cudf::pack
  */
-packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
+packed_columns pack(cudf::table_view const& input,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, cudf::get_default_stream(), mr);
+  return detail::pack(input, stream, mr);
 }
 
 /**
@@ -280,9 +278,6 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
   return detail::pack_metadata(table, contiguous_buffer, buffer_size, builder);
 }
 
-/**
- * @copydoc cudf::unpack
- */
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
@@ -292,9 +287,6 @@ table_view unpack(packed_columns const& input)
                             reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 
-/**
- * @copydoc cudf::unpack(uint8_t const*, uint8_t const* )
- */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   CUDF_FUNC_RANGE();

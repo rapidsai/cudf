@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,14 @@
 
 #include "parquet.hpp"
 
+#include <cudf/utilities/export.hpp>
+
 #include <algorithm>
 #include <cstddef>
-#include <optional>
-#include <string>
 #include <utility>
-#include <vector>
 
-namespace cudf::io::parquet::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::parquet::detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -108,6 +108,10 @@ class CompactProtocolReader {
   void read(IntType* t);
   void read(RowGroup* r);
   void read(ColumnChunk* c);
+  void read(BloomFilterAlgorithm* bf);
+  void read(BloomFilterHash* bf);
+  void read(BloomFilterCompression* bf);
+  void read(BloomFilterHeader* bf);
   void read(ColumnChunkMetaData* c);
   void read(PageHeader* p);
   void read(DataPageHeader* d);
@@ -120,6 +124,8 @@ class CompactProtocolReader {
   void read(ColumnIndex* c);
   void read(Statistics* s);
   void read(ColumnOrder* c);
+  void read(PageEncodingStats* s);
+  void read(SortingColumn* s);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -147,4 +153,5 @@ class CompactProtocolReader {
   friend class parquet_field_struct_blob;
 };
 
-}  // namespace cudf::io::parquet::detail
+}  // namespace io::parquet::detail
+}  // namespace CUDF_EXPORT cudf

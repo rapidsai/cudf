@@ -93,7 +93,7 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
   auto resource      = create_memory_resource(mr_name);
-  rmm::mr::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource(resource.get());
 
   auto const csv_file   = std::string{argv[1]};
   auto const csv_result = [csv_file] {

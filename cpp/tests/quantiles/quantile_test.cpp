@@ -22,7 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/quantiles.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <limits>
@@ -413,7 +412,7 @@ TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 TYPED_TEST(QuantileTest, TestEmpty)
 {
   auto input    = cudf::test::fixed_width_column_wrapper<TypeParam>({});
-  auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {0, 0});
+  auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {false, false});
   auto actual   = cudf::quantile(input, {0.5, 0.25});
 }
 

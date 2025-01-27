@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
@@ -10,7 +10,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 if not os.environ.get("RUN_HDFS_TESTS"):
     pytestmark = pytest.mark.skip("Env not configured to run HDFS tests")

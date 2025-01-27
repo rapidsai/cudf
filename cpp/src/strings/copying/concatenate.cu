@@ -16,7 +16,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -24,9 +26,9 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/advance.h>
@@ -78,7 +80,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
-  auto input_offsets = std::vector<size_t>(views.size() + 1);
+  auto input_offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
   auto offset_it     = std::next(input_offsets.begin());
   thrust::transform(
     thrust::host, views.begin(), views.end(), offset_it, [](auto const& col) -> size_t {
@@ -86,7 +88,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
   auto d_input_offsets = cudf::detail::make_device_uvector_async(
-    input_offsets, stream, rmm::mr::get_current_device_resource());
+    input_offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column
@@ -122,8 +124,8 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   bitmask_type* output_mask,
   size_type* out_valid_count)
 {
-  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type warp_valid_count           = 0;
+  auto output_index          = cudf::detail::grid_1d::global_thread_id();
+  size_type warp_valid_count = 0;
 
   unsigned active_mask;
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
@@ -155,7 +157,7 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
       warp_valid_count += __popc(new_word);
     }
 
-    output_index += blockDim.x * gridDim.x;
+    output_index += cudf::detail::grid_1d::grid_stride();
     if (Nullable) { active_mask = __ballot_sync(active_mask, output_index < output_size); }
   }
 
@@ -177,7 +179,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
                                                        size_type const output_size,
                                                        char* output_data)
 {
-  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  auto output_index = cudf::detail::grid_1d::global_thread_id();
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
@@ -197,13 +199,13 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
     auto const first_char     = input_offsets_data[input_view.offset()];
     output_data[output_index] = input_chars_data[offset_index + first_char];
 
-    output_index += blockDim.x * gridDim.x;
+    output_index += cudf::detail::grid_1d::grid_stride();
   }
 }
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Compute output sizes
@@ -241,7 +243,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   }
 
   {  // Copy offsets columns with single kernel launch
-    rmm::device_scalar<size_type> d_valid_count(0, stream);
+    cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
 
     constexpr size_type block_size{256};
     cudf::detail::grid_1d config(offsets_count, block_size);
@@ -264,15 +266,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     // Use a heuristic to guess when the fused kernel will be faster than memcpy
     if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
       // Use single kernel launch to copy chars columns
-      constexpr size_type block_size{256};
-      cudf::detail::grid_1d config(total_bytes, block_size);
-      auto const kernel = fused_concatenate_string_chars_kernel;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        d_views,
-        d_partition_offsets.data(),
-        static_cast<size_type>(columns.size()),
-        total_bytes,
-        d_new_chars);
+      constexpr size_t block_size{256};
+      // cudf::detail::grid_1d limited to size_type elements
+      auto const num_blocks = util::div_rounding_up_safe(total_bytes, block_size);
+      auto const kernel     = fused_concatenate_string_chars_kernel;
+      kernel<<<num_blocks, block_size, 0, stream.value()>>>(d_views,
+                                                            d_partition_offsets.data(),
+                                                            static_cast<size_type>(columns.size()),
+                                                            total_bytes,
+                                                            d_new_chars);
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {

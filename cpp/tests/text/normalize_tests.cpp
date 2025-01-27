@@ -20,7 +20,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/normalize.hpp>
@@ -79,7 +78,7 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 
 TEST_F(TextNormalizeTest, AllNullStrings)
 {
-  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {false, false, false});
   cudf::strings_column_view strings_view(strings);
   auto results = nvtext::normalize_spaces(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
@@ -89,10 +88,10 @@ TEST_F(TextNormalizeTest, AllNullStrings)
 
 TEST_F(TextNormalizeTest, SomeNullStrings)
 {
-  cudf::test::strings_column_wrapper strings({"", ".", "a"}, {0, 1, 1});
+  cudf::test::strings_column_wrapper strings({"", ".", "a"}, {false, true, true});
   cudf::strings_column_view strings_view(strings);
   auto results = nvtext::normalize_characters(strings_view, false);
-  cudf::test::strings_column_wrapper expected({"", " . ", "a"}, {0, 1, 1});
+  cudf::test::strings_column_wrapper expected({"", " . ", "a"}, {false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

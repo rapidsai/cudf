@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #ifndef __CUDA_ARCH__
 #include <cudf/utilities/error.hpp>
@@ -30,12 +31,14 @@
 #include <thrust/execution_policy.h>
 #endif
 
+#include <cuda/std/utility>
+
 #include <algorithm>
 
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 namespace detail {
 
@@ -74,8 +77,8 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
  * @param pos Character position to count to
  * @return The number of bytes and the left over non-counted position value
  */
-__device__ inline std::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
-                                                                              size_type pos)
+__device__ inline cuda::std::pair<size_type, size_type> bytes_to_character_position(
+  string_view d_str, size_type pos)
 {
   size_type bytes    = 0;
   auto ptr           = d_str.data();
@@ -98,7 +101,7 @@ __device__ inline std::pair<size_type, size_type> bytes_to_character_position(st
  * values. Also, this char pointer serves as valid device pointer of identity
  * value for minimum operator on string values.
  */
-static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};  // NOLINT
 }  // namespace detail
 }  // namespace strings
 
@@ -110,7 +113,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  *
  * @return An empty string
  */
-CUDF_HOST_DEVICE inline string_view string_view::min() { return string_view(); }
+CUDF_HOST_DEVICE inline string_view string_view::min() { return {}; }
 
 /**
  * @brief Return maximum value associated with the string type
@@ -130,7 +133,7 @@ CUDF_HOST_DEVICE inline string_view string_view::max()
   CUDF_CUDA_TRY(
     cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
 #endif
-  return string_view(psentinel, 4);
+  return {psentinel, 4};
 }
 
 __device__ inline size_type string_view::length() const
@@ -190,9 +193,14 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
 {
-  if (byte_pos > 0)
-    while (strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[--byte_pos])) == 0)
-      ;
+  if (byte_pos > 0) {
+    if (byte_pos == char_pos) {
+      --byte_pos;
+    } else {
+      while (strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[--byte_pos])) == 0)
+        ;
+    }
+  }
   --char_pos;
   return *this;
 }
@@ -277,14 +285,11 @@ __device__ inline size_type string_view::const_iterator::position() const { retu
 
 __device__ inline size_type string_view::const_iterator::byte_offset() const { return byte_pos; }
 
-__device__ inline string_view::const_iterator string_view::begin() const
-{
-  return const_iterator(*this, 0, 0);
-}
+__device__ inline string_view::const_iterator string_view::begin() const { return {*this, 0, 0}; }
 
 __device__ inline string_view::const_iterator string_view::end() const
 {
-  return const_iterator(*this, length(), size_bytes());
+  return {*this, length(), size_bytes()};
 }
 // @endcond
 
@@ -300,7 +305,7 @@ __device__ inline char_utf8 string_view::operator[](size_type pos) const
 __device__ inline size_type string_view::byte_offset(size_type pos) const
 {
   if (length() == size_bytes()) return pos;
-  return std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
+  return cuda::std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
 }
 
 __device__ inline int string_view::compare(string_view const& in) const
@@ -370,24 +375,23 @@ __device__ inline size_type string_view::find_impl(char const* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  auto const nchars = length();
-  if (!str || pos < 0 || pos > nchars) return npos;
-  if (count < 0) count = nchars;
+  if (!str || pos < 0) { return npos; }
+  if (pos > 0 && pos > length()) { return npos; }
 
   // use iterator to help reduce character/byte counting
-  auto itr        = begin() + pos;
+  auto const itr  = begin() + pos;
   auto const spos = itr.byte_offset();
-  auto const epos = ((pos + count) < nchars) ? (itr + count).byte_offset() : size_bytes();
+  auto const epos =
+    (count >= 0) && ((pos + count) < length()) ? (itr + count).byte_offset() : size_bytes();
 
   auto const find_length = (epos - spos) - bytes + 1;
+  auto const d_target    = string_view{str, bytes};
 
   auto ptr = data() + (forward ? spos : (epos - bytes));
   for (size_type idx = 0; idx < find_length; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
-      match = (ptr[jdx] == str[jdx]);
+    if (d_target.compare(ptr, bytes) == 0) {
+      return forward ? pos : character_offset(epos - bytes - idx);
     }
-    if (match) { return forward ? pos : character_offset(epos - bytes - idx); }
     // use pos to record the current find position
     pos += strings::detail::is_begin_utf8_char(*ptr);
     forward ? ++ptr : --ptr;
@@ -405,7 +409,7 @@ __device__ inline size_type string_view::find(char const* str,
 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
 {
-  char str[sizeof(char_utf8)];
+  char str[sizeof(char_utf8)];  // NOLINT
   size_type chwidth = strings::detail::from_char_utf8(chr, str);
   return find(str, chwidth, pos, count);
 }
@@ -427,7 +431,7 @@ __device__ inline size_type string_view::rfind(char const* str,
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
 {
-  char str[sizeof(char_utf8)];
+  char str[sizeof(char_utf8)];  // NOLINT
   size_type chwidth = strings::detail::from_char_utf8(chr, str);
   return rfind(str, chwidth, pos, count);
 }
@@ -439,7 +443,7 @@ __device__ inline string_view string_view::substr(size_type pos, size_type count
   auto const itr  = begin() + pos;
   auto const spos = itr.byte_offset();
   auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
-  return string_view(data() + spos, epos - spos);
+  return {data() + spos, epos - spos};
 }
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
@@ -448,4 +452,4 @@ __device__ inline size_type string_view::character_offset(size_type bytepos) con
   return strings::detail::characters_in_string(data(), bytepos);
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

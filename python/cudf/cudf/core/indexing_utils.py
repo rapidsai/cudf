@@ -1,19 +1,12 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple, Union
-
-from typing_extensions import TypeAlias
+from typing import Any, TypeAlias
 
 import cudf
-from cudf.api.types import (
-    _is_scalar_or_zero_d_array,
-    is_bool_dtype,
-    is_integer,
-    is_integer_dtype,
-)
+from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
 from cudf.core.copy_types import BooleanMask, GatherMap
 
 
@@ -51,15 +44,15 @@ class ScalarIndexer:
     key: GatherMap
 
 
-IndexingSpec: TypeAlias = Union[
-    EmptyIndexer, MapIndexer, MaskIndexer, ScalarIndexer, SliceIndexer
-]
+IndexingSpec: TypeAlias = (
+    EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
+)
 
-ColumnLabels: TypeAlias = List[str]
+ColumnLabels: TypeAlias = list[str]
 
 
 def destructure_iloc_key(
-    key: Any, frame: Union[cudf.Series, cudf.DataFrame]
+    key: Any, frame: cudf.Series | cudf.DataFrame
 ) -> tuple[Any, ...]:
     """
     Destructure a potentially tuple-typed key into row and column indexers.
@@ -124,7 +117,7 @@ def destructure_iloc_key(
 
 def destructure_dataframe_iloc_indexer(
     key: Any, frame: cudf.DataFrame
-) -> Tuple[Any, Tuple[bool, ColumnLabels]]:
+) -> tuple[Any, tuple[bool, ColumnLabels]]:
     """Destructure an index key for DataFrame iloc getitem.
 
     Parameters
@@ -157,10 +150,6 @@ def destructure_dataframe_iloc_indexer(
         column_names: ColumnLabels = list(
             frame._data.get_labels_by_index(cols)
         )
-        if len(set(column_names)) != len(column_names):
-            raise NotImplementedError(
-                "cudf DataFrames do not support repeated column names"
-            )
     except TypeError:
         raise TypeError(
             "Column indices must be integers, slices, "
@@ -229,12 +218,12 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
     else:
         key = cudf.core.column.as_column(key)
         if isinstance(key, cudf.core.column.CategoricalColumn):
-            key = key.as_numerical_column(key.codes.dtype)
-        if is_bool_dtype(key.dtype):
+            key = key.astype(key.codes.dtype)
+        if key.dtype.kind == "b":
             return MaskIndexer(BooleanMask(key, n))
         elif len(key) == 0:
             return EmptyIndexer()
-        elif is_integer_dtype(key.dtype):
+        elif key.dtype.kind in "iu":
             return MapIndexer(GatherMap(key, n, nullify=False))
         else:
             raise TypeError(

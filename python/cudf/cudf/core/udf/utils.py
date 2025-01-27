@@ -1,14 +1,15 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import functools
 import os
-from typing import Any, Callable, Dict
+from typing import TYPE_CHECKING, Any
 
 import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
-from cuda import cudart
+from cuda.bindings import runtime
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
@@ -19,6 +20,7 @@ from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 import rmm
 
 from cudf._lib import strings_udf
+from cudf._lib.column import Column
 from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
@@ -38,8 +40,16 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import initfunc
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import pylibcudf as plc
+
+    from cudf.core.buffer.buffer import Buffer
+    from cudf.core.indexed_frame import IndexedFrame
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
@@ -58,7 +68,7 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-launch_arg_getters: Dict[Any, Any] = {}
+launch_arg_getters: dict[Any, Any] = {}
 
 
 @functools.cache
@@ -71,7 +81,7 @@ def _ptx_file():
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -123,25 +133,23 @@ def _get_udf_return_type(argty, func: Callable, args=()):
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: col.dtype
-        if str(col.dtype) in supported_types
-        else np.dtype("O")
-        for colname, col in frame._data.items()
+        colname: dtype if str(dtype) in supported_types else np.dtype("O")
+        for colname, dtype in frame._dtypes
     }
 
 
 def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: col.dtype
-        for colname, col in frame._data.items()
-        if str(col.dtype) in supported_types
+        colname: dtype
+        for colname, dtype in frame._dtypes
+        if str(dtype) in supported_types
     }
 
 
 def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
-        for colname, col in frame._data.items()
+        for colname, col in frame._column_labels_and_values
         if str(col.dtype) in supported_types
     }
 
@@ -228,14 +236,14 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
         *cudautils.make_cache_key(
             func, tuple(_all_dtypes_from_frame(frame).values())
         ),
-        *(col.mask is None for col in frame._data.values()),
-        *frame._data.keys(),
+        *(col.mask is None for col in frame._columns),
+        *frame._column_names,
         scalar_argtypes,
         suffix,
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _compile_or_get(
     frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
 ):
@@ -296,12 +304,14 @@ def _get_kernel(kernel_string, globals_, sig, func):
     return kernel
 
 
-def _get_input_args_from_frame(fr):
-    args = []
+def _get_input_args_from_frame(fr: IndexedFrame) -> list:
+    args: list[Buffer | tuple[Buffer, Buffer]] = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
         if col.dtype == _cudf_str_dtype:
-            data = column_to_string_view_array_init_heap(col)
+            data = column_to_string_view_array_init_heap(
+                col.to_pylibcudf(mode="read")
+            )
         else:
             data = col.data
         if col.mask is not None:
@@ -325,7 +335,9 @@ def _return_arr_from_dtype(dtype, size):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return strings_udf.column_from_managed_udf_string_array(col, memsys)
+        return Column.from_pylibcudf(
+            strings_udf.column_from_managed_udf_string_array(col, memsys)
+        )
     return as_column(col, retty)
 
 
@@ -356,8 +368,8 @@ def set_malloc_heap_size(size=None):
     if size is None:
         size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
     if size != _heap_size:
-        (ret,) = cudart.cudaDeviceSetLimit(
-            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        (ret,) = runtime.cudaDeviceSetLimit(
+            runtime.cudaLimit.cudaLimitMallocHeapSize, size
         )
         if ret.value != 0:
             raise RuntimeError("Unable to set cudaMalloc heap size")
@@ -365,7 +377,7 @@ def set_malloc_heap_size(size=None):
         _heap_size = size
 
 
-def column_to_string_view_array_init_heap(col):
+def column_to_string_view_array_init_heap(col: plc.Column) -> Buffer:
     # lazily allocate heap only when a string needs to be returned
     return strings_udf.column_to_string_view_array(col)
 

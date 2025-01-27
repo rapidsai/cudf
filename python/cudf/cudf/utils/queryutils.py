@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import ast
 import datetime
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from numba import cuda
@@ -63,7 +64,7 @@ def query_parser(text):
     Returns
     -------
     info: a `dict` of the parsed info
-    """  # noqa
+    """
     # convert any '@' to
     text = text.replace("@", ENVREF_PREFIX)
     tree = ast.parse(text)
@@ -114,7 +115,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache: Dict[Any, Any] = {}
+_cache: dict[Any, Any] = {}
 
 
 def query_compile(expr):
@@ -209,7 +210,6 @@ def query_execute(df, expr, callenv):
         Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
         They represent the arg, local and global dictionaries of the caller.
     """
-
     # compile
     compiled = query_compile(expr)
     columns = compiled["colnames"]
@@ -246,9 +246,9 @@ def query_execute(df, expr, callenv):
 
     # allocate output buffer
     nrows = len(df)
-    out = column_empty(nrows, dtype=np.bool_)
+    out = column_empty(nrows, dtype=np.bool_, for_numba=True)
     # run kernel
-    args = [out] + colarrays + envargs
+    args = [out, *colarrays, *envargs]
     with _CUDFNumbaConfig():
         kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)

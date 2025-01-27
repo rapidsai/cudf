@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 
 
 def assert_resample_results_equal(lhs, rhs, **kwargs):
@@ -49,8 +50,9 @@ def test_series_upsample_simple():
 
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_ffill(rule):
-    rng = pd.date_range("1/1/2012", periods=10, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    date_idx = pd.date_range("1/1/2012", periods=10, freq="5s")
+    rng = np.random.default_rng(seed=0)
+    ts = pd.Series(rng.integers(0, 500, len(date_idx)), index=date_idx)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).ffill(), gts.resample(rule).ffill()
@@ -59,8 +61,9 @@ def test_series_resample_ffill(rule):
 
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_bfill(rule):
-    rng = pd.date_range("1/1/2012", periods=10, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    date_idx = pd.date_range("1/1/2012", periods=10, freq="5s")
+    rng = np.random.default_rng(seed=0)
+    ts = pd.Series(rng.integers(0, 500, len(date_idx)), index=date_idx)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).bfill(), gts.resample(rule).bfill()
@@ -69,8 +72,9 @@ def test_series_resample_bfill(rule):
 
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_asfreq(rule):
-    rng = pd.date_range("1/1/2012", periods=100, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    date_range = pd.date_range("1/1/2012", periods=100, freq="5s")
+    rng = np.random.default_rng(seed=0)
+    ts = pd.Series(rng.integers(0, 500, len(date_range)), index=date_range)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).asfreq(), gts.resample(rule).asfreq()
@@ -78,8 +82,9 @@ def test_series_resample_asfreq(rule):
 
 
 def test_dataframe_resample_aggregation_simple():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
-        np.random.randn(1000, 3),
+        rng.standard_normal(size=(1000, 3)),
         index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
@@ -90,8 +95,9 @@ def test_dataframe_resample_aggregation_simple():
 
 
 def test_dataframe_resample_multiagg():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
-        np.random.randn(1000, 3),
+        rng.standard_normal(size=(1000, 3)),
         index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
@@ -103,10 +109,11 @@ def test_dataframe_resample_multiagg():
 
 
 def test_dataframe_resample_on():
+    rng = np.random.default_rng(seed=0)
     # test resampling on a specified column
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(1000),
+            "x": rng.standard_normal(size=(1000)),
             "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
@@ -118,15 +125,16 @@ def test_dataframe_resample_on():
 
 
 def test_dataframe_resample_level():
+    rng = np.random.default_rng(seed=0)
     # test resampling on a specific level of a MultIndex
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(1000),
+            "x": rng.standard_normal(size=1000),
             "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
     pdi = pd.MultiIndex.from_frame(pdf)
-    pdf = pd.DataFrame({"a": np.random.randn(1000)}, index=pdi)
+    pdf = pd.DataFrame({"a": rng.standard_normal(size=1000)}, index=pdi)
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
         pdf.resample("3min", level="y").mean(),
@@ -147,12 +155,17 @@ def test_dataframe_resample_level():
         ("10D", "1D", "s"),
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
+    rng = np.random.default_rng(seed=0)
     # test that we cast to the appropriate frequency
     # when resampling:
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(100),
+            "x": rng.standard_normal(size=100),
             "y": pd.date_range("1/1/2012", freq=in_freq, periods=100),
         }
     )
@@ -162,3 +175,21 @@ def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
     assert_resample_results_equal(expect, got)
 
     assert got.index.dtype == np.dtype(f"datetime64[{out_freq}]")
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_resampling_downsampling_ms():
+    pdf = pd.DataFrame(
+        {
+            "time": pd.date_range("2020-01-01", periods=5, freq="1ns"),
+            "sign": range(5),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expected = pdf.resample("10ms", on="time").mean()
+    result = gdf.resample("10ms", on="time").mean()
+    result.index = result.index.astype("datetime64[ns]")
+    assert_eq(result, expected, check_freq=False)

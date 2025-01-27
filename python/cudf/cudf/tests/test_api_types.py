@@ -33,7 +33,6 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -42,7 +41,6 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -61,7 +59,6 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -142,7 +139,6 @@ def test_is_categorical_dtype(obj, expect):
         (np.float64, True),
         (np.complex128, True),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -151,7 +147,6 @@ def test_is_categorical_dtype(obj, expect):
         (np.float64(), True),
         (np.complex128(), True),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -170,7 +165,6 @@ def test_is_categorical_dtype(obj, expect):
         (np.array([], dtype=np.float64), True),
         (np.array([], dtype=np.complex128), True),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -247,7 +241,6 @@ def test_is_numeric_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -256,7 +249,6 @@ def test_is_numeric_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -275,7 +267,6 @@ def test_is_numeric_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -352,7 +343,6 @@ def test_is_integer_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -361,7 +351,6 @@ def test_is_integer_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -380,7 +369,6 @@ def test_is_integer_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -458,7 +446,6 @@ def test_is_integer(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, True),
-        (np.unicode_, True),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -467,7 +454,6 @@ def test_is_integer(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), True),
-        (np.unicode_(), True),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -486,7 +472,6 @@ def test_is_integer(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), True),
-        (np.array([], dtype=np.unicode_), True),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         # (np.array([], dtype=object), False),
@@ -577,7 +562,6 @@ def test_is_string_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, True),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -586,7 +570,6 @@ def test_is_string_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), True),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -605,7 +588,6 @@ def test_is_string_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), True),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -682,7 +664,6 @@ def test_is_datetime_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -691,7 +672,6 @@ def test_is_datetime_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -710,7 +690,6 @@ def test_is_datetime_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -787,7 +766,6 @@ def test_is_list_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -796,7 +774,6 @@ def test_is_list_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -815,7 +792,6 @@ def test_is_list_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -895,7 +871,6 @@ def test_is_struct_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -904,7 +879,6 @@ def test_is_struct_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -923,7 +897,6 @@ def test_is_struct_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
@@ -1004,7 +977,6 @@ def test_is_decimal_dtype(obj, expect):
         np.float64,
         np.complex128,
         np.str_,
-        np.unicode_,
         np.datetime64,
         np.timedelta64,
         # NumPy scalars.
@@ -1013,7 +985,6 @@ def test_is_decimal_dtype(obj, expect):
         np.float64(),
         np.complex128(),
         np.str_(),
-        np.unicode_(),
         np.datetime64(),
         np.timedelta64(),
         # NumPy dtype objects.
@@ -1032,7 +1003,6 @@ def test_is_decimal_dtype(obj, expect):
         np.array([], dtype=np.float64),
         np.array([], dtype=np.complex128),
         np.array([], dtype=np.str_),
-        np.array([], dtype=np.unicode_),
         np.array([], dtype=np.datetime64),
         np.array([], dtype=np.timedelta64),
         np.array([], dtype=object),
@@ -1088,7 +1058,6 @@ def test_pandas_agreement(obj):
         np.float64,
         np.complex128,
         np.str_,
-        np.unicode_,
         np.datetime64,
         np.timedelta64,
         # NumPy scalars.
@@ -1097,7 +1066,6 @@ def test_pandas_agreement(obj):
         np.float64(),
         np.complex128(),
         np.str_(),
-        np.unicode_(),
         np.datetime64(),
         np.timedelta64(),
         # NumPy dtype objects.
@@ -1116,7 +1084,6 @@ def test_pandas_agreement(obj):
         np.array([], dtype=np.float64),
         np.array([], dtype=np.complex128),
         np.array([], dtype=np.str_),
-        np.array([], dtype=np.unicode_),
         np.array([], dtype=np.datetime64),
         np.array([], dtype=np.timedelta64),
         np.array([], dtype=object),

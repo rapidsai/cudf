@@ -16,10 +16,14 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
+#include <rmm/resource_ref.hpp>
+
 #include <cub/block/block_scan.cuh>
 #include <cuda/atomic>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 namespace detail {
@@ -81,7 +85,7 @@ struct scan_tile_state {
 
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr)
+                  rmm::device_async_resource_ref mr)
     : tile_status(rmm::device_uvector<cuda::atomic<scan_tile_status, cuda::thread_scope_device>>(
         num_tiles, stream, mr)),
       tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),
@@ -145,4 +149,4 @@ struct scan_tile_state_callback {
 }  // namespace detail
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

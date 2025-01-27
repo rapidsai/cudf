@@ -137,6 +137,7 @@ Computations / descriptive stats
    DataFrame.describe
    DataFrame.diff
    DataFrame.eval
+   DataFrame.ewm
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
@@ -279,3 +280,5 @@ Serialization / IO / conversion
    DataFrame.to_string
    DataFrame.values
    DataFrame.values_host
+   DataFrame.to_pylibcudf
+   DataFrame.from_pylibcudf

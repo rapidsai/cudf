@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -374,7 +374,7 @@ TEST_F(groupby_cache_test, duplicate_agggregations)
   cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = vals;
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
@@ -403,10 +403,10 @@ TEST_F(groupby_cache_test, duplicate_columns)
   cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = vals;
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[1].values = vals;
   requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 

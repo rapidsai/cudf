@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -15,9 +15,8 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import ORCWriter
-from cudf.testing import assert_frame_equal
+from cudf.testing import assert_eq, assert_frame_equal
 from cudf.testing._utils import (
-    assert_eq,
     expect_warning_if,
     gen_rand_series,
     supported_numpy_dtypes,
@@ -185,25 +184,25 @@ def test_orc_read_statistics(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     # Check numberOfValues
-    assert_eq(file_statistics[0]["int1"]["number_of_values"], 11_000)
+    assert_eq(file_statistics[0]["int1"].number_of_values, 11_000)
     assert_eq(
-        file_statistics[0]["int1"]["number_of_values"],
+        file_statistics[0]["int1"].number_of_values,
         sum(
             [
-                stripes_statistics[0]["int1"]["number_of_values"],
-                stripes_statistics[1]["int1"]["number_of_values"],
-                stripes_statistics[2]["int1"]["number_of_values"],
+                stripes_statistics[0]["int1"].number_of_values,
+                stripes_statistics[1]["int1"].number_of_values,
+                stripes_statistics[2]["int1"].number_of_values,
             ]
         ),
     )
     assert_eq(
-        stripes_statistics[1]["int1"]["number_of_values"],
-        stripes_statistics[1]["string1"]["number_of_values"],
+        stripes_statistics[1]["int1"].number_of_values,
+        stripes_statistics[1]["string1"].number_of_values,
     )
-    assert_eq(stripes_statistics[2]["string1"]["number_of_values"], 1_000)
+    assert_eq(stripes_statistics[2]["string1"].number_of_values, 1_000)
 
     # Check other statistics
-    assert_eq(stripes_statistics[2]["string1"]["has_null"], False)
+    assert_eq(stripes_statistics[2]["string1"].has_null, False)
     assert_eq(
         file_statistics[0]["int1"]["minimum"],
         min(
@@ -607,7 +606,7 @@ def normalized_equals(value1, value2):
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 100000:
@@ -682,8 +681,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    np.random.seed(0)
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 200000:
@@ -705,6 +703,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
+                seed=0,
             )
             for dtype in supported_stat_types
         }
@@ -846,7 +845,6 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 
 def test_orc_bool_encode_fail():
-    np.random.seed(0)
     buffer = BytesIO()
 
     # Generate a boolean column longer than a single row group
@@ -928,7 +926,6 @@ def test_empty_string_columns(data):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_orc_writer_decimal(tmpdir, scale, decimal_type):
-    np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
@@ -989,7 +986,7 @@ def test_orc_string_stream_offset_issue():
 
 def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -1000,12 +997,12 @@ def generate_list_struct_buff(size=100_000):
                 [
                     [
                         [
-                            rd.choice([None, np.random.randint(1, 3)])
-                            for _ in range(np.random.randint(1, 3))
+                            rd.choice([None, rng.integers(1, 3)])
+                            for _ in range(rng.integers(1, 3))
                         ]
-                        for _ in range(np.random.randint(0, 3))
+                        for _ in range(rng.integers(0, 3))
                     ]
-                    for _ in range(np.random.randint(0, 3))
+                    for _ in range(rng.integers(0, 3))
                 ],
             ]
         )
@@ -1013,8 +1010,8 @@ def generate_list_struct_buff(size=100_000):
     ]
     lvl1_list = [
         [
-            rd.choice([None, np.random.randint(0, 3)])
-            for _ in range(np.random.randint(1, 4))
+            rd.choice([None, rng.integers(0, 3)])
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1022,7 +1019,7 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": np.random.randint(0, 3), "b": np.random.randint(0, 3)},
+                {"a": rng.integers(0, 3), "b": rng.integers(0, 3)},
             ]
         )
         for _ in range(size)
@@ -1031,11 +1028,11 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": rd.choice([None, np.random.randint(0, 3)])},
+                {"a": rd.choice([None, rng.integers(0, 3)])},
                 {
                     "lvl1_struct": {
-                        "c": rd.choice([None, np.random.randint(0, 3)]),
-                        "d": np.random.randint(0, 3),
+                        "c": rd.choice([None, rng.integers(0, 3)]),
+                        "d": rng.integers(0, 3),
                     },
                 },
             ]
@@ -1045,7 +1042,7 @@ def generate_list_struct_buff(size=100_000):
     list_nests_struct = [
         [
             {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
-            for _ in range(np.random.randint(1, 4))
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1136,7 +1133,7 @@ def gen_map_buff(size):
     from pyarrow import orc
 
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -1147,7 +1144,7 @@ def gen_map_buff(size):
                     None,
                     {
                         rd.choice(al): rd.choice(
-                            [None, np.random.randint(1, 1500)]
+                            [None, rng.integers(1, 1500)]
                         ),
                     },
                 ]
@@ -1168,7 +1165,7 @@ def gen_map_buff(size):
                                     None,
                                     [
                                         rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         )
                                         for _ in range(5)
                                     ],
@@ -1195,10 +1192,10 @@ def gen_map_buff(size):
                                     None,
                                     {
                                         "a": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                         "b": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                     },
                                 ]
@@ -1539,8 +1536,8 @@ def test_empty_statistics():
     for stats in got:
         # Similar expected stats for the first 6 columns in this case
         for col_name in ascii_lowercase[:6]:
-            assert stats[0][col_name].get("number_of_values") == 0
-            assert stats[0][col_name].get("has_null") is True
+            assert stats[0][col_name].number_of_values == 0
+            assert stats[0][col_name].has_null is True
             assert stats[0][col_name].get("minimum") is None
             assert stats[0][col_name].get("maximum") is None
         for col_name in ascii_lowercase[:3]:
@@ -1548,17 +1545,17 @@ def test_empty_statistics():
         # Sum for decimal column is a string
         assert stats[0]["d"].get("sum") == "0"
 
-        assert stats[0]["g"].get("number_of_values") == 0
-        assert stats[0]["g"].get("has_null") is True
+        assert stats[0]["g"].number_of_values == 0
+        assert stats[0]["g"].has_null is True
         assert stats[0]["g"].get("true_count") == 0
         assert stats[0]["g"].get("false_count") == 0
 
-        assert stats[0]["h"].get("number_of_values") == 0
-        assert stats[0]["h"].get("has_null") is True
+        assert stats[0]["h"].number_of_values == 0
+        assert stats[0]["h"].has_null is True
         assert stats[0]["h"].get("sum") == 0
 
-        assert stats[0]["i"].get("number_of_values") == 1
-        assert stats[0]["i"].get("has_null") is False
+        assert stats[0]["i"].number_of_values == 1
+        assert stats[0]["i"].has_null is False
         assert stats[0]["i"].get("minimum") == 1
         assert stats[0]["i"].get("maximum") == 1
         assert stats[0]["i"].get("sum") == 1
@@ -1680,7 +1677,13 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     "columns",
     [
         None,
-        [],
+        pytest.param(
+            [],
+            marks=pytest.mark.skipif(
+                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+                reason="Bug in older version of pandas",
+            ),
+        ),
     ],
 )
 def test_orc_columns_and_index_param(index_obj, index, columns):
@@ -1833,6 +1836,9 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     )
 
 
+@pytest.mark.skip(
+    reason="Bug specific to rockylinux8: https://github.com/rapidsai/cudf/issues/15802",
+)
 def test_orc_reader_apache_negative_timestamp(datadir):
     path = datadir / "TestOrcFile.apache_timestamp.orc"
 
@@ -1951,3 +1957,44 @@ def test_writer_lz4():
 
     got = pd.read_orc(buffer)
     assert_eq(gdf, got)
+
+
+def test_row_group_alignment(datadir):
+    path = datadir / "TestOrcFile.MapManyNulls.parquet"
+
+    expected = cudf.read_parquet(path)
+
+    buffer = BytesIO()
+    expected.to_orc(buffer)
+
+    got = cudf.read_orc(buffer)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "inputfile",
+    [
+        # These sample data have a single column my_timestamp of the TIMESTAMP type,
+        # 2660 rows, and 1536 rows per row group.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+        # These two data are the same with the above, except that every 100 rows start
+        # with a null value.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.hasNull.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.hasNull.orc",
+    ],
+)
+def test_orc_reader_desynced_timestamp(datadir, inputfile):
+    # Test a special case where the DATA stream (second) in a TIMESTAMP column
+    # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
+    # group. In this case, the "run cache manager" in the decoder kernel is used to
+    # orchestrate the dual-stream processing.
+    # For more information, see https://github.com/rapidsai/cudf/issues/17155.
+
+    path = datadir / inputfile
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_frame_equal(cudf.from_pandas(expect), got)

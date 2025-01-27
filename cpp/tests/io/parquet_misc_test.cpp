@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/transform.hpp>
+
+#include <array>
 
 ////////////////////////////////
 // delta encoding writer tests
@@ -96,7 +96,7 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
   // list<T>
   constexpr int vals_per_row = 4;
   auto c1_offset_iter        = cudf::detail::make_counting_transform_iterator(
-    0, [vals_per_row](cudf::size_type idx) { return idx * vals_per_row; });
+    0, [](cudf::size_type idx) { return idx * vals_per_row; });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
                                                                      c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<T> c1_vals(
@@ -225,10 +225,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  cudf::io::parquet::detail::BoundaryOrder expected_orders[] = {
-    cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
-    cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
-    cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
+  std::array expected_orders{cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
+                             cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
+                             cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto const ci = read_column_index(source, columns[i]);
@@ -269,6 +268,7 @@ TEST_P(ParquetCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(ParquetCompressionTest,
                         ParquetCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));

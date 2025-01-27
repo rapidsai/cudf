@@ -51,7 +51,7 @@ struct alignas(16) base_normalator {
    */
   CUDF_HOST_DEVICE inline Derived& operator++()
   {
-    Derived& derived = static_cast<Derived&>(*this);
+    auto& derived = static_cast<Derived&>(*this);
     derived.p_ += width_;
     return derived;
   }
@@ -71,7 +71,7 @@ struct alignas(16) base_normalator {
    */
   CUDF_HOST_DEVICE inline Derived& operator--()
   {
-    Derived& derived = static_cast<Derived&>(*this);
+    auto& derived = static_cast<Derived&>(*this);
     derived.p_ -= width_;
     return derived;
   }
@@ -91,7 +91,7 @@ struct alignas(16) base_normalator {
    */
   CUDF_HOST_DEVICE inline Derived& operator+=(difference_type offset)
   {
-    Derived& derived = static_cast<Derived&>(*this);
+    auto& derived = static_cast<Derived&>(*this);
     derived.p_ += offset * width_;
     return derived;
   }
@@ -121,7 +121,7 @@ struct alignas(16) base_normalator {
    */
   CUDF_HOST_DEVICE inline Derived& operator-=(difference_type offset)
   {
-    Derived& derived = static_cast<Derived&>(*this);
+    auto& derived = static_cast<Derived&>(*this);
     derived.p_ -= offset * width_;
     return derived;
   }

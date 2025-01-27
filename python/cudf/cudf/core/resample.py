@@ -13,24 +13,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
-import pickle
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
-import cudf._lib.labeling
-import cudf.core.index
-from cudf._typing import DataFrameOrSeries
+from cudf._lib.column import Column
+from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
     SeriesGroupBy,
     _Grouping,
 )
-from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
+
+if TYPE_CHECKING:
+    from cudf._typing import DataFrameOrSeries
 
 
 class _Resampler(GroupBy):
@@ -40,10 +45,12 @@ class _Resampler(GroupBy):
         by = _ResampleGrouping(obj, by)
         super().__init__(obj, by=by)
 
-    def agg(self, func):
-        result = super().agg(func)
+    def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
+        result = super().agg(
+            func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
+        )
         if len(self.grouping.bin_labels) != len(result):
-            index = cudf.core.index.Index(
+            index = cudf.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
             return result._align_to_index(
@@ -90,21 +97,21 @@ class _Resampler(GroupBy):
         header, frames = super().serialize()
         grouping_head, grouping_frames = self.grouping.serialize()
         header["grouping"] = grouping_head
-        header["resampler_type"] = pickle.dumps(type(self))
+        header["resampler_type"] = type(self).__name__
         header["grouping_frames_count"] = len(grouping_frames)
         frames.extend(grouping_frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        obj_type = pickle.loads(header["obj_type"])
+        obj_type = Serializable._name_type_map[header["obj_type_name"]]
         obj = obj_type.deserialize(
             header["obj"], frames[: header["num_obj_frames"]]
         )
         grouping = _ResampleGrouping.deserialize(
             header["grouping"], frames[header["num_obj_frames"] :]
         )
-        resampler_cls = pickle.loads(header["resampler_type"])
+        resampler_cls = Serializable._name_type_map[header["resampler_type"]]
         out = resampler_cls.__new__(resampler_cls)
         out.grouping = grouping
         super().__init__(out, obj, by=grouping)
@@ -120,7 +127,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-    bin_labels: cudf.core.index.Index
+    bin_labels: cudf.Index
 
     def __init__(self, obj, by=None, level=None):
         self._freq = getattr(by, "freq", None)
@@ -140,7 +147,9 @@ class _ResampleGrouping(_Grouping):
     def keys(self):
         index = super().keys
         if self._freq is not None and isinstance(index, cudf.DatetimeIndex):
-            return cudf.DatetimeIndex._from_data(index._data, freq=self._freq)
+            return cudf.DatetimeIndex._from_column(
+                index._column, name=index.name, freq=self._freq
+            )
         return index
 
     def serialize(self):
@@ -154,8 +163,8 @@ class _ResampleGrouping(_Grouping):
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
-        _named_columns = pickle.loads(header["_named_columns"])
+        names = header["names"]
+        _named_columns = header["_named_columns"]
         key_columns = cudf.core.column.deserialize_columns(
             header["columns"], frames[: -header["__bin_labels_count"]]
         )
@@ -163,7 +172,7 @@ class _ResampleGrouping(_Grouping):
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
-        out.bin_labels = cudf.core.index.Index.deserialize(
+        out.bin_labels = cudf.Index.deserialize(
             header["__bin_labels"], frames[-header["__bin_labels_count"] :]
         )
         out._freq = header["_freq"]
@@ -247,47 +256,52 @@ class _ResampleGrouping(_Grouping):
         # column to have the same dtype, so we compute a `result_type`
         # and cast them both to that type.
         try:
-            result_type = np.dtype(
-                _unit_dtype_map[_offset_alias_to_code[offset.name]]
-            )
-        except KeyError:
+            result_type = np.dtype(f"datetime64[{offset.rule_code}]")
+            # TODO: Ideally, we can avoid one cast by having `date_range`
+            # generate timestamps of a given dtype.  Currently, it can
+            # only generate timestamps with 'ns' precision
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
+        except TypeError:
             # unsupported resolution (we don't support resolutions >s)
             # fall back to using datetime64[s]
             result_type = np.dtype("datetime64[s]")
-
-        # TODO: Ideally, we can avoid one cast by having `date_range`
-        # generate timestamps of a given dtype.  Currently, it can
-        # only generate timestamps with 'ns' precision
-        key_column = key_column.astype(result_type)
-        bin_labels = bin_labels.astype(result_type)
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
-        bin_numbers = cudf._lib.labeling.label_bins(
-            key_column,
-            left_edges=bin_labels[:-1]._column,
-            left_inclusive=(closed == "left"),
-            right_edges=bin_labels[1:]._column,
-            right_inclusive=(closed == "right"),
-        )
+        with acquire_spill_lock():
+            plc_column = plc.labeling.label_bins(
+                cast_key_column.to_pylibcudf(mode="read"),
+                cast_bin_labels[:-1]._column.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if closed == "left"
+                else plc.labeling.Inclusive.NO,
+                cast_bin_labels[1:]._column.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if closed == "right"
+                else plc.labeling.Inclusive.NO,
+            )
+            bin_numbers = Column.from_pylibcudf(plc_column)
 
         if label == "right":
-            bin_labels = bin_labels[1:]
+            cast_bin_labels = cast_bin_labels[1:]
         else:
-            bin_labels = bin_labels[:-1]
+            cast_bin_labels = cast_bin_labels[:-1]
 
         # if we have more labels than bins, remove the extras labels:
         nbins = bin_numbers.max() + 1
-        if len(bin_labels) > nbins:
-            bin_labels = bin_labels[:nbins]
+        if len(cast_bin_labels) > nbins:
+            cast_bin_labels = cast_bin_labels[:nbins]
 
-        bin_labels.name = self.names[0]
-        self.bin_labels = bin_labels
+        cast_bin_labels.name = self.names[0]
+        self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [
-            bin_labels._gather(bin_numbers, check_bounds=False)._column.astype(
-                result_type
-            )
+            cast_bin_labels._gather(
+                bin_numbers, check_bounds=False
+            )._column.astype(result_type)
         ]
 
 

@@ -13,12 +13,14 @@ export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
 
-version=$(rapids-generate-version)
-
 rapids-logger "Begin cpp build"
 
+sccache --zero-stats
+
 # With boa installed conda build forward to boa
-RAPIDS_PACKAGE_VERSION=${version} rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry mambabuild \
     conda/recipes/libcudf
+
+sccache --show-adv-stats
 
 rapids-upload-conda-to-s3 cpp

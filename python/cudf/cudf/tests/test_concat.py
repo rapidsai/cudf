@@ -9,12 +9,10 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
@@ -32,6 +30,7 @@ def _hide_concat_empty_dtype_warning():
 
 
 def make_frames(index=None, nulls="none"):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "x": range(10),
@@ -53,7 +52,7 @@ def make_frames(index=None, nulls="none"):
         df2.y = np.full_like(df2.y, np.nan)
     if nulls == "some":
         mask = np.arange(10)
-        np.random.shuffle(mask)
+        rng.shuffle(mask)
         mask = mask[:5]
         df.loc[mask, "y"] = np.nan
         df2.loc[mask, "y"] = np.nan
@@ -205,10 +204,9 @@ def test_concat_misordered_columns():
 
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_concat_columns(axis):
-    pdf1 = pd.DataFrame(np.random.randint(10, size=(5, 3)), columns=[1, 2, 3])
-    pdf2 = pd.DataFrame(
-        np.random.randint(10, size=(5, 4)), columns=[4, 5, 6, 7]
-    )
+    rng = np.random.default_rng(seed=0)
+    pdf1 = pd.DataFrame(rng.integers(10, size=(5, 3)), columns=[1, 2, 3])
+    pdf2 = pd.DataFrame(rng.integers(10, size=(5, 4)), columns=[4, 5, 6, 7])
     gdf1 = cudf.from_pandas(pdf1)
     gdf2 = cudf.from_pandas(pdf2)
 
@@ -218,7 +216,8 @@ def test_concat_columns(axis):
     assert_eq(expect, got, check_index_type=True)
 
 
-def test_concat_multiindex_dataframe():
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_multiindex_dataframe(axis):
     gdf = cudf.DataFrame(
         {
             "w": np.arange(4),
@@ -233,14 +232,11 @@ def test_concat_multiindex_dataframe():
     pdg2 = pdg.iloc[:, 1:]
     gdg1 = cudf.from_pandas(pdg1)
     gdg2 = cudf.from_pandas(pdg2)
+    expected = pd.concat([pdg1, pdg2], axis=axis)
+    result = cudf.concat([gdg1, gdg2], axis=axis)
     assert_eq(
-        cudf.concat([gdg1, gdg2]).astype("float64"),
-        pd.concat([pdg1, pdg2]),
-        check_index_type=True,
-    )
-    assert_eq(
-        cudf.concat([gdg1, gdg2], axis=1),
-        pd.concat([pdg1, pdg2], axis=1),
+        expected,
+        result,
         check_index_type=True,
     )
 
@@ -456,45 +452,75 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        [
-            pd.Series([1, 2, 3.0, 1.2], name="abc"),
-            pd.DataFrame({"a": [1, 2]}),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+        pytest.param(
+            [
+                pd.Series([1, 2, 3.0, 1.2], name="abc"),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+                ),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+                ),
+                pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ]
+            * 7,
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
-            ),
-        ]
-        * 7,
+        ),
     ],
 )
 def test_concat_series_dataframe_input(objs):
@@ -599,7 +625,7 @@ def test_concat_series_dataframe_input_str(objs):
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_concat_empty_dataframes(df, other, ignore_index):
-    other_pd = [df] + other
+    other_pd = [df, *other]
 
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1198,7 +1224,7 @@ def test_concat_join_empty_dataframes(
     request, df, other, ignore_index, join, sort
 ):
     axis = 0
-    other_pd = [df] + other
+    other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
 
@@ -1286,7 +1312,7 @@ def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
 ):
     # no duplicate columns
-    other_pd = [df] + other
+    other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
 
@@ -1372,11 +1398,12 @@ def test_concat_single_object(ignore_index, typ):
     ],
 )
 def test_concat_decimal_dataframe(ltype, rtype):
+    rng = np.random.default_rng(seed=0)
     gdf1 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+        {"id": rng.integers(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
     )
     gdf2 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+        {"id": rng.integers(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
     )
 
     gdf1["val"] = gdf1["val"].astype(ltype)
@@ -1865,3 +1892,137 @@ def test_concat_mixed_list_types_error(s1, s2):
 
     with pytest.raises(NotImplementedError):
         cudf.concat([s1, s2], ignore_index=True)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        pytest.param(
+            0,
+            marks=pytest.mark.xfail(
+                reason="concat dictionaries with axis=0 not implemented"
+            ),
+        ),
+        1,
+        "columns",
+    ],
+)
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}})},
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
+            "third": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "C": [7, 8]}}),
+            "fourth": (cudf.DataFrame, {"data": {"B": [9, 10]}}),
+        },
+        pytest.param(
+            {
+                "first": (cudf.DataFrame, {"data": {2.0: [1, 1]}}),
+                "second": (cudf.DataFrame, {"data": {"test": ["abc", "def"]}}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": (cudf.Series, {"data": [1, 2, 3]}),
+            "second": (cudf.Series, {"data": [4, 5, 6]}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.Series, {"data": [5, 6], "name": "C"}),
+        },
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [1, 2], "C": [3, 4]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {"D": [5, 6], ("A", "B"): [7, 8]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [3, 4], 2.0: [1, 1]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {("C", "D"): [3, 4], 3.0: [5, 6]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [1, 2], (3, 4): [3, 4]}},
+            ),
+            "second": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [5, 6], (5, 6): [7, 8]}},
+            ),
+        },
+    ],
+)
+def test_concat_dictionary(d, axis):
+    _dict = {k: c(**v) for k, (c, v) in d.items()}
+    result = cudf.concat(_dict, axis=axis)
+    expected = cudf.from_pandas(
+        pd.concat({k: df.to_pandas() for k, df in _dict.items()}, axis=axis)
+    )
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": cudf.Index([1, 2, 3])},
+        {
+            "first": cudf.MultiIndex(
+                levels=[[1, 2], ["blue", "red"]],
+                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            )
+        },
+        {"first": cudf.CategoricalIndex([1, 2, 3])},
+    ],
+)
+def test_concat_dict_incorrect_type_index(d):
+    with pytest.raises(
+        TypeError,
+        match="cannot concatenate a dictionary containing indices",
+    ):
+        cudf.concat(d, axis=1)

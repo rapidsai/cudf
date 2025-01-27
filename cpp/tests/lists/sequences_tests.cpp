@@ -17,11 +17,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/filling.hpp>
+#include <cudf/utilities/error.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -200,8 +200,8 @@ TEST_F(NumericSequencesTest, InvalidSizesInput)
   auto const steps  = IntsCol{};
   auto const sizes  = FWDCol<float>{};
 
-  EXPECT_THROW(cudf::lists::sequences(starts, sizes), cudf::logic_error);
-  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, sizes), cudf::data_type_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::data_type_error);
 }
 
 TEST_F(NumericSequencesTest, MismatchedColumnSizesInput)
@@ -220,7 +220,7 @@ TEST_F(NumericSequencesTest, MismatchedColumnTypesInput)
   auto const steps  = FWDCol<float>{1, 2, 3};
   auto const sizes  = IntsCol{1, 2, 3};
 
-  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::data_type_error);
 }
 
 TEST_F(NumericSequencesTest, InputHasNulls)

@@ -32,7 +32,7 @@ pandas. You can learn more about these edge cases in
 
 We also run nightly tests that track interactions between
 `cudf.pandas` and other third party libraries. See
-[Third-Party Library Compatibility](#does-it-work-with-third-party-libraries).
+[Third-Party Library Compatibility](#does-cudf-pandas-work-with-third-party-libraries).
 
 ## How can I tell if `cudf.pandas` is active?
 
@@ -53,7 +53,54 @@ print(pd)
 <module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
 ```
 
-## Does it work with third-party libraries?
+## Which functions will run on the GPU?
+
+Generally, `cudf.pandas` will accelerate all the features in the
+{ref}`cuDF API <cudf-api>` on the GPU. There are some exceptions. For
+example, some functions are GPU-accelerated by cuDF but do not support
+every combination of keyword arguments. In cases like unsupported
+keyword arguments, cuDF is not able to provide GPU acceleration and
+`cudf.pandas` will fall back to the CPU.
+
+The most accurate way to assess which functions run on the GPU is to try
+running the code while using the `cudf.pandas` [profiling
+features](cudf-pandas-profiling). The profiler will indicate which functions
+ran on GPU / CPU. To improve performance, try to use only functionality that
+can run entirely on GPU.  This helps reduce the number of memory transfers
+needed to fallback to CPU.
+
+## How can I improve performance of my workflow with `cudf.pandas`?
+
+Most workflows will see significant performance improvements with
+`cudf.pandas`. However, sometimes things can be slower than expected.
+First, it's important to note that GPUs are good at parallel processing
+of large amounts of data. Small data sizes may be slower on GPU than
+CPU, because of the cost of data transfers. cuDF achieves the highest
+performance with many rows of data. As a _very rough_ rule of thumb,
+`cudf.pandas` shines on workflows with more than 10,000 - 100,000 rows
+of data, depending on the algorithms, data types, and other factors.
+Datasets that are several gigabytes in size and/or have millions of
+rows are a great fit for `cudf.pandas`.
+
+Here are some more tips to improve workflow performance:
+
+- Reshape data so it is long rather than wide (more rows, fewer
+  columns). This improves cuDF's ability to execute in parallel on the
+  entire GPU!
+- Avoid element-wise iteration and mutation. If you can, use pandas
+  functions to manipulate an entire column at once rather than writing
+  raw `for` loops that compute and assign.
+- If your data is really an n-dimensional array with lots of columns
+  where you aim to do lots of math (like adding matrices),
+  [CuPy](https://cupy.dev/) or [NumPy](https://numpy.org/) may be a
+  better choice than pandas or `cudf.pandas`. Array libraries are built
+  for different use cases than DataFrame libraries, and will get optimal
+  performance from using contiguous memory for multidimensional array
+  storage. Use the `.values` method to convert a DataFrame or Series to
+  an array.
+
+(does-cudf-pandas-work-with-third-party-libraries)=
+## Does `cudf.pandas` work with third-party libraries?
 
 `cudf.pandas` is tested with numerous popular third-party libraries.
 `cudf.pandas` will not only work but will accelerate pandas operations
@@ -81,7 +128,7 @@ common interactions with the following Python libraries:
 Please review the section on [Known Limitations](#are-there-any-known-limitations)
 for details about what is expected not to work (and why).
 
-## Can I use this with Dask or PySpark?
+## Can I use `cudf.pandas` with Dask or PySpark?
 
 `cudf.pandas` is not designed for distributed or out-of-core computing
 (OOC) workflows today. If you are looking for accelerated OOC and
@@ -95,6 +142,7 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
+(are-there-any-known-limitations)=
 ## Are there any known limitations?
 
 There are a few known limitations that you should be aware of:
@@ -103,11 +151,6 @@ There are a few known limitations that you should be aware of:
   [value mutability](https://pandas.pydata.org/pandas-docs/stable/getting_started/overview.html#mutability-and-copying-of-data)
   of Pandas objects is not always guaranteed. You should follow the
   pandas recommendation to favor immutable operations.
-- `cudf.pandas` can't currently interface smoothly with functions that
-  interact with objects using a C API (such as the Python or NumPy C
-  API)
-  - For example, you can write `torch.tensor(df.values)` but not
-    `torch.from_numpy(df.values)`, as the latter uses the NumPy C API
 - For performance reasons, joins and join-based operations are not
   currently implemented to maintain the same row ordering as standard
   pandas
@@ -138,6 +181,32 @@ There are a few known limitations that you should be aware of:
    ```
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
+- In order for `cudf.pandas` to produce a proxy array that ducktypes as a NumPy
+  array, we create a proxy type that actually subclasses `numpy.ndarray`. We can
+  verify this with an isinstance check.
+
+  ```python
+  %load_ext cudf.pandas
+  import pandas as pd
+  import numpy as np
+
+  arr = pd.Series([1, 1, 2]).unique() # returns a proxy array
+  isinstance(arr, np.ndarray) # returns True, where arr is a proxy array
+  ```
+  Because the proxy type ducktypes as a NumPy array, NumPy functions may attempt to
+  access internal members, such as the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays), via the NumPy C API.
+  However, our proxy mechanism is designed to proxy function calls at the Python
+  level, which is incompatible with these types of accesses. To handle these
+  situations, we perform an eager device-to-host (DtoH) copy, which sets the data
+  buffer correctly but incurs the cost of extra time when creating the proxy array.
+  In the previous example, creating `arr` performed this kind of implicit DtoH transfer.
+
+  With this approach, we also get compatibility with third party libraries like `torch`.
+
+  ```python
+  import torch
+  x = torch.from_numpy(arr)
+  ```
 
 ## Can I force running on the CPU?
 
@@ -150,16 +219,4 @@ for testing or benchmarking purposes. To do so, set the
 
 ```bash
 CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
-```
-
-## Slow tab completion in IPython?
-
-You may experience slow tab completion when inspecting the
-methods/attributes of large dataframes. We expect this issue to be
-resolved in an upcoming release. In the mean time, you may execute the
-following command in IPython before loading `cudf.pandas` to work
-around the issue:
-
-```
-%config IPCompleter.jedi_compute_type_timeout=0
 ```

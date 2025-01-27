@@ -16,16 +16,17 @@
 
 #include "file_io_utilities.hpp"
 
-#include "io/utilities/config_utils.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-
-#include <rmm/device_buffer.hpp>
+#include <cudf/io/config_utils.hpp>
+#include <cudf/logger.hpp>
 
 #include <dlfcn.h>
-#include <errno.h>
-#include <string.h>
+#include <sys/stat.h>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <numeric>
@@ -33,13 +34,31 @@
 namespace cudf {
 namespace io {
 namespace detail {
+namespace {
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
+}
+
+[[nodiscard]] size_t get_file_size(int file_descriptor)
+{
+  struct stat st {};
+  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
+  return static_cast<size_t>(st.st_size);
+}
+
+}  // namespace
 
 void force_init_cuda_context()
 {
   // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
   // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
   // initialized.
-  cudaFree(0);
+  cudaFree(nullptr);
 }
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
@@ -55,24 +74,9 @@ void force_init_cuda_context()
     CUDF_EXPECTS(std::filesystem::exists(path), "Cannot open file; it does not exist");
   }
 
-  std::array<char, 1024> error_msg_buffer;
+  std::array<char, 1024> error_msg_buffer{};
   auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
   CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
-}
-
-[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
-{
-  auto const fd = open(filepath.c_str(), flags, mode);
-  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
-
-  return fd;
-}
-
-[[nodiscard]] size_t get_file_size(int file_descriptor)
-{
-  struct stat st;
-  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
-  return static_cast<size_t>(st.st_size);
 }
 
 file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
@@ -82,7 +86,7 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-#ifdef CUFILE_FOUND
+#ifdef CUDF_CUFILE_FOUND
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
@@ -98,7 +102,7 @@ class cufile_shim {
   decltype(cuFileDriverClose)* driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
-  auto is_valid() const noexcept { return init_error == nullptr; }
+  [[nodiscard]] auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
   cufile_shim(cufile_shim const&)            = delete;
@@ -108,7 +112,11 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    if (driver_close != nullptr) driver_close();
+    // Explicit cuFile driver close should not be performed here to avoid segfault. However, in the
+    // absence of driver_close(), cuFile will implicitly do that, which in most cases causes
+    // segfault anyway. TODO: Revisit this conundrum once cuFile is fixed.
+    // https://github.com/rapidsai/cudf/issues/17121
+
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 
@@ -121,7 +129,7 @@ class cufile_shim {
 void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-  static temp_directory tmp_config_dir{"cudf_cufile_config"};
+  static temp_directory const tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
   auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
@@ -221,7 +229,6 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
     // The benefit from multithreaded read plateaus around 16 threads
     pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
-  pool.sleep_duration = 10;
 }
 
 namespace {
@@ -230,14 +237,15 @@ template <typename DataT,
           typename F,
           typename ResultT = std::invoke_result_t<F, DataT*, size_t, size_t>>
 std::vector<std::future<ResultT>> make_sliced_tasks(
-  F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
+  F function, DataT* ptr, size_t offset, size_t size, BS::thread_pool& pool)
 {
   constexpr size_t default_max_slice_size = 4 * 1024 * 1024;
   static auto const max_slice_size = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_size);
   auto const slices                = make_file_io_slices(size, max_slice_size);
   std::vector<std::future<ResultT>> slice_tasks;
   std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
-    return pool.submit(function, ptr + slice.offset, slice.size, offset + slice.offset);
+    return pool.submit_task(
+      [=] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
   });
   return slice_tasks;
 }
@@ -249,7 +257,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   uint8_t* dst,
                                                   rmm::cuda_stream_view stream)
 {
-  int device;
+  int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto read_slice = [device, gds_read = shim->read, file_handle = cf_file.handle()](
@@ -281,7 +289,7 @@ cufile_output_impl::cufile_output_impl(std::string const& filepath)
 
 std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
 {
-  int device;
+  int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto write_slice = [device, gds_write = shim->write, file_handle = cf_file.handle()](

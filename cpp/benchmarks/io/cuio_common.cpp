@@ -17,7 +17,10 @@
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include <unistd.h>
 
@@ -27,6 +30,14 @@
 #include <string>
 
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
+
+// Don't use cudf's pinned pool for the source data
+rmm::host_async_resource_ref pinned_memory_resource()
+{
+  static auto mr = rmm::mr::pinned_host_memory_resource{};
+
+  return mr;
+}
 
 std::string random_file_in_dir(std::string const& dir_path)
 {
@@ -41,6 +52,7 @@ std::string random_file_in_dir(std::string const& dir_path)
 
 cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
   : type{type},
+    pinned_buffer({pinned_memory_resource(), cudf::get_default_stream()}),
     d_buffer{0, cudf::get_default_stream()},
     file_name{random_file_in_dir(tmpdir.path())},
     void_sink{cudf::io::data_sink::create()}
@@ -52,6 +64,11 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
   switch (type) {
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
     case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
+    case io_type::PINNED_BUFFER: {
+      pinned_buffer.resize(h_buffer.size());
+      std::copy(h_buffer.begin(), h_buffer.end(), pinned_buffer.begin());
+      return cudf::io::source_info(pinned_buffer.data(), pinned_buffer.size());
+    }
     case io_type::DEVICE_BUFFER: {
       // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
       // stream
@@ -71,7 +88,8 @@ cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
   switch (type) {
     case io_type::VOID: return cudf::io::sink_info(void_sink.get());
     case io_type::FILEPATH: return cudf::io::sink_info(file_name);
-    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
     case io_type::DEVICE_BUFFER: return cudf::io::sink_info(&h_buffer);
     default: CUDF_FAIL("invalid output type");
   }
@@ -84,7 +102,8 @@ size_t cuio_source_sink_pair::size()
     case io_type::FILEPATH:
       return static_cast<size_t>(
         std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());
-    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
     case io_type::DEVICE_BUFFER: return h_buffer.size();
     default: CUDF_FAIL("invalid output type");
   }
@@ -167,7 +186,7 @@ std::string exec_cmd(std::string_view cmd)
   std::fflush(nullptr);
   // Switch stderr and stdout to only capture stderr
   auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
   CUDF_EXPECTS(pipe != nullptr, "popen() failed");
 
   std::array<char, 128> buffer;
@@ -204,13 +223,13 @@ void try_drop_l3_cache()
                "Failed to execute the drop cache command");
 }
 
-cudf::io::io_type retrieve_io_type_enum(std::string_view io_string)
+io_type retrieve_io_type_enum(std::string_view io_string)
 {
-  if (io_string == "FILEPATH") { return cudf::io::io_type::FILEPATH; }
-  if (io_string == "HOST_BUFFER") { return cudf::io::io_type::HOST_BUFFER; }
-  if (io_string == "DEVICE_BUFFER") { return cudf::io::io_type::DEVICE_BUFFER; }
-  if (io_string == "VOID") { return cudf::io::io_type::VOID; }
-  if (io_string == "USER_IMPLEMENTED") { return cudf::io::io_type::USER_IMPLEMENTED; }
+  if (io_string == "FILEPATH") { return io_type::FILEPATH; }
+  if (io_string == "HOST_BUFFER") { return io_type::HOST_BUFFER; }
+  if (io_string == "PINNED_BUFFER") { return io_type::PINNED_BUFFER; }
+  if (io_string == "DEVICE_BUFFER") { return io_type::DEVICE_BUFFER; }
+  if (io_string == "VOID") { return io_type::VOID; }
   CUDF_FAIL("Unsupported io_type.");
 }
 

@@ -6,11 +6,8 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
@@ -181,13 +178,19 @@ def test_column_set_equal_length_object_by_mask():
     bool_col = cudf.Series([True, True, True, True, True])._column
 
     data[bool_col] = replace_data
-    assert_eq(cudf.Series(data), cudf.Series(replace_data))
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series._from_column(replace_data),
+    )
 
     data = cudf.Series([0, 0, 1, 1, 1])._column
     bool_col = cudf.Series([True, False, True, False, True])._column
     data[bool_col] = replace_data
 
-    assert_eq(cudf.Series(data), cudf.Series([100, 0, 300, 1, 500]))
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series([100, 0, 300, 1, 500]),
+    )
 
 
 def test_column_set_unequal_length_object_by_mask():
@@ -469,7 +472,7 @@ def test_loc_setitem_series_index_alignment_13031(other_index):
         ),
     ],
 )
-@pytest.mark.parametrize("arg", list(range(-20, 20)) + [5.6, 3.1])
+@pytest.mark.parametrize("arg", [*list(range(-20, 20)), 5.6, 3.1])
 def test_series_set_item_range_index(ps, arg):
     gsr = cudf.from_pandas(ps)
     psr = ps.copy(deep=True)

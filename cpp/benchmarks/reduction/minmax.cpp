@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,50 +14,44 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
-class Reduction : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-template <typename type>
-void BM_reduction(benchmark::State& state)
+template <typename DataType>
+static void reduction_minmax(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
-  auto const dtype = cudf::type_to_id<type>();
-  auto const input_column =
-    create_random_column(dtype, row_count{column_size}, data_profile_builder().no_validity());
+  auto const size = static_cast<cudf::size_type>(state.get_int64("size"));
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = cudf::minmax(*input_column);
-  }
+  auto const input_type = cudf::type_to_id<DataType>();
+
+  data_profile const profile =
+    data_profile_builder().no_validity().distribution(input_type, distribution_id::UNIFORM, 0, 100);
+  auto const input_column = create_random_column(input_type, row_count{size}, profile);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.add_element_count(size);
+  state.add_global_memory_reads<DataType>(size);
+  state.add_global_memory_writes<DataType>(2);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&input_column](nvbench::launch& launch) { cudf::minmax(*input_column); });
+
+  set_throughputs(state);
 }
 
-#define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation())
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
 
-// TYPE, OP
-#define RBM_BENCHMARK_DEFINE(name, type, aggregation)                                            \
-  BENCHMARK_DEFINE_F(Reduction, name)(::benchmark::State & state) { BM_reduction<type>(state); } \
-  BENCHMARK_REGISTER_F(Reduction, name)                                                          \
-    ->UseManualTime()                                                                            \
-    ->Arg(10000)      /* 10k */                                                                  \
-    ->Arg(100000)     /* 100k */                                                                 \
-    ->Arg(1000000)    /* 1M */                                                                   \
-    ->Arg(10000000)   /* 10M */                                                                  \
-    ->Arg(100000000); /* 100M */
+using Types = nvbench::type_list<bool, int8_t, int32_t, float, cudf::timestamp_ms>;
 
-#define REDUCE_BENCHMARK_DEFINE(type, aggregation) \
-  RBM_BENCHMARK_DEFINE(concat(type, _, aggregation), type, aggregation)
-
-REDUCE_BENCHMARK_DEFINE(bool, minmax);
-REDUCE_BENCHMARK_DEFINE(int8_t, minmax);
-REDUCE_BENCHMARK_DEFINE(int32_t, minmax);
-using cudf::timestamp_ms;
-REDUCE_BENCHMARK_DEFINE(timestamp_ms, minmax);
-REDUCE_BENCHMARK_DEFINE(float, minmax);
+NVBENCH_BENCH_TYPES(reduction_minmax, NVBENCH_TYPE_AXES(Types))
+  .set_name("minmax")
+  .set_type_axes_names({"DataType"})
+  .add_int64_axis("size", {100'000, 1'000'000, 10'000'000, 100'000'000});

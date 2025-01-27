@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -6,9 +6,14 @@ import cupy
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
+from cudf._lib.column import Column
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import as_column
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -144,7 +149,7 @@ def cut(
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
-                    f"Bin edges must be unique: {repr(bins)}.\n"
+                    f"Bin edges must be unique: {bins!r}.\n"
                     f"You can drop duplicate edges by setting the 'duplicates'"
                     "kwarg"
                 )
@@ -187,9 +192,6 @@ def cut(
 
         # adjust bin edges decimal precision
         int_label_bins = np.around(bins, precision)
-
-    # the inputs is a column of the values in the array x
-    input_arr = as_column(x)
 
     # checking for the correct inclusivity values
     if right:
@@ -242,6 +244,9 @@ def cut(
                 labels if len(set(labels)) == len(labels) else None
             )
 
+    # the inputs is a column of the values in the array x
+    input_arr = as_column(x)
+
     if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns
         # we cannot typecast an IntervalIndex, so we need to
@@ -255,9 +260,19 @@ def cut(
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    index_labels = cudf._lib.labeling.label_bins(
-        input_arr, left_edges, left_inclusive, right_edges, right_inclusive
-    )
+    with acquire_spill_lock():
+        plc_column = plc.labeling.label_bins(
+            input_arr.to_pylibcudf(mode="read"),
+            left_edges.to_pylibcudf(mode="read"),
+            plc.labeling.Inclusive.YES
+            if left_inclusive
+            else plc.labeling.Inclusive.NO,
+            right_edges.to_pylibcudf(mode="read"),
+            plc.labeling.Inclusive.YES
+            if right_inclusive
+            else plc.labeling.Inclusive.NO,
+        )
+        index_labels = Column.from_pylibcudf(plc_column)
 
     if labels is False:
         # if labels is false we return the index labels, we return them
@@ -282,17 +297,21 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    col = build_categorical_column(
-        categories=interval_labels,
-        codes=index_labels,
+    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
+
+    col = CategoricalColumn(
+        data=None,
+        size=index_labels.size,
+        dtype=cudf.CategoricalDtype(
+            categories=interval_labels, ordered=ordered
+        ),
         mask=index_labels.base_mask,
         offset=index_labels.offset,
-        size=index_labels.size,
-        ordered=ordered,
+        children=(index_labels,),
     )
 
     # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.core.index.as_index(col)
+    categorical_index = cudf.CategoricalIndex._from_column(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

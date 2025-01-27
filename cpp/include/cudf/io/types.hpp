@@ -30,18 +30,19 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 class data_sink;
 class datasource;
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 //! cuDF interfaces
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 /**
@@ -53,7 +54,7 @@ namespace io {
 /**
  * @brief Compression algorithms
  */
-enum class compression_type {
+enum class compression_type : int32_t {
   NONE,    ///< No compression
   AUTO,    ///< Automatically detect or select compression format
   SNAPPY,  ///< Snappy format, using byte-oriented LZ77
@@ -71,7 +72,7 @@ enum class compression_type {
 /**
  * @brief Data source or destination types
  */
-enum class io_type {
+enum class io_type : int32_t {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
   DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
@@ -82,7 +83,7 @@ enum class io_type {
 /**
  * @brief Behavior when handling quotations in field data
  */
-enum class quote_style {
+enum class quote_style : int32_t {
   MINIMAL,     ///< Quote only fields which contain special characters
   ALL,         ///< Quote all fields
   NONNUMERIC,  ///< Quote all non-numeric fields
@@ -92,7 +93,7 @@ enum class quote_style {
 /**
  * @brief Column statistics granularity type for parquet/orc writers
  */
-enum statistics_freq {
+enum statistics_freq : int32_t {
   STATISTICS_NONE     = 0,  ///< No column statistics
   STATISTICS_ROWGROUP = 1,  ///< Per-Rowgroup column statistics
   STATISTICS_PAGE     = 2,  ///< Per-page column statistics
@@ -102,7 +103,7 @@ enum statistics_freq {
 /**
  * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
  */
-enum class column_encoding {
+enum class column_encoding : int32_t {
   // Common encodings:
   USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
   DICTIONARY,        ///< Use dictionary encoding
@@ -113,6 +114,7 @@ enum class column_encoding {
                             ///< valid for BYTE_ARRAY columns)
   DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
                             ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  BYTE_STREAM_SPLIT,        ///< Use BYTE_STREAM_SPLIT encoding (valid for all fixed width types)
   // ORC encodings:
   DIRECT,         ///< Use DIRECT encoding
   DIRECT_V2,      ///< Use DIRECT_V2 encoding
@@ -220,7 +222,7 @@ class writer_compression_statistics {
 /**
  * @brief Control use of dictionary encoding for parquet writer
  */
-enum dictionary_policy {
+enum dictionary_policy : int32_t {
   NEVER    = 0,  ///< Never use dictionary encoding
   ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
   ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
@@ -235,6 +237,8 @@ enum dictionary_policy {
 struct column_name_info {
   std::string name;                        ///< Column name
   std::optional<bool> is_nullable;         ///< Column nullability
+  std::optional<bool> is_binary;           ///< Column is binary (i.e. not a list)
+  std::optional<int32_t> type_length;      ///< Byte width of data (for fixed length data)
   std::vector<column_name_info> children;  ///< Child column names
 
   /**
@@ -242,13 +246,29 @@ struct column_name_info {
    *
    * @param _name Column name
    * @param _is_nullable True if column is nullable
+   * @param _is_binary True if column is binary data
    */
-  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
-    : name(_name), is_nullable(_is_nullable)
+  column_name_info(std::string _name,
+                   std::optional<bool> _is_nullable = std::nullopt,
+                   std::optional<bool> _is_binary   = std::nullopt)
+    : name(std::move(_name)), is_nullable(_is_nullable), is_binary(_is_binary)
   {
   }
 
   column_name_info() = default;
+
+  /**
+   * @brief Compares two column name info structs for equality
+   *
+   * @param rhs column name info struct to compare against
+   * @return boolean indicating if this and rhs are equal
+   */
+  bool operator==(column_name_info const& rhs) const
+  {
+    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
+            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
+            (children == rhs.children));
+  };
 };
 
 /**
@@ -257,6 +277,9 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+                                            //!< Currently only computed for Parquet readers if no
+                                            //!< AST filters being used. Empty vector otherwise.
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>
@@ -602,8 +625,10 @@ class column_in_metadata {
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
   bool _output_as_binary    = false;
+  bool _skip_compression    = false;
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
+  std::optional<int32_t> _type_length;
   std::vector<column_in_metadata> children;
   column_encoding _encoding = column_encoding::USE_DEFAULT;
 
@@ -692,6 +717,19 @@ class column_in_metadata {
   }
 
   /**
+   * @brief Set the data length of the column. Only valid if this column is a
+   * fixed-length byte array.
+   *
+   * @param length The data length to set for this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_type_length(int32_t length) noexcept
+  {
+    _type_length = length;
+    return *this;
+  }
+
+  /**
    * @brief Set the parquet field id of this column.
    *
    * @param field_id The parquet field id to set
@@ -719,6 +757,19 @@ class column_in_metadata {
     } else if (!_output_as_binary and children.size() == 2) {
       children.pop_back();
     }
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this column should not be compressed regardless of the compression
+   * codec specified for the file.
+   *
+   * @param skip If `true` do not compress this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_skip_compression(bool skip) noexcept
+  {
+    _skip_compression = skip;
     return *this;
   }
 
@@ -812,6 +863,22 @@ class column_in_metadata {
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
+   * @brief Get whether type length has been set for this column
+   *
+   * @return Boolean indicating whether type length has been set for this column
+   */
+  [[nodiscard]] bool is_type_length_set() const noexcept { return _type_length.has_value(); }
+
+  /**
+   * @brief Get the type length that was set for this column.
+   *
+   * @throws std::bad_optional_access If type length was not set for this
+   *         column. Check using `is_type_length_set()` first.
+   * @return The decimal precision that was set for this column
+   */
+  [[nodiscard]] uint8_t get_type_length() const { return _type_length.value(); }
+
+  /**
    * @brief Get whether parquet field id has been set for this column.
    *
    * @return Boolean indicating whether parquet field id has been set for this column
@@ -843,6 +910,13 @@ class column_in_metadata {
    * @return Boolean indicating whether to encode this column as binary data
    */
   [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
+
+  /**
+   * @brief Get whether to skip compressing this column
+   *
+   * @return Boolean indicating whether to skip compression of this column
+   */
+  [[nodiscard]] bool is_enabled_skip_compression() const noexcept { return _skip_compression; }
 
   /**
    * @brief Get the encoding that was set for this column.
@@ -910,6 +984,7 @@ struct partition_info {
 class reader_column_schema {
   // Whether to read binary data as a string column
   bool _convert_binary_to_strings{true};
+  int32_t _type_length{0};
 
   std::vector<reader_column_schema> children;
 
@@ -976,6 +1051,18 @@ class reader_column_schema {
   }
 
   /**
+   * @brief Sets the length of fixed length data.
+   *
+   * @param type_length Size of the data type in bytes
+   * @return this for chaining
+   */
+  reader_column_schema& set_type_length(int32_t type_length)
+  {
+    _type_length = type_length;
+    return *this;
+  }
+
+  /**
    * @brief Get whether to encode this column as binary or string data
    *
    * @return Boolean indicating whether to encode this column as binary data
@@ -984,6 +1071,13 @@ class reader_column_schema {
   {
     return _convert_binary_to_strings;
   }
+
+  /**
+   * @brief Get the length in bytes of this fixed length data.
+   *
+   * @return The length in bytes of the data type
+   */
+  [[nodiscard]] int32_t get_type_length() const { return _type_length; }
 
   /**
    * @brief Get the number of child objects
@@ -995,4 +1089,4 @@ class reader_column_schema {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

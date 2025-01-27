@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf.core.byte_pair_encoding import BytePairEncoder
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def test_tokenize():
@@ -44,7 +44,7 @@ def test_tokenize():
 
     actual = strings.str.tokenize()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -71,7 +71,7 @@ def test_tokenize_delimiter():
 
     actual = strings.str.tokenize(delimiter="o")
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -106,7 +106,7 @@ def test_detokenize():
             "the siamésé cat jumped under the sofa",
         ]
     )
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     indices = cudf.Series(
@@ -122,7 +122,7 @@ def test_detokenize():
             "the+the+the+the",
         ]
     )
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -150,7 +150,7 @@ def test_token_count(delimiter, expected_token_counts):
 
     actual = strings.str.token_count(delimiter)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual, check_dtype=False)
 
 
@@ -208,7 +208,7 @@ def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
     )
 
     actual = tokenizer.tokenize(strings, delimiter, default_id)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -232,7 +232,7 @@ def test_normalize_spaces():
 
     actual = strings.str.normalize_spaces()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -252,7 +252,7 @@ def test_normalize_characters():
     )
 
     actual = strings.str.normalize_characters()
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
@@ -266,7 +266,7 @@ def test_normalize_characters():
         ]
     )
     actual = strings.str.normalize_characters(do_lower=False)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -309,7 +309,7 @@ def test_ngrams(n, separator, expected_values):
 
     actual = strings.str.ngrams(n=n, separator=separator)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -364,7 +364,7 @@ def test_character_ngrams(n, expected_values, expected_index, as_list):
 
     actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -379,12 +379,12 @@ def test_hash_character_ngrams():
         ]
     )
     actual = strings.str.hash_character_ngrams(5, True)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     actual = strings.str.hash_character_ngrams(5)
     expected = expected.explode()
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -417,7 +417,7 @@ def test_ngrams_tokenize(n, separator, expected_values):
 
     actual = strings.str.ngrams_tokenize(n=n, separator=separator)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -426,7 +426,6 @@ def test_character_tokenize_series():
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
@@ -539,18 +538,17 @@ def test_character_tokenize_series():
 
 
 def test_character_tokenize_index():
-    sr = cudf.core.index.as_index(
+    sr = cudf.Index(
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
             ),
         ]
     )
-    expected = cudf.core.index.as_index(
+    expected = cudf.Index(
         [
             "h",
             "e",
@@ -648,8 +646,8 @@ def test_character_tokenize_index():
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
 
-    sr = cudf.core.index.as_index(["a"])
-    expected = cudf.core.index.as_index(["a"])
+    sr = cudf.Index(["a"])
+    expected = cudf.Index(["a"])
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -846,7 +844,7 @@ def test_porter_stemmer_measure():
 
     actual = strings.str.porter_stemmer_measure()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -858,14 +856,14 @@ def test_is_vowel_consonant():
         [False, False, True, False, False, False, True, False, None, False]
     )
     actual = strings.str.is_vowel(2)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
         [True, False, True, False, False, False, True, True, None, False]
     )
     actual = strings.str.is_consonant(1)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     indices = cudf.Series([2, 1, 0, 0, 1, 2, 0, 3, 0, 0])
@@ -873,79 +871,59 @@ def test_is_vowel_consonant():
         [False, True, False, False, True, False, True, True, None, False]
     )
     actual = strings.str.is_vowel(indices)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
         [False, False, True, True, False, True, False, False, None, False]
     )
     actual = strings.str.is_consonant(indices)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
 def test_minhash():
     strings = cudf.Series(["this is my", "favorite book", None, ""])
 
+    params = cudf.Series([1, 2, 3], dtype=np.uint32)
     expected = cudf.Series(
         [
-            cudf.Series([21141582], dtype=np.uint32),
-            cudf.Series([962346254], dtype=np.uint32),
-            None,
-            cudf.Series([0], dtype=np.uint32),
-        ]
-    )
-    actual = strings.str.minhash()
-    assert_eq(expected, actual)
-    seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
-    expected = cudf.Series(
-        [
-            cudf.Series([1305480167, 668155704, 34311509], dtype=np.uint32),
-            cudf.Series([32665384, 3470118, 363147162], dtype=np.uint32),
+            cudf.Series([1305480168, 462824406, 74608229], dtype=np.uint32),
+            cudf.Series([32665385, 65330770, 97996155], dtype=np.uint32),
             None,
             cudf.Series([0, 0, 0], dtype=np.uint32),
         ]
     )
-    actual = strings.str.minhash(seeds=seeds, width=5)
+    actual = strings.str.minhash(0, a=params, b=params, width=5)
     assert_eq(expected, actual)
 
-    expected = cudf.Series(
-        [
-            cudf.Series([3232308021562742685], dtype=np.uint64),
-            cudf.Series([23008204270530356], dtype=np.uint64),
-            None,
-            cudf.Series([0], dtype=np.uint64),
-        ]
-    )
-    actual = strings.str.minhash64()
-    assert_eq(expected, actual)
-    seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+    params = cudf.Series([1, 2, 3], dtype=np.uint64)
     expected = cudf.Series(
         [
             cudf.Series(
-                [7082801294247314046, 185949556058924788, 167570629329462454],
+                [105531920695060180, 172452388517576009, 316595762085180524],
                 dtype=np.uint64,
             ),
             cudf.Series(
-                [382665377781028452, 86243762733551437, 7688750597953083512],
+                [35713768479063122, 71427536958126236, 58787297728258212],
                 dtype=np.uint64,
             ),
             None,
             cudf.Series([0, 0, 0], dtype=np.uint64),
         ]
     )
-    actual = strings.str.minhash64(seeds=seeds, width=5)
+    actual = strings.str.minhash64(0, a=params, b=params, width=5)
     assert_eq(expected, actual)
 
     # test wrong seed types
     with pytest.raises(ValueError):
-        strings.str.minhash(seeds="a")
+        strings.str.minhash(1, a="a", b="b", width=7)
     with pytest.raises(ValueError):
-        seeds = cudf.Series([0, 1, 2], dtype=np.int32)
-        strings.str.minhash(seeds=seeds)
+        params = cudf.Series([0, 1, 2], dtype=np.int32)
+        strings.str.minhash(1, a=params, b=params, width=6)
     with pytest.raises(ValueError):
-        seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash64(seeds=seeds)
+        params = cudf.Series([0, 1, 2], dtype=np.uint32)
+        strings.str.minhash64(1, a=params, b=params, width=8)
 
 
 def test_jaccard_index():
@@ -1059,5 +1037,5 @@ def test_byte_pair_encoding(separator, input, results):
     expected = cudf.Series([results, None, "", results])
 
     actual = encoder(strings, separator)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)

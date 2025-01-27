@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,8 @@ TYPED_TEST(groupby_group_keys_and_values_test, some_nulls)
   using K = int32_t;
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 1, 3, 2, 1, 2}, {1, 0, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys({1, 1, 3, 2, 1, 2},
+                                                 {true, false, true, false, false, true});
   cudf::test::fixed_width_column_wrapper<K> expect_grouped_keys({1, 2, 3},
                                                                 cudf::test::iterators::no_nulls());
   cudf::test::fixed_width_column_wrapper<V> values({1, 2, 3, 4, 5, 6});

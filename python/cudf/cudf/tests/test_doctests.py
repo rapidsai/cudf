@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 import contextlib
 import doctest
 import inspect
@@ -8,8 +8,10 @@ import os
 
 import numpy as np
 import pytest
+from packaging import version
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
 
@@ -80,10 +82,24 @@ class TestDoctests:
         yield
         os.chdir(original_directory)
 
+    @pytest.fixture(autouse=True)
+    def prinoptions(cls):
+        # TODO: NumPy now prints scalars as `np.int8(1)`, etc. this should
+        #       be adapted evantually.
+        if version.parse(np.__version__) >= version.parse("2.0"):
+            with np.printoptions(legacy="1.25"):
+                yield
+        else:
+            yield
+
     @pytest.mark.parametrize(
         "docstring",
         itertools.chain(*[_find_doctests_in_obj(mod) for mod in tests]),
         ids=lambda docstring: docstring.name,
+    )
+    @pytest.mark.skipif(
+        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+        reason="Doctests not expected to pass on older versions of pandas",
     )
     def test_docstring(self, docstring):
         # We ignore differences in whitespace in the doctest output, and enable

@@ -17,9 +17,8 @@ from cudf.testing._utils import (
     OTHER_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
 )
-from cudf.testing.testing import assert_column_equal
+from cudf.testing.testing import assert_column_equal, assert_eq
 
 
 @pytest.fixture(
@@ -70,7 +69,7 @@ def test_basic_assert_index_equal(
         msg = str(e)
 
     if kind is not None:
-        if (kind == TypeError) and (
+        if (kind is TypeError) and (
             msg
             == (
                 "Categoricals can only be compared "

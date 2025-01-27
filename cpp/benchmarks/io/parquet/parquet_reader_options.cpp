@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ void BM_parquet_read_options(nvbench::state& state,
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
+                                                   static_cast<int32_t>(data_type::BOOL8),
                                                    static_cast<int32_t>(data_type::DECIMAL),
                                                    static_cast<int32_t>(data_type::TIMESTAMP),
                                                    static_cast<int32_t>(data_type::DURATION),

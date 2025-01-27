@@ -58,12 +58,13 @@ THE SOFTWARE.
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
+
 constexpr uint32_t huffman_lookup_table_width      = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
@@ -2019,7 +2020,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
     results[block_id].status =
       (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     // Return ext heap used by last block (statistics)
-    results[block_id].reserved = s->fb_size;
   }
 }
 
@@ -2047,19 +2047,14 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
  */
 size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
-  int sm_count = 0;
-  int dev      = 0;
   uint32_t max_fb_size, min_fb_size, fb_size;
-  CUDF_CUDA_TRY(cudaGetDevice(&dev));
-  if (cudaSuccess == cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev)) {
-    // printf("%d SMs on device %d\n", sm_count, dev);
-    max_num_inputs =
-      min(max_num_inputs, sm_count * 3);  // no more than 3 blocks/sm at most due to 32KB smem use
-    if (max_num_inputs <= 0) {
-      max_num_inputs = sm_count * 2;  // Target 2 blocks/SM by default for scratch mem computation
-    }
+  auto const sm_count = cudf::detail::num_multiprocessors();
+  // no more than 3 blocks/sm at most due to 32KB smem use
+  max_num_inputs = std::min(max_num_inputs, sm_count * 3);
+  if (max_num_inputs <= 0) {
+    max_num_inputs = sm_count * 2;  // Target 2 blocks/SM by default for scratch mem computation
   }
-  max_num_inputs = min(max(max_num_inputs, 1), 512);
+  max_num_inputs = std::min(std::max(max_num_inputs, 1), 512);
   // Max fb size per block occurs if all huffman tables for all 3 group types fail local_alloc()
   // with num_htrees=256 (See HuffmanTreeGroupAlloc)
   max_fb_size = 256 * (630 + 1080 + 920) * 2;  // 1.3MB
@@ -2119,5 +2114,4 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
 #endif
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

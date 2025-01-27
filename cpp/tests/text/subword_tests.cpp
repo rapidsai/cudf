@@ -19,13 +19,11 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
 
 #include <fstream>
-#include <iostream>
 #include <vector>
 
 // Global environment for temporary files
@@ -253,7 +251,7 @@ TEST(TextSubwordTest, EmptyStrings)
 
 TEST(TextSubwordTest, AllNullStrings)
 {
-  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {false, false, false});
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
   auto vocab  = nvtext::load_vocabulary_file(hash_file);

@@ -3,31 +3,49 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.2"]
+      cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
+      # Note that clang-tidy is not included here because cudf's preferred
+      # version conflicts with the rest of RAPIDS as well as its own
+      # clang-format version. Until we update our clang-format version we will
+      # not be able to install both into the same environment. Moreover, using
+      # this version will break compatibility with other RAPIDS libraries that
+      # are still using 16.0.6, and as such will and that would break any
+      # unified environment like that used in unified devcontainers.
       - build_base
       - build_all
       - build_cpp
-      - build_wheels
       - build_python_common
-      - build_python_cudf
+      - clang_format
       - cuda
       - cuda_version
+      - depends_on_cupy
+      - depends_on_libkvikio
+      - depends_on_librmm
+      - depends_on_nvcomp
+      - depends_on_rmm
       - develop
       - docs
-      - libarrow_build
       - notebooks
       - py_version
+      - pyarrow_run
+      - rapids_build_skbuild
+      - rapids_build_setuptools
       - run_common
       - run_cudf
+      - run_cudf_polars
+      - run_pylibcudf
       - run_dask_cudf
       - run_custreamz
       - test_cpp
       - test_python_common
       - test_python_cudf
+      - test_python_cudf_common
       - test_python_dask_cudf
-      - depends_on_cupy
+      - test_python_pylibcudf
+      - test_python_cudf_pandas
+      - test_python_cudf_polars
   test_static_build:
     output: none
     includes:
@@ -36,16 +54,31 @@ files:
     output: none
     includes:
       - cuda_version
-      - libarrow_run
       - test_cpp
-  test_python:
+  test_python_cudf_pandas:
     output: none
     includes:
       - cuda_version
       - py_version
-      - pyarrow_run
       - test_python_common
+      - test_python_cudf_common
       - test_python_cudf
+      - test_python_cudf_pandas
+  test_python_cudf:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_cudf_common
+      - test_python_cudf
+  test_python_other:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_cudf_common
       - test_python_dask_cudf
   test_java:
     output: none
@@ -54,7 +87,6 @@ files:
       - build_all
       - cuda
       - cuda_version
-      - libarrow_run
       - test_java
   test_notebooks:
     output: none
@@ -67,13 +99,22 @@ files:
     includes:
       - develop
       - py_version
+  clang_tidy:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - clang_tidy
+      - cuda
+      - cuda_version
+      - develop
+      - py_version
   docs:
     output: none
     includes:
       - cuda
       - cuda_version
       - docs
-      - libarrow_run
       - py_version
   py_build_cudf:
     output: pyproject
@@ -81,9 +122,20 @@ files:
     extras:
       table: build-system
     includes:
+      - rapids_build_skbuild
+  py_rapids_build_cudf:
+    output: pyproject
+    pyproject_dir: python/cudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
       - build_base
       - build_python_common
-      - build_python_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_rmm
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -94,6 +146,9 @@ files:
       - run_cudf
       - pyarrow_run
       - depends_on_cupy
+      - depends_on_libcudf
+      - depends_on_pylibcudf
+      - depends_on_rmm
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -102,7 +157,73 @@ files:
       key: test
     includes:
       - test_python_common
+      - test_python_cudf_common
       - test_python_cudf
+  py_build_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - depends_on_libkvikio
+      - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_libkvikio
+      - depends_on_nvcomp
+  py_build_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_python_common
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_rmm
+  py_run_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf
+      - depends_on_rmm
+      - pyarrow_run
+      - run_pylibcudf
+  py_test_pylibcudf:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - test_python_cudf_common
+      - test_python_pylibcudf
   py_test_pandas_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -119,13 +240,45 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
+  py_build_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_setuptools
+  py_run_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project
+    includes:
+      - run_cudf_polars
+      - depends_on_pylibcudf
+  py_run_cudf_polars_experimental:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: experimental
+    includes:
+      - run_cudf_polars_experimental
+  py_test_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - test_python_cudf_polars
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
     extras:
       table: build-system
     includes:
-      - build_wheels
+      - rapids_build_setuptools
   py_run_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -144,12 +297,21 @@ files:
       key: test
     includes:
       - test_python_common
+      - test_python_cudf_common
       - test_python_dask_cudf
   py_build_cudf_kafka:
     output: pyproject
     pyproject_dir: python/cudf_kafka
     extras:
       table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_cudf_kafka:
+    output: pyproject
+    pyproject_dir: python/cudf_kafka
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
     includes:
       - build_base
       - build_python_common
@@ -168,13 +330,14 @@ files:
       key: test
     includes:
       - test_python_common
+      - test_python_cudf_common
   py_build_custreamz:
     output: pyproject
     pyproject_dir: python/custreamz
     extras:
       table: build-system
     includes:
-      - build_wheels
+      - rapids_build_setuptools
   py_run_custreamz:
     output: pyproject
     pyproject_dir: python/custreamz
@@ -192,6 +355,7 @@ files:
       key: test
     includes:
       - test_python_common
+      - test_python_cudf_common
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -203,7 +367,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &cmake_ver cmake>=3.26.4
+          - &cmake_ver cmake>=3.26.4,!=3.30.0
           - &ninja ninja
   build_all:
     common:
@@ -218,14 +382,28 @@ dependencies:
         matrices:
           - matrix:
               arch: x86_64
+              cuda: "11.8"
             packages:
               - gcc_linux-64=11.*
-              - sysroot_linux-64==2.17
+              - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
+              cuda: "11.8"
             packages:
               - gcc_linux-aarch64=11.*
-              - sysroot_linux-aarch64==2.17
+              - sysroot_linux-aarch64==2.28
+          - matrix:
+              arch: x86_64
+              cuda: "12.*"
+            packages:
+              - gcc_linux-64=13.*
+              - sysroot_linux-64==2.28
+          - matrix:
+              arch: aarch64
+              cuda: "12.*"
+            packages:
+              - gcc_linux-aarch64=13.*
+              - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
           - matrix:
@@ -246,100 +424,75 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - fmt>=10.1.1,<11
-          - &gbench benchmark==1.8.0
-          - &gtest gtest>=1.13.0
-          - &gmock gmock>=1.13.0
-          - librmm==24.6.*
-          - libkvikio==24.6.*
-          - librdkafka>=1.9.0,<1.10.0a0
+          - fmt>=11.0.2,<12
+          - flatbuffers==24.3.25
+          - librdkafka>=2.5.0,<2.6.0a0
+  depends_on_nvcomp:
+    common:
+      - output_types: conda
+        packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.6
-          - spdlog>=1.12.0,<1.13
-  build_wheels:
+          - nvcomp==4.1.0.6
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              use_cuda_wheels: "true"
+            packages:
+              - nvidia-nvcomp-cu12==4.1.0.6
+          - matrix:
+              cuda: "11.*"
+              use_cuda_wheels: "true"
+            packages:
+              - nvidia-nvcomp-cu11==4.1.0.6
+          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
+          # (e.g. for DLFW and pip devcontainers)
+          - matrix:
+              use_cuda_wheels: "false"
+            packages:
+          # if no matching matrix selectors passed, list the unsuffixed packages
+          # (just as a source of documentation, as this populates pyproject.toml in source control)
+          - matrix:
+            packages:
+              - nvidia-nvcomp==4.1.0.6
+  rapids_build_skbuild:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &rapids_build_backend rapids-build-backend>=0.3.0,<0.4.0.dev0
+      - output_types: conda
+        packages:
+          - scikit-build-core>=0.10.0
+      - output_types: [requirements, pyproject]
+        packages:
+          - scikit-build-core[pyproject]>=0.10.0
+  rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - wheel
+          - *rapids_build_backend
           - setuptools
+          - wheel
   build_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3
-          # Hard pin the patch version used during the build. This must be kept
-          # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.2.*
-      - output_types: conda
-        packages:
-          - scikit-build-core>=0.7.0
-      - output_types: pyproject
-        packages:
-          # Hard pin the patch version used during the build.
-          # Sync with conda build constraint & wheel run constraint.
-          - numpy==1.23.*
-      - output_types: [requirements, pyproject]
-        packages:
-          - scikit-build-core[pyproject]>=0.7.0
-  build_python_cudf:
-    common:
-      - output_types: conda
-        packages:
-          - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf>=4.21,<5
-          - pip
-          - pip:
-              - git+https://github.com/python-streamz/streamz.git@master
-      - output_types: [requirements, pyproject]
-        packages:
-          - protoc-wheel
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          # This index is needed for rmm-cu{11,12}.
-          - --extra-index-url=https://pypi.nvidia.com
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-          - git+https://github.com/python-streamz/streamz.git@master
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix: {cuda: "12.*"}
-            packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.6.*
-          - matrix: {cuda: "11.*"}
-            packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.6.*
-          - {matrix: null, packages: null }
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [*rmm_conda] }
-  libarrow_build:
-    common:
-      - output_types: conda
-        packages:
-          # Hard pin the Arrow patch version used during the build. This must
-          # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.2.*
-          - libarrow-dataset==14.0.2.*
-          - libarrow==14.0.2.*
-          - libparquet==14.0.2.*
-  libarrow_run:
-    common:
-      - output_types: conda
-        packages:
-          # Allow runtime version to float up to minor version
-          # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-acero>=14.0.1,<15.0.0a0
-          - libarrow-dataset>=14.0.1,<15.0.0a0
-          - libarrow>=14.0.1,<15.0.0a0
-          - libparquet>=14.0.1,<15.0.0a0
   pyarrow_run:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
-          # Allow runtime version to float up to minor version
-          # Disallow pyarrow 14.0.0 due to a CVE
-          - pyarrow>=14.0.1,<15.0.0a0
+          - pyarrow>=14.0.0,<20.0.0a0
+      - output_types: [requirements, pyproject]
+        packages:
+          # pyarrow 17.0.0 wheels have a subtle issue around threading that
+          # can cause segmentation faults around imports on arm. It appears to
+          # be highly dependent on the exact build configuration, so we'll just
+          # avoid 17.0.0 for now unless we observe similar issues in future
+          # releases as well.
+          - pyarrow>=14.0.0,<20.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<20.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -368,6 +521,10 @@ dependencies:
               cuda: "12.2"
             packages:
               - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
   cuda:
     specific:
       - output_types: conda
@@ -458,25 +615,42 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
+          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_format:
+    common:
+      - output_types: conda
+        packages:
           - clang==16.0.6
           - clang-tools=16.0.6
-          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_tidy:
+    common:
+      - output_types: conda
+        packages:
+          - clang==19.1.3
+          - clang-tools==19.1.3
+          - include-what-you-use==0.23.0
   docs:
     common:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.6.*
+          - dask-cuda==25.2.*,>=0.0.0a0
           - *doxygen
           - make
           - myst-nb
           - nbsphinx
           - numpydoc
           - pandoc
-          # https://github.com/pydata/pydata-sphinx-theme/issues/1539
-          - pydata-sphinx-theme!=0.14.2
+          # Minimum version for safe parallel writing again.
+          # https://github.com/pydata/pydata-sphinx-theme/pull/1859
+          # https://github.com/pydata/pydata-sphinx-theme/releases/tag/v0.15.4
+          - pydata-sphinx-theme>=0.15.4
           - scipy
-          - sphinx
+          # Needed for safe parallel writes as with the pydata-sphinx-theme pin above
+          # https://github.com/sphinx-doc/sphinx/issues/12409
+          # https://github.com/sphinx-doc/sphinx/pull/12888
+          # https://github.com/sphinx-doc/sphinx/releases/tag/v8.1.0
+          - sphinx>=8.1.0
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
@@ -494,10 +668,6 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              py: "3.9"
-            packages:
-              - python=3.9
-          - matrix:
               py: "3.10"
             packages:
               - python=3.10
@@ -506,29 +676,53 @@ dependencies:
             packages:
               - python=3.11
           - matrix:
+              py: "3.12"
             packages:
-              - python>=3.9,<3.12
+              - python=3.12
+          - matrix:
+            packages:
+              - python>=3.10,<3.13
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.23,<2.0a0
-          - pandas>=2.0,<2.2.2dev0
+          - &numpy numpy>=1.23,<3.0a0
+          - pandas>=2.0,<2.2.4dev0
+  run_pylibcudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - nvtx>=0.2.1
+          - packaging
+          - typing_extensions>=4.0.0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - cuda-python>=12.6.2,<13.0a0
+          - matrix: {cuda: "11.*"}
+            packages: &run_pylibcudf_packages_all_cu11
+              - cuda-python>=11.8.5,<12.0a0
+          - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.57
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0a0
+          - &numba-dep numba>=0.59.1,<0.61.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
           - typing_extensions>=4.0.0
-          - *protobuf
-      - output_types: conda
-        packages:
-          - *rmm_conda
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -540,59 +734,77 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.6.2,<13.0a0
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.8.5,<12.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink
+              - &pynvjitlink_unsuffixed pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
-              - cubinlinker
-              - ptxcompiler
+              - &cubinlinker_unsuffixed cubinlinker
+              - &ptxcompiler_unsuffixed ptxcompiler
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
-              - rmm-cu12==24.6.*
-              - pynvjitlink-cu12
-          - matrix: {cuda: "11.*"}
+              - pynvjitlink-cu12>=0.0.0a0
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "false"
             packages:
-              - rmm-cu11==24.6.*
+              - *pynvjitlink_unsuffixed
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: null}
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "false"
+            packages: &run_cudf_cu11_unsuffixed
+              - *cubinlinker_unsuffixed
+              - *ptxcompiler_unsuffixed
+          - {matrix: null, packages: *run_cudf_cu11_unsuffixed}
+  run_cudf_polars:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - polars>=1.11,<1.18
+  run_cudf_polars_experimental:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-dask-dependency==25.2.*,>=0.0.0a0
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.6.*
+          - pynvml>=12.0.0,<13.0.0a0
+          - rapids-dask-dependency==25.2.*,>=0.0.0a0
   run_custreamz:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=1.9.0,<1.10.0a0
+          - python-confluent-kafka>=2.5.0,<2.6.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=1.9.0,<1.10.0a0
+          - confluent-kafka>=2.5.0,<2.6.0a0
   test_cpp:
     common:
       - output_types: conda
         packages:
           - *cmake_ver
-          - *gbench
-          - *gtest
-          - *gmock
     specific:
       - output_types: conda
         matrices:
@@ -613,6 +825,7 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
+          - boost
   test_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -620,6 +833,49 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+  test_python_cudf_common:
+    specific:
+      # Define additional constraints for testing with oldest dependencies.
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numba-cuda==0.2.0
+              - pandas==2.0.*
+          - matrix: {dependencies: "latest"}
+            packages:
+              - *numba-cuda-dep
+              - *numba-dep
+              - pandas==2.2.3
+          - matrix:
+            packages:
+      - output_types: conda
+        matrices:
+          - matrix: {dependencies: "oldest", arch: "aarch64", cuda: "12.*"}
+            packages:
+              - cupy==12.2.0  # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - cupy==12.0.0
+          - matrix:
+            packages:
+      - output_types: requirements
+        # Using --constraints for pip install, so we list cupy multiple times
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - cupy-cuda11x==12.0.0
+              - cupy-cuda12x==12.0.0
+          - matrix:
+            packages:
+  test_python_pylibcudf:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - fastavro>=0.22.9
+          - hypothesis
+          - *numpy
+          - pandas
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -630,6 +886,7 @@ dependencies:
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
+          - mmh3
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
@@ -638,22 +895,29 @@ dependencies:
           - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
-      - output_types: pyproject
+          - python-xxhash
+      - output_types: [pyproject, requirements]
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
-          - &transformers transformers==4.38.1
+          - &transformers transformers==4.39.3
           - tzdata
+          - xxhash
     specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.23.*
+              - pyarrow==14.*
+          - matrix:
+            packages:
       - output_types: conda
         matrices:
           - matrix:
-              arch: x86_64
+              cuda: "12.*"
             packages:
-              # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch>=2.1.0
-              # We only install these on x86_64 to avoid pulling pytorch as a
-              # dependency of transformers.
+              - pytorch>=2.4.0
               - *tokenizers
               - *transformers
           - matrix:
@@ -662,13 +926,78 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.6.*
-          - *numba
+          - dask-cuda==25.2.*,>=0.0.0a0
+          - *numba-cuda-dep
+          - *numba-dep
+    specific:
+      - output_types: [conda, requirements]
+        matrices:
+          - matrix: {dependencies: "oldest"}
+            packages:
+              - numpy==1.24.*
+              - pyarrow==14.*
+          - matrix:
+            packages:
+  test_python_cudf_polars:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - *numpy
+  depends_on_libcudf:
+    common:
+      - output_types: conda
+        packages:
+          - &libcudf_unsuffixed libcudf==25.2.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for libcudf-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-cu11==25.2.*,>=0.0.0a0
+          - {matrix: null, packages: [*libcudf_unsuffixed]}
+  depends_on_pylibcudf:
+    common:
+      - output_types: conda
+        packages:
+          - &pylibcudf_unsuffixed pylibcudf==25.2.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm, cubinlinker, ptxcompiler.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - pylibcudf-cu11==25.2.*,>=0.0.0a0
+          - {matrix: null, packages: [*pylibcudf_unsuffixed]}
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.6.*
+          - &cudf_unsuffixed cudf==25.2.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -678,18 +1007,22 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
-              - cudf-cu12==24.6.*
-          - matrix: {cuda: "11.*"}
+              - cudf-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
-              - cudf-cu11==24.6.*
-          - {matrix: null, packages: [*cudf_conda]}
+              - cudf-cu11==25.2.*,>=0.0.0a0
+          - {matrix: null, packages: [*cudf_unsuffixed]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.6.*
+          - &cudf_kafka_unsuffixed cudf_kafka==25.2.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -699,13 +1032,17 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
-          - matrix: {cuda: "12.*"}
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
             packages:
-              - cudf_kafka-cu12==24.6.*
-          - matrix: {cuda: "11.*"}
+              - cudf_kafka-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
             packages:
-              - cudf_kafka-cu11==24.6.*
-          - {matrix: null, packages: [*cudf_kafka_conda]}
+              - cudf_kafka-cu11==25.2.*,>=0.0.0a0
+          - {matrix: null, packages: [*cudf_kafka_unsuffixed]}
   depends_on_cupy:
     common:
       - output_types: conda
@@ -721,9 +1058,88 @@ dependencies:
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
           - {matrix: null, packages: *cupy_packages_cu11}
+  depends_on_libkvikio:
+    common:
+      - output_types: conda
+        packages:
+          - &libkvikio_unsuffixed libkvikio==25.2.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libkvikio-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - libkvikio-cu11==25.2.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libkvikio_unsuffixed
+  depends_on_librmm:
+    common:
+      - output_types: conda
+        packages:
+          - &librmm_unsuffixed librmm==25.2.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for librmm-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - librmm-cu11==25.2.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librmm_unsuffixed
+  depends_on_rmm:
+    common:
+      - output_types: conda
+        packages:
+          - &rmm_unsuffixed rmm==25.2.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm-cu{11,12}.
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - rmm-cu12==25.2.*,>=0.0.0a0
+          - matrix:
+              cuda: "11.*"
+              cuda_suffixed: "true"
+            packages:
+              - rmm-cu11==25.2.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *rmm_unsuffixed
   test_python_pandas_cudf:
     common:
-      - output_types: pyproject
+      - output_types: [requirements, pyproject]
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
@@ -732,9 +1148,13 @@ dependencies:
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
+          - ipython
   test_python_cudf_pandas:
     common:
-      - output_types: pyproject
+      - output_types: [conda, requirements, pyproject]
         packages:
           - ipython
+          - jupyter_client
+          - nbconvert
+          - nbformat
           - openpyxl

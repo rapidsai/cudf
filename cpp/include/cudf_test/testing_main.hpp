@@ -16,10 +16,13 @@
 
 #pragma once
 
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -29,11 +32,16 @@
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
+
+struct config {
+  std::string rmm_mode;
+  std::string stream_mode;
+  std::string stream_error_mode;
+};
 
 /// MR factory functions
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
@@ -92,7 +100,7 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 /**
  * @brief Parses the cuDF test command line options.
@@ -156,39 +164,72 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  * @param cmd_opts Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
-inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
+inline auto make_memory_resource_adaptor(cudf::test::config const& config)
 {
-  auto resource                      = rmm::mr::get_current_device_resource();
-  auto const stream_mode             = cmd_opts["stream_mode"].as<std::string>();
-  auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
-  auto const error_on_invalid_stream = (stream_error_mode == "error");
-  auto const check_default_stream    = (stream_mode == "new_cudf_default");
-  auto adaptor =
-    make_stream_checking_resource_adaptor(resource, error_on_invalid_stream, check_default_stream);
-  if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    rmm::mr::set_current_device_resource(&adaptor);
+  auto resource = cudf::test::create_memory_resource(config.rmm_mode);
+  cudf::set_current_device_resource(resource.get());
+  return resource;
+}
+
+/**
+ * @brief Sets up stream mode memory resource adaptor
+ *
+ * The resource adaptor is only set as the current device resource if the
+ * stream mode is enabled.
+ *
+ * The caller must keep the return object alive for the life of the test runs.
+ *
+ * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @return Memory resource adaptor
+ */
+inline auto make_stream_mode_adaptor(cudf::test::config const& config)
+{
+  auto resource                      = cudf::get_current_device_resource_ref();
+  auto const error_on_invalid_stream = (config.stream_error_mode == "error");
+  auto const check_default_stream    = (config.stream_mode == "new_cudf_default");
+  auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
+    resource, error_on_invalid_stream, check_default_stream);
+  if ((config.stream_mode == "new_cudf_default") || (config.stream_mode == "new_testing_default")) {
+    cudf::set_current_device_resource(&adaptor);
   }
   return adaptor;
 }
 
 /**
+ * @brief Should be called in every test program that uses rmm allocators since it maintains the
+ * lifespan of the rmm default memory resource. this function parses the command line to customize
+ * test behavior, like the allocation mode used for creating the default memory resource.
+ *
+ */
+inline void init_cudf_test(int argc, char** argv, cudf::test::config const& config_override = {})
+{
+  // static lifetime to keep rmm resource alive till tests end
+  auto const cmd_opts       = parse_cudf_test_opts(argc, argv);
+  cudf::test::config config = config_override;
+  if (config.rmm_mode.empty()) { config.rmm_mode = cmd_opts["rmm_mode"].as<std::string>(); }
+
+  if (config.stream_mode.empty()) {
+    config.stream_mode = cmd_opts["stream_mode"].as<std::string>();
+  }
+
+  if (config.stream_error_mode.empty()) {
+    config.stream_error_mode = cmd_opts["stream_error_mode"].as<std::string>();
+  }
+
+  [[maybe_unused]] static auto mr      = make_memory_resource_adaptor(config);
+  [[maybe_unused]] static auto adaptor = make_stream_mode_adaptor(config);
+}
+
+/**
  * @brief Macro that defines main function for gtest programs that use rmm
  *
- * Should be included in every test program that uses rmm allocators since
- * it maintains the lifespan of the rmm default memory resource.
  * This `main` function is a wrapper around the google test generated `main`,
- * maintaining the original functionality. In addition, this custom `main`
- * function parses the command line to customize test behavior, like the
- * allocation mode used for creating the default memory resource.
+ * maintaining the original functionality.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char** argv)                                       \
-  {                                                                     \
-    ::testing::InitGoogleTest(&argc, argv);                             \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
-    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
-    auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_current_device_resource(resource.get());               \
-    auto adaptor = make_stream_mode_adaptor(cmd_opts);                  \
-    return RUN_ALL_TESTS();                                             \
+#define CUDF_TEST_PROGRAM_MAIN()            \
+  int main(int argc, char** argv)           \
+  {                                         \
+    ::testing::InitGoogleTest(&argc, argv); \
+    init_cudf_test(argc, argv);             \
+    return RUN_ALL_TESTS();                 \
   }

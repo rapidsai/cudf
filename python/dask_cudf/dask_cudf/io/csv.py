@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import os
 from glob import glob
@@ -7,9 +7,8 @@ from warnings import warn
 from fsspec.utils import infer_compression
 
 from dask import dataframe as dd
-from dask.base import tokenize
 from dask.dataframe.io.csv import make_reader
-from dask.utils import apply, parse_bytes
+from dask.utils import parse_bytes
 
 import cudf
 
@@ -26,11 +25,11 @@ def read_csv(path, blocksize="default", **kwargs):
     >>> import dask_cudf
     >>> df = dask_cudf.read_csv("myfiles.*.csv")
 
-    In some cases it can break up large files:
+    It can break up large files if blocksize is specified:
 
     >>> df = dask_cudf.read_csv("largefile.csv", blocksize="256 MiB")
 
-    It can read CSV files from external resources (e.g. S3, HTTP, FTP)
+    It can read CSV files from external resources (e.g. S3, HTTP, FTP):
 
     >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
     >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
@@ -45,15 +44,15 @@ def read_csv(path, blocksize="default", **kwargs):
     ----------
     path : str, path object, or file-like object
         Either a path to a file (a str, :py:class:`pathlib.Path`, or
-        py._path.local.LocalPath), URL (including http, ftp, and S3
-        locations), or any object with a read() method (such as
+        ``py._path.local.LocalPath``), URL (including HTTP, FTP, and S3
+        locations), or any object with a ``read()`` method (such as
         builtin :py:func:`open` file handler function or
         :py:class:`~io.StringIO`).
     blocksize : int or str, default "256 MiB"
         The target task partition size. If ``None``, a single block
         is used for each file.
     **kwargs : dict
-        Passthrough key-word arguments that are sent to
+        Passthrough keyword arguments that are sent to
         :func:`cudf:cudf.read_csv`.
 
     Notes
@@ -72,18 +71,6 @@ def read_csv(path, blocksize="default", **kwargs):
     2  3     ai
 
     """
-
-    # Handle `chunksize` deprecation
-    if "chunksize" in kwargs:
-        chunksize = kwargs.pop("chunksize", "default")
-        warn(
-            "`chunksize` is deprecated and will be removed in the future. "
-            "Please use `blocksize` instead.",
-            FutureWarning,
-        )
-        if blocksize == "default":
-            blocksize = chunksize
-
     # Set default `blocksize`
     if blocksize == "default":
         if (
@@ -121,10 +108,6 @@ def _internal_read_csv(path, blocksize="256 MiB", **kwargs):
         msg = f"A file in: {filenames} does not exist."
         raise FileNotFoundError(msg)
 
-    name = "read-csv-" + tokenize(
-        path, tokenize, **kwargs
-    )  # TODO: get last modified time
-
     compression = kwargs.get("compression", "infer")
 
     if compression == "infer":
@@ -157,10 +140,9 @@ def _internal_read_csv(path, blocksize="256 MiB", **kwargs):
         # `usecols` or `dtype` was specified
         meta = dask_reader(filenames[0], **kwargs)._meta
 
-    dsk = {}
     i = 0
-    dtypes = meta.dtypes.values
-
+    path_list = []
+    kwargs_list = []
     for fn in filenames:
         size = os.path.getsize(fn)
         for start in range(0, size, blocksize):
@@ -172,15 +154,14 @@ def _internal_read_csv(path, blocksize="256 MiB", **kwargs):
             if start != 0:
                 kwargs2["names"] = names  # no header in the middle of the file
                 kwargs2["header"] = None
-            dsk[(name, i)] = (apply, _read_csv, [fn, dtypes], kwargs2)
-
+            path_list.append(fn)
+            kwargs_list.append(kwargs2)
             i += 1
 
-    divisions = [None] * (len(dsk) + 1)
-    return dd.core.new_dd_object(dsk, name, meta, divisions)
+    return dd.from_map(_read_csv, path_list, kwargs_list, meta=meta)
 
 
-def _read_csv(fn, dtypes=None, **kwargs):
+def _read_csv(fn, kwargs):
     return cudf.read_csv(fn, **kwargs)
 
 
@@ -201,8 +182,6 @@ def read_csv_without_blocksize(path, **kwargs):
     else:
         raise TypeError(f"Path type not understood:{type(path)}")
 
-    name = "read-csv-" + tokenize(path, **kwargs)
-
     meta_kwargs = kwargs.copy()
     if "skipfooter" in meta_kwargs:
         meta_kwargs.pop("skipfooter")
@@ -211,12 +190,4 @@ def read_csv_without_blocksize(path, **kwargs):
     # Read "head" of first file (first 5 rows).
     # Convert to empty df for metadata.
     meta = cudf.read_csv(filenames[0], nrows=5, **meta_kwargs).iloc[:0]
-
-    graph = {
-        (name, i): (apply, cudf.read_csv, [fn], kwargs)
-        for i, fn in enumerate(filenames)
-    }
-
-    divisions = [None] * (len(filenames) + 1)
-
-    return dd.core.new_dd_object(graph, name, meta, divisions)
+    return dd.from_map(cudf.read_csv, filenames, meta=meta, **kwargs)

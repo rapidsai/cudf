@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,41 +18,14 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction/detail/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::detail {
-
-bool can_optimize_unbounded_window(bool unbounded_preceding,
-                                   bool unbounded_following,
-                                   size_type min_periods,
-                                   rolling_aggregation const& agg)
-{
-  auto is_supported = [](auto const& agg) {
-    switch (agg.kind) {
-      case cudf::aggregation::Kind::COUNT_ALL: [[fallthrough]];
-      case cudf::aggregation::Kind::COUNT_VALID: [[fallthrough]];
-      case cudf::aggregation::Kind::SUM: [[fallthrough]];
-      case cudf::aggregation::Kind::MIN: [[fallthrough]];
-      case cudf::aggregation::Kind::MAX: return true;
-      default:
-        // COLLECT_LIST and COLLECT_SET can be added at a later date.
-        // Other aggregations do not fit into the [UNBOUNDED, UNBOUNDED]
-        // category. For instance:
-        // 1. Ranking functions (ROW_NUMBER, RANK, DENSE_RANK, PERCENT_RANK)
-        //    use [UNBOUNDED PRECEDING, CURRENT ROW].
-        // 2. LEAD/LAG are defined on finite row boundaries.
-        return false;
-    }
-  };
-
-  return unbounded_preceding && unbounded_following && (min_periods == 1) && is_supported(agg);
-}
+namespace {
 
 /// Converts rolling_aggregation to corresponding reduce/groupby_aggregation.
 template <typename Base>
@@ -94,13 +67,13 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
                                                          column_view const& input,
                                                          rolling_aggregation const& aggr,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(group_keys.num_columns() > 0,
                "Ungrouped rolling window not supported in aggregation path.");
 
   auto agg_requests = std::vector<cudf::groupby::aggregation_request>{};
-  agg_requests.push_back(cudf::groupby::aggregation_request());
+  agg_requests.emplace_back();
   agg_requests.front().values = input;
   agg_requests.front().aggregations.push_back(convert_to<cudf::groupby_aggregation>(aggr));
 
@@ -127,7 +100,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
 std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
                                                        rolling_aggregation const& aggr,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+                                                       rmm::device_async_resource_ref mr)
 {
   auto const reduce_results = [&] {
     auto const return_dtype = cudf::detail::target_type(input.type(), aggr.kind);
@@ -141,18 +114,45 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
                                              return_dtype,
                                              std::nullopt,
                                              stream,
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
     }
   }();
   // Blow up results into separate column.
   return cudf::make_column_from_scalar(*reduce_results, input.size(), stream, mr);
+}
+}  // namespace
+
+bool can_optimize_unbounded_window(bool unbounded_preceding,
+                                   bool unbounded_following,
+                                   size_type min_periods,
+                                   rolling_aggregation const& agg)
+{
+  auto is_supported = [](auto const& agg) {
+    switch (agg.kind) {
+      case cudf::aggregation::Kind::COUNT_ALL: [[fallthrough]];
+      case cudf::aggregation::Kind::COUNT_VALID: [[fallthrough]];
+      case cudf::aggregation::Kind::SUM: [[fallthrough]];
+      case cudf::aggregation::Kind::MIN: [[fallthrough]];
+      case cudf::aggregation::Kind::MAX: return true;
+      default:
+        // COLLECT_LIST and COLLECT_SET can be added at a later date.
+        // Other aggregations do not fit into the [UNBOUNDED, UNBOUNDED]
+        // category. For instance:
+        // 1. Ranking functions (ROW_NUMBER, RANK, DENSE_RANK, PERCENT_RANK)
+        //    use [UNBOUNDED PRECEDING, CURRENT ROW].
+        // 2. LEAD/LAG are defined on finite row boundaries.
+        return false;
+    }
+  };
+
+  return unbounded_preceding && unbounded_following && (min_periods == 1) && is_supported(agg);
 }
 
 std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
                                                    column_view const& input,
                                                    rolling_aggregation const& aggr,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   return group_keys.num_columns() > 0
            ? aggregation_based_rolling_window(group_keys, input, aggr, stream, mr)

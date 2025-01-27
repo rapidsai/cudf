@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -230,6 +229,16 @@ TEST_F(CopyRangeTestFixture, CopyWithNullsString)
 
   auto p_ret = cudf::copy_range(source, target, source_begin, source_end, target_begin);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
+}
+
+TEST_F(CopyRangeTestFixture, CopyWithTargetNullsString)
+{
+  auto target =
+    cudf::test::strings_column_wrapper({"a", "b", "", "d", "", "é"}, {1, 1, 0, 1, 1, 1});
+  auto source   = cudf::test::strings_column_wrapper({"A", "B", "C", "D", "E", "F"});
+  auto result   = cudf::copy_range(source, target, 1, 5, 1);
+  auto expected = cudf::test::strings_column_wrapper({"a", "B", "C", "D", "E", "é"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 }
 
 TEST_F(CopyRangeTestFixture, CopyNoNullsString)
@@ -465,7 +474,7 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   auto dict_target = cudf::dictionary::encode(target);
   auto dict_source = cudf::dictionary::encode(source);
   EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 template <typename T>

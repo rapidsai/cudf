@@ -336,7 +336,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
   auto const result_even = cudf::round(input, -target_scale, cudf::rounding_method::HALF_EVEN);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_even, result_even->view());
 
-  const std::initializer_list<bool> validity = {1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0};
+  const std::initializer_list<bool> validity = {
+    true, false, true, true, true, false, false, true, true, true, true, false};
   auto const input_null =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, validity, scale_type{1}};
   auto const expected_null =
@@ -705,7 +706,7 @@ TEST_F(RoundTests, BoolTestHalfUp)
 }
 
 // Use __uint128_t for demonstration.
-constexpr __uint128_t operator""_uint128_t(const char* s)
+constexpr __uint128_t operator""_uint128_t(char const* s)
 {
   __uint128_t ret = 0;
   for (int i = 0; s[i] != '\0'; ++i) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/transpose.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -34,7 +35,7 @@ namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::device_async_resource_ref mr)
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
@@ -60,10 +61,11 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 }  // namespace detail
 
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transpose(input, cudf::get_default_stream(), mr);
+  return detail::transpose(input, stream, mr);
 }
 
 }  // namespace cudf

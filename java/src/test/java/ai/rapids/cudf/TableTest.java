@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,7 +40,6 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -48,8 +47,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -81,6 +83,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
+  private static final File TEST_ORC_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
   private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
@@ -436,6 +439,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
   void testReadSingleQuotesJSONFileKeepQuotes() throws IOException {
     Schema schema = Schema.builder()
         .column(DType.STRING, "A")
@@ -451,6 +455,224 @@ public class TableTest extends CudfTestBase {
          MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
          Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] JSON_VALIDATION_BUFFER = (
+      "{\"a\":true}\n" +
+      "{\"a\":false}\n" +
+      "{\"a\":null}\n" +
+      "{\"a\":true, \"b\":truee}\n" +
+      "{\"a\":true, \"b\":\"nulll\"}\n" +
+      "{\"a\": 1}\n" +
+      "{\"a\": 0}\n" +
+      "{\"a\": -}\n" +
+      "{\"a\": -0}\n" +
+      "{\"a\": -01}\n" +
+
+      "{\"a\": 01}\n" +
+      "{\"a\": -0.1}\n" +
+      "{\"a\": -00.1}\n" +
+      "{\"a\": NaN}\n" +
+      "{\"a\": INF}\n" +
+      "{\"a\": +INF}\n" +
+      "{\"a\": -INF}\n" +
+      "{\"a\": +Infinity}\n" +
+      "{\"a\": Infinity}\n" +
+      "{\"a\": -Infinity}\n" +
+
+      "{\"a\": INFinity}\n" +
+      "{\"a\":\"3710-11-10T02:46:58.732Z\"}\n" +
+      "{\"a\":12.}\n" +
+      "{\"a\": -3.4e+38}\n" +
+      "{\"a\": -3.4e-38}\n" +
+      "{\"a\": 1.4e38}\n" +
+      "{\"a\": -3.4E+38}\n" +
+      "{\"a\": -3.4E-38}\n" +
+      "{\"a\": 1.4E38}\n" +
+      "{\"a\": -3.4E+}\n" +
+
+      "{\"a\": -3.4E-}\n" +
+      "{\"a\": \"A\u0000B\"}\n" +
+      "{\"a\": \"A\\u0000B\"}\n" +
+      "{\"a\": \"A\u0001B\"}\n" +
+      "{\"a\": \"A\\u0001B\"}\n" +
+      "{\"a\": \"A\u001FB\"}\n" +
+      "{\"a\": \"A\\u001FB\"}\n" +
+      "{\"a\": \"A\u0020B\"}\n" +
+      "{\"a\": \"A\\u0020B\"}\n" +
+      "{\"a\": \"\\u12\"}\n" +
+
+      "{\"a\": \"\\z\"}\n" +
+      "{\"a\": \"\\r\"}\n" +
+      "{\"a\": \"something\", \"b\": \"\\z\"}\n"
+  ).getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testJSONValidationNoStrict() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "a")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeWhitespace(true)
+        .withKeepQuotes(true)
+        .withNormalizeSingleQuotes(true)
+        .withStrictValidation(false)
+        .withLeadingZeros(false)
+        .withNonNumericNumbers(false)
+        .withUnquotedControlChars(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(
+            "true", "false", null, "true", "true", "1", "0", "-", "-0", "-01",
+            "01", "-0.1", "-00.1", "NaN", "INF", "+INF", "-INF", "+Infinity", "Infinity", "-Infinity",
+            "INFinity", "\"3710-11-10T02:46:58.732Z\"", "12.", "-3.4e+38", "-3.4e-38", "1.4e38", "-3.4E+38", "-3.4E-38", "1.4E38", "-3.4E+",
+            "-3.4E-", "\"A\u0000B\"", "\"A\u0000B\"", "\"A\u0001B\"", "\"A\u0001B\"", "\"A\u001FB\"", "\"A\u001FB\"", "\"A B\"", "\"A B\"", null,
+            null, "\"\r\"", "\"something\"")
+        .build();
+         MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
+         Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testJSONValidation() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "a")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeWhitespace(true)
+        .withKeepQuotes(true)
+        .withNormalizeSingleQuotes(true)
+        .withStrictValidation(true)
+        .withLeadingZeros(false)
+        .withNonNumericNumbers(false)
+        .withUnquotedControlChars(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(
+            "true", "false", null, null, "true", "1", "0", null, "-0", null,
+            null, "-0.1", null, null, null, null, null, null, null, null,
+            null, "\"3710-11-10T02:46:58.732Z\"", null, "-3.4e+38", "-3.4e-38", "1.4e38", "-3.4E+38", "-3.4E-38", "1.4E38", null,
+            null, "\"A\u0000B\"", "\"A\u0000B\"", "\"A\u0001B\"", "\"A\u0001B\"", "\"A\u001FB\"", "\"A\u001FB\"", "\"A B\"", "\"A B\"", null,
+            null, "\"\r\"", null)
+        .build();
+         MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
+         Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testJSONValidationLeadingZeros() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "a")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeWhitespace(true)
+        .withKeepQuotes(true)
+        .withNormalizeSingleQuotes(true)
+        .withStrictValidation(true)
+        .withLeadingZeros(true)
+        .withNonNumericNumbers(false)
+        .withUnquotedControlChars(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(
+            "true", "false", null, null, "true", "1", "0", null, "-0", "-01",
+            "01", "-0.1", "-00.1", null, null, null, null, null, null, null,
+            null, "\"3710-11-10T02:46:58.732Z\"", null, "-3.4e+38", "-3.4e-38", "1.4e38", "-3.4E+38", "-3.4E-38", "1.4E38", null,
+            null, "\"A\u0000B\"", "\"A\u0000B\"", "\"A\u0001B\"", "\"A\u0001B\"", "\"A\u001FB\"", "\"A\u001FB\"", "\"A B\"", "\"A B\"", null,
+            null, "\"\r\"", null)
+        .build();
+         MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
+         Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testJSONValidationNonNumeric() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "a")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeWhitespace(true)
+        .withKeepQuotes(true)
+        .withNormalizeSingleQuotes(true)
+        .withStrictValidation(true)
+        .withLeadingZeros(false)
+        .withNonNumericNumbers(true)
+        .withUnquotedControlChars(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(
+            "true", "false", null, null, "true", "1", "0", null, "-0", null,
+            null, "-0.1", null, "NaN", null, "+INF", "-INF", "+Infinity", "Infinity", "-Infinity",
+            null, "\"3710-11-10T02:46:58.732Z\"", null, "-3.4e+38", "-3.4e-38", "1.4e38", "-3.4E+38", "-3.4E-38", "1.4E38", null,
+            null, "\"A\u0000B\"", "\"A\u0000B\"", "\"A\u0001B\"", "\"A\u0001B\"", "\"A\u001FB\"", "\"A\u001FB\"", "\"A B\"", "\"A B\"", null,
+            null, "\"\r\"", null)
+        .build();
+         MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
+         Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testJSONValidationUnquotedControl() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "a")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeWhitespace(true)
+        .withKeepQuotes(true)
+        .withNormalizeSingleQuotes(true)
+        .withStrictValidation(true)
+        .withLeadingZeros(false)
+        .withNonNumericNumbers(false)
+        .withUnquotedControlChars(false)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(
+            "true", "false", null, null, "true", "1", "0", null, "-0", null,
+            null, "-0.1", null, null, null, null, null, null, null, null,
+            null, "\"3710-11-10T02:46:58.732Z\"", null, "-3.4e+38", "-3.4e-38", "1.4e38", "-3.4E+38", "-3.4E-38", "1.4E38", null,
+            null, null, "\"A\u0000B\"", null, "\"A\u0001B\"", null, "\"A\u001FB\"", "\"A B\"", "\"A B\"", null,
+            null, "\"\r\"", null)
+        .build();
+         MultiBufferDataSource source = sourceFrom(JSON_VALIDATION_BUFFER);
+         Table table = Table.readJSON(schema, opts, source, (int)expected.getRowCount())) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] CR_JSON_TEST_BUFFER = ("{\"a\":\"12\n3\"}\0" +
+      "{\"a\":\"AB\nC\"}\0").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadJSONDelim() {
+    Schema schema = Schema.builder().addColumn(DType.STRING, "a").build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .withLineDelimiter('\0')
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("12\n3", "AB\nC")
+        .build();
+        Table found = Table.readJSON(schema, opts, CR_JSON_TEST_BUFFER)) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
@@ -1496,6 +1718,42 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testChunkedReadParquetHostBuffers() throws Exception {
+    long size = TEST_PARQUET_FILE_CHUNKED_READ.length();
+    java.nio.file.Path path = TEST_PARQUET_FILE_CHUNKED_READ.toPath();
+    try (HostMemoryBuffer buf1 = HostMemoryBuffer.allocate(size / 2);
+         HostMemoryBuffer buf2 = HostMemoryBuffer.allocate(size - buf1.getLength())) {
+      try (SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ)) {
+        ByteBuffer bb1 = buf1.asByteBuffer();
+        while (bb1.hasRemaining()) {
+          if (channel.read(bb1) == -1) {
+            throw new EOFException("error reading first buffer");
+          }
+        }
+        ByteBuffer bb2 = buf2.asByteBuffer();
+        while (bb2.hasRemaining()) {
+          if (channel.read(bb2) == -1) {
+            throw new EOFException("error reading second buffer");
+          }
+        }
+      }
+      ParquetOptions opts = ParquetOptions.DEFAULT;
+      try (ParquetChunkedReader reader = new ParquetChunkedReader(240000, 0, opts, buf1, buf2)) {
+        int numChunks = 0;
+        long totalRows = 0;
+        while(reader.hasNext()) {
+          ++numChunks;
+          try(Table chunk = reader.readChunk()) {
+            totalRows += chunk.getRowCount();
+          }
+        }
+        assertEquals(2, numChunks);
+        assertEquals(40000, totalRows);
+      }
+    }
+  }
+
+  @Test
   void testChunkedReadParquetFromDataSource() throws IOException {
     try (MultiBufferDataSource source = sourceFrom(TEST_PARQUET_FILE_CHUNKED_READ);
          ParquetChunkedReader reader = new ParquetChunkedReader(240000, ParquetOptions.DEFAULT, source)) {
@@ -1696,6 +1954,29 @@ public class TableTest extends CudfTestBase {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP_SECONDS, table.getColumn(0).getType());
       assertEquals(DType.TIMESTAMP_DAYS, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
+  void testORCChunkedReader() throws IOException {
+    byte[] buffer = Files.readAllBytes(TEST_ORC_FILE_CHUNKED_READ.toPath());
+    long len = buffer.length;
+
+    try (HostMemoryBuffer hostBuf = hostMemoryAllocator.allocate(len)) {
+      hostBuf.setBytes(0, buffer, 0, len);
+      try (ORCChunkedReader reader = new ORCChunkedReader(0, 2 * 1024 * 1024, 10000,
+          ORCOptions.DEFAULT, hostBuf, 0, len)) {
+        int numChunks = 0;
+        long totalRows = 0;
+        while (reader.hasNext()) {
+          ++numChunks;
+          try (Table chunk = reader.readChunk()) {
+            totalRows += chunk.getRowCount();
+          }
+        }
+        assertEquals(10, numChunks);
+        assertEquals(1000000, totalRows);
+      }
     }
   }
 
@@ -7814,11 +8095,12 @@ public class TableTest extends CudfTestBase {
         .build();
          Table result = t.groupBy(0).aggregate(
              GroupByAggregation.sum().onColumn(1));
+         Table sorted = result.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column("1-URGENT", "3-MEDIUM")
              .column(5289L + 5303L, 5203L + 5206L)
              .build()) {
-      assertTablesAreEqual(expected, result);
+      assertTablesAreEqual(expected, sorted);
     }
   }
 
@@ -8896,7 +9178,11 @@ public class TableTest extends CudfTestBase {
     columns.add(Columns.STRUCT.name);
     WriteUtils.buildWriterOptions(optBuilder, columns);
     ParquetWriterOptions options = optBuilder.build();
-    ParquetWriterOptions optionsNoCompress = optBuilder.withCompressionType(CompressionType.NONE).build();
+    ParquetWriterOptions optionsNoCompress =
+      optBuilder.withCompressionType(CompressionType.NONE)
+      .withRowGroupSizeRows(10000)
+      .withRowGroupSizeBytes(10000)
+      .build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
@@ -8982,6 +9268,8 @@ public class TableTest extends CudfTestBase {
           .withDecimalColumn("_c7", 4)
           .withDecimalColumn("_c8", 6)
           .withCompressionType(CompressionType.NONE)
+          .withRowGroupSizeRows(10000)
+          .withRowGroupSizeBytes(10000)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {

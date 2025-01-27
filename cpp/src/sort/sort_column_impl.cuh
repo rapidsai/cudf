@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -52,7 +53,7 @@ std::unique_ptr<column> sorted_order(column_view const& input,
                                      order column_order,
                                      null_order null_precedence,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Comparator functor needed for single column sort.

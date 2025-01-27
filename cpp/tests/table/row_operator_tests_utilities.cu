@@ -42,7 +42,7 @@ std::unique_ptr<cudf::column> two_table_comparison(cudf::table_view lhs,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  if (cudf::detail::has_nested_columns(lhs) || cudf::detail::has_nested_columns(rhs)) {
+  if (cudf::has_nested_columns(lhs) || cudf::has_nested_columns(rhs)) {
     thrust::transform(rmm::exec_policy(stream),
                       lhs_it,
                       lhs_it + lhs.num_rows(),
@@ -129,7 +129,7 @@ std::unique_ptr<cudf::column> two_table_equality(cudf::table_view lhs,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  if (cudf::detail::has_nested_columns(lhs) or cudf::detail::has_nested_columns(rhs)) {
+  if (cudf::has_nested_columns(lhs) or cudf::has_nested_columns(rhs)) {
     auto const equal_comparator =
       table_comparator.equal_to<true>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
 

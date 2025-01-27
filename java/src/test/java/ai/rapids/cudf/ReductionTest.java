@@ -612,13 +612,13 @@ class ReductionTest extends CudfTestBase {
       assertEquals(expected, result);
     }
 
-    try (Scalar expected = Scalar.fromFloat(1.666667f);
+    try (Scalar expected = Scalar.fromFloat(1.6666666f);
          ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
          Scalar result = cv.variance(DType.FLOAT32)) {
       assertEquals(expected, result);
     }
 
-    try (Scalar expected = Scalar.fromFloat(1.2909945f);
+    try (Scalar expected = Scalar.fromFloat(1.2909944f);
          ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
          Scalar result = cv.standardDeviation(DType.FLOAT32)) {
       assertEquals(expected, result);

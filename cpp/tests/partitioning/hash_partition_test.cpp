@@ -26,6 +26,7 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -140,7 +141,7 @@ TEST_F(HashPartition, MixedColumnTypes)
 
 TEST_F(HashPartition, NullableStrings)
 {
-  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {1, 1, 1, 1});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {true, true, true, true});
   cudf::table_view input({strings});
 
   std::vector<cudf::size_type> const columns_to_hash({0});
@@ -290,7 +291,7 @@ void run_fixed_width_test(size_t cols,
   // Make a table view of the partition numbers
   constexpr cudf::data_type dtype{cudf::type_id::INT32};
   auto d_partitions = cudf::detail::make_device_uvector_sync(
-    partitions, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    partitions, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::column_view partitions_col(dtype, rows, d_partitions.data(), nullptr, 0);
   cudf::table_view partitions_table({partitions_col});
 

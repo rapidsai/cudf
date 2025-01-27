@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 
 #include "mixed_join_kernel.cuh"
+#include "mixed_join_kernel.hpp"
 
 namespace cudf {
 namespace detail {
 
-template __global__ void mixed_join<DEFAULT_JOIN_BLOCK_SIZE, false>(
+template void launch_mixed_join<false>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
@@ -32,7 +33,10 @@ template __global__ void mixed_join<DEFAULT_JOIN_BLOCK_SIZE, false>(
   size_type* join_output_r,
   cudf::ast::detail::expression_device_view device_expression_data,
   cudf::size_type const* join_result_offsets,
-  bool const swap_tables);
+  bool const swap_tables,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

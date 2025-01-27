@@ -36,6 +36,8 @@
 #define CUDF_KERNEL static
 #endif
 
+#include <cudf/utilities/export.hpp>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +56,7 @@ class device_buffer;
 
 }  // namespace rmm
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 // Forward declaration
 class column;
 class column_view;
@@ -264,7 +266,7 @@ class data_type {
    *
    * @param id The type's identifier
    */
-  explicit constexpr data_type(type_id id) : _id{id} {}
+  CUDF_HOST_DEVICE explicit constexpr data_type(type_id id) : _id{id} {}
 
   /**
    * @brief Construct a new `data_type` object for `numeric::fixed_point`
@@ -282,14 +284,17 @@ class data_type {
    *
    * @return The type identifier
    */
-  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    *
    * @return The scale
    */
-  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t scale() const noexcept
+  {
+    return _fixed_point_scale;
+  }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -344,4 +349,4 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
 std::size_t size_of(data_type t);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

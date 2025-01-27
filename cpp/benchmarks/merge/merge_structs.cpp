@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/detail/merge.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -27,11 +28,11 @@ void nvbench_merge_struct(nvbench::state& state)
 
   auto const input1 = create_structs_data(state);
   auto const sorted_input1 =
-    cudf::detail::sort(*input1, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::sort(*input1, {}, {}, stream, cudf::get_current_device_resource_ref());
 
   auto const input2 = create_structs_data(state);
   auto const sorted_input2 =
-    cudf::detail::sort(*input2, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::sort(*input2, {}, {}, stream, cudf::get_current_device_resource_ref());
 
   stream.synchronize();
 
@@ -43,7 +44,7 @@ void nvbench_merge_struct(nvbench::state& state)
                         {cudf::order::ASCENDING},
                         {},
                         stream_view,
-                        rmm::mr::get_current_device_resource());
+                        cudf::get_current_device_resource_ref());
   });
 }
 

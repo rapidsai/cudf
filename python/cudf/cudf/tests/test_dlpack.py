@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -9,7 +9,7 @@ import pytest
 from packaging import version
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 nelems = [0, 3, 10]
 dtype = [np.uint16, np.int32, np.float64]
@@ -42,9 +42,10 @@ def data_1d(request):
     nelems = request.param[0]
     dtype = request.param[1]
     nulls = request.param[2]
-    a = np.random.randint(10, size=nelems).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    a = rng.integers(10, size=nelems).astype(dtype)
     if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
-        idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
+        idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a[idx] = np.nan
     return a
 
@@ -55,9 +56,10 @@ def data_2d(request):
     nrows = request.param[1]
     dtype = request.param[2]
     nulls = request.param[3]
-    a = np.random.randint(10, size=(nrows, ncols)).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    a = rng.integers(10, size=(nrows, ncols)).astype(dtype)
     if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
-        idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
+        idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a.ravel()[idx] = np.nan
     return np.ascontiguousarray(a)
 
@@ -101,7 +103,7 @@ def test_to_dlpack_index(data_1d):
     with expectation:
         if np.isnan(data_1d).any():
             pytest.skip("Nulls not allowed in Index")
-        gi = cudf.core.index.as_index(data_1d)
+        gi = cudf.Index(data_1d)
         dlt = gi.to_dlpack()
 
         # PyCapsules are a C-API thing so couldn't come up with a better way
@@ -201,12 +203,7 @@ def test_to_dlpack_mixed_dtypes():
     "shape",
     [
         (0, 3),
-        pytest.param(
-            (3, 0),
-            marks=pytest.mark.xfail(
-                reason="Index information not available via from_dlpack"
-            ),
-        ),
+        (3, 0),
         (0, 0),
     ],
 )

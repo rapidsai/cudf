@@ -16,11 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <random>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 
 template <typename T, typename Enable = void>
@@ -170,4 +171,4 @@ class UniformRandomGenerator {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

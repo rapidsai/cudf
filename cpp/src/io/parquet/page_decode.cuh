@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
+#include <cooperative_groups.h>
 #include <cuda/atomic>
 #include <cuda/std/tuple>
 
 namespace cudf::io::parquet::detail {
 
 struct page_state_s {
-  constexpr page_state_s() noexcept {}
+  CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
   uint8_t const* data_start{};
   uint8_t const* data_end{};
   uint8_t const* lvl_end{};
@@ -120,9 +121,10 @@ struct null_count_back_copier {
 /**
  * @brief Test if the given page is in a string column
  */
-constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
+__device__ constexpr bool is_string_col(PageInfo const& page,
+                                        device_span<ColumnChunkDesc const> chunks)
 {
-  if (page.flags & PAGEINFO_FLAGS_DICTIONARY != 0) { return false; }
+  if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
   return is_string_col(col);
 }
@@ -148,10 +150,21 @@ inline __device__ bool is_bounds_page(page_state_s* const s,
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
-  // for non-nested schemas, rows cannot span pages, so use a more restrictive test
-  return has_repetition
-           ? ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end))
-           : ((page_begin < begin && page_end > begin) || (page_begin < end && page_end > end));
+  // Test for list schemas.
+  auto const is_bounds_page_lists =
+    ((page_begin <= begin and page_end >= begin) or (page_begin <= end and page_end >= end));
+
+  // For non-list schemas, rows cannot span pages, so use a more restrictive test. Make sure to
+  // relax the test for `page_end` if we adjusted the `num_rows` for the last page to compensate
+  // for list row size estimates in `generate_list_column_row_count_estimates()` when chunked
+  // read mode.
+  auto const test_page_end_nonlists =
+    s->page.is_num_rows_adjusted ? page_end >= end : page_end > end;
+
+  auto const is_bounds_page_nonlists =
+    (page_begin < begin and page_end > begin) or (page_begin < end and test_page_end_nonlists);
+
+  return has_repetition ? is_bounds_page_lists : is_bounds_page_nonlists;
 }
 
 /**
@@ -185,12 +198,11 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return A pair containing a pointer to the string and its length
  */
 template <typename state_buf>
-inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s* s,
-                                                                        state_buf* sb,
-                                                                        int src_pos)
+inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
   char const* ptr = nullptr;
-  size_t len      = 0;
+  using len_type  = std::tuple_element<1, string_index_pair>::type;
+  len_type len    = 0;
 
   if (s->dict_base) {
     // String dictionary
@@ -199,9 +211,7 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_sta
         ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] * sizeof(string_index_pair)
         : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
-      ptr             = src->first;
-      len             = src->second;
+      return *reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
     }
   } else {
     // Plain encoding
@@ -420,46 +430,62 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
  * @param[in,out] s Page state input/output
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
- * @param[in] t Thread ID
+ * @param[in] g Cooperative group (thread block or tile)
  * @tparam sizes_only True if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
+ * @tparam thread_group Typename of the cooperative group (inferred)
  *
  * @return Total length of strings processed
  */
-template <bool sizes_only, typename state_buf>
-__device__ size_type
-gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int target_pos, int t)
+template <bool sizes_only, typename state_buf, typename thread_group>
+__device__ size_type gpuInitStringDescriptors(page_state_s* s,
+                                              [[maybe_unused]] state_buf* sb,
+                                              int target_pos,
+                                              thread_group const& g)
 {
-  int pos       = s->dict_pos;
-  int total_len = 0;
+  int const t         = g.thread_rank();
+  int const dict_size = s->dict_size;
+  int k               = s->dict_val;
+  int pos             = s->dict_pos;
+  int total_len       = 0;
 
-  // This step is purely serial
-  if (!t) {
-    uint8_t const* cur = s->data_start;
-    int dict_size      = s->dict_size;
-    int k              = s->dict_val;
+  // All group threads can participate for fixed len byte arrays.
+  if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+    int const dtype_len_in = s->dtype_len_in;
+    total_len              = min((target_pos - pos) * dtype_len_in, dict_size - s->dict_val);
+    if constexpr (!sizes_only) {
+      for (pos += t, k += t * dtype_len_in; pos < target_pos; pos += g.size()) {
+        sb->str_len[rolling_index<state_buf::str_buf_size>(pos)] =
+          (k < dict_size) ? dtype_len_in : 0;
+        // dict_idx is upperbounded by dict_size.
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
+        // Increment k if needed.
+        if (k < dict_size) { k = min(k + (g.size() * dtype_len_in), dict_size); }
+      }
+    }
+    // Only thread_rank = 0 updates the s->dict_val
+    if (!t) { s->dict_val += total_len; }
+  }
+  // This step is purely serial for byte arrays
+  else {
+    if (!t) {
+      uint8_t const* cur = s->data_start;
 
-    while (pos < target_pos) {
-      int len = 0;
-      if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
-        if (k < dict_size) { len = s->dtype_len_in; }
-      } else {
+      for (int len = 0; pos < target_pos; pos++, len = 0) {
         if (k + 4 <= dict_size) {
           len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
           k += 4;
           if (k + len > dict_size) { len = 0; }
         }
+        if constexpr (!sizes_only) {
+          sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
+          sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
+        }
+        k += len;
+        total_len += len;
       }
-      if constexpr (!sizes_only) {
-        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
-        sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
-      }
-      k += len;
-      total_len += len;
-      pos++;
+      s->dict_val = k;
     }
-    s->dict_val = k;
-    __threadfence_block();
   }
 
   return total_len;
@@ -876,7 +902,7 @@ __device__ void gpuDecodeLevels(page_state_s* s,
 {
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  constexpr int batch_size = 32;
+  constexpr int batch_size = cudf::detail::warp_size;
   int cur_leaf_count       = target_leaf_count;
   while (s->error == 0 && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
@@ -924,7 +950,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 
   auto start = cur;
 
-  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur, uint8_t const* end) {
+  auto init_rle = [s, lvl, level_bits](uint8_t const* cur, uint8_t const* end) {
     uint32_t const run      = get_vlq32(cur, end);
     s->initial_rle_run[lvl] = run;
     if (!(run & 1)) {
@@ -1160,7 +1186,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
             if (s->col.logical_type.has_value()) {
-              auto const& lt = s->col.logical_type.value();
+              auto const& lt = *s->col.logical_type;
               if (lt.is_timestamp_millis()) {
                 units = cudf::timestamp_ms::period::den;
               } else if (lt.is_timestamp_micros()) {
@@ -1217,7 +1243,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       } else if (data_type == INT32) {
         // check for smaller bitwidths
         if (s->col.logical_type.has_value()) {
-          auto const& lt = s->col.logical_type.value();
+          auto const& lt = *s->col.logical_type;
           if (lt.type == LogicalType::INTEGER) {
             s->dtype_len = lt.bit_width() / 8;
           } else if (lt.is_time_millis()) {
@@ -1298,9 +1324,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
-        case Encoding::RLE_DICTIONARY:
+        case Encoding::RLE_DICTIONARY: {
           // RLE-packed dictionary indices, first byte indicates index length in bits
-          if (s->col.physical_type == BYTE_ARRAY && s->col.str_dict_index != nullptr) {
+          auto const is_decimal =
+            s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+          if ((s->col.physical_type == BYTE_ARRAY or
+               s->col.physical_type == FIXED_LEN_BYTE_ARRAY) and
+              not is_decimal and s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
@@ -1314,8 +1344,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (s->dict_bits > 32 || (!s->dict_base && s->col.dict_page->num_input_values > 0)) {
             s->set_error_code(decode_error::INVALID_DICT_WIDTH);
           }
-          break;
+        } break;
         case Encoding::PLAIN:
+        case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
           if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }

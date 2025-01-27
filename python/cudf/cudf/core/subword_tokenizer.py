@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import warnings
-from typing import Union
 
 import cupy as cp
 
-from cudf._lib.nvtext.subword_tokenize import (
-    Hashed_Vocabulary as cpp_hashed_vocabulary,
-    subword_tokenize_inmem_hash as cpp_subword_tokenize,
-)
+import pylibcudf as plc
 
 
 def _cast_to_appropriate_type(ar, cast_type):
@@ -51,7 +47,9 @@ class SubwordTokenizer:
 
     def __init__(self, hash_file: str, do_lower_case: bool = True):
         self.do_lower_case = do_lower_case
-        self.vocab_file = cpp_hashed_vocabulary(hash_file)
+        self.vocab_file = plc.nvtext.subword_tokenize.HashedVocabulary(
+            hash_file
+        )
 
     def __call__(
         self,
@@ -60,7 +58,7 @@ class SubwordTokenizer:
         max_num_rows: int,
         add_special_tokens: bool = True,
         padding: str = "max_length",
-        truncation: Union[bool, str] = False,
+        truncation: bool | str = False,
         stride: int = 0,
         return_tensors: str = "cp",
         return_token_type_ids: bool = False,
@@ -208,8 +206,7 @@ class SubwordTokenizer:
         stride = max_length - stride
         # behavior varies from subword_tokenize but maps with huggingface
 
-        input_ids, attention_mask, metadata = cpp_subword_tokenize(
-            text._column,
+        input_ids, attention_mask, metadata = text._column.subword_tokenize(
             self.vocab_file,
             max_sequence_length=max_length,
             stride=stride,

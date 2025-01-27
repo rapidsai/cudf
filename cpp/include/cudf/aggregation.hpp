@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <functional>
 #include <memory>
@@ -31,7 +32,7 @@
  * individual function documentation to see what aggregations are supported.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_factories
  * @{
@@ -103,13 +104,15 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    EWMA,            ///< get exponential weighted moving average at current index
     RANK,            ///< get rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
+    PTX,             ///< PTX  based UDF aggregation
+    CUDA,            ///< CUDA based UDF aggregation
+    HOST_UDF,        ///< host based UDF aggregation
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
     MERGE_M2,        ///< merge partial values of M2 aggregation,
@@ -118,7 +121,7 @@ class aggregation {
     TDIGEST,         ///< create a tdigest from a set of input values
     MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,       ///< compute frequency of each element
-    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation,
+    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation
   };
 
   aggregation() = delete;
@@ -250,6 +253,8 @@ class segmented_reduce_aggregation : public virtual aggregation {
 enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
+/// Type of treatment of EWM input values' first value
+enum class ewm_history : int32_t { INFINITE, FINITE };
 
 /// Factory to create a SUM aggregation
 /// @return A SUM aggregation object
@@ -412,6 +417,42 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
+ * @brief Factory to create an EWMA aggregation
+ *
+ * `EWMA` returns a non-nullable column with the same type as the input,
+ * whose values are the exponentially weighted moving average of the input
+ * sequence. Let these values be known as the y_i.
+ *
+ * EWMA aggregations are parameterized by a center of mass (`com`) which
+ * affects the contribution of the previous values (y_0 ... y_{i-1}) in
+ * computing the y_i.
+ *
+ * EWMA aggregations are also parameterized by a history `cudf::ewm_history`.
+ * Special considerations have to be given to the mathematical treatment of
+ * the first value of the input sequence. There are two approaches to this,
+ * one which considers the first value of the sequence to be the exponential
+ * weighted moving average of some infinite history of data, and one which
+ * takes the first value to be the only datapoint known. These assumptions
+ * lead to two different formulas for the y_i. `ewm_history` selects which.
+ *
+ * EWMA aggregations have special null handling. Nulls have two effects. The
+ * first is to propagate forward the last valid value as far as it has been
+ * computed. This could be thought of as the nulls not affecting the average
+ * in any way. The second effect changes the way the y_i are computed. Since
+ * a moving average is conceptually designed to weight contributing values by
+ * their recency, nulls ought to count as valid periods even though they do
+ * not change the average. For example, if the input sequence is {1, NULL, 3}
+ * then when computing y_2 one should weigh y_0 as if it occurs two periods
+ * before y_2 rather than just one.
+ *
+ * @param center_of_mass the center of mass.
+ * @param history which assumption to make about the first value
+ * @return A EWM aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewm_history history);
+
+/**
  * @brief Factory to create a RANK aggregation
  *
  * `RANK` returns a column of size_type or double "ranks" (see note 3 below for how the
@@ -558,6 +599,18 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
+
+// Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
+class host_udf_base;
+
+/**
+ * @brief Factory to create a HOST_UDF aggregation.
+ *
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
+ * @return A HOST_UDF aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
 
 /**
  * @brief Factory to create a MERGE_LISTS aggregation.
@@ -731,4 +784,4 @@ template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

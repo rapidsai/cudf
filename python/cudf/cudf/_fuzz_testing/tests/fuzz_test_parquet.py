@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import sys
 
@@ -68,7 +68,9 @@ def parquet_writer_test(pdf):
 @pythonfuzz(
     data_handle=ParquetWriter,
     params={
-        "row_group_size": np.random.random_integers(1, 10000, 100),
+        "row_group_size": np.random.default_rng(seed=0).integers(
+            1, 10000, 100
+        ),
         "compression": ["snappy", None],
     },
 )

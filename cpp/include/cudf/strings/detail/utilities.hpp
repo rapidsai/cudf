@@ -18,14 +18,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @brief Create an offsets column to be a child of a strings column
@@ -43,7 +44,7 @@ namespace detail {
 std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
                                                     size_type count,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr);
+                                                    rmm::device_async_resource_ref mr);
 
 /**
  * @brief Creates a string_view vector from a strings column.
@@ -56,7 +57,7 @@ std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return the threshold size for a strings column to use int64 offsets
@@ -95,6 +96,5 @@ int64_t get_offset_value(cudf::column_view const& offsets,
                          size_type index,
                          rmm::cuda_stream_view stream);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

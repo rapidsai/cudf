@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/rmm_host_vector.hpp>
-#include <cudf/io/memory_resource.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -53,7 +53,7 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : h_data({cudf::io::get_host_memory_resource(), stream}), d_data(max_size, stream)
+    : h_data{make_pinned_vector_async<T>(0, stream)}, d_data(max_size, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
@@ -117,63 +117,43 @@ class hostdevice_vector {
     return d_data.element(element_index, stream);
   }
 
-  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
-  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
+  operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
+  operator cudf::host_span<T const>() const
+  {
+    return host_span<T const>{h_data}.subspan(0, size());
+  }
 
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
+    cuda_memcpy_async<T>(d_data, h_data, stream);
   }
 
-  void host_to_device_sync(rmm::cuda_stream_view stream)
-  {
-    host_to_device_async(stream);
-    stream.synchronize();
-  }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
+    cuda_memcpy_async<T>(h_data, d_data, stream);
   }
 
-  void device_to_host_sync(rmm::cuda_stream_view stream)
-  {
-    device_to_host_async(stream);
-    stream.synchronize();
-  }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
    *
    * @return A typed hostdevice_span of the hostdevice_vector's data
    */
-  [[nodiscard]] operator hostdevice_span<T>()
-  {
-    return hostdevice_span<T>{h_data.data(), d_data.data(), size()};
-  }
+  [[nodiscard]] operator hostdevice_span<T>() { return {host_span<T>{h_data}, device_ptr()}; }
 
-  /**
-   * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A typed hostdevice_span of the hostdevice_vector's data
-   */
-  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
+  [[nodiscard]] operator hostdevice_span<T const>() const
   {
-    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
-    CUDF_EXPECTS(count <= d_data.size() - offset,
-                 "The span with given offset and count is out of bounds.");
-    return hostdevice_span<T>{h_data.data() + offset, d_data.data() + offset, count};
+    return {host_span<T const>{h_data}, device_ptr()};
   }
 
  private:
-  cudf::detail::rmm_host_vector<T> h_data;
+  cudf::detail::host_vector<T> h_data;
   rmm::device_uvector<T> d_data;
 };
 
@@ -192,40 +172,49 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
-  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
+  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
-  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+  [[nodiscard]] device_2dspan<T const> device_view() const
+  {
+    return static_cast<device_2dspan<T const>>(*this);
+  }
 
-  operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
-  operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+  operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
+  operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
-  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+  [[nodiscard]] host_2dspan<T const> host_view() const
+  {
+    return static_cast<host_2dspan<T const>>(*this);
+  }
 
   host_span<T> operator[](size_t row)
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T>{_data}.subspan(row * _size.second, _size.second);
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
   }
 
-  auto size() const noexcept { return _size; }
-  auto count() const noexcept { return _size.first * _size.second; }
-  auto is_empty() const noexcept { return count() == 0; }
+  [[nodiscard]] auto size() const noexcept { return _size; }
+  [[nodiscard]] auto count() const noexcept { return _size.first * _size.second; }
+  [[nodiscard]] auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
 
-  T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+  [[nodiscard]] T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
 
-  T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+  [[nodiscard]] T const* base_device_ptr(size_t offset = 0) const
+  {
+    return _data.device_ptr(offset);
+  }
 
-  size_t size_bytes() const noexcept { return _data.size_bytes(); }
+  [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
   void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }

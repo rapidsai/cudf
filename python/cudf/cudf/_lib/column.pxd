@@ -1,16 +1,19 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from typing import Literal
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
-from rmm._lib.device_buffer cimport device_buffer
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
+from pylibcudf.libcudf.types cimport size_type
+from rmm.librmm.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.types cimport size_type
-
+cdef dtype_from_column_view(column_view cv)
 
 cdef class Column:
     cdef public:
@@ -38,5 +41,3 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(column_view, object)
-
-    cdef size_type compute_null_count(self) except? 0

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,50 +19,30 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/interop.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table_view.hpp>
 
-struct ArrowTest : public cudf::test::BaseFixture {};
+#include <dlpack/dlpack.h>
 
-TEST_F(ArrowTest, ToArrow)
+namespace {
+struct dlpack_deleter {
+  void operator()(DLManagedTensor* tensor) { tensor->deleter(tensor); }
+};
+}  // namespace
+
+struct DLPackTest : public cudf::test::BaseFixture {};
+
+TEST_F(DLPackTest, ToDLPack)
 {
-  int32_t const value{42};
-  auto col = cudf::test::fixed_width_column_wrapper<int32_t>{{value}};
-  cudf::table_view tbl{{col}};
-
-  std::vector<cudf::column_metadata> metadata{{""}};
-  cudf::to_arrow(tbl, metadata, cudf::test::get_default_stream());
+  cudf::table_view empty(std::vector<cudf::column_view>{});
+  cudf::to_dlpack(empty, cudf::test::get_default_stream());
 }
 
-TEST_F(ArrowTest, FromArrow)
+TEST_F(DLPackTest, FromDLPack)
 {
-  std::vector<int64_t> host_values = {1, 2, 3, 5, 6, 7, 8};
-  std::vector<bool> host_validity  = {true, true, true, false, true, true, true};
-
-  arrow::Int64Builder builder;
-  auto status      = builder.AppendValues(host_values, host_validity);
-  auto maybe_array = builder.Finish();
-  auto array       = *maybe_array;
-
-  auto field  = arrow::field("", arrow::int32());
-  auto schema = arrow::schema({field});
-  auto table  = arrow::Table::Make(schema, {array});
-  cudf::from_arrow(*table, cudf::test::get_default_stream());
-}
-
-TEST_F(ArrowTest, ToArrowScalar)
-{
-  int32_t const value{42};
-  auto cudf_scalar =
-    cudf::make_fixed_width_scalar<int32_t>(value, cudf::test::get_default_stream());
-
-  cudf::column_metadata metadata{""};
-  cudf::to_arrow(*cudf_scalar, metadata, cudf::test::get_default_stream());
-}
-
-TEST_F(ArrowTest, FromArrowScalar)
-{
-  int32_t const value{42};
-  auto arrow_scalar = arrow::MakeScalar(value);
-  cudf::from_arrow(*arrow_scalar, cudf::test::get_default_stream());
+  using unique_managed_tensor = std::unique_ptr<DLManagedTensor, dlpack_deleter>;
+  cudf::test::fixed_width_column_wrapper<int32_t> col1({});
+  cudf::test::fixed_width_column_wrapper<int32_t> col2({});
+  cudf::table_view input({col1, col2});
+  unique_managed_tensor tensor(cudf::to_dlpack(input, cudf::test::get_default_stream()));
+  auto result = cudf::from_dlpack(tensor.get(), cudf::test::get_default_stream());
 }

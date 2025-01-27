@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -26,7 +25,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -1100,7 +1098,7 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{
+      cudf::test::fixed_width_column_wrapper<int32_t>{
         {2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
         cudf::test::iterators::nulls_at(std::vector{4, 5, 10, 11})}
         .release();
@@ -1120,7 +1118,7 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{
+      cudf::test::fixed_width_column_wrapper<int32_t>{
         {0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9}, cudf::test::iterators::nulls_at(std::vector{0, 6})}
         .release();
     auto expected_output =

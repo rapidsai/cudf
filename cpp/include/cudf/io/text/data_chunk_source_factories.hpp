@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,14 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <memory>
 #include <string>
 
-namespace cudf::io::text {
+namespace CUDF_EXPORT cudf {
+namespace io::text {
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a datasource.
@@ -84,4 +86,5 @@ std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view 
  */
 std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data);
 
-}  // namespace cudf::io::text
+}  // namespace io::text
+}  // namespace CUDF_EXPORT cudf

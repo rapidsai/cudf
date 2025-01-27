@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,10 +82,10 @@ TEST_F(JoinStringsTest, JoinZeroSizeStringsColumn)
 
 TEST_F(JoinStringsTest, JoinAllNullStringsColumn)
 {
-  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {false, false, false});
 
   auto results = cudf::strings::join_strings(cudf::strings_column_view(strings));
-  cudf::test::strings_column_wrapper expected1({""}, {0});
+  cudf::test::strings_column_wrapper expected1({""}, {false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
 
   results = cudf::strings::join_strings(

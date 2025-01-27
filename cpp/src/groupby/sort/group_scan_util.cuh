@@ -29,6 +29,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -60,7 +61,7 @@ struct group_scan_dispatcher {
                                      size_type num_groups,
                                      cudf::device_span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
@@ -89,7 +90,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -106,7 +107,10 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
     if (values.is_empty()) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    cudf::detail::initialize_with_identity(result_table, {K}, stream);
+    // Need an address of the aggregation kind to pass to the span
+    auto const kind = K;
+    cudf::detail::initialize_with_identity(
+      result_table, host_span<aggregation::Kind const>(&kind, 1), stream);
 
     auto result_view = mutable_column_device_view::create(result->mutable_view(), stream);
     auto values_view = column_device_view::create(values, stream);
@@ -145,7 +149,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using OpType = cudf::detail::corresponding_operator_t<K>;
 
@@ -191,7 +195,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 

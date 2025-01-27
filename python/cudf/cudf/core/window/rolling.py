@@ -1,22 +1,52 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION
+# Copyright (c) 2020-2025, NVIDIA CORPORATION
+from __future__ import annotations
 
-import itertools
+import warnings
+from typing import TYPE_CHECKING
 
 import numba
+import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
+
+import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
+from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
 
-class Rolling(GetAttrGetItemMixin, Reducible):
+
+class _RollingBase:
+    """
+    Contains routines to apply a window aggregation to a column.
+    """
+
+    obj: cudf.DataFrame | cudf.Series
+
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str
+    ) -> ColumnBase:
+        raise NotImplementedError
+
+    def _apply_agg(self, agg_name: str) -> cudf.DataFrame | cudf.Series:
+        applied = (
+            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
+
+
+class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     """
     Rolling window calculations.
 
@@ -178,17 +208,26 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         obj,
         window,
         min_periods=None,
-        center=False,
+        center: bool = False,
+        win_type: str | None = None,
+        on=None,
         axis=0,
-        win_type=None,
+        closed: str | None = None,
+        step: int | None = None,
+        method: str = "single",
     ):
         self.obj = obj
         self.window = window
         self.min_periods = min_periods
         self.center = center
         self._normalize()
-        self.agg_params = {}
+        # for var & std only?
+        self.agg_params: dict[str, int] = {}
         if axis != 0:
+            warnings.warn(
+                "axis is deprecated with will be removed in a future version. "
+                "Transpose the DataFrame first instead."
+            )
             raise NotImplementedError("axis != 0 is not supported yet.")
         self.axis = axis
 
@@ -198,6 +237,15 @@ class Rolling(GetAttrGetItemMixin, Reducible):
                     "Only the default win_type 'boxcar' is currently supported"
                 )
         self.win_type = win_type
+
+        if on is not None:
+            raise NotImplementedError("on is currently not supported")
+        if closed not in (None, "right"):
+            raise NotImplementedError("closed is currently not supported")
+        if step is not None:
+            raise NotImplementedError("step is currently not supported")
+        if method != "single":
+            raise NotImplementedError("method is currently not supported")
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
@@ -226,12 +274,8 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             end = as_column(end, dtype="int32")
 
             idx = as_column(range(len(start)))
-            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
-            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
+            preceding_window = (idx - start + np.int32(1)).astype("int32")
+            following_window = (end - idx - np.int32(1)).astype("int32")
             window = None
         else:
             preceding_window = as_column(self.window)
@@ -240,38 +284,37 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             )
             window = None
 
-        return libcudf.rolling.rolling(
-            source_column=source_column,
-            pre_column_window=preceding_window,
-            fwd_column_window=following_window,
-            window=window,
-            min_periods=min_periods,
-            center=self.center,
-            op=agg_name,
-            agg_params=self.agg_params,
-        )
-
-    def _apply_agg_dataframe(self, df, agg_name):
-        return cudf.DataFrame._from_data(
-            {
-                col_name: self._apply_agg_column(col, agg_name)
-                for col_name, col in df._data.items()
-            },
-            index=df.index,
-        )
-
-    def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return cudf.Series._from_data(
-                {
-                    self.obj.name: self._apply_agg_column(
-                        self.obj._column, agg_name
+        with acquire_spill_lock():
+            if window is None:
+                if self.center:
+                    # TODO: we can support this even though Pandas currently does not
+                    raise NotImplementedError(
+                        "center is not implemented for offset-based windows"
                     )
-                },
-                index=self.obj.index,
+                pre = preceding_window.to_pylibcudf(mode="read")
+                fwd = following_window.to_pylibcudf(mode="read")
+            else:
+                if self.center:
+                    pre = (window // 2) + 1
+                    fwd = window - (pre)
+                else:
+                    pre = window
+                    fwd = 0
+
+            return libcudf.column.Column.from_pylibcudf(
+                plc.rolling.rolling_window(
+                    source_column.to_pylibcudf(mode="read"),
+                    pre,
+                    fwd,
+                    min_periods,
+                    aggregation.make_aggregation(
+                        agg_name,
+                        {"dtype": source_column.dtype}
+                        if callable(agg_name)
+                        else self.agg_params,
+                    ).plc_obj,
+                )
             )
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
 
     def _reduce(
         self,
@@ -533,18 +576,9 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
-        index = cudf.MultiIndex.from_frame(
-            cudf.DataFrame(
-                {
-                    key: value
-                    for key, value in itertools.chain(
-                        self._group_keys._data.items(),
-                        self.obj.index._data.items(),
-                    )
-                }
-            )
+        index = cudf.MultiIndex._from_data(
+            {**self._group_keys._data, **self.obj.index._data}
         )
-
         result = super()._apply_agg(agg_name)
         result.index = index
         return result

@@ -1,15 +1,17 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import functools
 import os
 import traceback
 import warnings
-from typing import FrozenSet, Set, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
 import rmm
 
 import cudf
@@ -159,8 +161,9 @@ def _external_only_api(func, alternative=""):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Check the immediately preceding frame to see if it's in cudf.
-        frame, lineno = next(traceback.walk_stack(None))
-        fn = frame.f_code.co_filename
+        pre_frame = traceback.extract_stack(limit=2)[0]
+        fn = pre_frame.filename
+        lineno = pre_frame.lineno
         if _cudf_root in fn and _tests_root not in fn:
             raise RuntimeError(
                 f"External-only API called in {fn} at line {lineno}. "
@@ -207,7 +210,7 @@ class GetAttrGetItemMixin:
 
     # Tracking of protected keys by each subclass is necessary to make the
     # `__getattr__`->`__getitem__` call safe. See
-    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     # for an explanation. In brief, defining the `_PROTECTED_KEYS` allows this
     # class to avoid calling `__getitem__` inside `__getattr__` when
     # `__getitem__` will internally again call `__getattr__`, resulting in an
@@ -218,7 +221,7 @@ class GetAttrGetItemMixin:
     # `__setstate__`, but this class may be used in complex multiple
     # inheritance hierarchies that might also override serialization.  The
     # solution here is a minimally invasive change that avoids such conflicts.
-    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
+    _PROTECTED_KEYS: frozenset[str] | set[str] = frozenset()
 
     def __getattr__(self, key):
         if key in self._PROTECTED_KEYS:
@@ -250,7 +253,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     """
     Convert PyArrow mask buffer to cuDF mask buffer
     """
-    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
@@ -338,6 +341,15 @@ def is_na_like(obj):
     return obj is None or obj is cudf.NA or obj is cudf.NaT
 
 
+def _is_null_host_scalar(slr) -> bool:
+    # slr is NA like or NaT like
+    return (
+        is_na_like(slr)
+        or (isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr))
+        or slr is pd.NaT
+    )
+
+
 def _warn_no_dask_cudf(fn):
     @functools.wraps(fn)
     def wrapper(self):
@@ -402,3 +414,40 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
     return result_col
+
+
+def _datetime_timedelta_find_and_replace(
+    original_column: "cudf.core.column.DatetimeColumn"
+    | "cudf.core.column.TimeDeltaColumn",
+    to_replace: Any,
+    replacement: Any,
+    all_nan: bool = False,
+) -> "cudf.core.column.DatetimeColumn" | "cudf.core.column.TimeDeltaColumn":
+    """
+    This is an internal utility to find and replace values in a datetime or
+    timedelta column. It is used by the `find_and_replace` method of
+    `DatetimeColumn` and `TimeDeltaColumn`. Centralizing the code in a single
+    as opposed to duplicating it in both classes.
+    """
+    original_col_class = type(original_column)
+    if not isinstance(to_replace, original_col_class):
+        to_replace = cudf.core.column.as_column(to_replace)
+        if to_replace.can_cast_safely(original_column.dtype):
+            to_replace = to_replace.astype(original_column.dtype)
+    if not isinstance(replacement, original_col_class):
+        replacement = cudf.core.column.as_column(replacement)
+        if replacement.can_cast_safely(original_column.dtype):
+            replacement = replacement.astype(original_column.dtype)
+    if isinstance(to_replace, original_col_class):
+        to_replace = to_replace.as_numerical_column(dtype=np.dtype("int64"))
+    if isinstance(replacement, original_col_class):
+        replacement = replacement.as_numerical_column(dtype=np.dtype("int64"))
+    try:
+        result_col = (
+            original_column.as_numerical_column(dtype=np.dtype("int64"))
+            .find_and_replace(to_replace, replacement, all_nan)
+            .astype(original_column.dtype)
+        )
+    except TypeError:
+        result_col = original_column.copy(deep=True)
+    return result_col  # type: ignore

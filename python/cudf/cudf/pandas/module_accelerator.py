@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -17,7 +17,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, NamedTuple, Tuple
+from typing import Any, ContextManager, NamedTuple  # noqa: UP035
 
 from typing_extensions import Self
 
@@ -377,7 +377,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     attempts to call the fast version first).
     """
 
-    _denylist: Tuple[str]
+    _denylist: tuple[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
     _module_cache_prefix: str = "_slow_lib_"
@@ -503,23 +503,26 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         Context manager for disabling things
         """
-        try:
-            self._use_fast_lib_lock.acquire()
-            # The same thread might enter this context manager
-            # multiple times, so we need to remember the previous
-            # value
+        with self._use_fast_lib_lock:
+            # Have to hold the lock to modify this variable since
+            # another thread might be reading it.
+            # Modification has to happen with the lock held for the
+            # duration, so if someone else has modified things, then
+            # we block trying to acquire the lock (hence it is safe to
+            # release the lock after modifying this value)
             saved = self._use_fast_lib
             self._use_fast_lib = False
+        try:
             yield
         finally:
-            self._use_fast_lib = saved
-            self._use_fast_lib_lock.release()
+            with self._use_fast_lib_lock:
+                self._use_fast_lib = saved
 
     @staticmethod
     def getattr_real_or_wrapped(
         name: str,
         *,
-        real: Dict[str, Any],
+        real: dict[str, Any],
         wrapped_objs,
         loader: ModuleAccelerator,
     ) -> Any:
@@ -613,7 +616,7 @@ def disable_module_accelerator() -> contextlib.ExitStack:
     """
     Temporarily disable any module acceleration.
     """
-    with contextlib.ExitStack() as stack:
+    with ImportLock(), contextlib.ExitStack() as stack:
         for finder in sys.meta_path:
             if isinstance(finder, ModuleAcceleratorBase):
                 stack.enter_context(finder.disabled())

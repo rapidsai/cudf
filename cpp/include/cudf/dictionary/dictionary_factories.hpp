@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_factories Factories
  * @{
@@ -65,8 +65,8 @@ namespace cudf {
 std::unique_ptr<column> make_dictionary_column(
   column_view const& keys_column,
   column_view const& indices_column,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys
@@ -86,12 +86,17 @@ std::unique_ptr<column> make_dictionary_column(
  * @param indices_column Indices to use for the new dictionary column.
  * @param null_mask Null mask for the output column.
  * @param null_count Number of nulls for the output column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
-                                               std::unique_ptr<column> indices_column,
-                                               rmm::device_buffer&& null_mask,
-                                               size_type null_count);
+std::unique_ptr<column> make_dictionary_column(
+  std::unique_ptr<column> keys_column,
+  std::unique_ptr<column> indices_column,
+  rmm::device_buffer&& null_mask,
+  size_type null_count,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys
@@ -117,8 +122,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 std::unique_ptr<column> make_dictionary_column(
   std::unique_ptr<column> keys_column,
   std::unique_ptr<column> indices_column,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

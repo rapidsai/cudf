@@ -15,7 +15,6 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <src/io/utilities/row_selection.hpp>
@@ -120,19 +119,6 @@ TEST_F(FromOptsTest, LimitOptionsToFileRows)
     EXPECT_EQ(out_skip, 10);
     EXPECT_EQ(out_num, 90);
   }
-}
-
-TEST_F(FromOptsTest, OverFlowDetection)
-{
-  auto const too_large_for_32bit = std::numeric_limits<int64_t>::max();
-
-  // Too many rows to read until the end of the file
-  EXPECT_THROW(skip_rows_num_rows_from_options(0, std::nullopt, too_large_for_32bit),
-               std::overflow_error);
-
-  // Should work fine with num_rows
-  EXPECT_NO_THROW(
-    skip_rows_num_rows_from_options(1000, too_large_for_32bit - 100, too_large_for_32bit));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

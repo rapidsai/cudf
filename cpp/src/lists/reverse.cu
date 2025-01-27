@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/reverse.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -36,7 +37,7 @@ namespace detail {
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
 
@@ -44,7 +45,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
   auto const labels =
-    generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
+    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
 
   // The offsets of the output lists column.
   auto out_offsets = get_normalized_offsets(input, stream, mr);
@@ -88,7 +89,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::reverse(input, stream, mr);

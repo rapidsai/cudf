@@ -81,12 +81,11 @@ struct alignas(8) relist {
     return true;
   }
 
-  __device__ __forceinline__ restate get_state(int16_t idx) const
+  [[nodiscard]] __device__ __forceinline__ restate get_state(int16_t idx) const
   {
     return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
-
-  __device__ __forceinline__ int16_t get_size() const { return size; }
+  [[nodiscard]] __device__ __forceinline__ int16_t get_size() const { return size; }
 
  private:
   int16_t size{};
@@ -102,7 +101,7 @@ struct alignas(8) relist {
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos) const
+  [[nodiscard]] __device__ __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
@@ -125,6 +124,16 @@ __device__ __forceinline__ void reprog_device::reljunk::swaplist()
   auto tmp = list1;
   list1    = list2;
   list2    = tmp;
+}
+
+/**
+ * @brief Check for supported new-line characters
+ *
+ * '\n, \r, \u0085, \u2028, or \u2029'
+ */
+constexpr bool is_newline(char32_t const ch)
+{
+  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
 }
 
 /**
@@ -217,6 +226,15 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
                                             : reinterpret_cast<reprog_device*>(buffer)[0];
 }
 
+__device__ __forceinline__ static string_view::const_iterator find_char(
+  cudf::char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
+{
+  while (itr.byte_offset() < d_str.size_bytes() && *itr != chr) {
+    ++itr;
+  }
+  return itr;
+}
+
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
  *
@@ -250,19 +268,22 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     if (checkstart) {
       auto startchar = static_cast<char_utf8>(jnk.startchar);
       switch (jnk.starttype) {
-        case BOL:
-          if (pos == 0) break;
-          if (jnk.startchar != '^') { return thrust::nullopt; }
-          --pos;
+        case BOL: {
+          if (pos == 0) { break; }
+          if (startchar != '^' && startchar != 'S') { return cuda::std::nullopt; }
+          if (startchar != '\n') { break; }
+          --itr;
           startchar = static_cast<char_utf8>('\n');
+          [[fallthrough]];
+        }
         case CHAR: {
-          auto const fidx = dstr.find(startchar, pos);
-          if (fidx == string_view::npos) { return thrust::nullopt; }
-          pos = fidx + (jnk.starttype == BOL);
+          auto const find_itr = find_char(startchar, dstr, itr);
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return cuda::std::nullopt; }
+          itr = find_itr + (jnk.starttype == BOL);
+          pos = itr.position();
           break;
         }
       }
-      itr += (pos - itr.position());  // faster to increment position
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
@@ -304,26 +325,34 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
             id_activate = inst.u2.next_id;
             expanded    = true;
             break;
-          case BOL:
-            if ((pos == 0) || ((inst.u1.c == '^') && (dstr[pos - 1] == '\n'))) {
+          case BOL: {
+            auto titr         = itr;
+            auto const prev_c = pos > 0 ? *(--titr) : 0;
+            if ((pos == 0) || ((inst.u1.c == '^') && (prev_c == '\n')) ||
+                ((inst.u1.c == 'S') && (is_newline(prev_c)))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
-          case EOL:
+          }
+          case EOL: {
             // after the last character OR:
             // - for MULTILINE, if current character is new-line
             // - for non-MULTILINE, the very last character of the string can also be a new-line
+            bool const nl = (inst.u1.c == 'S' || inst.u1.c == 'N') ? is_newline(c) : (c == '\n');
             if (last_character ||
-                ((c == '\n') && (inst.u1.c != 'Z') &&
-                 ((inst.u1.c == '$') || (itr.byte_offset() + 1 == dstr.size_bytes())))) {
+                (nl && (inst.u1.c != 'Z') &&
+                 ((inst.u1.c == '$' || inst.u1.c == 'S') ||
+                  (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
+          }
           case BOW:
           case NBOW: {
-            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto titr               = itr;
+            auto const prev_c       = pos > 0 ? *(--titr) : 0;
             auto const word_class   = reclass_device{CCLASS_W};
             bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
             bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
@@ -358,9 +387,10 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
         case CHAR:
           if (inst.u1.c == c) id_activate = inst.u2.next_id;
           break;
-        case ANY:
-          if (c != '\n') id_activate = inst.u2.next_id;
-          break;
+        case ANY: {
+          if ((c == '\n') || ((inst.u1.c == 'N') && is_newline(c))) { break; }
+          [[fallthrough]];
+        }
         case ANYNL: id_activate = inst.u2.next_id; break;
         case NCCLASS:
         case CCLASS: {
@@ -388,7 +418,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match ? match_result({begin, end}) : thrust::nullopt;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 __device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,

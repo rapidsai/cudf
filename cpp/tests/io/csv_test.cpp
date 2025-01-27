@@ -17,33 +17,25 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/unary.hpp>
 
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <arrow/io/api.h>
 
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <limits>
 #include <numeric>
@@ -63,9 +55,9 @@ auto dtype()
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 using column     = cudf::column;
 using table      = cudf::table;
 using table_view = cudf::table_view;
@@ -938,7 +930,7 @@ TEST_F(CsvReaderTest, Strings)
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
-    outfile << "30,stu \"\"vwx\"\" yz" << '\n';
+    outfile << R"(30,stu ""vwx"" yz)" << '\n';
   }
 
   cudf::io::csv_reader_options in_opts =
@@ -954,7 +946,7 @@ TEST_F(CsvReaderTest, Strings)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"},
+    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"},
     view.column(1));
 }
 
@@ -996,7 +988,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
-    outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
+    outfile << R"(20,"jkl ""mno"" pqr")" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
   }
 
@@ -1014,8 +1006,49 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"},
+    std::vector<std::string>{"\"abcdef ghi\"", R"("jkl ""mno"" pqr")", "stu \"vwx\" yz"},
     view.column(1));
+}
+
+TEST_F(CsvReaderTest, StringsQuotesWhitespace)
+{
+  std::vector<std::string> names{"line", "verse"};
+
+  auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << names[0] << ',' << names[1] << '\n';
+    outfile << "A,a" << '\n';              // unquoted no whitespace
+    outfile << "    B,b" << '\n';          // unquoted leading whitespace
+    outfile << "C    ,c" << '\n';          // unquoted trailing whitespace
+    outfile << "    D    ,d" << '\n';      // unquoted leading and trailing whitespace
+    outfile << "\"E\",e" << '\n';          // quoted no whitespace
+    outfile << "\"F\"    ,f" << '\n';      // quoted trailing whitespace
+    outfile << "    \"G\",g" << '\n';      // quoted leading whitespace
+    outfile << "    \"H\"    ,h" << '\n';  // quoted leading and trailing whitespace
+    outfile << "    \"    I    \"    ,i"
+            << '\n';  // quoted leading and trailing whitespace with spaces inside quotes
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names(names)
+      .dtypes(std::vector<data_type>{dtype<cudf::string_view>(), dtype<cudf::string_view>()})
+      .quoting(cudf::io::quote_style::ALL)
+      .doublequote(false)
+      .detect_whitespace_around_quotes(true);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(2, view.num_columns());
+  ASSERT_EQ(type_id::STRING, view.column(0).type().id());
+  ASSERT_EQ(type_id::STRING, view.column(1).type().id());
+
+  expect_column_data_equal(
+    std::vector<std::string>{"A", "    B", "C    ", "    D    ", "E", "F", "G", "H", "    I    "},
+    view.column(0));
+  expect_column_data_equal(std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
+                           view.column(1));
 }
 
 TEST_F(CsvReaderTest, SkiprowsNrows)
@@ -1154,30 +1187,6 @@ TEST_F(CsvReaderTest, HeaderOnlyFile)
   auto const view = result.tbl->view();
   EXPECT_EQ(0, view.num_rows());
   EXPECT_EQ(3, view.num_columns());
-}
-
-TEST_F(CsvReaderTest, ArrowFileSource)
-{
-  auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
-  {
-    std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "A\n9\n8\n7\n6\n5\n4\n3\n2\n";
-  }
-
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath).Value(&infile).ok());
-
-  auto arrow_source = cudf::io::arrow_io_source{infile};
-  cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{&arrow_source})
-      .dtypes({dtype<int8_t>()});
-  auto result = cudf::io::read_csv(in_opts);
-
-  auto const view = result.tbl->view();
-  EXPECT_EQ(1, view.num_columns());
-  ASSERT_EQ(type_id::INT8, view.column(0).type().id());
-
-  expect_column_data_equal(std::vector<int8_t>{9, 8, 7, 6, 5, 4, 3, 2}, view.column(0));
 }
 
 TEST_F(CsvReaderTest, InvalidFloatingPoint)
@@ -1813,7 +1822,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
 
   auto int_column = column_wrapper<int32_t>{10, 20, 30};
   auto string_column =
-    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
+    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
@@ -2497,6 +2506,41 @@ TEST_F(CsvReaderTest, UTF8BOM)
   auto expected = cudf::table_view({col1, col2, col3});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result_view, expected);
+}
+
+void expect_buffers_equal(cudf::io::datasource::buffer* lhs, cudf::io::datasource::buffer* rhs)
+{
+  ASSERT_EQ(lhs->size(), rhs->size());
+  EXPECT_EQ(0, std::memcmp(lhs->data(), rhs->data(), lhs->size()));
+}
+
+TEST_F(CsvReaderTest, OutOfMapBoundsReads)
+{
+  // write a lot of data into a file
+  auto filepath        = temp_env->get_temp_dir() + "OutOfMapBoundsReads.csv";
+  auto const num_rows  = 1 << 20;
+  auto const row       = std::string{"0,1,2,3,4,5,6,7,8,9\n"};
+  auto const file_size = num_rows * row.size();
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (size_t i = 0; i < num_rows; ++i) {
+      outfile << row;
+    }
+  }
+
+  // Only memory map the middle of the file
+  auto source         = cudf::io::datasource::create(filepath, file_size / 2, file_size / 4);
+  auto full_source    = cudf::io::datasource::create(filepath);
+  auto const all_data = source->host_read(0, file_size);
+  auto ref_data       = full_source->host_read(0, file_size);
+  expect_buffers_equal(ref_data.get(), all_data.get());
+
+  auto const start_data = source->host_read(file_size / 2, file_size / 2);
+  expect_buffers_equal(full_source->host_read(file_size / 2, file_size / 2).get(),
+                       start_data.get());
+
+  auto const end_data = source->host_read(0, file_size / 2 + 512);
+  expect_buffers_equal(full_source->host_read(0, file_size / 2 + 512).get(), end_data.get());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

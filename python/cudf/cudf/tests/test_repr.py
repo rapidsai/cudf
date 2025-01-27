@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -25,9 +25,10 @@ repr_categories = [
 @pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
+    rng = np.random.default_rng(seed=0)
     size = 5
-    sr = cudf.Series(np.random.randint(1, 9, size)).astype(dtype)
-    sr[np.random.choice([False, True], size=size)] = None
+    sr = cudf.Series(rng.integers(1, 9, size)).astype(dtype)
+    sr[rng.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view(mode="read").copy_to_host(),
@@ -60,11 +61,12 @@ dtype_categories = [
 
 @pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5, 10])
 def test_null_dataframe(ncols):
+    rng = np.random.default_rng(seed=0)
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
-        sr = cudf.Series(np.random.randint(0, 128, size)).astype(dtype)
-        sr[np.random.choice([False, True], size=size)] = None
+        sr = cudf.Series(rng.integers(0, 128, size)).astype(dtype)
+        sr[rng.choice([False, True], size=size)] = None
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
@@ -77,7 +79,8 @@ def test_null_dataframe(ncols):
 @pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
-    ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    ps = pd.Series(rng.integers(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = nrows
     assert repr(ps) == repr(sr)
@@ -89,8 +92,9 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("size", [20, 21])
 @pytest.mark.parametrize("dtype", repr_categories)
 def test_full_dataframe_20(dtype, size, nrows, ncols):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
-        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+        {idx: rng.integers(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
@@ -178,21 +182,20 @@ def test_mixed_series(mixed_pdf, mixed_gdf):
 
 
 def test_MI():
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 4, 10),
-            "b": np.random.randint(0, 4, 10),
-            "c": np.random.randint(0, 4, 10),
+            "a": rng.integers(0, 4, 10),
+            "b": rng.integers(0, 4, 10),
+            "c": rng.integers(0, 4, 10),
         }
     )
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
-    codes = cudf.DataFrame(
-        {
-            "a": [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
-            "b": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
-            "c": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        }
-    )
+    codes = [
+        [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
+        [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    ]
     pd.options.display.max_rows = 999
     pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
@@ -225,9 +228,10 @@ def test_groupby_MI(nrows, ncols):
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 @pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
 def test_generic_index(length, dtype):
+    rng = np.random.default_rng(seed=0)
     psr = pd.Series(
         range(length),
-        index=np.random.randint(0, high=100, size=length).astype(dtype),
+        index=rng.integers(0, high=100, size=length).astype(dtype),
         dtype="float64" if length == 0 else None,
     )
     gsr = cudf.Series.from_pandas(psr)
@@ -614,9 +618,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001000000
-            1    0 days 00:00:00.000200000
-            2    0 days 00:00:00.003000000
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:00.000200
+            2    0 days 00:00:00.003000
             dtype: timedelta64[ns]
             """
             ),
@@ -706,12 +710,12 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.012
-            1    0 days 00:00:00.012
-            2    0 days 00:00:00.022
-            3    0 days 00:00:00.343
-            4    0 days 01:12:33.534
-            5    0 days 00:07:15.342
+            0    0 days 00:00:00.012000
+            1    0 days 00:00:00.012000
+            2    0 days 00:00:00.022000
+            3    0 days 00:00:00.343000
+            4    0 days 01:12:33.534000
+            5    0 days 00:07:15.342000
             dtype: timedelta64[ms]
             """
             ),
@@ -741,13 +745,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001
-            1    0 days 00:00:01.132
-            2    0 days 06:27:03.231
-            3    0 days 00:00:00.233
-            4        0 days 00:00:00
-            5    0 days 00:00:00.332
-            6    0 days 00:00:00.323
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:01.132000
+            2    0 days 06:27:03.231000
+            3    0 days 00:00:00.233000
+            4           0 days 00:00:00
+            5    0 days 00:00:00.332000
+            6    0 days 00:00:00.323000
             dtype: timedelta64[ms]
             """
             ),
@@ -767,13 +771,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    157937 days 02:23:52.432000
+            1         1 days 13:25:36.784000
+            2         2 days 20:09:05.345000
+            3         2 days 14:03:52.411000
+            4     11573 days 23:39:03.241000
+            5        42 days 01:35:48.734000
+            6         0 days 00:00:23.234000
             dtype: timedelta64[ms]
             """
             ),
@@ -820,13 +824,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    157937 days 02:23:52.432000
+            1         1 days 13:25:36.784000
+            2         2 days 20:09:05.345000
+            3         2 days 14:03:52.411000
+            4     11573 days 23:39:03.241000
+            5        42 days 01:35:48.734000
+            6         0 days 00:00:23.234000
             Name: abc, dtype: timedelta64[ms]
             """
             ),
@@ -1210,7 +1214,7 @@ def test_multiindex_repr(pmi, max_seq_items):
             .index,
             textwrap.dedent(
                 """
-                MultiIndex([('abc',                       'NaT', 0.345),
+                MultiIndex([('abc',                         NaT, 0.345),
                             ( <NA>, '0 days 00:00:00.000000001',  <NA>),
                             ('xyz', '0 days 00:00:00.000000002', 100.0),
                             ( <NA>, '0 days 00:00:00.000000003',  10.0)],
@@ -1252,10 +1256,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             .index,
             textwrap.dedent(
                 """
-            MultiIndex([('NaT', <NA>),
-                        ('NaT', <NA>),
-                        ('NaT', <NA>),
-                        ('NaT', <NA>)],
+            MultiIndex([(NaT, <NA>),
+                        (NaT, <NA>),
+                        (NaT, <NA>),
+                        (NaT, <NA>)],
                     names=['b', 'a'])
             """
             ),
@@ -1480,5 +1484,24 @@ def test_interval_index_repr():
         ]
     )
     gi = cudf.from_pandas(pi)
+
+    assert repr(pi) == repr(gi)
+
+
+def test_large_unique_categories_repr():
+    # Unfortunately, this is a long running test (takes about 1 minute)
+    # and there is no way we can reduce the time
+    pi = pd.CategoricalIndex(range(100_000_000))
+    gi = cudf.CategoricalIndex(range(100_000_000))
+    expected_repr = repr(pi)
+    with utils.cudf_timeout(6):
+        actual_repr = repr(gi)
+    assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_categorical_index_ordered(ordered):
+    pi = pd.CategoricalIndex(range(10), ordered=ordered)
+    gi = cudf.CategoricalIndex(range(10), ordered=ordered)
 
     assert repr(pi) == repr(gi)

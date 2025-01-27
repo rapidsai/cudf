@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,15 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cmath>
 
 auto constexpr null{0};  // null at current level
 auto constexpr XXX{0};   // null pushed down from parent level
@@ -137,7 +133,7 @@ TEST_F(StableDistinctKeepAny, NoColumnInputTable)
 
 TEST_F(StableDistinctKeepAny, EmptyKeys)
 {
-  int32s_col col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
+  int32s_col col{{5, 4, 3, 5, 8, 1}, {true, false, true, true, true, true}};
   int32s_col empty_col{};
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> key_idx{};

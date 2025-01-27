@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -98,10 +100,10 @@ struct out_of_place_copy_range_dispatch {
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
-    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
+    if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
       p_ret->set_null_mask(
         cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
     }
@@ -129,7 +131,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   return cudf::strings::detail::copy_range(
     source, target, source_begin, source_end, target_begin, stream, mr);
@@ -141,20 +143,21 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
-  CUDF_EXPECTS(dict_source.keys().type() == dict_target.keys().type(),
-               "dictionary keys must be the same type");
+  CUDF_EXPECTS(cudf::have_same_types(dict_source.keys(), dict_target.keys()),
+               "dictionary keys must be the same type",
+               cudf::data_type_error);
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
     cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
   auto source_matched    = cudf::dictionary::detail::set_keys(
-    dict_source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
+    dict_source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices
@@ -210,7 +213,7 @@ void copy_range_in_place(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
   CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.",
                std::invalid_argument);
@@ -231,14 +234,14 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     target.type(),
@@ -270,7 +273,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, mr);

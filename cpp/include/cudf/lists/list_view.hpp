@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,14 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 /**
  * @file list_view.hpp
  * @brief Class definition for cudf::list_view.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A non-owning, immutable view of device data that represents
@@ -29,4 +31,4 @@ namespace cudf {
  */
 class list_view {};
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

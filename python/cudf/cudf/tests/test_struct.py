@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,8 +6,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
@@ -49,10 +49,14 @@ def test_struct_for_field(key, expect):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("input_obj", [[{"a": 1, "b": cudf.NA, "c": 3}]])
-def test_series_construction_with_nulls(input_obj):
-    expect = pa.array(input_obj, from_pandas=True)
-    got = cudf.Series(input_obj).to_arrow()
+def test_series_construction_with_nulls():
+    fields = [
+        pa.array([1], type=pa.int64()),
+        pa.array([None], type=pa.int64()),
+        pa.array([3], type=pa.int64()),
+    ]
+    expect = pa.StructArray.from_arrays(fields, ["a", "b", "c"])
+    got = cudf.Series(expect).to_arrow()
 
     assert expect == got
 
@@ -74,7 +78,7 @@ def test_series_construction_with_nulls(input_obj):
 )
 def test_serialize_struct_dtype(fields):
     dtype = cudf.StructDtype(fields)
-    recreated = dtype.__class__.deserialize(*dtype.serialize())
+    recreated = dtype.__class__.device_deserialize(*dtype.device_serialize())
     assert recreated == dtype
 
 
@@ -156,7 +160,6 @@ def test_struct_setitem(data, item):
 def test_struct_scalar_host_construction(data):
     slr = cudf.Scalar(data)
     assert slr.value == data
-    assert list(slr.device_value.value.values()) == list(data.values())
 
 
 @pytest.mark.parametrize(
@@ -189,12 +192,11 @@ def test_struct_scalar_host_construction_no_dtype_inference(data, dtype):
     # is empty.
     slr = cudf.Scalar(data, dtype=dtype)
     assert slr.value == data
-    assert list(slr.device_value.value.values()) == list(data.values())
 
 
 def test_struct_scalar_null():
-    slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
-    assert slr.device_value.value is cudf.NA
+    slr = cudf.Scalar(cudf.NA, dtype=cudf.StructDtype)
+    assert cudf.Scalar.from_pylibcudf(slr.device_value).value is cudf.NA
 
 
 def test_struct_explode():

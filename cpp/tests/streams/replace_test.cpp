@@ -27,21 +27,24 @@ class ReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceTest, ReplaceNullsColumn)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   cudf::test::fixed_width_column_wrapper<int> replacement({1, 1, 1, 1, 1});
   cudf::replace_nulls(input, replacement, cudf::test::get_default_stream());
 }
 
 TEST_F(ReplaceTest, ReplaceNullsScalar)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   auto replacement = cudf::numeric_scalar<int>(1, true, cudf::test::get_default_stream());
   cudf::replace_nulls(input, replacement, cudf::test::get_default_stream());
 }
 
 TEST_F(ReplaceTest, ReplaceNullsPolicy)
 {
-  cudf::test::fixed_width_column_wrapper<int> input({{0, 0, 0, 0, 0}, {0, 0, 1, 1, 1}});
+  cudf::test::fixed_width_column_wrapper<int> input(
+    {{0, 0, 0, 0, 0}, {false, false, true, true, true}});
   cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING, cudf::test::get_default_stream());
 }
 
@@ -101,9 +104,9 @@ TEST_F(ReplaceTest, NormalizeNansAndZeros)
 
 TEST_F(ReplaceTest, NormalizeNansAndZerosMutable)
 {
-  auto nan          = std::numeric_limits<double>::quiet_NaN();
-  auto input_column = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
-  cudf::test::fixed_width_column_wrapper<double> input(input_column.begin(), input_column.end());
-  cudf::normalize_nans_and_zeros(static_cast<cudf::mutable_column_view>(input),
-                                 cudf::test::get_default_stream());
+  auto nan   = std::numeric_limits<double>::quiet_NaN();
+  auto data  = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
+  auto input = cudf::test::fixed_width_column_wrapper<double>(data.begin(), data.end()).release();
+  auto view  = input->mutable_view();
+  cudf::normalize_nans_and_zeros(view, cudf::test::get_default_stream());
 }

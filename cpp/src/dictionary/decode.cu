@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -46,7 +47,7 @@ struct indices_handler_fn {
  */
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   if (source.is_empty()) return make_empty_column(type_id::EMPTY);
 
@@ -77,7 +78,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::decode(source, stream, mr);

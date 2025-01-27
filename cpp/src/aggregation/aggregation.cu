@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,16 @@
  */
 
 #include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
 void initialize_with_identity(mutable_table_view& table,
-                              std::vector<aggregation::Kind> const& aggs,
+                              host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream)
 {
   // TODO: Initialize all the columns in a single kernel instead of invoking one

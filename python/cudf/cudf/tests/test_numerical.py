@@ -5,7 +5,9 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, expect_warning_if
+from cudf.core._compat import PANDAS_GE_220
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 
@@ -44,7 +46,7 @@ def test_can_cast_safely_same_kind():
     assert data.can_cast_safely(to_dtype)
 
     data = cudf.Series(
-        [np.finfo("float32").max * 2, 1.0], dtype="float64"
+        [float(np.finfo("float32").max) * 2, 1.0], dtype="float64"
     )._column
     to_dtype = np.dtype("float32")
     assert not data.can_cast_safely(to_dtype)
@@ -372,7 +374,7 @@ def test_to_numeric_error(data, errors):
         ):
             cudf.to_numeric(data, errors=errors)
     else:
-        with expect_warning_if(errors == "ignore"):
+        with expect_warning_if(PANDAS_GE_220 and errors == "ignore"):
             expect = pd.to_numeric(data, errors=errors)
         with expect_warning_if(errors == "ignore"):
             got = cudf.to_numeric(data, errors=errors)

@@ -8,17 +8,17 @@
 
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
 GH_JOB_NAME="pandas-tests-diff / build"
+RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Github job name: ${GH_JOB_NAME}"
+rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
 
-PY_VER="39"
-MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-results.json
-PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-results.json
+PY_VER="310"
+MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json
+PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
 
 rapids-logger "Fetching latest available results from nightly"
-aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-results.json')], &LastModified)[::-1].[Key]" --output text > s3_output.txt
-
-read -r COMPARE_ENV < s3_output.txt
-export COMPARE_ENV
+aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json')], &LastModified)[::].[Key]" --output text  | tee s3_output.txt
+COMPARE_ENV=$(tail -n 1 s3_output.txt)
 rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json

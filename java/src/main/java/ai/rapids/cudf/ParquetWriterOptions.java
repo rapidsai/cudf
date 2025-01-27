@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,9 +24,13 @@ package ai.rapids.cudf;
  */
 public final class ParquetWriterOptions extends CompressionMetadataWriterOptions {
   private final StatisticsFrequency statsGranularity;
+  private int rowGroupSizeRows;
+  private long rowGroupSizeBytes;
 
   private ParquetWriterOptions(Builder builder) {
     super(builder);
+    this.rowGroupSizeRows = builder.rowGroupSizeRows;
+    this.rowGroupSizeBytes = builder.rowGroupSizeBytes;
     this.statsGranularity = builder.statsGranularity;
   }
 
@@ -51,16 +55,36 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
     return new Builder();
   }
 
+  public int getRowGroupSizeRows() {
+    return rowGroupSizeRows;
+  }
+
+  public long getRowGroupSizeBytes() {
+    return rowGroupSizeBytes;
+  }
+
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
 
   public static class Builder extends CompressionMetadataWriterOptions.Builder
         <Builder, ParquetWriterOptions> {
+    private int rowGroupSizeRows = 1000000; //Max of 1 million rows per row group
+    private long rowGroupSizeBytes = 128 * 1024 * 1024; //Max of 128MB per row group
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
 
     public Builder() {
       super();
+    }
+
+    public Builder withRowGroupSizeRows(int rowGroupSizeRows) {
+      this.rowGroupSizeRows = rowGroupSizeRows;
+      return this;
+    }
+
+    public Builder withRowGroupSizeBytes(long rowGroupSizeBytes) {
+      this.rowGroupSizeBytes = rowGroupSizeBytes;
+      return this;
     }
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {

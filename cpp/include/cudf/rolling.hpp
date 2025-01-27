@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_rolling
  * @{
@@ -43,6 +44,8 @@ namespace cudf {
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  *
+ * @note Windows near the endpoints of the input are automatically clamped to be in-bounds.
+ *
  * Notes on return column types:
  * - The returned column for count aggregation always has `INT32` type.
  * - The returned column for VARIANCE/STD aggregations always has `FLOAT64` type.
@@ -56,6 +59,7 @@ namespace cudf {
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -66,7 +70,8 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief rolling_window
@@ -76,7 +81,8 @@ std::unique_ptr<column> rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& agg,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::cuda_stream_view stream,
+ *            rmm::device_async_resource_ref mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
  *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
@@ -89,7 +95,8 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Abstraction for window boundary sizes
@@ -226,6 +233,7 @@ struct window_bounds {
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -237,7 +245,8 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -248,7 +257,8 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::cuda_stream_view stream,
+ *            rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
@@ -257,7 +267,8 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -268,7 +279,8 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::cuda_stream_view stream,,
+ *            rmm::device_async_resource_ref mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
  *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
@@ -282,7 +294,8 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -294,7 +307,8 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::cuda_stream_view stream,
+ *            rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
@@ -304,11 +318,14 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column.
+ *
+ * @deprecated Since 25.02, to be removed in 25.04
  *
  * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
@@ -386,11 +403,13 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
  */
-std::unique_ptr<column> grouped_time_range_rolling_window(
+[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
+grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
   cudf::order const& timestamp_order,
@@ -399,11 +418,14 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   size_type following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column,.
+ *
+ * @deprecated Since 25.02, to be removed in 25.04
  *
  * @details @copydetails grouped_time_range_rolling_window(
  *                table_view const& group_keys,
@@ -414,12 +436,14 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *                size_type following_window_in_days,
  *                size_type min_periods,
  *                rolling_aggregation const& aggr,
- *                rmm::mr::device_memory_resource* mr)
+ *                rmm::cuda_stream_view stream,
+ *                rmm::device_async_resource_ref mr)
  *
  * The `preceding_window_in_days` and `following_window_in_days` are specified as a `window_bounds`
  * and supports "unbounded" windows, if set to `window_bounds::unbounded()`.
  */
-std::unique_ptr<column> grouped_time_range_rolling_window(
+[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
+grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
   cudf::order const& timestamp_order,
@@ -428,7 +452,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   window_bounds following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
@@ -535,6 +560,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -548,7 +574,8 @@ std::unique_ptr<column> grouped_range_rolling_window(
   range_window_bounds const& following,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -569,6 +596,11 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
+ * @note All entries in `preceding_window` and `following_window` must produce window extents that
+ * are in-bounds for the `input`. That is, for all `i`, it is required that the set of rows defined
+ * by the interval `[i - preceding_window[i] + 1, ..., i + following_window[i] + 1)` is a subset of
+ * `[0, input.size())`.
+ *
  * @throws cudf::logic_error if window column type is not INT32
  *
  * @param[in] input The input column
@@ -581,6 +613,7 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -591,7 +624,8 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

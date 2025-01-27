@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 #pragma once
 
-#include "io/comp/gpuinflate.hpp"
+#include "io/comp/comp.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/timezone.cuh>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
@@ -40,18 +41,26 @@ namespace gpu {
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 
+using key_type    = size_type;
+using mapped_type = size_type;
+using slot_type   = cuco::pair<key_type, mapped_type>;
+auto constexpr map_cg_size =
+  1;  ///< A CUDA Cooperative Group of 1 thread (set for best performance) to handle each subset.
+      ///< Note: Adjust insert and find loops to use `cg::tile<map_cg_size>` if increasing this.
+auto constexpr bucket_size =
+  1;  ///< Number of concurrent slots (set for best performance) handled by each thread.
+auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size
+                                          ///< N * (1/0.7) = 1.43 to target a 70% occupancy factor.
+using storage_type     = cuco::bucket_storage<slot_type,
+                                          bucket_size,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
+using storage_ref_type = typename storage_type::ref_type;
+using bucket_type      = typename storage_type::bucket_type;
+using slot_type        = cuco::pair<key_type, mapped_type>;
+
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
-
-using map_type = cuco::legacy::static_map<size_type, size_type>;
-
-/**
- * @brief The alias of `map_type::pair_atomic_type` class.
- *
- * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
- * declaration of this struct somewhere else.
- */
-struct slot_type : public map_type::slot_type {};
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -64,14 +73,14 @@ struct CompressedStreamInfo {
   uint8_t const* compressed_data{};  // [in] base ptr to compressed stream data
   uint8_t*
     uncompressed_data{};  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size{};              // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl{};   // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl{};        // [in] output buffer to decompress into
-  device_span<compression_result> dec_res{};  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl{};  // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl{};       // [out] output buffer to copy to
-  uint32_t num_compressed_blocks{};           // [in,out] number of entries in decctl(in), number of
-                                              // compressed blocks(out)
+  size_t compressed_data_size{};             // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl{};  // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl{};       // [in] output buffer to decompress into
+  device_span<cudf::io::detail::compression_result> dec_res{};  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl{};                    // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl{};                         // [out] output buffer to copy to
+  uint32_t num_compressed_blocks{};    // [in,out] number of entries in decctl(in), number of
+                                       // compressed blocks(out)
   uint32_t num_uncompressed_blocks{};  // [in,out] number of entries in dec_in_ctl(in), number of
                                        // uncompressed blocks(out)
   uint64_t max_uncompressed_size{};    // [out] maximum uncompressed data size of stream
@@ -184,11 +193,11 @@ struct StripeStream {
  */
 struct stripe_dictionary {
   // input
-  device_span<slot_type> map_slots;  // hash map storage
-  uint32_t column_idx      = 0;      // column index
-  size_type start_row      = 0;      // first row in the stripe
-  size_type start_rowgroup = 0;      // first rowgroup in the stripe
-  size_type num_rows       = 0;      // number of rows in the stripe
+  device_span<bucket_type> map_slots;  // hash map (buckets) storage
+  uint32_t column_idx      = 0;        // column index
+  size_type start_row      = 0;        // first row in the stripe
+  size_type start_rowgroup = 0;        // first rowgroup in the stripe
+  size_type num_rows       = 0;        // number of rows in the stripe
 
   // output
   device_span<uint32_t> data;        // index of elements in the column to include in the dictionary
@@ -398,14 +407,14 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
-  CompressionKind compression,
+  compression_type compression,
   uint32_t comp_blk_size,
   uint32_t max_comp_blk_size,
   uint32_t comp_block_align,
   bool collect_statistics,
   device_2dspan<StripeStream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<compression_result> comp_res,
+  device_span<cudf::io::detail::compression_result> comp_res,
   rmm::cuda_stream_view stream);
 
 /**

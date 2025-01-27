@@ -2,5 +2,5 @@
 rolling
 =======
 
-.. automodule:: cudf._lib.pylibcudf.rolling
+.. automodule:: pylibcudf.rolling
    :members:

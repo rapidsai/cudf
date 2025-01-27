@@ -2,7 +2,7 @@
 from numpy.testing import assert_array_equal
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def test_groupby_14955():

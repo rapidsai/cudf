@@ -16,17 +16,13 @@
 
 #pragma once
 
-#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <zlib.h>
-
-#include <algorithm>
-#include <array>
 #include <fstream>
-#include <limits>
 
-namespace cudf::io::text::detail::bgzip {
+namespace CUDF_EXPORT cudf {
+namespace io::text::detail::bgzip {
 
 struct header {
   int block_size;
@@ -109,4 +105,5 @@ void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> pre_size_subfields  = {},
                             host_span<char const> post_size_subfields = {});
 
-}  // namespace cudf::io::text::detail::bgzip
+}  // namespace io::text::detail::bgzip
+}  // namespace CUDF_EXPORT cudf

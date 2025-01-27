@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -37,7 +36,7 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 struct timezone_file_header {
   uint32_t magic;          ///< "TZif"
   uint8_t version;         ///< 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint8_t reserved15[15];  ///< unused, reserved for future use // NOLINT
   uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
   uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
   uint32_t leapcnt;        ///< number of leap second records contained in the body
@@ -63,7 +62,7 @@ struct dst_transition_s {
 #pragma pack(pop)
 
 struct timezone_file {
-  timezone_file_header header;
+  timezone_file_header header{};
   bool is_header_from_64bit = false;
 
   std::vector<int64_t> transition_times;
@@ -137,7 +136,7 @@ struct timezone_file {
       std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-    CUDF_EXPECTS(fin, "Failed to open the timezone file.");
+    CUDF_EXPECTS(fin, "Failed to open the timezone file '" + tz_filename.string() + "'");
     auto const file_size = fin.tellg();
     fin.seekg(0);
 
@@ -219,7 +218,7 @@ class posix_parser {
   /**
    * @brief Returns the remaining number of characters in the input.
    */
-  auto remaining_char_cnt() const { return end - cur; }
+  [[nodiscard]] auto remaining_char_cnt() const { return end - cur; }
 
   /**
    * @brief Returns the next character in the input.
@@ -379,11 +378,11 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::make_timezone_transition_table(
-    tzif_dir, timezone_name, cudf::get_default_stream(), mr);
+  return detail::make_timezone_transition_table(tzif_dir, timezone_name, stream, mr);
 }
 
 namespace detail {
@@ -391,7 +390,7 @@ namespace detail {
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
@@ -483,14 +482,12 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   CUDF_EXPECTS(transition_times.size() == offsets.size(),
                "Error reading TZif file for timezone " + std::string{timezone_name});
 
-  std::vector<timestamp_s> ttimes_typed;
-  ttimes_typed.reserve(transition_times.size());
+  auto ttimes_typed = make_empty_host_vector<timestamp_s>(transition_times.size(), stream);
   std::transform(transition_times.cbegin(),
                  transition_times.cend(),
                  std::back_inserter(ttimes_typed),
                  [](auto ts) { return timestamp_s{duration_s{ts}}; });
-  std::vector<duration_s> offsets_typed;
-  offsets_typed.reserve(offsets.size());
+  auto offsets_typed = make_empty_host_vector<duration_s>(offsets.size(), stream);
   std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
     return duration_s{ts};
   });

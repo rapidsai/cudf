@@ -16,11 +16,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -116,8 +115,8 @@ DLDataType data_type_to_DLDataType(data_type type)
 
 // Context object to own memory allocated for DLManagedTensor
 struct dltensor_context {
-  int64_t shape[2];
-  int64_t strides[2];
+  int64_t shape[2]{};    // NOLINT
+  int64_t strides[2]{};  // NOLINT
   rmm::device_buffer buffer;
 
   static void deleter(DLManagedTensor* arg)
@@ -133,7 +132,7 @@ struct dltensor_context {
 namespace detail {
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
@@ -219,7 +218,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -230,9 +229,9 @@ DLManagedTensor* to_dlpack(table_view const& input,
   DLDataType const dltype = data_type_to_DLDataType(type);
 
   // Ensure all columns are the same type
-  CUDF_EXPECTS(
-    std::all_of(input.begin(), input.end(), [type](auto const& col) { return col.type() == type; }),
-    "All columns required to have same data type");
+  CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
+               "All columns required to have same data type",
+               cudf::data_type_error);
 
   // Ensure none of the columns have nulls
   CUDF_EXPECTS(
@@ -298,16 +297,19 @@ DLManagedTensor* to_dlpack(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_dlpack(managed_tensor, cudf::get_default_stream(), mr);
+  return detail::from_dlpack(managed_tensor, stream, mr);
 }
 
-DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
+DLManagedTensor* to_dlpack(table_view const& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_dlpack(input, cudf::get_default_stream(), mr);
+  return detail::to_dlpack(input, stream, mr);
 }
 
 }  // namespace cudf

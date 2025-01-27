@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@ column_view dictionary_column_view::indices() const noexcept { return child(0); 
 
 column_view dictionary_column_view::get_indices_annotated() const noexcept
 {
-  return column_view(
-    indices().type(), size(), indices().head(), null_mask(), null_count(), offset());
+  return {indices().type(), size(), indices().head(), null_mask(), null_count(), offset()};
 }
 
 column_view dictionary_column_view::keys() const noexcept { return child(1); }

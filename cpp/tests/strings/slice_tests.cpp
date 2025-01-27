@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ TEST_P(Parameters, Substring)
   auto results        = cudf::strings::slice_strings(strings_column, start);
 
   std::vector<std::string> h_expected;
-  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
-    h_expected.push_back((*itr).substr(start));
+  for (auto& h_string : h_strings)
+    h_expected.push_back(h_string.substr(start));
 
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -268,6 +268,25 @@ TEST_F(StringsSliceTest, MaxPositions)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsSliceTest, MultiByteChars)
+{
+  auto input = cudf::test::strings_column_wrapper({
+    // clang-format off
+    "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving "
+    "the following code snippet demonstrates how to use search for values in an ordered range  "
+            // this placement tests proper multi-byte chars handling  ------vvvvv
+    "it returns the last position where value could be inserted without the ééééé ordering ",
+    "algorithms execution is parallelized as determined by an execution policy; this is a 12345"
+    "continuation of previous row to make sure string boundaries are honored 012345678901234567"
+           //   v--- this one also
+    "01234567890é34567890012345678901234567890"
+    // clang-format on
+  });
+
+  auto results = cudf::strings::slice_strings(cudf::strings_column_view(input), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
+}
+
 TEST_F(StringsSliceTest, Error)
 {
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
@@ -277,7 +296,7 @@ TEST_F(StringsSliceTest, Error)
   auto indexes = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes, indexes), cudf::logic_error);
 
-  auto indexes_null = cudf::test::fixed_width_column_wrapper<int32_t>({1}, {0});
+  auto indexes_null = cudf::test::fixed_width_column_wrapper<int32_t>({1}, {false});
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_null, indexes_null),
                cudf::logic_error);
 

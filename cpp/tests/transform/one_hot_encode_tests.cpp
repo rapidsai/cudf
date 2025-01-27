@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <limits>
 
@@ -56,8 +57,9 @@ TYPED_TEST(OneHotEncodingTestTyped, Basic)
 
 TYPED_TEST(OneHotEncodingTestTyped, Nulls)
 {
-  auto input    = cudf::test::fixed_width_column_wrapper<int32_t>{{8, 8, 8, 9, 9}, {1, 1, 0, 1, 1}};
-  auto category = cudf::test::fixed_width_column_wrapper<int32_t>({8, 9, -1}, {1, 1, 0});
+  auto input    = cudf::test::fixed_width_column_wrapper<int32_t>{{8, 8, 8, 9, 9},
+                                                                  {true, true, false, true, true}};
+  auto category = cudf::test::fixed_width_column_wrapper<int32_t>({8, 9, -1}, {true, true, false});
 
   auto col0 = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 0, 0, 0};
   auto col1 = cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1};
@@ -163,8 +165,8 @@ TEST_F(OneHotEncodingTest, Strings)
 {
   auto input = cudf::test::strings_column_wrapper{
     {"hello", "rapidsai", "cudf", "hello", "cuspatial", "hello", "world", "!"},
-    {1, 1, 1, 1, 0, 1, 1, 0}};
-  auto category = cudf::test::strings_column_wrapper{{"hello", "world", ""}, {1, 1, 0}};
+    {true, true, true, true, false, true, true, false}};
+  auto category = cudf::test::strings_column_wrapper{{"hello", "world", ""}, {true, true, false}};
 
   auto col0 = cudf::test::fixed_width_column_wrapper<bool>{1, 0, 0, 1, 0, 1, 0, 0};
   auto col1 = cudf::test::fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0};
@@ -198,7 +200,7 @@ TEST_F(OneHotEncodingTest, MismatchTypes)
   auto input    = cudf::test::strings_column_wrapper{"xx", "yy", "xx"};
   auto category = cudf::test::fixed_width_column_wrapper<int64_t>{1};
 
-  EXPECT_THROW(cudf::one_hot_encode(input, category), cudf::logic_error);
+  EXPECT_THROW(cudf::one_hot_encode(input, category), cudf::data_type_error);
 }
 
 TEST_F(OneHotEncodingTest, List)

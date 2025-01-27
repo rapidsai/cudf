@@ -19,12 +19,13 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/utilities/export.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 using time_point_ms =
   cuda::std::chrono::time_point<cuda::std::chrono::system_clock, cuda::std::chrono::milliseconds>;
@@ -75,4 +76,4 @@ inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(in
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,20 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <memory>
 #include <numba_cuda_runtime.cuh>
+
+#include <memory>
 
 namespace cudf {
 namespace strings {
 namespace udf {
+
+/**
+ * @brief Get the CUDA version used at build time.
+ *
+ * @return The CUDA version as an integer, parsed as major * 1000 + minor * 10.
+ */
+int get_cuda_build_version();
 
 class udf_string;
 class managed_udf_string;

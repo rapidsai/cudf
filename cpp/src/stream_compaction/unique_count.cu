@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,10 +67,12 @@ cudf::size_type unique_count(table_view const& keys,
 
 }  // namespace detail
 
-cudf::size_type unique_count(table_view const& input, null_equality nulls_equal)
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal,
+                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, nulls_equal, cudf::get_default_stream());
+  return detail::unique_count(input, nulls_equal, stream);
 }
 
 }  // namespace cudf

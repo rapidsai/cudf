@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 
@@ -8,13 +8,9 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core.index import RangeIndex, as_index
-from cudf.testing._utils import (
-    DATETIME_TYPES,
-    NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
-    assert_eq,
-)
+from cudf.core.index import Index, RangeIndex
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 def cudf_date_series(start, stop, freq):
@@ -74,7 +70,7 @@ def test_series_contains(values, item, expected):
 
 @pytest.mark.parametrize("values, item, expected", testdata_all)
 def test_index_contains(values, item, expected):
-    index = as_index(values)
+    index = Index(values)
     assert_eq(expected, item in index)
 
 

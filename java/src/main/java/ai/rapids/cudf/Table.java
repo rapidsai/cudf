@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -254,7 +254,13 @@ public final class Table implements AutoCloseable {
                                         boolean normalizeSingleQuotes,
                                         boolean normalizeWhitespace,
                                         boolean mixedTypesAsStrings,
-                                        boolean keepStringQuotes) throws CudfException;
+                                        boolean keepStringQuotes,
+                                        boolean strictValidation,
+                                        boolean allowLeadingZeros,
+                                        boolean allowNonNumericNumbers,
+                                        boolean allowUnquotedControl,
+                                        boolean experimental,
+                                        byte lineDelimiter) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
@@ -264,6 +270,12 @@ public final class Table implements AutoCloseable {
                                       boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       boolean keepStringQuotes,
+                                      boolean strictValidation,
+                                      boolean allowLeadingZeros,
+                                      boolean allowNonNumericNumbers,
+                                      boolean allowUnquotedControl,
+                                      boolean experimental,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
@@ -272,7 +284,14 @@ public final class Table implements AutoCloseable {
                                       boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       boolean keepStringQuotes,
+                                      boolean strictValidation,
+                                      boolean allowLeadingZeros,
+                                      boolean allowNonNumericNumbers,
+                                      boolean allowUnquotedControl,
+                                      boolean experimental,
+                                      byte lineDelimiter,
                                       long dsHandle) throws CudfException;
+
   private static native long readAndInferJSON(long address, long length,
                                               boolean dayFirst,
                                               boolean lines,
@@ -280,7 +299,13 @@ public final class Table implements AutoCloseable {
                                               boolean normalizeSingleQuotes,
                                               boolean normalizeWhitespace,
                                               boolean mixedTypesAsStrings,
-                                              boolean keepStringQuotes) throws CudfException;
+                                              boolean keepStringQuotes,
+                                              boolean strictValidation,
+                                              boolean allowLeadingZeros,
+                                              boolean allowNonNumericNumbers,
+                                              boolean allowUnquotedControl,
+                                              boolean experimental,
+                                              byte lineDelimiter) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -288,12 +313,11 @@ public final class Table implements AutoCloseable {
    *                           all of them
    * @param binaryToString     whether to convert this column to String if binary
    * @param filePath           the path of the file to read, or null if no path should be read.
-   * @param address            the address of the buffer to read from or 0 if we should not.
-   * @param length             the length of the buffer to read from.
+   * @param addrsAndSizes      the address and size pairs for every buffer or null for no buffers.
    * @param timeUnit           return type of TimeStamp in units
    */
   private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long[] addrsAndSizes, int timeUnit) throws CudfException;
 
   private static native long[] readParquetFromDataSource(String[] filterColumnNames,
                                                          boolean[] binaryToString, int timeUnit,
@@ -315,20 +339,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a file.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param filename        local output path
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param filename          local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
@@ -338,6 +364,8 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
+                                                   int rowGroupSizeRows,
+                                                   long rowGroupSizeBytes,
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
@@ -349,20 +377,22 @@ public final class Table implements AutoCloseable {
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
-   * @param columnNames     names that correspond to the table columns
-   * @param numChildren     Children of the top level
-   * @param flatNumChildren flattened list of children per column
-   * @param nullable        true if the column can have nulls else false
-   * @param metadataKeys    Metadata key names to place in the Parquet file
-   * @param metadataValues  Metadata values corresponding to metadataKeys
-   * @param compression     native compression codec ID
-   * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
-   * @param precisions      precision list containing all the precisions of the decimal types in
-   *                        the columns
-   * @param isMapValues     true if a column is a map
-   * @param isBinaryValues  true if a column is a binary
-   * @param consumer        consumer of host buffers produced.
+   * @param columnNames       names that correspond to the table columns
+   * @param numChildren       Children of the top level
+   * @param flatNumChildren   flattened list of children per column
+   * @param nullable          true if the column can have nulls else false
+   * @param metadataKeys      Metadata key names to place in the Parquet file
+   * @param metadataValues    Metadata values corresponding to metadataKeys
+   * @param compression       native compression codec ID
+   * @param rowGroupSizeRows  max #rows in a row group
+   * @param rowGroupSizeBytes max #bytes in a row group
+   * @param statsFreq         native statistics frequency ID
+   * @param isInt96           true if timestamp type is int96
+   * @param precisions        precision list containing all the precisions of the decimal types in
+   *                          the columns
+   * @param isMapValues       true if a column is a map
+   * @param isBinaryValues    true if a column is a binary
+   * @param consumer          consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
@@ -372,6 +402,8 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
+                                                     int rowGroupSizeRows,
+                                                     long rowGroupSizeBytes,
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
@@ -1057,185 +1089,6 @@ public final class Table implements AutoCloseable {
     return readJSON(schema, opts, buffer, 0, buffer.length);
   }
 
-  private static class DidViewChange {
-    ColumnVector changeWasNeeded = null;
-    boolean noChangeNeeded = false;
-
-    public static DidViewChange yes(ColumnVector cv) {
-      DidViewChange ret = new DidViewChange();
-      ret.changeWasNeeded = cv;
-      return ret;
-    }
-
-    public static DidViewChange no() {
-      DidViewChange ret = new DidViewChange();
-      ret.noChangeNeeded = true;
-      return ret;
-    }
-  }
-
-  private static DidViewChange gatherJSONColumns(Schema schema, TableWithMeta.NestedChildren children,
-                                                 ColumnView cv) {
-    // We need to do this recursively to be sure it all matches as expected.
-    // If we run into problems where the data types don't match, we are not
-    // going to fix up the data types. We are only going to reorder the columns.
-    if (schema.getType() == DType.STRUCT) {
-      if (cv.getType() != DType.STRUCT) {
-        // The types don't match so just return the input unchanged...
-        return DidViewChange.no();
-      } else {
-        String[] foundNames = children.getNames();
-        HashMap<String, Integer> indices = new HashMap<>();
-        for (int i = 0; i < foundNames.length; i++) {
-          indices.put(foundNames[i], i);
-        }
-        // We might need to rearrange the columns to match what we want.
-        DType[] types = schema.getChildTypes();
-        String[] neededNames = schema.getColumnNames();
-        ColumnView[] columns = new ColumnView[neededNames.length];
-        try {
-          boolean somethingChanged = false;
-          if (columns.length != foundNames.length) {
-            somethingChanged = true;
-          }
-          for (int i = 0; i < columns.length; i++) {
-            String neededColumnName = neededNames[i];
-            Integer index = indices.get(neededColumnName);
-            if (index != null) {
-              if (schema.getChild(i).isStructOrHasStructDescendant()) {
-                ColumnView child = cv.getChildColumnView(index);
-                boolean shouldCloseChild = true;
-                try {
-                  if (index != i) {
-                    somethingChanged = true;
-                  }
-                  DidViewChange childResult = gatherJSONColumns(schema.getChild(i),
-                      children.getChild(index), child);
-                  if (childResult.noChangeNeeded) {
-                    shouldCloseChild = false;
-                    columns[i] = child;
-                  } else {
-                    somethingChanged = true;
-                    columns[i] = childResult.changeWasNeeded;
-                  }
-                } finally {
-                  if (shouldCloseChild) {
-                    child.close();
-                  }
-                }
-              } else {
-                if (index != i) {
-                  somethingChanged = true;
-                }
-                columns[i] = cv.getChildColumnView(index);
-              }
-            } else {
-              somethingChanged = true;
-              try (Scalar s = Scalar.fromNull(types[i])) {
-                columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
-              }
-            }
-          }
-          if (somethingChanged) {
-            try (ColumnView ret = new ColumnView(cv.type, cv.rows, Optional.of(cv.nullCount),
-                cv.getValid(), null, columns)) {
-              return DidViewChange.yes(ret.copyToColumnVector());
-            }
-          } else {
-            return DidViewChange.no();
-          }
-        } finally {
-          for (ColumnView c: columns) {
-            if (c != null) {
-              c.close();
-            }
-          }
-        }
-      }
-    } else if (schema.getType() == DType.LIST && cv.getType() == DType.LIST) {
-      if (schema.isStructOrHasStructDescendant()) {
-        String [] childNames = children.getNames();
-        if (childNames.length == 2 &&
-            "offsets".equals(childNames[0]) &&
-            "element".equals(childNames[1])) {
-          try (ColumnView child = cv.getChildColumnView(0)){
-            DidViewChange listResult = gatherJSONColumns(schema.getChild(0),
-                children.getChild(1), child);
-            if (listResult.noChangeNeeded) {
-              return DidViewChange.no();
-            } else {
-              try (ColumnView listView = new ColumnView(cv.type, cv.rows,
-                  Optional.of(cv.nullCount), cv.getValid(), cv.getOffsets(),
-                  new ColumnView[]{listResult.changeWasNeeded})) {
-                return DidViewChange.yes(listView.copyToColumnVector());
-              } finally {
-                listResult.changeWasNeeded.close();
-              }
-            }
-          }
-        }
-      }
-      // Nothing to change so just return the input, but we need to inc a ref count to really
-      // make it work, so for now we are going to turn it into a ColumnVector.
-      return DidViewChange.no();
-    } else {
-      // Nothing to change so just return the input, but we need to inc a ref count to really
-      // make it work, so for now we are going to turn it into a ColumnVector.
-      return DidViewChange.no();
-    }
-  }
-
-  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm, int emptyRowCount) {
-    String[] neededColumns = schema.getColumnNames();
-    if (neededColumns == null || neededColumns.length == 0) {
-      return twm.releaseTable();
-    } else {
-      String[] foundNames = twm.getColumnNames();
-      HashMap<String, Integer> indices = new HashMap<>();
-      for (int i = 0; i < foundNames.length; i++) {
-        indices.put(foundNames[i], i);
-      }
-      // We might need to rearrange the columns to match what we want.
-      DType[] types = schema.getChildTypes();
-      ColumnVector[] columns = new ColumnVector[neededColumns.length];
-      try (Table tbl = twm.releaseTable()) {
-        int rowCount = tbl == null ? emptyRowCount : (int)tbl.getRowCount();
-        if (rowCount < 0) {
-          throw new IllegalStateException(
-              "No empty row count provided and the table read has no row count or columns");
-        }
-        for (int i = 0; i < columns.length; i++) {
-          String neededColumnName = neededColumns[i];
-          Integer index = indices.get(neededColumnName);
-          if (index != null) {
-            if (schema.getChild(i).isStructOrHasStructDescendant()) {
-              DidViewChange gathered = gatherJSONColumns(schema.getChild(i), twm.getChild(index),
-                  tbl.getColumn(index));
-              if (gathered.noChangeNeeded) {
-                columns[i] = tbl.getColumn(index).incRefCount();
-              } else {
-                columns[i] = gathered.changeWasNeeded;
-              }
-            } else {
-              columns[i] = tbl.getColumn(index).incRefCount();
-            }
-          } else {
-            try (Scalar s = Scalar.fromNull(types[i])) {
-              columns[i] = ColumnVector.fromScalar(s, rowCount);
-            }
-          }
-        }
-        return new Table(columns);
-      } finally {
-        for (ColumnVector c: columns) {
-          if (c != null) {
-            c.close();
-          }
-        }
-      }
-    }
-  }
-
   /**
    * Read a JSON file.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
@@ -1253,9 +1106,15 @@ public final class Table implements AutoCloseable {
                     opts.isNormalizeSingleQuotes(),
                     opts.isNormalizeWhitespace(),
                     opts.isMixedTypesAsStrings(),
-                opts.keepStringQuotes()))) {
+                    opts.keepStringQuotes(),
+                    opts.strictValidation(),
+                    opts.leadingZerosAllowed(),
+                    opts.nonNumericNumbersAllowed(),
+                    opts.unquotedControlChars(),
+                    opts.experimental(),
+                    opts.getLineDelimiter()))) {
 
-      return gatherJSONColumns(schema, twm, -1);
+      return twm.releaseTable();
     }
   }
 
@@ -1276,6 +1135,10 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read JSON formatted data.
+   *
+   * @deprecated This method is deprecated since emptyRowCount is not used. Use the method without
+   * emptyRowCount instead.
+   *
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
    * @param buffer raw UTF8 formatted bytes.
@@ -1285,6 +1148,7 @@ public final class Table implements AutoCloseable {
    * @param emptyRowCount the number of rows to return if no columns were read.
    * @return the data parsed as a table on the GPU.
    */
+  @SuppressWarnings("unused")
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
                                long len, HostMemoryAllocator hostMemoryAllocator,
                                int emptyRowCount) {
@@ -1296,14 +1160,14 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readJSON(schema, opts, newBuf, 0, len, emptyRowCount);
+      return readJSON(schema, opts, newBuf, 0, len);
     }
   }
 
+  @SuppressWarnings("unused")
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
                                long len, int emptyRowCount) {
-    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get(),
-        emptyRowCount);
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
@@ -1331,7 +1195,14 @@ public final class Table implements AutoCloseable {
         opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
         opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
-        opts.isMixedTypesAsStrings(), opts.keepStringQuotes()));
+        opts.isMixedTypesAsStrings(),
+        opts.keepStringQuotes(),
+        opts.strictValidation(),
+        opts.leadingZerosAllowed(),
+        opts.nonNumericNumbersAllowed(),
+        opts.unquotedControlChars(),
+        opts.experimental(),
+        opts.getLineDelimiter()));
   }
 
   /**
@@ -1349,6 +1220,12 @@ public final class Table implements AutoCloseable {
           opts.isNormalizeWhitespace(),
           opts.isMixedTypesAsStrings(),
           opts.keepStringQuotes(),
+          opts.strictValidation(),
+          opts.leadingZerosAllowed(),
+          opts.nonNumericNumbersAllowed(),
+          opts.unquotedControlChars(),
+          opts.experimental(),
+          opts.getLineDelimiter(),
           dsHandle));
         return twm;
       } finally {
@@ -1372,6 +1249,10 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read JSON formatted data.
+   *
+   * @deprecated This method is deprecated since emptyRowCount is not used. Use the method without
+   * emptyRowCount instead.
+   *
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
    * @param buffer raw UTF8 formatted bytes.
@@ -1380,6 +1261,7 @@ public final class Table implements AutoCloseable {
    * @param emptyRowCount the number of rows to use if no columns were found.
    * @return the data parsed as a table on the GPU.
    */
+  @SuppressWarnings("unused")
   public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
                                long offset, long len, int emptyRowCount) {
     if (len <= 0) {
@@ -1391,11 +1273,21 @@ public final class Table implements AutoCloseable {
     try (TableWithMeta twm = new TableWithMeta(readJSON(
             schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
             schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
-            opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+            buffer.getAddress() + offset, len,
+            opts.isDayFirst(),
+            opts.isLines(),
+            opts.isRecoverWithNull(),
+            opts.isNormalizeSingleQuotes(),
             opts.isNormalizeWhitespace(),
-            opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
-      return gatherJSONColumns(schema, twm, emptyRowCount);
+            opts.isMixedTypesAsStrings(),
+            opts.keepStringQuotes(),
+            opts.strictValidation(),
+            opts.leadingZerosAllowed(),
+            opts.nonNumericNumbersAllowed(),
+            opts.unquotedControlChars(),
+            opts.experimental(),
+            opts.getLineDelimiter()))) {
+      return twm.releaseTable();
     }
   }
 
@@ -1412,20 +1304,36 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read JSON formatted data.
+   *
+   * @deprecated This method is deprecated since emptyRowCount is not used. Use the method without
+   * emptyRowCount instead.
+   *
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
    * @param ds the DataSource to read from.
-   * @param emtpyRowCount the number of rows to return if no columns were read.
+   * @param emptyRowCount the number of rows to return if no columns were read.
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emtpyRowCount) {
+  @SuppressWarnings("unused")
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emptyRowCount) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
-        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
-        opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
+        opts.isDayFirst(),
+        opts.isLines(),
+        opts.isRecoverWithNull(),
+        opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
-        opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
-      return gatherJSONColumns(schema, twm, emtpyRowCount);
+        opts.isMixedTypesAsStrings(),
+        opts.keepStringQuotes(),
+        opts.strictValidation(),
+        opts.leadingZerosAllowed(),
+        opts.nonNumericNumbersAllowed(),
+        opts.unquotedControlChars(),
+        opts.experimental(),
+        opts.getLineDelimiter(),
+        dsHandle))) {
+      return twm.releaseTable();
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
@@ -1448,7 +1356,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), null, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -1493,6 +1401,14 @@ public final class Table implements AutoCloseable {
     }
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
     return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
@@ -1513,10 +1429,35 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
+    long[] addrsSizes = new long[]{ buffer.getAddress() + offset, len };
     return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, addrsSizes, opts.timeUnit().typeId.getNativeId()));
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffers Buffers containing the Parquet data. The buffers are logically concatenated
+   *                in order to construct the file being read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer... buffers) {
+    assert buffers.length > 0;
+    long[] addrsSizes = new long[buffers.length * 2];
+    for (int i = 0; i < buffers.length; i++) {
+      addrsSizes[i * 2] = buffers[i].getAddress();
+      addrsSizes[(i * 2) + 1] = buffers[i].getLength();
+    }
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
+        null, addrsSizes, opts.timeUnit().typeId.getNativeId()));
+  }
+
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param ds custom datasource to provide the Parquet file data
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, DataSource ds) {
     long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
     try {
@@ -1734,6 +1675,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -1754,6 +1697,8 @@ public final class Table implements AutoCloseable {
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getRowGroupSizeRows(),
+          options.getRowGroupSizeBytes(),
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),

@@ -11,7 +11,8 @@ import pytest
 
 import cudf
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
@@ -42,7 +43,9 @@ def test_cuda_array_interface_interop_in(dtype, module):
         assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["str"])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
+)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()
@@ -73,7 +76,9 @@ def test_cuda_array_interface_interop_out(dtype, module):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
@@ -104,7 +109,9 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
         module_data = module_constructor(cudf_data)  # noqa: F841
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
 @pytest.mark.parametrize("mask_type", ["bits", "bools"])
 def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
@@ -163,13 +170,13 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     # CuPy array
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
-    b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    b = cupy.asarray([1, 1, 1])
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
 
 @pytest.mark.xfail(
@@ -180,7 +187,7 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     ),
 )
 def test_cuda_array_interface_pytorch():
-    torch = pytest.importorskip("torch", minversion="1.6.0")
+    torch = pytest.importorskip("torch", minversion="2.4.0")
     if not torch.cuda.is_available():
         pytest.skip("need gpu version of pytorch to be installed")
 
@@ -195,15 +202,10 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    # TODO: This test fails with PyTorch 2. It appears that PyTorch
-    # checks that the pointer is device-accessible even when the
-    # size is zero. See
-    # https://github.com/pytorch/pytorch/issues/98133
-    #
-    # index = cudf.Index([], dtype="float64")
-    # tensor = torch.tensor(index)
-    # got = cudf.Index(tensor)
-    # assert_eq(got, index)
+    index = cudf.Index([], dtype="float64")
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
 
     index = cudf.core.index.RangeIndex(start=0, stop=100)
     tensor = torch.tensor(index)

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -63,7 +63,7 @@ set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -g -G)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
-list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "60")
+list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "70")
 
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")

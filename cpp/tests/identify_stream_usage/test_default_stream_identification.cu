@@ -33,6 +33,7 @@ void test_cudaLaunchKernel()
   } catch (std::runtime_error&) {
     return;
   }
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
   throw std::runtime_error("No exception raised for kernel on default stream!");
 }
 

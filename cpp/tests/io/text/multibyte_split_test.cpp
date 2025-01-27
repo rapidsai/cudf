@@ -19,16 +19,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 using cudf::test::strings_column_wrapper;
@@ -97,10 +93,9 @@ TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange)
   auto expected = strings_column_wrapper{"abcdefg:"};
 
   auto source = cudf::io::text::make_source(host_input);
-  auto out    = cudf::io::text::multibyte_split(
-    *source,
-    delimiter,
-    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size())});
+  cudf::io::text::parse_options options{
+    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size())}};
+  auto out = cudf::io::text::multibyte_split(*source, delimiter, options);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
@@ -113,10 +108,9 @@ TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange2)
   auto expected = strings_column_wrapper{"abcdefg:"};
 
   auto source = cudf::io::text::make_source(host_input);
-  auto out    = cudf::io::text::multibyte_split(
-    *source,
-    delimiter,
-    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size() - 1)});
+  cudf::io::text::parse_options options{
+    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size() - 1)}};
+  auto out = cudf::io::text::multibyte_split(*source, delimiter, options);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
@@ -147,7 +141,7 @@ TEST_F(MultibyteSplitTest, LargeInput)
 
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
-    host_expected.emplace_back(std::string("...:|"));
+    host_expected.emplace_back("...:|");
   }
 
   auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
@@ -277,9 +271,12 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
   auto source    = cudf::io::text::make_source(host_input);
 
   auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
-  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
-  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  auto out0        = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[0]});
+  auto out1 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[1]});
+  auto out2 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[2]});
 
   auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
   auto out       = cudf::concatenate(out_views);
@@ -303,9 +300,12 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
   auto source                           = cudf::io::text::make_source(host_input);
 
   auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
-  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
-  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  auto out0        = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[0]});
+  auto out1 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[1]});
+  auto out2 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[2]});
 
   auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
   auto out       = cudf::concatenate(out_views);
@@ -327,9 +327,12 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
   auto source    = cudf::io::text::make_source(host_input);
 
   auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
-  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
-  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  auto out0        = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[0]});
+  auto out1 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[1]});
+  auto out2 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[2]});
 
   auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
   auto out       = cudf::concatenate(out_views);
@@ -352,9 +355,12 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRangeSingleByte)
   auto source                       = cudf::io::text::make_source(host_input);
 
   auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
-  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
-  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  auto out0        = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[0]});
+  auto out1 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[1]});
+  auto out2 = cudf::io::text::multibyte_split(
+    *source, delimiter, cudf::io::text::parse_options{byte_ranges[2]});
 
   auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
   auto out       = cudf::concatenate(out_views);
@@ -383,9 +389,14 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
     SCOPED_TRACE(split1);
     for (int split2 = split1 + 1; split2 < size; split2++) {
       SCOPED_TRACE(split2);
-      auto out1 = multibyte_split(*source, delimiter, byte_range_info{0, split1});
-      auto out2 = multibyte_split(*source, delimiter, byte_range_info{split1, split2 - split1});
-      auto out3 = multibyte_split(*source, delimiter, byte_range_info{split2, size - split2});
+      auto out1 = multibyte_split(
+        *source, delimiter, cudf::io::text::parse_options{byte_range_info{0, split1}});
+      auto out2 =
+        multibyte_split(*source,
+                        delimiter,
+                        cudf::io::text::parse_options{byte_range_info{split1, split2 - split1}});
+      auto out3 = multibyte_split(
+        *source, delimiter, cudf::io::text::parse_options{byte_range_info{split2, size - split2}});
 
       auto out_views = std::vector<cudf::column_view>({out1->view(), out2->view(), out3->view()});
       auto out       = cudf::concatenate(out_views);
@@ -416,9 +427,14 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
     SCOPED_TRACE(split1);
     for (int split2 = split1 + 1; split2 < size; split2++) {
       SCOPED_TRACE(split2);
-      auto out1 = multibyte_split(*source, delimiter, byte_range_info{0, split1});
-      auto out2 = multibyte_split(*source, delimiter, byte_range_info{split1, split2 - split1});
-      auto out3 = multibyte_split(*source, delimiter, byte_range_info{split2, size - split2});
+      auto out1 = multibyte_split(
+        *source, delimiter, cudf::io::text::parse_options{byte_range_info{0, split1}});
+      auto out2 =
+        multibyte_split(*source,
+                        delimiter,
+                        cudf::io::text::parse_options{byte_range_info{split1, split2 - split1}});
+      auto out3 = multibyte_split(
+        *source, delimiter, cudf::io::text::parse_options{byte_range_info{split2, size - split2}});
 
       auto out_views = std::vector<cudf::column_view>({out1->view(), out2->view(), out3->view()});
       auto out       = cudf::concatenate(out_views);
@@ -441,7 +457,8 @@ TEST_F(MultibyteSplitTest, SingletonRangeAtEnd)
   auto source     = make_source(host_input);
   auto expected   = strings_column_wrapper{};
 
-  auto out = multibyte_split(*source, delimiter, byte_range_info{5, 1});
+  auto out =
+    multibyte_split(*source, delimiter, cudf::io::text::parse_options{byte_range_info{5, 1}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
@@ -480,7 +497,8 @@ TEST_F(MultibyteSplitTest, EmptyRange)
   auto source     = make_source(host_input);
   auto expected   = strings_column_wrapper{};
 
-  auto out = multibyte_split(*source, delimiter, byte_range_info{4, 0});
+  auto out =
+    multibyte_split(*source, delimiter, cudf::io::text::parse_options{byte_range_info{4, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }
@@ -493,7 +511,8 @@ TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
   auto source     = make_source(host_input);
   auto expected   = strings_column_wrapper{};
 
-  auto out = multibyte_split(*source, delimiter, byte_range_info{3, 0});
+  auto out =
+    multibyte_split(*source, delimiter, cudf::io::text::parse_options{byte_range_info{3, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, cudf::test::debug_output_level::ALL_ERRORS);
 }

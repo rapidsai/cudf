@@ -29,6 +29,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/byte_pair_encoding.hpp>
 
@@ -341,7 +342,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  bpe_merge_pairs const& merge_pairs,
                                                  cudf::string_scalar const& separator,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+                                                 rmm::device_async_resource_ref mr)
 {
   if (input.is_empty() || input.chars_size(stream) == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
@@ -458,10 +459,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const& input,
                                                  bpe_merge_pairs const& merges_table,
                                                  cudf::string_scalar const& separator,
-                                                 rmm::mr::device_memory_resource* mr)
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, cudf::get_default_stream(), mr);
+  return detail::byte_pair_encoding(input, merges_table, separator, stream, mr);
 }
 
 }  // namespace nvtext

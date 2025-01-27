@@ -8,7 +8,6 @@ follow_imports = "skip"
 exclude = [
     "cudf/_lib/",
     "cudf/cudf/tests/",
-    "cudf/cudf/utils/metadata/orc_column_statistics_pb2.py",
     "custreamz/custreamz/tests/",
     "dask_cudf/dask_cudf/tests/",
  ]
@@ -19,25 +18,112 @@ exclude = [
 skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
 # ignore short words, and typename parameters like OffsetT
 ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
-ignore-words-list = "inout,unparseable,falsy,couldn,Couldn"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty"
 builtin = "clear"
 quiet-level = 3
 
 [tool.ruff]
 line-length = 79
+target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "D201", "D204", "D206", "D207", "D208", "D209", "D210", "D211", "D214", "D215", "D300", "D301", "D403", "D405", "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D414", "D418"]
+typing-modules = ["cudf._typing"]
+select = [
+    # pycodestyle Error
+    "E",
+    # Pyflakes
+    "F",
+    # pycodestyle Warning
+    "W",
+    # isort
+    "I",
+    # no-blank-line-before-function
+    "D201",
+    # one-blank-line-after-class
+    "D204",
+    # indent-with-spaces
+    "D206",
+    # under-indentation
+    "D207",
+    # over-indentation
+    "D208",
+    # new-line-after-last-paragraph
+    "D209",
+    # surrounding-whitespace
+    "D210",
+    # blank-line-before-class
+    "D211",
+    # section-not-over-indented
+    "D214",
+    # section-underline-not-over-indented
+    "D215",
+    # triple-single-quotes
+    "D300",
+    # escape-sequence-in-docstring
+    "D301",
+    # first-line-capitalized
+    "D403",
+    # capitalize-section-name
+    "D405",
+    # new-line-after-section-name
+    "D406",
+    # dashed-underline-after-section
+    "D407",
+    # section-underline-after-name
+    "D408",
+    # section-underline-matches-section-length
+    "D409",
+    # no-blank-line-after-section
+    "D410",
+    # no-blank-line-before-section
+    "D411",
+    # blank-lines-between-header-and-content
+    "D412",
+    # empty-docstring-section
+    "D414",
+    # overload-with-docstring
+    "D418",
+    # flake8-type-checking
+    "TCH",
+    # flake8-future-annotations
+    "FA",
+    # non-pep585-annotation
+    "UP006",
+    # non-pep604-annotation
+    "UP007",
+    # Import from `collections.abc` instead: `Callable`
+    "UP035",
+    # usage of legacy `np.random` function calls
+    "NPY002",
+    # Ruff-specific rules
+    "RUF",
+]
 ignore = [
     # whitespace before :
     "E203",
     # line-too-long (due to Copyright header)
     "E501",
+    # type-comparison, disabled because we compare types to numpy dtypes
+    "E721",
+    # String contains ambiguous character
+    "RUF001",
+    # Parenthesize `a and b` expressions when chaining `and` and `or`
+    # together, to make the precedence clear
+    "RUF021",
+    # Mutable class attributes should be annotated with
+    # `typing.ClassVar`
+    "RUF012",
 ]
 fixable = ["ALL"]
 exclude = [
-    # TODO: Remove this in a follow-up where we fix __all__.
-    "__init__.py",
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
+]
+
+[tool.ruff.format]
+exclude = [
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
 ]
 
 [tool.ruff.lint.per-file-ignores]

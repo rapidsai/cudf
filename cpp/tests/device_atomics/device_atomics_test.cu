@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -30,6 +31,7 @@
 
 #include <algorithm>
 
+namespace {
 template <typename T>
 CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
 {
@@ -108,6 +110,7 @@ std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const>
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
   return T{typename T::duration{std::accumulate(ys.begin(), ys.end(), 0)}};
 }
+}  // namespace
 
 template <typename T>
 struct AtomicsTest : public cudf::test::BaseFixture {
@@ -144,9 +147,9 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[5] = result_init[2];
 
     auto dev_data = cudf::detail::make_device_uvector_sync(
-      v, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      v, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto dev_result = cudf::detail::make_device_uvector_sync(
-      result_init, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      result_init, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     if (block_size == 0) { block_size = vec_size; }
 

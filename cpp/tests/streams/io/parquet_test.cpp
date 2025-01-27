@@ -17,13 +17,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 
 #include <string>
 #include <vector>
@@ -55,20 +51,10 @@ cudf::table construct_table()
   cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones, num_rows] {
-    auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones[i], numeric::scale_type{12}};
-    });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
-                                                                       col6_data + num_rows);
-  }();
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones, num_rows] {
-    auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones[i], numeric::scale_type{-12}};
-    });
-    return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data,
-                                                                       col7_data + num_rows);
-  }();
+  cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep> col6(
+    ones.begin(), ones.end(), numeric::scale_type{12});
+  cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep> col7(
+    ones.begin(), ones.end(), numeric::scale_type{-12});
 
   cudf::test::lists_column_wrapper<int64_t> col8{
     {1, 1}, {1, 1, 1}, {}, {1}, {1, 1, 1, 1}, {1, 1, 1, 1, 1}, {}, {1, -1}, {}, {-1, -1}};

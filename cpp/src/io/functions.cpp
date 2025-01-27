@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,46 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
+#include <utility>
 
 namespace cudf::io {
+namespace {
+
+compression_type infer_compression_type(compression_type compression, source_info const& info)
+{
+  if (compression != compression_type::AUTO) { return compression; }
+
+  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+
+  auto filepath = info.filepaths()[0];
+
+  // Attempt to infer from the file extension
+  auto const pos = filepath.find_last_of('.');
+
+  if (pos == std::string::npos) { return {}; }
+
+  auto str_tolower = [](auto const& begin, auto const& end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+
+  auto const ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
+
+  if (ext == "gz") { return compression_type::GZIP; }
+  if (ext == "zip") { return compression_type::ZIP; }
+  if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "xz") { return compression_type::XZ; }
+
+  return compression_type::NONE;
+}
+
+}  // namespace
+
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
@@ -113,20 +146,20 @@ parquet_writer_options_builder parquet_writer_options::builder()
 chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
   sink_info const& sink)
 {
-  return chunked_parquet_writer_options_builder(sink);
+  return chunked_parquet_writer_options_builder{sink};
 }
 
 namespace {
 
 std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info const& info,
-                                                                    size_t range_offset = 0,
-                                                                    size_t range_size   = 0)
+                                                                    size_t offset            = 0,
+                                                                    size_t max_size_estimate = 0)
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
       auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
       for (auto const& filepath : info.filepaths()) {
-        sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
+        sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
       }
       return sources;
     }
@@ -156,8 +189,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(avro_reader_options const& options, rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -170,38 +202,9 @@ table_with_metadata read_avro(avro_reader_options const& options,
   return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
 }
 
-compression_type infer_compression_type(compression_type compression, source_info const& info)
-{
-  if (compression != compression_type::AUTO) { return compression; }
-
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
-
-  auto filepath = info.filepaths()[0];
-
-  // Attempt to infer from the file extension
-  auto const pos = filepath.find_last_of('.');
-
-  if (pos == std::string::npos) { return {}; }
-
-  auto str_tolower = [](auto const& begin, auto const& end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  auto const ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
-
-  if (ext == "gz") { return compression_type::GZIP; }
-  if (ext == "zip") { return compression_type::ZIP; }
-  if (ext == "bz2") { return compression_type::BZIP2; }
-  if (ext == "xz") { return compression_type::XZ; }
-
-  return compression_type::NONE;
-}
-
 table_with_metadata read_json(json_reader_options options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -214,9 +217,7 @@ table_with_metadata read_json(json_reader_options options,
   return json::detail::read_json(datasources, options, stream, mr);
 }
 
-void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr)
+void write_json(json_writer_options const& options, rmm::cuda_stream_view stream)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -225,13 +226,12 @@ void write_json(json_writer_options const& options,
     sinks[0].get(),
     options.get_table(),
     options,
-    stream,
-    mr);
+    stream);
 }
 
 table_with_metadata read_csv(csv_reader_options options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -251,9 +251,7 @@ table_with_metadata read_csv(csv_reader_options options,
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
 {
   using namespace cudf::io::detail;
 
@@ -265,8 +263,7 @@ void write_csv(csv_writer_options const& options,
     options.get_table(),
     options.get_names(),
     options,
-    stream,
-    mr);
+    stream);
 }
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
@@ -293,7 +290,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get(), stream);
+  orc::metadata const metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;
@@ -305,14 +302,14 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
 
   // Get file-level statistics, statistics of each column of file
   for (auto const& stats : metadata.ff.statistics) {
-    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
+    result.file_stats.emplace_back(stats.cbegin(), stats.cend());
   }
 
   // Get stripe-level statistics
   for (auto const& stripes_stats : metadata.md.stripeStats) {
     result.stripes_stats.emplace_back();
     for (auto const& stats : stripes_stats.colStats) {
-      result.stripes_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
+      result.stripes_stats.back().emplace_back(stats.cbegin(), stats.cend());
     }
   }
 
@@ -413,13 +410,13 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
   auto reader = std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, mr);
-  return reader->read(options);
+  return reader->read();
 }
 
 /**
@@ -438,6 +435,70 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
   writer->write(options.get_table());
 }
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       size_type output_row_granularity,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         output_row_granularity,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, mr)
+{
+}
+
+chunked_orc_reader::chunked_orc_reader() = default;
+
+// This destructor destroys the internal reader instance.
+// Since the declaration of the internal `reader` object does not exist in the header, this
+// destructor needs to be defined in a separate source file which can access to that object's
+// declaration.
+chunked_orc_reader::~chunked_orc_reader() = default;
+
+bool chunked_orc_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+table_with_metadata chunked_orc_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
+}
+
+orc_chunked_writer::orc_chunked_writer() = default;
+
+orc_chunked_writer::~orc_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
@@ -481,7 +542,7 @@ namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -489,7 +550,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   auto reader =
     std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
 
-  return reader->read(options);
+  return reader->read();
 }
 
 parquet_metadata read_parquet_metadata(source_info const& src_info)
@@ -533,6 +594,8 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
     [&](column_name_info const& name) {
       auto col_meta = column_in_metadata{name.name};
       if (name.is_nullable.has_value()) { col_meta.set_nullability(name.is_nullable.value()); }
+      if (name.is_binary.value_or(false)) { col_meta.set_output_as_binary(true); }
+      if (name.type_length.has_value()) { col_meta.set_type_length(name.type_length.value()); }
       std::transform(name.children.begin(),
                      name.children.end(),
                      std::back_inserter(col_meta.children),
@@ -563,13 +626,15 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   return writer->close(options.get_column_chunks_file_paths());
 }
 
+chunked_parquet_reader::chunked_parquet_reader() = default;
+
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
       chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
 {
@@ -582,7 +647,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                std::size_t pass_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
                                                             make_datasources(options.get_source()),
@@ -617,6 +682,8 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
   return reader->read_chunk();
 }
 
+parquet_chunked_writer::parquet_chunked_writer() = default;
+
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
@@ -630,6 +697,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   writer = std::make_unique<detail_parquet::writer>(
     std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
+
+parquet_chunked_writer::~parquet_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
@@ -679,29 +748,49 @@ void parquet_reader_options::set_num_rows(size_type val)
   _num_rows = val;
 }
 
-void parquet_writer_options::set_partitions(std::vector<partition_info> partitions)
+void parquet_writer_options_base::set_metadata(table_input_metadata metadata)
 {
-  CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
-               "Mismatch between number of sinks and number of partitions");
-  _partitions = std::move(partitions);
+  _metadata = std::move(metadata);
 }
 
-void parquet_writer_options::set_key_value_metadata(
+void parquet_writer_options_base::set_key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
-  CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
+  CUDF_EXPECTS(metadata.size() == get_sink().num_sinks(),
                "Mismatch between number of sinks and number of metadata maps");
   _user_data = std::move(metadata);
 }
 
-void parquet_writer_options::set_column_chunks_file_paths(std::vector<std::string> file_paths)
+void parquet_writer_options_base::set_stats_level(statistics_freq sf) { _stats_level = sf; }
+
+void parquet_writer_options_base::set_compression(compression_type compression)
 {
-  CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
-               "Mismatch between number of sinks and number of chunk paths to set");
-  _column_chunks_file_paths = std::move(file_paths);
+  _compression = compression;
+  if (compression == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
 }
 
-void parquet_writer_options::set_row_group_size_bytes(size_t size_bytes)
+void parquet_writer_options_base::enable_int96_timestamps(bool req)
+{
+  CUDF_EXPECTS(not req or not is_enabled_write_arrow_schema(),
+               "INT96 timestamps and arrow schema cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
+  _write_timestamps_as_int96 = req;
+}
+
+void parquet_writer_options_base::enable_utc_timestamps(bool val)
+{
+  _write_timestamps_as_UTC = val;
+}
+
+void parquet_writer_options_base::enable_write_arrow_schema(bool val)
+{
+  CUDF_EXPECTS(not val or not is_enabled_int96_timestamps(),
+               "arrow schema and INT96 timestamps cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
+  _write_arrow_schema = val;
+}
+
+void parquet_writer_options_base::set_row_group_size_bytes(size_t size_bytes)
 {
   CUDF_EXPECTS(
     size_bytes >= 1024,
@@ -709,13 +798,13 @@ void parquet_writer_options::set_row_group_size_bytes(size_t size_bytes)
   _row_group_size_bytes = size_bytes;
 }
 
-void parquet_writer_options::set_row_group_size_rows(size_type size_rows)
+void parquet_writer_options_base::set_row_group_size_rows(size_type size_rows)
 {
   CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
   _row_group_size_rows = size_rows;
 }
 
-void parquet_writer_options::set_max_page_size_bytes(size_t size_bytes)
+void parquet_writer_options_base::set_max_page_size_bytes(size_t size_bytes)
 {
   CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
   CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
@@ -723,176 +812,256 @@ void parquet_writer_options::set_max_page_size_bytes(size_t size_bytes)
   _max_page_size_bytes = size_bytes;
 }
 
-void parquet_writer_options::set_max_page_size_rows(size_type size_rows)
+void parquet_writer_options_base::set_max_page_size_rows(size_type size_rows)
 {
   CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
   _max_page_size_rows = size_rows;
 }
 
-void parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes)
+void parquet_writer_options_base::set_column_index_truncate_length(int32_t size_bytes)
 {
   CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
   _column_index_truncate_length = size_bytes;
 }
 
-void parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
+void parquet_writer_options_base::set_dictionary_policy(dictionary_policy policy)
 {
   _dictionary_policy = policy;
 }
 
-void parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
+void parquet_writer_options_base::set_max_dictionary_size(size_t size_bytes)
 {
   CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
                "The maximum dictionary size cannot exceed 2GB.");
   _max_dictionary_size = size_bytes;
 }
 
-void parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
+void parquet_writer_options_base::set_max_page_fragment_size(size_type size_rows)
 {
   CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
   _max_page_fragment_size = size_rows;
 }
 
+void parquet_writer_options_base::set_compression_statistics(
+  std::shared_ptr<writer_compression_statistics> comp_stats)
+{
+  _compression_stats = std::move(comp_stats);
+}
+
+void parquet_writer_options_base::enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+void parquet_writer_options_base::set_sorting_columns(std::vector<sorting_column> sorting_columns)
+{
+  _sorting_columns = std::move(sorting_columns);
+}
+
+parquet_writer_options::parquet_writer_options(sink_info const& sink, table_view table)
+  : parquet_writer_options_base(sink), _table(std::move(table))
+{
+}
+
+void parquet_writer_options::set_partitions(std::vector<partition_info> partitions)
+{
+  CUDF_EXPECTS(partitions.size() == get_sink().num_sinks(),
+               "Mismatch between number of sinks and number of partitions");
+  _partitions = std::move(partitions);
+}
+
+void parquet_writer_options::set_column_chunks_file_paths(std::vector<std::string> file_paths)
+{
+  CUDF_EXPECTS(file_paths.size() == get_sink().num_sinks(),
+               "Mismatch between number of sinks and number of chunk paths to set");
+  _column_chunks_file_paths = std::move(file_paths);
+}
+
+template <class BuilderT, class OptionsT>
+parquet_writer_options_builder_base<BuilderT, OptionsT>::parquet_writer_options_builder_base(
+  OptionsT options)
+  : _options(std::move(options))
+{
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::metadata(
+  table_input_metadata metadata)
+{
+  _options.set_metadata(std::move(metadata));
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::key_value_metadata(
+  std::vector<std::map<std::string, std::string>> metadata)
+{
+  _options.set_key_value_metadata(std::move(metadata));
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::stats_level(statistics_freq sf)
+{
+  _options.set_stats_level(sf);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::compression(
+  compression_type compression)
+{
+  _options.set_compression(compression);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::row_group_size_bytes(size_t val)
+{
+  _options.set_row_group_size_bytes(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::row_group_size_rows(
+  size_type val)
+{
+  _options.set_row_group_size_rows(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::max_page_size_bytes(size_t val)
+{
+  _options.set_max_page_size_bytes(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::max_page_size_rows(size_type val)
+{
+  _options.set_max_page_size_rows(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::column_index_truncate_length(
+  int32_t val)
+{
+  _options.set_column_index_truncate_length(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::dictionary_policy(
+  enum dictionary_policy val)
+{
+  _options.set_dictionary_policy(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::max_dictionary_size(size_t val)
+{
+  _options.set_max_dictionary_size(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::max_page_fragment_size(
+  size_type val)
+{
+  _options.set_max_page_fragment_size(val);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::compression_statistics(
+  std::shared_ptr<writer_compression_statistics> const& comp_stats)
+{
+  _options.set_compression_statistics(comp_stats);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::int96_timestamps(bool enabled)
+{
+  _options.enable_int96_timestamps(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::utc_timestamps(bool enabled)
+{
+  _options.enable_utc_timestamps(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_arrow_schema(bool enabled)
+{
+  _options.enable_write_arrow_schema(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_v2_headers(bool enabled)
+{
+  _options.enable_write_v2_headers(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::sorting_columns(
+  std::vector<sorting_column> sorting_columns)
+{
+  _options.set_sorting_columns(std::move(sorting_columns));
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+parquet_writer_options_builder_base<BuilderT, OptionsT>::operator OptionsT&&()
+{
+  return std::move(_options);
+}
+
+template <class BuilderT, class OptionsT>
+OptionsT&& parquet_writer_options_builder_base<BuilderT, OptionsT>::build()
+{
+  return std::move(_options);
+}
+
+template class parquet_writer_options_builder_base<parquet_writer_options_builder,
+                                                   parquet_writer_options>;
+template class parquet_writer_options_builder_base<chunked_parquet_writer_options_builder,
+                                                   chunked_parquet_writer_options>;
+
+parquet_writer_options_builder::parquet_writer_options_builder(sink_info const& sink,
+                                                               table_view const& table)
+  : parquet_writer_options_builder_base(parquet_writer_options{sink, table})
+{
+}
+
 parquet_writer_options_builder& parquet_writer_options_builder::partitions(
   std::vector<partition_info> partitions)
 {
-  options.set_partitions(std::move(partitions));
-  return *this;
-}
-
-parquet_writer_options_builder& parquet_writer_options_builder::key_value_metadata(
-  std::vector<std::map<std::string, std::string>> metadata)
-{
-  options.set_key_value_metadata(std::move(metadata));
+  get_options().set_partitions(std::move(partitions));
   return *this;
 }
 
 parquet_writer_options_builder& parquet_writer_options_builder::column_chunks_file_paths(
   std::vector<std::string> file_paths)
 {
-  options.set_column_chunks_file_paths(std::move(file_paths));
+  get_options().set_column_chunks_file_paths(std::move(file_paths));
   return *this;
 }
 
-parquet_writer_options_builder& parquet_writer_options_builder::dictionary_policy(
-  enum dictionary_policy val)
+chunked_parquet_writer_options::chunked_parquet_writer_options(sink_info sink)
+  : parquet_writer_options_base(std::move(sink))
 {
-  options.set_dictionary_policy(val);
-  return *this;
 }
 
-parquet_writer_options_builder& parquet_writer_options_builder::max_dictionary_size(size_t val)
+chunked_parquet_writer_options_builder::chunked_parquet_writer_options_builder(
+  sink_info const& sink)
+  : parquet_writer_options_builder_base(chunked_parquet_writer_options{sink})
 {
-  options.set_max_dictionary_size(val);
-  return *this;
-}
-
-parquet_writer_options_builder& parquet_writer_options_builder::max_page_fragment_size(
-  size_type val)
-{
-  options.set_max_page_fragment_size(val);
-  return *this;
-}
-
-parquet_writer_options_builder& parquet_writer_options_builder::write_v2_headers(bool enabled)
-{
-  options.enable_write_v2_headers(enabled);
-  return *this;
-}
-
-void chunked_parquet_writer_options::set_key_value_metadata(
-  std::vector<std::map<std::string, std::string>> metadata)
-{
-  CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-               "Mismatch between number of sinks and number of metadata maps");
-  _user_data = std::move(metadata);
-}
-
-void chunked_parquet_writer_options::set_row_group_size_bytes(size_t size_bytes)
-{
-  CUDF_EXPECTS(
-    size_bytes >= 1024,
-    "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
-  _row_group_size_bytes = size_bytes;
-}
-
-void chunked_parquet_writer_options::set_row_group_size_rows(size_type size_rows)
-{
-  CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
-  _row_group_size_rows = size_rows;
-}
-
-void chunked_parquet_writer_options::set_max_page_size_bytes(size_t size_bytes)
-{
-  CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
-  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
-               "The maximum page size cannot exceed 2GB.");
-  _max_page_size_bytes = size_bytes;
-}
-
-void chunked_parquet_writer_options::set_max_page_size_rows(size_type size_rows)
-{
-  CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
-  _max_page_size_rows = size_rows;
-}
-
-void chunked_parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes)
-{
-  CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-  _column_index_truncate_length = size_bytes;
-}
-
-void chunked_parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
-{
-  _dictionary_policy = policy;
-}
-
-void chunked_parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
-{
-  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
-               "The maximum dictionary size cannot exceed 2GB.");
-  _max_dictionary_size = size_bytes;
-}
-
-void chunked_parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
-{
-  CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
-  _max_page_fragment_size = size_rows;
-}
-
-chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::key_value_metadata(
-  std::vector<std::map<std::string, std::string>> metadata)
-{
-  options.set_key_value_metadata(std::move(metadata));
-  return *this;
-}
-
-chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::dictionary_policy(
-  enum dictionary_policy val)
-{
-  options.set_dictionary_policy(val);
-  return *this;
-}
-
-chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::max_dictionary_size(
-  size_t val)
-{
-  options.set_max_dictionary_size(val);
-  return *this;
-}
-
-chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::write_v2_headers(
-  bool enabled)
-{
-  options.enable_write_v2_headers(enabled);
-  return *this;
-}
-
-chunked_parquet_writer_options_builder&
-chunked_parquet_writer_options_builder::max_page_fragment_size(size_type val)
-{
-  options.set_max_page_fragment_size(val);
-  return *this;
 }
 
 }  // namespace cudf::io

@@ -14,13 +14,8 @@ You can import `cudf` directly and use it like `pandas`:
 
 ```python
 import cudf
-import requests
-from io import StringIO
 
-url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode("utf-8")
-
-tips_df = cudf.read_csv(StringIO(content))
+tips_df = cudf.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
@@ -36,13 +31,8 @@ supported operations and falling back to pandas when needed:
 %load_ext cudf.pandas  # pandas operations now use the GPU!
 
 import pandas as pd
-import requests
-from io import StringIO
 
-url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode("utf-8")
-
-tips_df = pd.read_csv(StringIO(content))
+tips_df = pd.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
@@ -89,17 +79,17 @@ pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12
 
 ### Conda
 
-cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects/miniconda/en/latest/) or the full [Anaconda distribution](https://www.anaconda.com/download) from the `rapidsai` channel:
+cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.06 python=3.11 cuda-version=12.2
+    cudf=25.02 python=3.12 cuda-version=12.5
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
 of our latest development branch.
 
-Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
+Note: cuDF is supported only on Linux, and with Python versions 3.10 and later.
 
 See the [RAPIDS installation guide](https://docs.rapids.ai/install) for more OS and version info.
 

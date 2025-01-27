@@ -89,12 +89,12 @@ struct bpe_equal {
     return lhs == rhs;  // all rows are unique
   }
   // used by find
-  __device__ bool operator()(cudf::size_type lhs, merge_pair_type const& rhs) const noexcept
+  __device__ bool operator()(merge_pair_type const& lhs, cudf::size_type rhs) const noexcept
   {
-    lhs *= 2;
-    auto const left  = d_strings.element<cudf::string_view>(lhs);
-    auto const right = d_strings.element<cudf::string_view>(lhs + 1);
-    return (left == rhs.first) && (right == rhs.second);
+    rhs *= 2;
+    auto const left  = d_strings.element<cudf::string_view>(rhs);
+    auto const right = d_strings.element<cudf::string_view>(rhs + 1);
+    return (left == lhs.first) && (right == lhs.second);
   }
 };
 
@@ -106,7 +106,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::size_type,
                                               cuda::thread_scope_device,
                                               bpe_equal,
                                               bpe_probe_scheme,
-                                              cudf::detail::cuco_allocator,
+                                              cudf::detail::cuco_allocator<char>,
                                               cuco_storage>;
 
 /**
@@ -149,10 +149,10 @@ struct mp_equal {
     return left == right;
   }
   // used by find
-  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
-    auto const left = d_strings.element<cudf::string_view>(lhs);
-    return left == rhs;
+    auto const right = d_strings.element<cudf::string_view>(rhs);
+    return lhs == right;
   }
 };
 
@@ -164,7 +164,7 @@ using mp_table_map_type = cuco::static_map<cudf::size_type,
                                            cuda::thread_scope_device,
                                            mp_equal,
                                            mp_probe_scheme,
-                                           cudf::detail::cuco_allocator,
+                                           cudf::detail::cuco_allocator<char>,
                                            cuco_storage>;
 
 }  // namespace detail

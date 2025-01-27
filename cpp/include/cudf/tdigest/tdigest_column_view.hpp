@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! Tdigest interfaces
 namespace tdigest {
 /**
@@ -59,7 +59,7 @@ class tdigest_column_view : private column_view {
   tdigest_column_view(column_view const&);  ///< Construct tdigest_column_view from a column_view
   tdigest_column_view(tdigest_column_view&&)      = default;  ///< Move constructor
   tdigest_column_view(tdigest_column_view const&) = default;  ///< Copy constructor
-  ~tdigest_column_view()                          = default;
+  ~tdigest_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *
@@ -132,4 +132,4 @@ class tdigest_column_view : private column_view {
 
 /** @} */  // end of group
 }  // namespace tdigest
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 struct regex_program;
@@ -59,8 +58,8 @@ struct regex_program;
 std::unique_ptr<column> contains_re(
   strings_column_view const& input,
   regex_program const& prog,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -87,8 +86,8 @@ std::unique_ptr<column> contains_re(
 std::unique_ptr<column> matches_re(
   strings_column_view const& input,
   regex_program const& prog,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the number of times the given regex_program's pattern
@@ -115,8 +114,8 @@ std::unique_ptr<column> matches_re(
 std::unique_ptr<column> count_re(
   strings_column_view const& input,
   regex_program const& prog,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -163,7 +162,7 @@ std::unique_ptr<column> like(
   string_scalar const& pattern,
   string_scalar const& escape_character = string_scalar(""),
   rmm::cuda_stream_view stream          = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -204,8 +203,8 @@ std::unique_ptr<column> like(
   strings_column_view const& patterns,
   string_scalar const& escape_character = string_scalar(""),
   rmm::cuda_stream_view stream          = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr     = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

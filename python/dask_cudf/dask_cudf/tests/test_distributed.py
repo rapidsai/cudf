@@ -4,12 +4,12 @@ import numba.cuda
 import pytest
 
 import dask
-from dask import dataframe as dd
+from dask import array as da, dataframe as dd
 from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 import dask_cudf
 
@@ -80,6 +80,11 @@ def test_str_series_roundtrip():
 
 
 def test_p2p_shuffle():
+    pytest.importorskip(
+        "pyarrow",
+        minversion="14.0.1",
+        reason="P2P shuffling requires pyarrow>=14.0.1",
+    )
     # Check that we can use `shuffle_method="p2p"`
     with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
         with Client(cluster):
@@ -116,3 +121,17 @@ def test_unique():
                 ddf.x.unique().compute(),
                 check_index=False,
             )
+
+
+def test_serialization_of_numpy_types():
+    # Dask uses numpy integers as column names, which can break cudf serialization
+    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
+        with Client(cluster):
+            with dask.config.set(
+                {"dataframe.backend": "cudf", "array.backend": "cupy"}
+            ):
+                rng = da.random.default_rng()
+                X_arr = rng.random((100, 10), chunks=(50, 10))
+                X = dd.from_dask_array(X_arr)
+                X = X[X.columns[0]]
+                X.compute()

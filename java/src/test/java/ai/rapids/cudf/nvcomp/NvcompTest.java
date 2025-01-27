@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,18 +23,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.Optional;
 
 public class NvcompTest {
   private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
 
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
+  private final long chunkSize = 64 * 1024;
+  private final long targetIntermediteSize = Long.MAX_VALUE;
+
   @Test
   void testBatchedLZ4RoundTripAsync() {
+    testBatchedRoundTripAsync(new BatchedLZ4Compressor(chunkSize, targetIntermediteSize),
+        new BatchedLZ4Decompressor(chunkSize));
+  }
+
+  @Test
+  void testBatchedZstdRoundTripAsync() {
+    testBatchedRoundTripAsync(new BatchedZstdCompressor(chunkSize, targetIntermediteSize),
+        new BatchedZstdDecompressor(chunkSize));
+  }
+
+  void testBatchedRoundTripAsync(BatchedCompressor comp, BatchedDecompressor decomp) {
     final Cuda.Stream stream = Cuda.DEFAULT_STREAM;
-    final long chunkSize = 64 * 1024;
-    final long targetIntermediteSize = Long.MAX_VALUE;
     final int maxElements = 1024 * 1024 + 1;
     final int numBuffers = 200;
     long[] data = new long[maxElements];
@@ -52,10 +63,8 @@ public class NvcompTest {
       }
 
       // compress and decompress the buffers
-      BatchedLZ4Compressor compressor = new BatchedLZ4Compressor(chunkSize, targetIntermediteSize);
-
       try (CloseableArray<DeviceMemoryBuffer> compressedBuffers =
-               CloseableArray.wrap(compressor.compress(originalBuffers.getArray(), stream));
+               CloseableArray.wrap(comp.compress(originalBuffers.getArray(), stream));
            CloseableArray<DeviceMemoryBuffer> uncompressedBuffers =
                CloseableArray.wrap(new DeviceMemoryBuffer[numBuffers])) {
         for (int i = 0; i < numBuffers; i++) {
@@ -64,8 +73,8 @@ public class NvcompTest {
         }
 
         // decompress takes ownership of the compressed buffers and will close them
-        BatchedLZ4Decompressor.decompressAsync(chunkSize, compressedBuffers.release(),
-            uncompressedBuffers.getArray(), stream);
+        decomp.decompressAsync(compressedBuffers.release(), uncompressedBuffers.getArray(),
+            stream);
 
         // check the decompressed results against the original
         for (int i = 0; i < numBuffers; ++i) {

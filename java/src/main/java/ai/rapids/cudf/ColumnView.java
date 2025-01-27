@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -913,28 +913,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
   }
 
-  /**
-   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
-   * device_vector equivalent of the boolean column given as argument.
-   *
-   * The boolColumn must have the same number of rows as the current column.
-   * The result column will have the same number of rows as the current column.
-   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
-   * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   *
-   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
-   * then the row value is undefined.
-   *
-   * @param boolColumn bool column whose value is to be used as the validity mask.
-   * @return Deep copy of the column with replaced validity mask.
-   */
-  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
-    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Extract a particular date time component from a timestamp.
+   * @param component what should be extracted
+   * @return a column with the extracted information in it.
+   */
+  public final ColumnVector extractDateTimeComponent(DateTimeComponent component) {
+    assert type.isTimestampType();
+    return new ColumnVector(extractDateTimeComponent(getNativeView(), component.getNativeId()));
+  }
 
   /**
    * Get year from a timestamp.
@@ -944,8 +935,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector year() {
-    assert type.isTimestampType();
-    return new ColumnVector(year(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.YEAR);
   }
 
   /**
@@ -956,8 +946,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector month() {
-    assert type.isTimestampType();
-    return new ColumnVector(month(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.MONTH);
   }
 
   /**
@@ -968,8 +957,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector day() {
-    assert type.isTimestampType();
-    return new ColumnVector(day(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.DAY);
   }
 
   /**
@@ -980,8 +968,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector hour() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(hour(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.HOUR);
   }
 
   /**
@@ -992,8 +979,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector minute() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(minute(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.MINUTE);
   }
 
   /**
@@ -1004,8 +990,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector second() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(second(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.SECOND);
   }
 
   /**
@@ -1016,8 +1001,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public final ColumnVector weekDay() {
-    assert type.isTimestampType();
-    return new ColumnVector(weekDay(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.WEEKDAY);
   }
 
   /**
@@ -1065,11 +1049,60 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 scalar indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(Scalar months) {
+    return new ColumnVector(addScalarCalendricalMonths(getNativeView(), months.getScalarHandle()));
+  }
+
+  /**
    * Check to see if the year for this timestamp is a leap year or not.
    * @return BOOL8 vector of results
    */
   public final ColumnVector isLeapYear() {
     return new ColumnVector(isLeapYear(getNativeView()));
+  }
+
+  /**
+   * Extract the number of days in the month
+   * @return INT16 column of the number of days in the corresponding month
+   */
+  public final ColumnVector daysInMonth() {
+    assert type.isTimestampType();
+    return new ColumnVector(daysInMonth(getNativeView()));
+  }
+
+  /**
+   * Round the timestamp up to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded up.
+   */
+  public final ColumnVector dateTimeCeil(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeCeil(getNativeView(), freq.getNativeId()));
+  }
+
+  /**
+   * Round the timestamp down to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded down.
+   */
+  public final ColumnVector dateTimeFloor(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeFloor(getNativeView(), freq.getNativeId()));
+  }
+
+  /**
+   * Round the timestamp (half up) to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded (half up).
+   */
+  public final ColumnVector dateTimeRound(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeRound(getNativeView(), freq.getNativeId()));
   }
 
   /**
@@ -3352,6 +3385,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * @brief Searches for the given target strings within each string in the provided column
+   *
+   * Each column in the result table corresponds to the result for the target string at the same
+   * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1th for 1th,
+   * etc.
+   *
+   * If the target is not found for a string, false is returned for that entry in the output column.
+   * If the target is an empty string, true is returned for all non-null entries in the output column.
+   *
+   * Any null input strings return corresponding null entries in the output columns.
+   *
+   * input = ["a", "b", "c"]
+   * targets = ["a", "c"]
+   * output is a table with two boolean columns:
+   *   column 0: [true, false, false]
+   *   column 1: [false, false, true]
+   *
+   * @param targets UTF-8 encoded strings to search for in each string in `input`
+   * @return BOOL8 columns
+   */
+  public final ColumnVector[] stringContains(ColumnView targets) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets.getType().equals(DType.STRING) : "targets type must be a string";
+    assert targets.getNullCount() == 0 : "targets must not contain nulls";
+    assert targets.getRowCount() > 0 : "targets must not be empty";
+    long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
+    return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
+  }
+
+  /**
    * Replaces values less than `lo` in `input` with `lo`,
    * and values greater than `hi` with `hi`.
    *
@@ -4457,6 +4520,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
+   * Native method for searching for the given target strings within each string in the provided column.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param targetViewHandle handle of the column view containing the strings being searched for.
+   */
+  private static native long[] stringContainsMulti(long cudfViewHandle, long targetViewHandle) throws CudfException;
+
+  /**
    * Native method for extracting results from a regex program pattern. Returns a table handle.
    *
    * @param cudfViewHandle Native handle of the cudf::column_view being operated on.
@@ -4703,19 +4773,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long unaryOperation(long viewHandle, int op);
 
-  private static native long year(long viewHandle) throws CudfException;
-
-  private static native long month(long viewHandle) throws CudfException;
-
-  private static native long day(long viewHandle) throws CudfException;
-
-  private static native long hour(long viewHandle) throws CudfException;
-
-  private static native long minute(long viewHandle) throws CudfException;
-
-  private static native long second(long viewHandle) throws CudfException;
-
-  private static native long weekDay(long viewHandle) throws CudfException;
+  private static native long extractDateTimeComponent(long viewHandle, int component);
 
   private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
@@ -4725,7 +4783,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
 
+  private static native long addScalarCalendricalMonths(long tsViewHandle, long scalarHandle);
+
   private static native long isLeapYear(long viewHandle) throws CudfException;
+
+  private static native long daysInMonth(long viewHandle) throws CudfException;
+
+  private static native long dateTimeCeil(long viewHandle, int freq);
+
+  private static native long dateTimeFloor(long viewHandle, int freq);
+
+  private static native long dateTimeRound(long viewHandle, int freq);
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
@@ -4766,25 +4834,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
-
-  /**
-   * Native method to deep copy a column while replacing the null mask. The null mask is the
-   * device_vector equivalent of the boolean column given as argument.
-   *
-   * The boolColumn must have the same number of rows as the exemplar column.
-   * The result column will have the same number of rows as the exemplar.
-   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
-   * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   *
-   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
-   * then the resultant row value is undefined.
-   *
-   * @param exemplarViewHandle column view of the column that is deep copied.
-   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
-   * @return Deep copy of the column with replaced null mask.
-   */
-  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle,
-                                                             long boolColumnViewHandle) throws CudfException;
 
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
@@ -5034,8 +5083,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
-  private static HostColumnVectorCore copyToHostNestedHelper(
-      ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
+  private static HostColumnVectorCore copyToHostAsyncNestedHelper(
+      Cuda.Stream stream, ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -5056,20 +5105,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
         hostData = hostMemoryAllocator.allocate(currData.length);
-        hostData.copyFromDeviceBuffer(currData);
+        hostData.copyFromDeviceBufferAsync(currData, stream);
       }
       if (currValidity != null) {
         hostValid = hostMemoryAllocator.allocate(currValidity.length);
-        hostValid.copyFromDeviceBuffer(currValidity);
+        hostValid.copyFromDeviceBufferAsync(currValidity, stream);
       }
       if (currOffsets != null) {
         hostOffsets = hostMemoryAllocator.allocate(currOffsets.length);
-        hostOffsets.copyFromDeviceBuffer(currOffsets);
+        hostOffsets.copyFromDeviceBufferAsync(currOffsets, stream);
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
         try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+          children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
         }
       }
       currNullCount = deviceCvPointer.getNullCount();
@@ -5103,11 +5152,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
-  /**
-   * Copy the data to the host.
-   */
+  /** Copy the data to the host synchronously. */
   public HostColumnVector copyToHost(HostMemoryAllocator hostMemoryAllocator) {
-    try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+    HostColumnVector result = copyToHostAsync(Cuda.DEFAULT_STREAM, hostMemoryAllocator);
+    Cuda.DEFAULT_STREAM.sync();
+    return result;
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream,
+                                          HostMemoryAllocator hostMemoryAllocator) {
+    try (NvtxRange toHost = new NvtxRange("toHostAsync", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
@@ -5127,16 +5185,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         if (!type.isNestedType()) {
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.length);
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
@@ -5145,21 +5203,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         } else {
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
-            hostDataBuffer.copyFromDeviceBuffer(data);
+            hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
 
           if (valid != null) {
             hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
-            hostValidityBuffer.copyFromDeviceBuffer(valid);
+            hostValidityBuffer.copyFromDeviceBufferAsync(valid, stream);
           }
           if (offsets != null) {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
-            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
-              children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
+              children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -5192,8 +5250,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /** Copy the data to host memory synchronously */
   public HostColumnVector copyToHost() {
     return copyToHost(DefaultHostMemoryAllocator.get());
+  }
+
+  /**
+   * Copy the data to the host asynchronously. The caller MUST synchronize on the stream
+   * before examining the result.
+   */
+  public HostColumnVector copyToHostAsync(Cuda.Stream stream) {
+    return copyToHostAsync(stream, DefaultHostMemoryAllocator.get());
   }
 
   /**

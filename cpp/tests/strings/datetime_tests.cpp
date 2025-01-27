@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -59,8 +58,8 @@ TEST_F(StringsDatetimeTest, ToTimestamp)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%dT%H:%M:%SZ");
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 0, 0, 1, 1, 1, 1},
-                                                           {1, 1, 0, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> is_expected(
+    {1, 1, 0, 0, 1, 1, 1, 1}, {true, true, false, true, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 

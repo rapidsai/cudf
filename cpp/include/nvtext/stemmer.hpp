@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 /**
  * @addtogroup nvtext_stemmer
  * @{
@@ -49,7 +51,7 @@ enum class letter_type {
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * b1 = is_letter(st, VOWEL, 1)
  * b1 is now [false, true, true]
  * @endcode
@@ -60,7 +62,7 @@ enum class letter_type {
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * b2 = is_letter(st, CONSONANT, -1) // last letter checked in each string
  * b2 is now [false, true, false]
  * @endcode
@@ -79,8 +81,8 @@ std::unique_ptr<cudf::column> is_letter(
   cudf::strings_column_view const& input,
   letter_type ltype,
   cudf::size_type character_index,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns boolean column indicating if character at `indices[i]` of `input[i]`
@@ -97,7 +99,7 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * ix = [3, 1, 4]
  * b1 = is_letter(st, VOWEL, ix)
  * b1 is now [true, true, false]
@@ -109,7 +111,7 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * ix = [3, -2, 4] // 2nd to last character in st[1] is checked
  * b2 = is_letter(st, CONSONANT, ix)
  * b2 is now [false, false, true]
@@ -132,8 +134,8 @@ std::unique_ptr<cudf::column> is_letter(
   cudf::strings_column_view const& input,
   letter_type ltype,
   cudf::column_view const& indices,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the Porter Stemmer measurements of a strings column.
@@ -166,8 +168,8 @@ std::unique_ptr<cudf::column> is_letter(
  */
 std::unique_ptr<cudf::column> porter_stemmer_measure(
   cudf::strings_column_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

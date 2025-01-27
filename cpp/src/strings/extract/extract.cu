@@ -26,6 +26,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -91,7 +92,7 @@ struct extract_fn {
 std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
@@ -99,9 +100,8 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
-  auto indices = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
-  auto d_indices =
-    cudf::detail::device_2dspan<string_index_pair>(indices.data(), input.size(), groups);
+  auto indices   = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
+  auto d_indices = cudf::detail::device_2dspan<string_index_pair>(indices, groups);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
@@ -135,7 +135,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 std::unique_ptr<table> extract(strings_column_view const& input,
                                regex_program const& prog,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::extract(input, prog, stream, mr);

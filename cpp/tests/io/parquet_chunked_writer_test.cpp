@@ -124,15 +124,15 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask1[] = {true, true, false, true, true, true, true};
+  std::array mask1{true, true, false, true, true, true, true};
   std::vector<char const*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
-  cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
+  cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1.data());
   cols.push_back(strings1.release());
   cudf::table tbl1(std::move(cols));
 
-  bool mask2[] = {false, true, true, true, true, true, true};
+  std::array mask2{false, true, true, true, true, true, true};
   std::vector<char const*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
-  cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
+  cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2.data());
   cols.push_back(strings2.release());
   cudf::table tbl2(std::move(cols));
 
@@ -228,10 +228,12 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
   auto table_1 = table_view({*list_col_1});
 
   // Table 2
-  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
-  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {1, 1, 0}};
-  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {1, 0, 1}};
-  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}, {1, 1, 0}};
+  auto weight_2 = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
+  auto ages_2 =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {true, true, false}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {true, false, true}};
+  auto is_human_2 =
+    cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}, {true, true, false}};
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
 
   auto list_offsets_column_2 =
@@ -313,10 +315,11 @@ TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
   // [[], [], []]
   lcw flats_2{lcw{lcw{}}, lcw{lcw{}, lcw{}, lcw{}}};
 
-  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{-1.0, -1.0}};
-  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{351, 351}, {1, 0}};
-  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2, land_2, flats_2}, {0, 1}};
-  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false}, {1, 0}};
+  auto weight_2 = cudf::test::fixed_width_column_wrapper<float>{{-1.0, -1.0}};
+  auto ages_2   = cudf::test::fixed_width_column_wrapper<int32_t>{{351, 351}, {true, false}};
+  auto struct_1_2 =
+    cudf::test::structs_column_wrapper{{weight_2, ages_2, land_2, flats_2}, {false, true}};
+  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false}, {true, false}};
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
 
   auto list_offsets_column_2 =
@@ -495,10 +498,12 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
 
   // Table 2: struct_1 and is_human are nullable now so if we hadn't assumed worst case (nullable)
   // when writing table_1, we would have wrong pages for it.
-  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
-  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {1, 1, 0}};
-  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {1, 0, 1}};
-  auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}, {1, 1, 0}};
+  auto weight_2 = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
+  auto ages_2 =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {true, true, false}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {true, false, true}};
+  auto is_human_2 =
+    cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}, {true, true, false}};
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
   auto table_2    = cudf::table_view({struct_2_2});
 
@@ -628,9 +633,10 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
   auto struct_2_1 = cudf::test::structs_column_wrapper{{is_human_1, struct_1_1}};
   auto table_1    = cudf::table_view({struct_2_1});
 
-  auto weight_2   = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
-  auto ages_2     = cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {1, 1, 0}};
-  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {1, 0, 1}};
+  auto weight_2 = cudf::test::fixed_width_column_wrapper<float>{{1.1, -1.0, -1.0}};
+  auto ages_2 =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{31, 351, 351}, {true, true, false}};
+  auto struct_1_2 = cudf::test::structs_column_wrapper{{weight_2, ages_2}, {true, false, true}};
   auto is_human_2 = cudf::test::fixed_width_column_wrapper<bool>{{false, false, false}};
   auto struct_2_2 = cudf::test::structs_column_wrapper{{is_human_2, struct_1_2}};
   auto table_2    = cudf::table_view({struct_2_2});
@@ -765,29 +771,29 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 
   using T = TypeParam;
 
-  int num_els = 31;
+  constexpr int num_els = 31;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true,
+  std::array<bool, num_els> mask{false, true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true,
 
-                 true,  true, true, true, true, true, true, true, true};
-  T c1a[num_els];
-  std::fill(c1a, c1a + num_els, static_cast<T>(5));
-  T c1b[num_els];
-  std::fill(c1b, c1b + num_els, static_cast<T>(6));
-  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
-  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+                                 true,  true, true, true, true, true, true, true, true};
+  std::array<T, num_els> c1a;
+  std::fill(c1a.begin(), c1a.end(), static_cast<T>(5));
+  std::array<T, num_els> c1b;
+  std::fill(c1b.begin(), c1b.end(), static_cast<T>(5));
+  column_wrapper<T> c1a_w(c1a.begin(), c1a.end(), mask.begin());
+  column_wrapper<T> c1b_w(c1b.begin(), c1b.end(), mask.begin());
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[num_els];
-  std::fill(c2a, c2a + num_els, static_cast<T>(8));
-  T c2b[num_els];
-  std::fill(c2b, c2b + num_els, static_cast<T>(9));
-  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
-  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  std::array<T, num_els> c2a;
+  std::fill(c2a.begin(), c2a.end(), static_cast<T>(8));
+  std::array<T, num_els> c2b;
+  std::fill(c2b.begin(), c2b.end(), static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a.begin(), c2a.end(), mask.begin());
+  column_wrapper<T> c2b_w(c2b.begin(), c2b.end(), mask.begin());
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));
@@ -813,29 +819,29 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
 
   using T = TypeParam;
 
-  int num_els = 33;
+  constexpr int num_els = 33;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true};
+  std::array<bool, num_els> mask{false, true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true};
 
-  T c1a[num_els];
-  std::fill(c1a, c1a + num_els, static_cast<T>(5));
-  T c1b[num_els];
-  std::fill(c1b, c1b + num_els, static_cast<T>(6));
-  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
-  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  std::array<T, num_els> c1a;
+  std::fill(c1a.begin(), c1a.end(), static_cast<T>(5));
+  std::array<T, num_els> c1b;
+  std::fill(c1b.begin(), c1b.end(), static_cast<T>(5));
+  column_wrapper<T> c1a_w(c1a.begin(), c1a.end(), mask.begin());
+  column_wrapper<T> c1b_w(c1b.begin(), c1b.end(), mask.begin());
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[num_els];
-  std::fill(c2a, c2a + num_els, static_cast<T>(8));
-  T c2b[num_els];
-  std::fill(c2b, c2b + num_els, static_cast<T>(9));
-  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
-  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  std::array<T, num_els> c2a;
+  std::fill(c2a.begin(), c2a.end(), static_cast<T>(8));
+  std::array<T, num_els> c2b;
+  std::fill(c2b.begin(), c2b.end(), static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a.begin(), c2a.end(), mask.begin());
+  column_wrapper<T> c2b_w(c2b.begin(), c2b.end(), mask.begin());
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
   cudf::table tbl2(std::move(cols));

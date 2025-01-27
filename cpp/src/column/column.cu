@@ -30,6 +30,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -46,9 +47,7 @@
 namespace cudf {
 
 // Copy ctor w/ optional stream/mr
-column::column(column const& other,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+column::column(column const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   : _type{other._type},
     _size{other._size},
     _data{other._data, stream, mr},
@@ -160,7 +159,7 @@ namespace {
 struct create_column_from_view {
   cudf::column_view view;
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   template <typename ColumnType,
             std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
@@ -254,7 +253,7 @@ struct create_column_from_view {
 }  // anonymous namespace
 
 // Copy from a view
-column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}

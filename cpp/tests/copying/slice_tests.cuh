@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ std::vector<cudf::table> create_expected_tables(cudf::size_type num_cols,
       }
     }
 
-    result.push_back(cudf::table(std::move(cols)));
+    result.emplace_back(std::move(cols));
   }
 
   return result;
@@ -163,13 +163,12 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
     if (not nullable) {
-      result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
-                                                          strings.begin() + indices[index + 1]));
+      result.emplace_back(strings.begin() + indices[index], strings.begin() + indices[index + 1]);
     } else {
       auto valids = cudf::detail::make_counting_transform_iterator(
         indices[index], [](auto i) { return i % 2 == 0; });
-      result.push_back(cudf::test::strings_column_wrapper(
-        strings.begin() + indices[index], strings.begin() + indices[index + 1], valids));
+      result.emplace_back(
+        strings.begin() + indices[index], strings.begin() + indices[index + 1], valids);
     }
   }
 
@@ -184,16 +183,16 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
   std::vector<cudf::test::strings_column_wrapper> result = {};
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
-    result.push_back(cudf::test::strings_column_wrapper(strings.begin() + indices[index],
-                                                        strings.begin() + indices[index + 1],
-                                                        validity.begin() + indices[index]));
+    result.emplace_back(strings.begin() + indices[index],
+                        strings.begin() + indices[index + 1],
+                        validity.begin() + indices[index]);
   }
 
   return result;
 }
 
 inline std::vector<cudf::table> create_expected_string_tables(
-  std::vector<std::string> const strings[2],
+  std::vector<std::vector<std::string>> const strings,
   std::vector<cudf::size_type> const& indices,
   bool nullable)
 {
@@ -216,7 +215,7 @@ inline std::vector<cudf::table> create_expected_string_tables(
       }
     }
 
-    result.push_back(cudf::table(std::move(cols)));
+    result.emplace_back(std::move(cols));
   }
 
   return result;

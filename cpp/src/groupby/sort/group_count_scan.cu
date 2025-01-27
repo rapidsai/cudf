@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -30,7 +31,7 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   std::unique_ptr<column> result = make_fixed_width_column(
     data_type{type_id::INT32}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);

@@ -16,6 +16,8 @@
 
 #include "groupby/sort/group_scan_util.cuh"
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -25,7 +27,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
                                  size_type num_groups,
                                  cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   return type_dispatcher(values.type(),
                          group_scan_dispatcher<aggregation::MAX>{},

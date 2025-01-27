@@ -41,7 +41,7 @@ TEST_F(StringsFilterTest, Translate)
   auto view  = cudf::strings_column_view(input);
 
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table{
-    make_entry("b", 0), make_entry("a", "A"), make_entry(" ", "_")};
+    make_entry("b", nullptr), make_entry("a", "A"), make_entry(" ", "_")};
   cudf::strings::translate(view, translate_table, cudf::test::get_default_stream());
 }
 
@@ -51,7 +51,7 @@ TEST_F(StringsFilterTest, Filter)
   auto view  = cudf::strings_column_view(input);
 
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
-    make_entry("b", 0), make_entry("a", "A"), make_entry(" ", "_")};
+    make_entry("b", nullptr), make_entry("a", "A"), make_entry(" ", "_")};
 
   auto const repl = cudf::string_scalar("X", true, cudf::test::get_default_stream());
   auto const keep = cudf::strings::filter_type::KEEP;

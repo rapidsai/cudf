@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 
 /**
  * @addtogroup nvtext_tokenize
@@ -60,12 +62,14 @@ struct hashed_vocabulary {
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
  *        Note that this is the file AFTER python/perfect_hash.py has been used
  *        for preprocessing.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects.
  * @return vocabulary hash-table elements
  */
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Result object for the subword_tokenize functions.
@@ -145,6 +149,7 @@ struct tokenizer_result {
  * @param do_truncate If true, the tokenizer will discard all the token-ids after
  *        `max_sequence_length` for each input string. If false, it will use a new row
  *        in the output token-ids to continue generating the output.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects.
  * @return token-ids, attention-mask, and metadata
  */
@@ -155,7 +160,8 @@ tokenizer_result subword_tokenize(
   uint32_t stride,
   bool do_lower_case,
   bool do_truncate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

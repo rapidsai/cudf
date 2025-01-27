@@ -11,11 +11,9 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import (
-    NUMERIC_TYPES,
-    assert_eq,
-    assert_exceptions_equal,
-)
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal
 
 
 @contextmanager
@@ -100,7 +98,7 @@ def test_categorical_compare_unordered():
     # test equal
     out = sr == sr
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr == pdsr)
 
@@ -136,7 +134,7 @@ def test_categorical_compare_ordered():
     # test equal
     out = sr1 == sr1
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr1 == pdsr1)
 
@@ -254,10 +252,10 @@ def test_cat_series_binop_error():
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_unique(num_elements):
     # create categorical series
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
+            rng.choice(
                 list(string.ascii_letters + string.digits), num_elements
             ),
             dtype="category",
@@ -281,12 +279,10 @@ def test_categorical_unique(num_elements):
 @pytest.mark.parametrize("nelem", [20, 50, 100])
 def test_categorical_unique_count(nelem):
     # create categorical series
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=0)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
-                list(string.ascii_letters + string.digits), nelem
-            ),
+            rng.choice(list(string.ascii_letters + string.digits), nelem),
             dtype="category",
         )
     )
@@ -460,7 +456,7 @@ def test_categorical_dataframe_slice_copy():
         pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
-        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.nan], dtype="float64"),
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
@@ -493,7 +489,7 @@ def test_categorical_typecast(data, cat_type):
         pd.Series([1, 2, 3, 89]),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
-        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.nan], dtype="float64"),
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
@@ -772,7 +768,7 @@ def test_categorical_setitem_with_nan():
     assert_eq(gs, expected_series)
 
 
-@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
+@pytest.mark.parametrize("dtype", [*list(NUMERIC_TYPES), "object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
     dtype = cudf.dtype(dtype)
@@ -859,3 +855,108 @@ def test_cat_from_scalar(scalar):
     gs = cudf.Series(scalar, dtype="category")
 
     assert_eq(ps, gs)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
+def test_cat_groupby_fillna():
+    ps = pd.Series(["a", "b", "c"], dtype="category")
+    gs = cudf.from_pandas(ps)
+
+    with pytest.warns(FutureWarning):
+        pg = ps.groupby(ps)
+    gg = gs.groupby(gs)
+
+    assert_exceptions_equal(
+        lfunc=pg.fillna,
+        rfunc=gg.fillna,
+        lfunc_args_and_kwargs=(("d",), {}),
+        rfunc_args_and_kwargs=(("d",), {}),
+    )
+
+
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_categorical_maxima(op):
+    ser = cudf.Series(
+        ["a", "d", "c", "z", "g"],
+        dtype=cudf.CategoricalDtype(["z", "c", "g", "d", "a"], ordered=False),
+    )
+    assert not ser.cat.ordered
+
+    # Cannot get extrema of unordered Categorical column
+    with pytest.raises(TypeError, match="Categorical is not ordered"):
+        getattr(ser, op)()
+
+    # Max/min should work after converting to "ordered"
+    ser_pd = ser.to_pandas()
+    result = getattr(ser.cat.as_ordered(), op)()
+    result_pd = getattr(ser_pd.cat.as_ordered(), op)()
+    assert_eq(result, result_pd)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_ordered(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
+    cudf_ci = cudf.from_pandas(pd_ci)
+    assert pd_ci.ordered == cudf_ci.ordered
+
+
+@pytest.mark.parametrize("method", ["as_ordered", "as_unordered"])
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_as_ordered(method, ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = getattr(pd_ci, method)()
+    result = getattr(cudf_ci, method)()
+    assert_eq(result, expected)
+
+
+def test_index_add_categories():
+    pd_ci = pd.CategoricalIndex([1, 2, 3])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.add_categories([4])
+    result = cudf_ci.add_categories([4])
+    assert_eq(result, expected)
+
+
+def test_index_remove_categories():
+    pd_ci = pd.CategoricalIndex([1, 2, 3], categories=[1, 2, 3, 4])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.remove_categories([4])
+    result = cudf_ci.remove_categories([4])
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_reorder_categories(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], categories=[1, 3, 2, 4])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.reorder_categories([1, 2, 3, 4], ordered=ordered)
+    result = cudf_ci.reorder_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_set_categories(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    result = cudf_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)
+
+
+def test_categorical_interval_pandas_roundtrip():
+    expected = cudf.Series(cudf.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected.to_pandas())
+    assert_eq(result, expected)
+
+    expected = pd.Series(pd.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected).to_pandas()
+    assert_eq(result, expected)

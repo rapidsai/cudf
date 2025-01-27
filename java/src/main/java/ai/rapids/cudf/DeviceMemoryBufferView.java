@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ package ai.rapids.cudf;
  * that is backing it.
  */
 public class DeviceMemoryBufferView extends BaseDeviceMemoryBuffer {
-  DeviceMemoryBufferView(long address, long lengthInBytes) {
+  public DeviceMemoryBufferView(long address, long lengthInBytes) {
     // Set the cleaner to null so we don't end up releasing anything
     super(address, lengthInBytes, (MemoryBufferCleaner) null);
   }

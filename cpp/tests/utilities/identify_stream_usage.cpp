@@ -92,7 +92,7 @@ class test_cuda_stream_pool : public cuda_stream_pool {
     return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream());
   }
 
-  std::size_t get_stream_pool_size() const override { return 1UL; }
+  [[nodiscard]] std::size_t get_stream_pool_size() const override { return 1UL; }
 };
 
 cuda_stream_pool* create_global_cuda_stream_pool() { return new test_cuda_stream_pool(); }

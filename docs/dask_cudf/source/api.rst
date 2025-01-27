@@ -13,12 +13,11 @@ Creating and storing DataFrames
 of DataFrames from a variety of storage formats. For on-disk data that
 are not supported directly in Dask-cuDF, we recommend using Dask's
 data reading facilities, followed by calling
-:func:`.from_dask_dataframe` to obtain a Dask-cuDF object.
+:meth:`*.to_backend("cudf")` to obtain a Dask-cuDF object.
 
 .. automodule:: dask_cudf
    :members:
       from_cudf,
-      from_dask_dataframe,
       from_delayed,
       read_csv,
       read_json,

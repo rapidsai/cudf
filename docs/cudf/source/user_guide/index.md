@@ -16,5 +16,6 @@ options
 performance-comparisons/index
 PandasCompat
 copy-on-write
+memory-profiling
 pandas-2.0-breaking-changes
 ```

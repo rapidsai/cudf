@@ -203,6 +203,7 @@ template std::vector<int8_t> random_values<int8_t>(size_t size);
 template std::vector<int16_t> random_values<int16_t>(size_t size);
 template std::vector<int32_t> random_values<int32_t>(size_t size);
 template std::vector<int64_t> random_values<int64_t>(size_t size);
+template std::vector<__int128_t> random_values<__int128_t>(size_t size);
 template std::vector<uint8_t> random_values<uint8_t>(size_t size);
 template std::vector<uint16_t> random_values<uint16_t>(size_t size);
 template std::vector<uint32_t> random_values<uint32_t>(size_t size);
@@ -482,10 +483,10 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 ascending()
 {
-  char buf[10];
+  std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "%09d", i);
-    return std::string(buf);
+    sprintf(buf.data(), "%09d", i);
+    return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
@@ -494,10 +495,10 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 descending()
 {
-  char buf[10];
+  std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "%09d", num_ordered_rows - i);
-    return std::string(buf);
+    sprintf(buf.data(), "%09d", static_cast<short>(num_ordered_rows - i));
+    return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
@@ -506,10 +507,10 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
 unordered()
 {
-  char buf[10];
+  std::array<char, 10> buf;
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
-    return std::string(buf);
+    sprintf(buf.data(), "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
+    return std::string(buf.data());
   });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
@@ -743,7 +744,7 @@ int32_t compare(T& v1, T& v2)
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       thrust::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
+                       std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
 {
   auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
   switch (ptype) {

@@ -2,5 +2,5 @@
 reduce
 ======
 
-.. automodule:: cudf._lib.pylibcudf.reduce
+.. automodule:: pylibcudf.reduce
    :members:

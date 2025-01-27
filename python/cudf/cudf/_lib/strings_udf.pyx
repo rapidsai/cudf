@@ -1,15 +1,18 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t, uint16_t, uint64_t, uintptr_t
 
 from cudf._lib.cpp.strings_udf cimport (
-    NRT_MemSys_new as cpp_NRT_MemSys_new,
-    column_from_managed_udf_string_array as cpp_column_from_managed_udf_string_array,
-    free_managed_udf_string_array as cpp_free_managed_udf_string_array,
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
     get_special_case_mapping_table as cpp_get_special_case_mapping_table,
     managed_udf_string,
+)
+
+from pylibcudf.libcudf.strings_udf cimport (
+    get_character_cases_table as cpp_get_character_cases_table,
+    get_character_flags_table as cpp_get_character_flags_table,
+    get_special_case_mapping_table as cpp_get_special_case_mapping_table,
 )
 
 import numpy as np
@@ -31,7 +34,7 @@ from cudf._lib.cpp.strings_udf cimport (
 )
 
 
-def column_to_string_view_array(Column strings_col):
+def column_to_string_view_array(plc_Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
     cdef column_view input_view = strings_col.view()
     with nogil:
@@ -50,9 +53,7 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
         c_result = move(cpp_column_from_udf_string_array(data, size))
         cpp_free_udf_string_array(data, size)
 
-    result = Column.from_unique_ptr(move(c_result))
-
-    return result
+    return plc_Column.from_libcudf(move(c_result))
 
 
 def column_from_managed_udf_string_array(DeviceBuffer d_buffer, memsys):

@@ -30,7 +30,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Result type of the `element_relational_comparator` function object.
@@ -635,4 +635,4 @@ class row_hasher {
   uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

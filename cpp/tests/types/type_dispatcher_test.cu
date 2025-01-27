@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -70,7 +71,7 @@ CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
@@ -131,7 +132,7 @@ CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   double_dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());

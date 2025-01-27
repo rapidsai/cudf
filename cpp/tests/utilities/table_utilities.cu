@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
  */
 
 #include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
-
-#include <gmock/gmock.h>
 
 namespace cudf::test::detail {
 void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs)

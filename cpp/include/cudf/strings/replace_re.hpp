@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 struct regex_program;
@@ -59,7 +58,7 @@ std::unique_ptr<column> replace_re(
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
   rmm::cuda_stream_view stream               = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
@@ -81,9 +80,9 @@ std::unique_ptr<column> replace_re(
   strings_column_view const& input,
   std::vector<std::string> const& patterns,
   strings_column_view const& replacements,
-  regex_flags const flags             = regex_flags::DEFAULT,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  regex_flags const flags           = regex_flags::DEFAULT,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief For each string, replaces any character sequence matching the given regex
@@ -107,8 +106,8 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& input,
   regex_program const& prog,
   std::string_view replacement,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

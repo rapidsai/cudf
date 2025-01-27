@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 template <typename T>
@@ -248,7 +247,7 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithoutNull_NullScalar)
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
   cudf::test::strings_column_wrapper expected({"", "a", "cc", "f", "", "bb", "d"},
-                                              {0, 1, 1, 1, 0, 1, 1});
+                                              {false, true, true, true, false, true, true});
   cudf::size_type offset = 1;
   auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type());
 
@@ -260,9 +259,9 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithNull_NullScalar)
   using K = int32_t;
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 0, 1, 1, 0, 0, 0});
+                                         {true, false, true, true, false, false, false});
   cudf::test::strings_column_wrapper expected({"", "", "a", "cc", "", "", ""},
-                                              {0, 0, 1, 1, 0, 0, 0});
+                                              {false, false, true, true, false, false, false});
   cudf::size_type offset = 2;
   auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type());
 
@@ -287,9 +286,9 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithNull_ValidScalar)
   using K = int32_t;
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 1, 0, 0, 1, 0, 1});
+                                         {true, true, false, false, true, false, true});
   cudf::test::strings_column_wrapper expected({"42", "a", "", "", "42", "bb", ""},
-                                              {1, 1, 0, 0, 1, 1, 0});
+                                              {true, true, false, false, true, true, false});
 
   cudf::size_type offset = 1;
   auto slr               = cudf::make_string_scalar("42");
@@ -303,7 +302,7 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithoutNull_NullScalar)
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
   cudf::test::strings_column_wrapper expected({"gg", "", "", "", "", "", ""},
-                                              {1, 0, 0, 0, 0, 0, 0});
+                                              {true, false, false, false, false, false, false});
 
   cudf::size_type offset = -3;
   auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type());
@@ -316,9 +315,9 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithNull_NullScalar)
   using K = int32_t;
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 0, 1, 1, 0, 0, 0});
+                                         {true, false, true, true, false, false, false});
   cudf::test::strings_column_wrapper expected({"cc", "", "", "", "d", "", ""},
-                                              {1, 0, 0, 0, 1, 0, 0});
+                                              {true, false, false, false, true, false, false});
 
   cudf::size_type offset = -1;
   auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type());
@@ -344,9 +343,9 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithNull_ValidScalar)
   using K = int32_t;
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 1, 0, 0, 1, 0, 1});
+                                         {true, true, false, false, true, false, true});
   cudf::test::strings_column_wrapper expected({"", "gg", "42", "42", "eee", "42", "42"},
-                                              {0, 1, 1, 1, 1, 1, 1});
+                                              {false, true, true, true, true, true, true});
 
   cudf::size_type offset = -2;
   auto slr               = cudf::make_string_scalar("42");
@@ -431,7 +430,8 @@ TYPED_TEST(groupby_shift_mixed_test, NoFill)
   cudf::test::fixed_width_column_wrapper<TypeParam> v2{1, 2, 3, 4, 5, 6, 7};
   cudf::table_view value{{v1, v2}};
 
-  cudf::test::strings_column_wrapper e1({"", "", "a", "cc", "", "", "bb"}, {0, 0, 1, 1, 0, 0, 1});
+  cudf::test::strings_column_wrapper e1({"", "", "a", "cc", "", "", "bb"},
+                                        {false, false, true, true, false, false, true});
   cudf::test::fixed_width_column_wrapper<TypeParam> e2({-1, 1, 3, 6, -1, 2, 4},
                                                        {0, 1, 1, 1, 0, 1, 1});
   cudf::table_view expected{{e1, e2}};
@@ -507,7 +507,7 @@ TEST_F(groupby_shift_fixed_point_type_test, MismatchScaleType)
 
   EXPECT_THROW(test_groupby_shift_multi(
                  key, cudf::table_view{{v1}}, offset, {*slr1}, cudf::table_view{{stub}}),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 TEST_F(groupby_shift_fixed_point_type_test, MismatchRepType)
@@ -525,5 +525,5 @@ TEST_F(groupby_shift_fixed_point_type_test, MismatchRepType)
 
   EXPECT_THROW(test_groupby_shift_multi(
                  key, cudf::table_view{{v1}}, offset, {*slr1}, cudf::table_view{{stub}}),
-               cudf::logic_error);
+               cudf::data_type_error);
 }

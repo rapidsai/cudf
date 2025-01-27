@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 
 #include <algorithm>
 #include <cstddef>
@@ -258,7 +258,7 @@ class ProtobufReader {
 
  private:
   template <int index>
-  friend class FunctionSwitchImpl;
+  friend struct FunctionSwitchImpl;
 
   void skip_bytes(size_t bytecnt)
   {
@@ -511,7 +511,7 @@ class ProtobufWriter {
                            TypeKind kind,
                            ColStatsBlob const* stats);
 
-  std::size_t size() const { return m_buff.size(); }
+  [[nodiscard]] std::size_t size() const { return m_buff.size(); }
   uint8_t const* data() { return m_buff.data(); }
 
   std::vector<uint8_t>& buffer() { return m_buff; }
@@ -602,13 +602,13 @@ struct column_validity_info {
  * convenience methods for initializing and accessing metadata.
  */
 class metadata {
-  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
-
  public:
-  struct stripe_source_mapping {
+  struct orc_stripe_info {
+    StripeInformation const* stripe_info;
+    StripeFooter const* stripe_footer;
     int source_idx;
-    std::vector<OrcStripeInfo> stripe_info;
   };
+  std::vector<orc_stripe_info> stripe_info;
 
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
@@ -692,11 +692,12 @@ class metadata {
  * @brief `column_device_view` and additional, ORC specific, information on the column.
  */
 struct orc_column_device_view : public column_device_view {
-  __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
+  __device__ orc_column_device_view(column_device_view col,
+                                    cuda::std::optional<uint32_t> parent_idx)
     : column_device_view{col}, parent_index{parent_idx}
   {
   }
-  thrust::optional<uint32_t> parent_index;
+  cuda::std::optional<uint32_t> parent_index;
   bitmask_type const* pushdown_mask = nullptr;
 };
 
@@ -706,7 +707,7 @@ struct orc_column_device_view : public column_device_view {
 struct rowgroup_rows {
   size_type begin;
   size_type end;
-  [[nodiscard]] constexpr auto size() const noexcept { return end - begin; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto size() const noexcept { return end - begin; }
 };
 
 }  // namespace orc

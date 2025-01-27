@@ -20,10 +20,13 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -35,8 +38,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 /**
@@ -45,7 +47,7 @@ namespace detail {
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -75,7 +77,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
                                                     size_type count,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   auto const threshold = get_offset64_threshold();
   if (!is_large_strings_enabled()) {
@@ -157,8 +159,13 @@ int64_t get_offset64_threshold()
 
 bool is_large_strings_enabled()
 {
+  // default depends on compile-time switch but can be overridden by the environment variable
   auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+#ifdef CUDF_LARGE_STRINGS_DISABLED
   return env != nullptr && std::string(env) == "1";
+#else
+  return env == nullptr || std::string(env) == "1";
+#endif
 }
 
 int64_t get_offset_value(cudf::column_view const& offsets,
@@ -174,5 +181,17 @@ int64_t get_offset_value(cudf::column_view const& offsets,
 }
 
 }  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+
+rmm::device_uvector<string_view> create_string_vector_from_column(
+  cudf::strings_column_view const strings,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::create_string_vector_from_column(strings, stream, mr);
+}
+
+int64_t get_offset64_threshold() { return detail::get_offset64_threshold(); }
+bool is_large_strings_enabled() { return detail::is_large_strings_enabled(); }
+
+}  // namespace cudf::strings

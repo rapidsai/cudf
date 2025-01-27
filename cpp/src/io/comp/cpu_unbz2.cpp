@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,7 +221,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   if (getbits(s, 1)) return BZ_DATA_ERROR;  // blockRandomized not supported (old bzip versions)
 
   s->origPtr = getbits(s, 24);
-  if (s->origPtr < 0 || s->origPtr > 10 + 100000 * s->blockSize100k) return BZ_DATA_ERROR;
+  if (s->origPtr > 10 + 100000 * s->blockSize100k) return BZ_DATA_ERROR;
 
   // Receive the mapping table
   inUse16 = getbits(s, 16);
@@ -436,7 +436,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   }
 
   // Now we know what nblock is, we can do a better sanity check on s->origPtr.
-  if (s->origPtr < 0 || s->origPtr >= nblock) return BZ_DATA_ERROR;
+  if (s->origPtr >= nblock) return BZ_DATA_ERROR;
 
   // compute the T^(-1) vector
   {

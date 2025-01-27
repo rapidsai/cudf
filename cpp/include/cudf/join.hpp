@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,35 +21,39 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <optional>
 #include <utility>
 #include <vector>
 
-namespace cudf {
-
-/**
- * @brief Enum to indicate whether the distinct join table has nested columns or not
- *
- * @ingroup column_join
- */
-enum class has_nested : bool { YES, NO };
+namespace CUDF_EXPORT cudf {
 
 // forward declaration
 namespace hashing::detail {
+
+/**
+ * @brief Forward declaration for our Murmur Hash 3 implementation
+ */
 template <typename T>
 class MurmurHash3_x86_32;
 }  // namespace hashing::detail
 namespace detail {
+
+/**
+ * @brief Forward declaration for our hash join
+ */
 template <typename T>
 class hash_join;
 
-template <cudf::has_nested HasNested>
+/**
+ * @brief Forward declaration for our distinct hash join
+ */
 class distinct_hash_join;
 }  // namespace detail
 
@@ -85,6 +89,7 @@ class distinct_hash_join;
  * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -95,8 +100,9 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 inner_join(cudf::table_view const& left_keys,
            cudf::table_view const& right_keys,
-           null_equality compare_nulls         = null_equality::EQUAL,
-           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+           null_equality compare_nulls       = null_equality::EQUAL,
+           rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+           rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -125,6 +131,7 @@ inner_join(cudf::table_view const& left_keys,
  * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -135,8 +142,9 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 left_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
-          null_equality compare_nulls         = null_equality::EQUAL,
-          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+          null_equality compare_nulls       = null_equality::EQUAL,
+          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -164,6 +172,7 @@ left_join(cudf::table_view const& left_keys,
  * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -174,8 +183,9 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 full_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
-          null_equality compare_nulls         = null_equality::EQUAL,
-          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+          null_equality compare_nulls       = null_equality::EQUAL,
+          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a vector of row indices corresponding to a left semi-join
@@ -193,6 +203,7 @@ full_join(cudf::table_view const& left_keys,
  * @param left_keys The left table
  * @param right_keys The right table
  * @param compare_nulls Controls whether null join-key values should match or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct
@@ -202,8 +213,9 @@ full_join(cudf::table_view const& left_keys,
 std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a vector of row indices corresponding to a left anti join
@@ -224,6 +236,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A column `left_indices` that can be used to construct
@@ -233,8 +246,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
 std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a cross join on two tables (`left`, `right`)
@@ -254,6 +268,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  *
  * @param left  The left table
  * @param right The right table
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr    Device memory resource used to allocate the returned table's device memory
  *
  * @return     Result of cross joining `left` and `right` tables
@@ -261,7 +276,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief The enum class to specify if any of the input join tables (`build` table and any later
@@ -335,12 +351,12 @@ class hash_join {
    * the result of performing an inner join between two tables with `build` and `probe`
    * as the join keys .
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -358,14 +374,14 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the join keys .
+   * as the join keys.
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+            rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -385,12 +401,12 @@ class hash_join {
    * the result of performing a full join between two tables with `build` and `probe`
    * as the join keys .
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+            rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref()) const;
 
   /**
    * Returns the exact number of matches (rows) when performing an inner join with the specified
@@ -439,26 +455,25 @@ class hash_join {
    * @return The exact number of output when performing a full join between two tables with `build`
    * and `probe` as the join keys .
    */
-  std::size_t full_join_size(
+  [[nodiscard]] std::size_t full_join_size(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  const std::unique_ptr<impl_type const> _impl;
+  std::unique_ptr<impl_type const> _impl;
 };
 
 /**
  * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
+ * This class enables the distinct hash join scheme that builds hash table once, and probes as many
+ * times as needed (possibly in parallel).
+ *
  * @note Behavior is undefined if the build table contains duplicates.
  * @note All NaNs are considered as equal
- *
- * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-// TODO: `HasNested` to be removed via dispatching
-template <cudf::has_nested HasNested>
 class distinct_hash_join {
  public:
   distinct_hash_join() = delete;
@@ -472,15 +487,10 @@ class distinct_hash_join {
    * @brief Constructs a distinct hash join object for subsequent probe calls
    *
    * @param build The build table that contains distinct elements
-   * @param probe The probe table, from which the keys are probed
-   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
-   *        any `probe` table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   distinct_hash_join(cudf::table_view const& build,
-                     cudf::table_view const& probe,
-                     nullable_join has_nulls      = nullable_join::YES,
                      null_equality compare_nulls  = null_equality::EQUAL,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -488,17 +498,19 @@ class distinct_hash_join {
    * @brief Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join().
    *
+   * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned indices' device memory.
    *
-   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to construct
-   * the result of performing an inner join between two tables with `build` and `probe`
-   * as the join keys.
+   * @return A pair of columns [`probe_indices`, `build_indices`] that can be used to
+   * construct the result of performing an inner join between two tables
+   * with `build` and `probe` as the join keys.
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(cudf::table_view const& probe,
+             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Returns the build table indices that can be used to construct the result of performing
@@ -508,18 +520,22 @@ class distinct_hash_join {
    * the row index of the matched row from the build table if there is a match. Otherwise, contains
    * `JoinNoneValue`.
    *
+   * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
-   * @return A `build_indices` column that can be used to construct the result of performing a left
-   * join between two tables with `build` and `probe` as the join keys.
+   *
+   * @return A `build_indices` column that can be used to construct the result of
+   * performing a left join between two tables with `build` and `probe` as the join
+   * keys.
    */
-  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
+  using impl_type = cudf::detail::distinct_hash_join;  ///< Implementation type
 
   std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
 };
@@ -548,12 +564,13 @@ class distinct_hash_join {
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
  * @param output_size Optional value which allows users to specify the exact output size
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -561,12 +578,12 @@ class distinct_hash_join {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-conditional_inner_join(
-  table_view const& left,
-  table_view const& right,
-  ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+conditional_inner_join(table_view const& left,
+                       table_view const& right,
+                       ast::expression const& binary_predicate,
+                       std::optional<std::size_t> output_size = {},
+                       rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -594,12 +611,13 @@ conditional_inner_join(
  * Result: {{0, 1, 2}, {None, 0, None}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
  * @param output_size Optional value which allows users to specify the exact output size
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -611,7 +629,8 @@ conditional_left_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
                       std::optional<std::size_t> output_size = {},
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                      rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -638,11 +657,12 @@ conditional_left_join(table_view const& left,
  * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -653,7 +673,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_full_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -675,12 +696,13 @@ conditional_full_join(table_view const& left,
  * Result: {1}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
  * @param output_size Optional value which allows users to specify the exact output size
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -692,7 +714,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view const& right,
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -714,12 +737,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * Result: {0, 2}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
  * @param output_size Optional value which allows users to specify the exact output size
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -731,7 +755,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view const& right,
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr      = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -759,7 +784,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -774,6 +799,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_inner_join_size API).
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -789,7 +815,8 @@ mixed_inner_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -819,7 +846,7 @@ mixed_inner_join(
  * Result: {{0, 1, 2}, {None, 0, None}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -834,6 +861,7 @@ mixed_inner_join(
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_left_join_size API).
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -849,7 +877,8 @@ mixed_left_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -879,7 +908,7 @@ mixed_left_join(
  * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -894,6 +923,7 @@ mixed_left_join(
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_full_join_size API).
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -909,7 +939,8 @@ mixed_full_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -932,7 +963,7 @@ mixed_full_join(
  * Result: {1}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -944,6 +975,7 @@ mixed_full_join(
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -955,8 +987,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -980,7 +1013,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * Result: {0, 2}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -992,6 +1025,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -1003,8 +1037,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1017,7 +1052,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1029,6 +1064,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1043,8 +1079,9 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1057,7 +1094,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1069,6 +1106,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * @param right_conditional The right table used for the conditional join
  * @param binary_predicate The condition on which to join
  * @param compare_nulls Whether or not null values join to each other or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1083,8 +1121,9 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1094,11 +1133,12 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join
@@ -1107,7 +1147,8 @@ std::size_t conditional_inner_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1117,11 +1158,12 @@ std::size_t conditional_inner_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join
@@ -1130,7 +1172,8 @@ std::size_t conditional_left_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1140,11 +1183,12 @@ std::size_t conditional_left_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join
@@ -1153,7 +1197,8 @@ std::size_t conditional_left_semi_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1163,11 +1208,12 @@ std::size_t conditional_left_semi_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join
@@ -1176,6 +1222,7 @@ std::size_t conditional_left_anti_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

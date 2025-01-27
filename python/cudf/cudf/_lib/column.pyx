@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 from typing import Literal
@@ -7,11 +7,10 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf
 import rmm
 
 import cudf
-import cudf._lib as libcudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -20,42 +19,35 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.utils.dtypes import (
+    _get_base_dtype,
+    dtype_to_pylibcudf_type,
+    PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+)
 
 from cpython.buffer cimport PyObject_CheckBuffer
-from libc.stdint cimport uintptr_t
-from libcpp.memory cimport make_unique, unique_ptr
+from libc.stdint cimport uintptr_t, int32_t
+from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport (
-    dtype_from_column_view,
-    dtype_to_data_type,
-    dtype_to_pylibcudf_type,
+from pylibcudf cimport (
+    DataType as plc_DataType,
+    Column as plc_Column,
+    Scalar as plc_Scalar,
 )
-
-from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf._lib.types import dtype_from_pylibcudf_column
-
-# TODO: We currently need this for "casting" empty pylibcudf columns in
-# from_pylibcudf by instead creating an empty numeric column. We will be able
-# to remove this once column factories are exposed to pylibcudf.
-
-cimport cudf._lib.cpp.copying as cpp_copying
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
-from cudf._lib cimport pylibcudf
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar,
-    make_numeric_column,
+cimport pylibcudf.libcudf.copying as cpp_copying
+cimport pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.unary as libcudf_unary
+from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_factories cimport (
+    make_numeric_column
 )
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.scalar cimport DeviceScalar
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
+from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 
 cdef get_element(column_view col_view, size_type index):
@@ -65,10 +57,82 @@ cdef get_element(column_view col_view, size_type index):
         c_output = move(
             cpp_copying.get_element(col_view, index)
         )
+    plc_scalar = plc_Scalar.from_libcudf(move(c_output))
+    return pylibcudf.interop.to_arrow(plc_scalar).as_py()
 
-    return DeviceScalar.from_unique_ptr(
-        move(c_output), dtype=dtype_from_column_view(col_view)
-    )
+
+def dtype_from_pylibcudf_column(plc_Column col not None):
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == pylibcudf.TypeId.LIST:
+        child = col.list_view().child()
+        return cudf.ListDtype(dtype_from_pylibcudf_column(child))
+    elif tid == pylibcudf.TypeId.STRUCT:
+        fields = {
+            str(i): dtype_from_pylibcudf_column(col.child(i))
+            for i in range(col.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == pylibcudf.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
+
+
+cdef dtype_from_lists_column_view(column_view cv):
+    # lists_column_view have no default constructor, so we heap
+    # allocate it to get around Cython's limitation of requiring
+    # default constructors for stack allocated objects
+    cdef shared_ptr[lists_column_view] lv = make_shared[lists_column_view](cv)
+    cdef column_view child = lv.get()[0].child()
+
+    if child.type().id() == libcudf_types.type_id.LIST:
+        return cudf.ListDtype(dtype_from_lists_column_view(child))
+    else:
+        return cudf.ListDtype(dtype_from_column_view(child))
+
+
+cdef dtype_from_column_view(column_view cv):
+    cdef libcudf_types.type_id tid = cv.type().id()
+    if tid == libcudf_types.type_id.LIST:
+        return dtype_from_lists_column_view(cv)
+    elif tid == libcudf_types.type_id.STRUCT:
+        fields = {
+            str(i): dtype_from_column_view(cv.child(i))
+            for i in range(cv.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == libcudf_types.type_id.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[<int32_t>(tid)]
 
 
 cdef class Column:
@@ -90,8 +154,10 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        tuple children=()
     ):
+        if size < 0:
+            raise ValueError("size must be >=0")
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -161,7 +227,10 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudf.null_mask.copy_bitmask(self)
+                with acquire_spill_lock():
+                    self._mask = as_buffer(
+                        pylibcudf.null_mask.copy_bitmask(self.to_pylibcudf(mode="read"))
+                    )
         return self._mask
 
     @property
@@ -185,7 +254,9 @@ cdef class Column:
 
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
-            required_size = bitmask_allocation_size_bytes(self.base_size)
+            required_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                self.base_size
+            )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
@@ -206,11 +277,13 @@ cdef class Column:
 
     def _clear_cache(self):
         self._distinct_count = {}
-        try:
-            del self.memory_usage
-        except AttributeError:
-            # `self.memory_usage` was never called before, So ignore.
-            pass
+        attrs = ("memory_usage", "is_monotonic_increasing", "is_monotonic_decreasing")
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                # attr was not called yet, so ignore.
+                pass
         self._null_count = None
 
     def set_mask(self, value):
@@ -220,7 +293,7 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        mask_size = bitmask_allocation_size_bytes(self.size)
+        mask_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(self.size)
         required_num_bytes = -(-self.size // 8)  # ceiling divide
         error_msg = (
             "The value for mask is smaller than expected, got {}  bytes, "
@@ -272,7 +345,15 @@ cdef class Column:
     @property
     def null_count(self):
         if self._null_count is None:
-            self._null_count = self.compute_null_count()
+            if not self.nullable or self.size == 0:
+                self._null_count = 0
+            else:
+                with acquire_spill_lock():
+                    self._null_count = pylibcudf.null_mask.null_count(
+                        self.base_mask.get_ptr(mode="read"),
+                        self.offset,
+                        self.offset + self.size
+                    )
         return self._null_count
 
     @property
@@ -297,11 +378,11 @@ cdef class Column:
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
                 ]
-                self._children = [
+                self._children = tuple(
                     child._with_type_metadata(dtype) for child, dtype in zip(
                         children, dtypes
                     )
-                ]
+                )
         return self._children
 
     def set_base_children(self, value):
@@ -336,18 +417,6 @@ cdef class Column:
         else:
             return other_col
 
-    cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        with acquire_spill_lock():
-            if not self.nullable:
-                return 0
-            return cpp_null_count(
-                <libcudf_types.bitmask_type*><uintptr_t>(
-                    self.base_mask.get_ptr(mode="read")
-                ),
-                self.offset,
-                self.offset + self.size
-            )
-
     cdef mutable_column_view mutable_view(self) except *:
         if isinstance(self.dtype, cudf.CategoricalDtype):
             col = self.base_children[0]
@@ -359,7 +428,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
@@ -396,7 +465,7 @@ cdef class Column:
         self._data = None
 
         return mutable_column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,
@@ -422,7 +491,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
@@ -448,7 +517,7 @@ cdef class Column:
         cdef libcudf_types.size_type c_null_count = null_count
 
         return column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,
@@ -599,7 +668,6 @@ cdef class Column:
             children=tuple(children)
         )
 
-    #  TODO: Actually support exposed data pointers.
     @staticmethod
     def from_pylibcudf(
         col, bint data_ptr_exposed=False
@@ -616,44 +684,41 @@ cdef class Column:
         col : pylibcudf.Column
             The object to copy.
         data_ptr_exposed : bool
-            This parameter is not yet supported
+            Whether the data buffer is exposed.
 
         Returns
         -------
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
-        cdef libcudf_types.data_type new_dtype
         if col.type().id() == pylibcudf.TypeId.TIMESTAMP_DAYS:
             col = pylibcudf.unary.cast(
                 col, pylibcudf.DataType(pylibcudf.TypeId.TIMESTAMP_SECONDS)
             )
         elif col.type().id() == pylibcudf.TypeId.EMPTY:
-            new_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
-            # TODO: This function call is what requires cimporting pylibcudf.
-            # We can remove the cimport once we can directly do
-            # pylibcudf.column_factories.make_numeric_column or equivalent.
-            col = pylibcudf.Column.from_libcudf(
-                move(
-                    make_numeric_column(
-                        new_dtype, col.size(), libcudf_types.mask_state.ALL_NULL
-                        )
-                    )
+            new_dtype = pylibcudf.DataType(pylibcudf.TypeId.INT8)
+
+            col = pylibcudf.column_factories.make_numeric_column(
+                new_dtype,
+                col.size(),
+                pylibcudf.column_factories.MaskState.ALL_NULL
             )
 
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(
-            data=as_buffer(col.data().obj) if col.data() is not None else None,
+            data=as_buffer(
+                col.data().obj, exposed=data_ptr_exposed
+            ) if col.data() is not None else None,
             dtype=dtype,
             size=col.size(),
             mask=as_buffer(
-                col.null_mask().obj
+                col.null_mask().obj, exposed=data_ptr_exposed
             ) if col.null_mask() is not None else None,
             offset=col.offset(),
             null_count=col.null_count(),
             children=tuple([
-                Column.from_pylibcudf(child)
+                Column.from_pylibcudf(child, data_ptr_exposed=data_ptr_exposed)
                 for child in col.children()
             ])
         )
@@ -692,15 +757,18 @@ cdef class Column:
         # special case for string column
         is_string_column = (cv.type().id() == libcudf_types.type_id.STRING)
         if is_string_column:
-            # get the size from offset child column (device to host copy)
-            offsets_column_index = 0
-            offset_child_column = cv.child(offsets_column_index)
-            if offset_child_column.size() == 0:
+            if cv.num_children() == 0:
                 base_nbytes = 0
             else:
-                chars_size = get_element(
-                    offset_child_column, offset_child_column.size()-1).value
-                base_nbytes = chars_size
+                # get the size from offset child column (device to host copy)
+                offsets_column_index = 0
+                offset_child_column = cv.child(offsets_column_index)
+                if offset_child_column.size() == 0:
+                    base_nbytes = 0
+                else:
+                    chars_size = get_element(
+                        offset_child_column, offset_child_column.size()-1)
+                    base_nbytes = chars_size
 
         if data_ptr:
             if data_owner is None:
@@ -791,13 +859,17 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(base_size)
+                            size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                                base_size
+                            )
                         )
                     )
             else:
                 mask = as_buffer(
                     data=mask_ptr,
-                    size=bitmask_allocation_size_bytes(base_size),
+                    size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                        base_size
+                    ),
                     owner=mask_owner,
                     exposed=True
                 )
@@ -834,9 +906,8 @@ cdef class Column:
 
     @staticmethod
     def from_scalar(py_val, size_type size):
-        cdef DeviceScalar val = py_val.device_value
-        cdef const scalar* c_val = val.get_raw_ptr()
-        cdef unique_ptr[column] c_result
-        with nogil:
-            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-        return Column.from_unique_ptr(move(c_result))
+        return Column.from_pylibcudf(
+            pylibcudf.Column.from_scalar(
+                py_val.device_value, size
+            )
+        )

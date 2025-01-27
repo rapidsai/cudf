@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -8,12 +8,15 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import List, Union
+from typing import cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
+
+import pylibcudf as plc
 
 import cudf
 from cudf.core._compat import PANDAS_LT_300
@@ -90,7 +93,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer_dtype(obj.dtype)
+        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)
 
 
@@ -142,8 +145,9 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
-            cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            plc.Scalar,
+            pa.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)
@@ -219,7 +223,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: List[Union[cudf.Series, cudf.CategoricalIndex]],
+    to_union: list[cudf.Series | cudf.CategoricalIndex],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):
@@ -238,7 +242,10 @@ def _union_categoricals(
         raise TypeError("ignore_order is not yet implemented")
 
     result_col = cudf.core.column.CategoricalColumn._concat(
-        [obj._column for obj in to_union]
+        [
+            cast(cudf.core.column.CategoricalColumn, obj._column)
+            for obj in to_union
+        ]
     )
     if sort_categories:
         sorted_categories = result_col.categories.sort_values(ascending=True)
@@ -246,7 +253,7 @@ def _union_categoricals(
             new_categories=sorted_categories
         )
 
-    return cudf.Index(result_col)
+    return cudf.CategoricalIndex._from_column(result_col)
 
 
 def is_bool_dtype(arr_or_dtype):

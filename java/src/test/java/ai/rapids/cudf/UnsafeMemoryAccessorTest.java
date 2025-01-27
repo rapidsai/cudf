@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -61,6 +61,24 @@ public class UnsafeMemoryAccessorTest {
       assertEquals(2, v);
       v = UnsafeMemoryAccessor.getInt(address + 4);
       assertEquals(4, v);
+    } finally {
+      UnsafeMemoryAccessor.free(address);
+    }
+  }
+
+  @Test
+  public void setAndGetInts() {
+    int numInts = 289;
+    long address = UnsafeMemoryAccessor.allocate(numInts * 4);
+    try {
+      for (int i = 0; i < numInts; i++) {
+        UnsafeMemoryAccessor.setInt(address + i * 4, i);
+      }
+      int[] ints = new int[numInts];
+      UnsafeMemoryAccessor.getInts(ints, 0, address, numInts);
+      for (int i = 0; i < numInts; i++) {
+        assertEquals(i, ints[i]);
+      }
     } finally {
       UnsafeMemoryAccessor.free(address);
     }

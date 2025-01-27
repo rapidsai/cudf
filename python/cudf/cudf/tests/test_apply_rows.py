@@ -1,10 +1,11 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import pytest
 
 import cudf
 from cudf.core.column import column
-from cudf.testing._utils import assert_eq, gen_rand_series
+from cudf.testing import assert_eq
+from cudf.testing._utils import gen_rand_series
 
 
 def _kernel_multiply(a, b, out):
@@ -26,8 +27,12 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
         gdf_series_expected = gdf_series_a * gdf_series_b
     else:
         # optimistically ignore the null masks
-        a = cudf.Series(column.build_column(gdf_series_a.data, dtype))
-        b = cudf.Series(column.build_column(gdf_series_b.data, dtype))
+        a = cudf.Series._from_column(
+            column.build_column(gdf_series_a.data, dtype)
+        )
+        b = cudf.Series._from_column(
+            column.build_column(gdf_series_b.data, dtype)
+        )
         gdf_series_expected = a * b
 
     df_expected = cudf.DataFrame(

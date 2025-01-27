@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import glob
 import math
@@ -15,12 +15,12 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
+from dask_cudf._legacy.io.parquet import create_metadata_file
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
 need_create_meta = pytest.mark.skipif(
-    dask_cudf.io.parquet.create_metadata_file is None,
+    create_metadata_file is None,
     reason="Need create_metadata_file support in dask.dataframe.",
 )
 
@@ -41,7 +41,7 @@ def test_roundtrip_backend_dispatch(tmpdir):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
     with dask.config.set({"dataframe.backend": "cudf"}):
-        ddf2 = dd.read_parquet(tmpdir, index=False)
+        ddf2 = dd.read_parquet(tmpdir, index=False, blocksize=None)
     assert isinstance(ddf2, dask_cudf.DataFrame)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
@@ -95,7 +95,7 @@ def test_roundtrip_from_dask_index_false(tmpdir):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
 
-    ddf2 = dask_cudf.read_parquet(tmpdir, index=False)
+    ddf2 = dask_cudf.read_parquet(tmpdir, index=False, blocksize=None)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
 
@@ -113,7 +113,7 @@ def test_roundtrip_from_dask_none_index_false(tmpdir):
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
-    gddf = dask_cudf.from_dask_dataframe(ddf)
+    gddf = ddf.to_backend("cudf")
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
@@ -166,9 +166,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    # Workaround until following issue is fixed:
-    # https://github.com/apache/arrow/issues/33321
-    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
+    dd.assert_eq(ddf2, read_df.compute())
 
 
 @pytest.mark.parametrize("index", [False, None])
@@ -373,12 +371,12 @@ def test_split_row_groups(tmpdir, row_groups, index):
     row_group_size = 5
     file_row_groups = 10  # Known apriori
     npartitions_expected = math.ceil(file_row_groups / row_groups) * 2
-
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
-            "b": np.random.random(size=df_size),
-            "c": np.random.randint(1, 5, size=df_size),
+            "a": rng.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": rng.random(size=df_size),
+            "c": rng.integers(1, 5, size=df_size),
             "index": np.arange(0, df_size),
         }
     )
@@ -423,10 +421,14 @@ def test_create_metadata_file(tmpdir, partition_on):
         fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
-    dask_cudf.io.parquet.create_metadata_file(
-        fns,
-        split_every=3,  # Force tree reduction
-    )
+
+    with pytest.warns(
+        match="dask_cudf.io.parquet.create_metadata_file is now deprecated"
+    ):
+        dask_cudf.io.parquet.create_metadata_file(
+            fns,
+            split_every=3,  # Force tree reduction
+        )
 
     # Check that we can now read the ddf
     # with the _metadata file present
@@ -443,7 +445,6 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
-@xfail_dask_expr("dtypes are inconsistent")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine
@@ -470,7 +471,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
     # consistency.
-    dask_cudf.io.parquet.create_metadata_file([p0, p1])
+    create_metadata_file([p0, p1])
 
     # Check that we can still read the ddf
     # with the _metadata file present
@@ -524,19 +525,6 @@ def test_cudf_list_struct_write(tmpdir):
     dd.assert_eq(df, new_ddf)
 
 
-@skip_dask_expr("Not necessary in dask-expr")
-def test_check_file_size(tmpdir):
-    # Test simple file-size check to help warn users
-    # of upstream change to `split_row_groups` default
-    fn = str(tmpdir.join("test.parquet"))
-    cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
-    with pytest.warns(match="large parquet file"):
-        # Need to use `dask_cudf.io` path
-        # TODO: Remove outdated `check_file_size` functionality
-        dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
-
-
-@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="1.0")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
@@ -598,3 +586,79 @@ def test_parquet_read_filter_and_project(tmpdir):
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     dd.assert_eq(got, expected)
+
+
+def test_timezone_column(tmpdir):
+    path = str(tmpdir.join("test.parquet"))
+    pdf = pd.DataFrame(
+        {
+            "time": pd.to_datetime(
+                ["1996-01-02", "1996-12-01"],
+                utc=True,
+            ),
+            "x": [1, 2],
+        }
+    )
+    pdf.to_parquet(path)
+
+    # Check that `cudf` and `dask_cudf` results match
+    got = dask_cudf.read_parquet(path)
+    expect = cudf.read_parquet(path)
+    dd.assert_eq(got, expect)
+
+
+@pytest.mark.skipif(
+    not dask_cudf.backends.PYARROW_GE_15,
+    reason="Requires pyarrow 15",
+)
+@pytest.mark.parametrize("min_part_size", ["1B", "1GB"])
+def test_read_parquet_arrow_filesystem(tmpdir, min_part_size):
+    tmp_path = str(tmpdir)
+    with dask.config.set(
+        {
+            "dataframe.backend": "cudf",
+            "dataframe.parquet.minimum-partition-size": min_part_size,
+        }
+    ):
+        dd.from_dict(
+            {"x": range(1000), "y": ["a", "b", "c", "d"] * 250},
+            npartitions=10,
+        ).to_parquet(tmp_path, write_index=False)
+        df = cudf.read_parquet(tmp_path)
+        ddf = dask_cudf.read_parquet(tmp_path, filesystem="arrow")
+        dd.assert_eq(df, ddf, check_index=False)
+        assert isinstance(ddf._meta, cudf.DataFrame)
+        assert isinstance(ddf.compute(), cudf.DataFrame)
+
+
+@pytest.mark.parametrize("write_metadata_file", [True, False])
+def test_to_parquet_append(tmpdir, write_metadata_file):
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    ddf = dask_cudf.from_cudf(df, npartitions=1)
+    ddf.to_parquet(
+        tmpdir,
+        append=True,
+        write_metadata_file=write_metadata_file,
+        write_index=False,
+    )
+    ddf.to_parquet(
+        tmpdir,
+        append=True,
+        write_metadata_file=write_metadata_file,
+        write_index=False,
+    )
+    ddf2 = dask_cudf.read_parquet(tmpdir, blocksize=None)
+    dd.assert_eq(cudf.concat([df, df]), ddf2)
+
+
+def test_deprecated_api_paths(tmpdir):
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    # io.to_parquet function is deprecated
+    with pytest.warns(match="dask_cudf.io.to_parquet is now deprecated"):
+        dask_cudf.io.to_parquet(df, tmpdir)
+
+    df2 = dask_cudf.io.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)
+
+    df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)

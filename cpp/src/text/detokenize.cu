@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/tokenize.hpp>
 
@@ -47,12 +48,13 @@ namespace {
  * the same row. The `d_separator` is appended between each token.
  */
 struct detokenizer_fn {
-  cudf::column_device_view const d_strings;  // these are the tokens
-  cudf::size_type const* d_row_map;          // indices sorted by output row
-  cudf::size_type const* d_token_offsets;    // to each input token array
-  cudf::string_view const d_separator;       // append after each token
-  cudf::size_type* d_offsets{};              // offsets to output buffer d_chars
-  char* d_chars{};                           // output buffer for characters
+  cudf::column_device_view const d_strings;    // these are the tokens
+  cudf::size_type const* d_row_map;            // indices sorted by output row
+  cudf::size_type const* d_token_offsets;      // to each input token array
+  cudf::string_view const d_separator;         // append after each token
+  cudf::size_type* d_sizes{};                  // output sizes
+  char* d_chars{};                             // output buffer for characters
+  cudf::detail::input_offsetalator d_offsets;  // for addressing output row data in d_chars
 
   __device__ void operator()(cudf::size_type idx)
   {
@@ -74,7 +76,7 @@ struct detokenizer_fn {
         nbytes += d_separator.size_bytes();
       }
     }
-    if (!d_chars) { d_offsets[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
+    if (!d_chars) { d_sizes[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
   }
 };
 
@@ -132,7 +134,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
@@ -146,7 +148,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   // the indices may not be in order so we need to build a sorted map
   auto sorted_rows = cudf::detail::stable_sorted_order(
-    cudf::table_view({row_indices}), {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::table_view({row_indices}), {}, {}, stream, cudf::get_current_device_resource_ref());
   auto const d_row_map = sorted_rows->view().data<cudf::size_type>();
 
   // create offsets for the tokens for each output string
@@ -173,7 +175,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::detokenize(input, row_indices, separator, stream, mr);

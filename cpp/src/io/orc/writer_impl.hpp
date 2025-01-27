@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,10 +78,9 @@ struct orc_table_view {
  * Provides a container-like interface to iterate over rowgroup indices.
  */
 struct stripe_rowgroups {
-  uint32_t id;     // stripe id
-  uint32_t first;  // first rowgroup in the stripe
-  uint32_t size;   // number of rowgroups in the stripe
-  stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
+  size_type id;     // stripe id
+  size_type first;  // first rowgroup in the stripe
+  size_type size;   // number of rowgroups in the stripe
   [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
   [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
@@ -91,8 +90,9 @@ struct stripe_rowgroups {
  */
 struct encoder_decimal_info {
   std::map<uint32_t, rmm::device_uvector<uint32_t>>
-    elem_sizes;                                        ///< Column index -> per-element size map
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
+    elem_sizes;  ///< Column index -> per-element size map
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>>
+    rg_sizes;  ///< Column index -> per-rowgroup size map
 };
 
 /**
@@ -125,7 +125,7 @@ class orc_streams {
  */
 struct file_segmentation {
   hostdevice_2dvector<rowgroup_rows> rowgroups;
-  std::vector<stripe_rowgroups> stripes;
+  cudf::detail::host_vector<stripe_rowgroups> stripes;
 
   auto num_rowgroups() const noexcept { return rowgroups.size().first; }
   auto num_stripes() const noexcept { return stripes.size(); }
@@ -342,7 +342,7 @@ class writer::impl {
   // Writer options.
   stripe_size_limits const _max_stripe_size;
   size_type const _row_index_stride;
-  CompressionKind const _compression_kind;
+  compression_type const _compression;
   size_t const _compression_blocksize;
   std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;

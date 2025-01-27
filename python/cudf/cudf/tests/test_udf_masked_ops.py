@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -17,9 +17,9 @@ from cudf.core.udf._ops import (
 )
 from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
-    assert_eq,
     parametrize_numeric_dtypes_pairwise,
     sv_to_managed_udf_str,
 )

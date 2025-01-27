@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,14 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/cmath>
+#include <cuda/std/limits>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
@@ -238,11 +241,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
-  {
-    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
-  }
-
   bool compare_common(cudf::column_view const& lhs,
                       cudf::column_view const& rhs,
                       cudf::column_view const& lhs_row_indices,
@@ -252,9 +250,9 @@ struct column_property_comparator {
     bool result = true;
 
     if (check_exact_equality) {
-      PROP_EXPECT_EQ(lhs.type(), rhs.type());
+      PROP_EXPECT_EQ(cudf::have_same_types(lhs, rhs), true);
     } else {
-      PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
+      PROP_EXPECT_EQ(cudf::column_types_equivalent(lhs, rhs), true);
     }
 
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();
@@ -416,14 +414,16 @@ class corresponding_rows_not_equivalent {
         T const y = rhs.element<T>(rhs_index);
 
         // Must handle inf and nan separately
-        if (std::isinf(x) || std::isinf(y)) {
+        if (cuda::std::isinf(x) || cuda::std::isinf(y)) {
           return x != y;  // comparison of (inf==inf) returns true
-        } else if (std::isnan(x) || std::isnan(y)) {
-          return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
+        } else if (cuda::std::isnan(x) || cuda::std::isnan(y)) {
+          return cuda::std::isnan(x) !=
+                 cuda::std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
-          T const abs_x_minus_y = std::abs(x - y);
-          return abs_x_minus_y >= std::numeric_limits<T>::min() &&
-                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * fp_ulps;
+          T const abs_x_minus_y = cuda::std::abs(x - y);
+          return abs_x_minus_y >= cuda::std::numeric_limits<T>::min() &&
+                 abs_x_minus_y >
+                   cuda::std::numeric_limits<T>::epsilon() * cuda::std::abs(x + y) * fp_ulps;
         }
       } else {
         // if either is null, then the inequality was checked already
@@ -781,7 +781,7 @@ struct column_comparator {
 
 void check_non_empty_nulls(column_view const& lhs, column_view const& rhs)
 {
-  auto check_column_nulls = [](column_view const& col, const char* col_name) {
+  auto check_column_nulls = [](column_view const& col, char const* col_name) {
     if (cudf::detail::has_nonempty_nulls(col, cudf::get_default_stream())) {
       throw std::invalid_argument(col_name + std::string(" column has non-empty nulls"));
     }

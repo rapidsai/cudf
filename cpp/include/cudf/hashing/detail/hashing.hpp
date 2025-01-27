@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,54 +17,59 @@
 
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cstddef>
 #include <functional>
 
-namespace cudf {
-namespace hashing {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace hashing::detail {
 
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
                                            rmm::cuda_stream_view,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
                                            uint64_t seed,
                                            rmm::cuda_stream_view,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr);
+                            rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> sha1(table_view const& input,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
+                             rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> sha224(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> sha256(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> sha384(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> sha512(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
+
+std::unique_ptr<column> xxhash_32(table_view const& input,
+                                  uint64_t seed,
+                                  rmm::cuda_stream_view,
+                                  rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> xxhash_64(table_view const& input,
                                   uint64_t seed,
                                   rmm::cuda_stream_view,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /* Copyright 2005-2014 Daniel James.
  *
@@ -82,7 +87,7 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
  * @param rhs The second hash value
  * @return Combined hash value
  */
-constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
+CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
 }
@@ -108,9 +113,8 @@ constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
   return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
 
-}  // namespace detail
-}  // namespace hashing
-}  // namespace cudf
+}  // namespace hashing::detail
+}  // namespace CUDF_EXPORT cudf
 
 // specialization of std::hash for cudf::data_type
 namespace std {

@@ -88,13 +88,35 @@ TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
   EXPECT_EQ(results->has_nulls(), false);
 }
 
+TEST_F(TextReplaceTest, ReplaceTokensLongStrings)
+{
+  cudf::test::strings_column_wrapper input{
+    "pellentesque ut euismod semo phaselus tristiut libero ut dui congusem non pellentesque nunc ",
+    "pellentesque ut euismod se phaselus tristiut libero ut dui congusem non pellentesque ",
+    "pellentesque ut euismod phaselus tristiut libero ut dui congusem non pellentesque nun ",
+    "pellentesque ut euismod seem phaselus tristiut libero ut dui congusem non pellentesque un "};
+  cudf::test::strings_column_wrapper targets({"ut", "pellentesque"});
+  cudf::test::strings_column_wrapper repls({"___", "é"});
+
+  auto expected = cudf::test::strings_column_wrapper{
+    "é ___ euismod semo phaselus tristiut libero ___ dui congusem non é nunc ",
+    "é ___ euismod se phaselus tristiut libero ___ dui congusem non é ",
+    "é ___ euismod phaselus tristiut libero ___ dui congusem non é nun ",
+    "é ___ euismod seem phaselus tristiut libero ___ dui congusem non é un "};
+
+  auto results = nvtext::replace_tokens(cudf::strings_column_view(input),
+                                        cudf::strings_column_view(targets),
+                                        cudf::strings_column_view(repls));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(TextReplaceTest, ReplaceTokensErrorTest)
 {
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   cudf::test::strings_column_wrapper notnulls({"", "", ""});
   cudf::strings_column_view notnulls_view(notnulls);
-  cudf::test::strings_column_wrapper nulls({"", ""}, {0, 0});
+  cudf::test::strings_column_wrapper nulls({"", ""}, {false, false});
   cudf::strings_column_view nulls_view(nulls);
 
   EXPECT_THROW(nvtext::replace_tokens(strings_view, nulls_view, notnulls_view), cudf::logic_error);

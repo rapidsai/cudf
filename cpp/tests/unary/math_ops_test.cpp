@@ -22,10 +22,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/unary.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
-#include <cuda/std/climits>
 
 #include <vector>
 
@@ -69,7 +65,8 @@ TYPED_TEST(UnaryLogicalOpsTest, SimpleLogicalNot)
 TYPED_TEST(UnaryLogicalOpsTest, SimpleLogicalNotWithNullMask)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}, {1, 0, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false}, {1, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false},
+                                                        {true, false, true, true}};
   auto output = cudf::unary_operation(input, cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
   auto encoded = cudf::dictionary::encode(input);

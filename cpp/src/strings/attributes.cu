@@ -26,6 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -75,7 +76,7 @@ template <typename UnaryFunction>
 std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                                   UnaryFunction& ufn,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   // create output column
   auto results   = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -136,7 +137,7 @@ CUDF_KERNEL void count_characters_parallel_fn(column_device_view const d_strings
 
 std::unique_ptr<column> count_characters_parallel(strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -165,7 +166,7 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   if ((input.size() == input.null_count()) ||
       ((input.chars_size(stream) / (input.size() - input.null_count())) <
@@ -180,7 +181,7 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto ufn = cuda::proclaim_return_type<size_type>(
     [] __device__(string_view const& d_str) { return d_str.size_bytes(); });
@@ -219,7 +220,7 @@ namespace detail {
 //
 std::unique_ptr<column> code_points(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
@@ -263,24 +264,27 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
 // external APIS
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_characters(input, cudf::get_default_stream(), mr);
+  return detail::count_characters(input, stream, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_bytes(input, cudf::get_default_stream(), mr);
+  return detail::count_bytes(input, stream, mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& input,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::code_points(input, cudf::get_default_stream(), mr);
+  return detail::code_points(input, stream, mr);
 }
 
 }  // namespace strings

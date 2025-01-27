@@ -778,6 +778,138 @@ TYPED_TEST(MixedLeftSemiJoinTest, BasicEquality)
              {1});
 }
 
+TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMap)
+{
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto left_one_greater_right_one =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
+             {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
+             {0},
+             {1},
+             left_one_greater_right_one,
+             {2, 7, 8});
+}
+
+TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
+{
+  using T1 = double;
+
+  // Number of rows in each column
+  auto constexpr N = 10000;
+
+  // Generate column data for left and right tables
+  auto const [left_col0, right_col0] = gen_random_nullable_repeated_columns<T1>(N, 200);
+  auto const [left_col1, right_col1] = gen_random_nullable_repeated_columns<T1>(N, 100);
+
+  // Setup data and nulls for the left table
+  std::vector<std::pair<std::vector<T1>, std::vector<bool>>> lefts = {
+    {left_col0.first, left_col0.second}, {left_col1.first, left_col1.second}};
+  std::vector<cudf::test::fixed_width_column_wrapper<T1>> left_wrappers;
+  std::vector<cudf::column_view> left_columns;
+  for (auto [data, valids] : lefts) {
+    left_wrappers.emplace_back(
+      cudf::test::fixed_width_column_wrapper<T1>(data.begin(), data.end(), valids.begin()));
+    left_columns.emplace_back(left_wrappers.back());
+  };
+
+  // Setup data and nulls for the right table
+  std::vector<std::pair<std::vector<T1>, std::vector<bool>>> rights = {
+    {right_col0.first, right_col0.second}, {right_col1.first, right_col1.second}};
+  std::vector<cudf::test::fixed_width_column_wrapper<T1>> right_wrappers;
+  std::vector<cudf::column_view> right_columns;
+  for (auto [data, valids] : rights) {
+    right_wrappers.emplace_back(
+      cudf::test::fixed_width_column_wrapper<T1>(data.begin(), data.end(), valids.begin()));
+    right_columns.emplace_back(left_wrappers.back());
+  };
+
+  // Left and right table views.
+  auto const left_table  = cudf::table_view{left_columns};
+  auto const right_table = cudf::table_view{right_columns};
+
+  // Using the zeroth column for equality.
+  auto const left_equality  = left_table.select({0});
+  auto const right_equality = right_table.select({0});
+
+  // Column references for equality column.
+  auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto left_zero_eq_right_zero =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+
+  // Mixed semi join with zeroth column equality
+  {
+    // Expected left_semi_join result
+    auto const expected_mixed_semi_join =
+      cudf::conditional_left_semi_join(left_table, right_table, left_zero_eq_right_zero);
+
+    // Actual mixed_left_semi_join result
+    auto const mixed_semi_join = cudf::mixed_left_semi_join(left_equality,
+                                                            right_equality,
+                                                            left_table,
+                                                            right_table,
+                                                            left_zero_eq_right_zero,
+                                                            cudf::null_equality::UNEQUAL);
+
+    // Copy data back to host for comparisons
+    auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
+      cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
+    auto result_indices = cudf::detail::make_std_vector_sync<int32_t>(
+      cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
+
+    // Sort the indices for 1-1 comparison
+    std::sort(expected_indices.begin(), expected_indices.end());
+    std::sort(result_indices.begin(), result_indices.end());
+
+    // Expected and actual vectors must match.
+    EXPECT_EQ(expected_mixed_semi_join->size(), mixed_semi_join->size());
+    EXPECT_TRUE(
+      std::equal(expected_indices.begin(), expected_indices.end(), result_indices.begin()));
+  }
+
+  // Mixed semi join with zeroth column equality and first column GREATER conditional
+  {
+    // Column references for conditional column.
+    auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+    auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+    auto left_one_gt_right_one =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+    // Expected left_semi_join result
+    auto const expected_mixed_semi_join = cudf::conditional_left_semi_join(
+      left_table,
+      right_table,
+      cudf::ast::operation(
+        cudf::ast::ast_operator::LOGICAL_AND, left_zero_eq_right_zero, left_one_gt_right_one));
+
+    // Actual left_semi_join result
+    auto const mixed_semi_join = cudf::mixed_left_semi_join(left_equality,
+                                                            right_equality,
+                                                            left_table,
+                                                            right_table,
+                                                            left_one_gt_right_one,
+                                                            cudf::null_equality::UNEQUAL);
+
+    // Copy data back to host for comparisons
+    auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
+      cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
+    auto result_indices = cudf::detail::make_std_vector_sync<int32_t>(
+      cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
+
+    // Sort the indices for 1-1 comparison
+    std::sort(expected_indices.begin(), expected_indices.end());
+    std::sort(result_indices.begin(), result_indices.end());
+
+    // Expected and actual vectors must match.
+    EXPECT_EQ(expected_mixed_semi_join->size(), mixed_semi_join->size());
+    EXPECT_TRUE(
+      std::equal(expected_indices.begin(), expected_indices.end(), result_indices.begin()));
+  }
+}
+
 TYPED_TEST(MixedLeftSemiJoinTest, BasicEqualityDuplicates)
 {
   this->test({{0, 1, 2, 1}, {3, 4, 5, 6}, {10, 20, 30, 40}},
@@ -899,4 +1031,19 @@ TYPED_TEST(MixedLeftAntiJoinTest, AsymmetricLeftLargerEquality)
              {1, 2},
              left_zero_eq_right_zero,
              {0, 1, 3});
+}
+
+TYPED_TEST(MixedLeftAntiJoinTest, MixedLeftAntiJoinGatherMap)
+{
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto left_one_greater_right_one =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+
+  this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
+             {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
+             {0},
+             {1},
+             left_one_greater_right_one,
+             {0, 1, 3, 4, 5, 6, 9});
 }

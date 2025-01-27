@@ -25,6 +25,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
@@ -72,15 +73,10 @@ CUDF_KERNEL void kernel_compute_tensor_metadata(
   uint32_t* attn_mask,
   uint32_t* metadata)
 {
-  cudf::thread_index_type const output_idx =
-    threadIdx.x + static_cast<cudf::thread_index_type>(blockIdx.x) *
-                    static_cast<cudf::thread_index_type>(blockDim.x);
-  if (output_idx >= (static_cast<cudf::thread_index_type>(nrows_tensor_token_ids) *
-                     static_cast<cudf::thread_index_type>(max_sequence_length))) {
-    return;
-  }
+  auto const output_idx = cudf::detail::grid_1d::global_thread_id();
 
-  uint32_t const absolute_row_id         = output_idx / max_sequence_length;
+  uint32_t const absolute_row_id = output_idx / max_sequence_length;
+  if (absolute_row_id >= nrows_tensor_token_ids) { return; }
   uint32_t const tensor_id               = row2tensor[absolute_row_id];
   uint32_t const row_within_tensor       = row2row_within_tensor[absolute_row_id];
   uint32_t const offset_token_ids_tensor = offsets[tensor_id];
@@ -139,7 +135,7 @@ CUDF_KERNEL void kernel_compute_tensor_metadata(
 tokenizer_result build_empty_result(cudf::size_type size,
                                     uint32_t max_sequence_length,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto zero = cudf::numeric_scalar<uint32_t>(0, true, stream);
   auto ids  = cudf::detail::sequence(size * max_sequence_length, zero, zero, stream, mr);
@@ -166,7 +162,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   bool do_lower_case,
                                   bool do_truncate,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
@@ -292,17 +288,12 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(strings,
-                                  vocabulary_table,
-                                  max_sequence_length,
-                                  stride,
-                                  do_lower_case,
-                                  do_truncate,
-                                  cudf::get_default_stream(),
-                                  mr);
+  return detail::subword_tokenize(
+    strings, vocabulary_table, max_sequence_length, stride, do_lower_case, do_truncate, stream, mr);
 }
 
 }  // namespace nvtext

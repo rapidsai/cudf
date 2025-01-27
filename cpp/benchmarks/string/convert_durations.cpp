@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,92 +14,60 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
-#include <cudf/types.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/wrappers/durations.hpp>
 
-#include <algorithm>
-#include <random>
+#include <nvbench/nvbench.cuh>
 
-class DurationsToString : public cudf::benchmark {};
-template <class TypeParam>
-void BM_convert_from_durations(benchmark::State& state)
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::duration_D, "cudf::duration_D", "cudf::duration_D");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::duration_s, "cudf::duration_s", "cudf::duration_s");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::duration_ms, "cudf::duration_ms", "cudf::duration_ms");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::duration_us, "cudf::duration_us", "cudf::duration_us");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::duration_ns, "cudf::duration_ns", "cudf::duration_ns");
+
+using Types = nvbench::type_list<cudf::duration_D,
+                                 cudf::duration_s,
+                                 cudf::duration_ms,
+                                 cudf::duration_us,
+                                 cudf::duration_ns>;
+
+template <class DataType>
+void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  cudf::size_type const source_size = state.range(0);
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const data_type = cudf::data_type(cudf::type_to_id<DataType>());
+  auto const from_dur  = state.get_string("dir") == "from";
 
-  // Every element is valid
-  auto data = cudf::detail::make_counting_transform_iterator(
-    0, [source_size](auto i) { return TypeParam{i - source_size / 2}; });
+  auto const ts_col = create_random_column(data_type.id(), row_count{num_rows});
+  cudf::column_view input(ts_col->view());
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_durations(data, data + source_size);
+  auto format = std::string{"%D days %H:%M:%S"};
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::strings::from_durations(source_durations, "%D days %H:%M:%S");
+  if (from_dur) {
+    state.add_global_memory_reads<DataType>(num_rows);
+    state.add_global_memory_writes<int8_t>(format.size() * num_rows);
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::from_durations(input, format); });
+  } else {
+    auto source = cudf::strings::from_durations(input, format);
+    auto view   = cudf::strings_column_view(source->view());
+    state.add_global_memory_reads<int8_t>(view.chars_size(stream));
+    state.add_global_memory_writes<DataType>(num_rows);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::to_durations(view, data_type, format);
+    });
   }
-
-  state.SetBytesProcessed(state.iterations() * source_size * sizeof(TypeParam));
 }
 
-class StringToDurations : public cudf::benchmark {};
-template <class TypeParam>
-void BM_convert_to_durations(benchmark::State& state)
-{
-  cudf::size_type const source_size = state.range(0);
-
-  // Every element is valid
-  auto data = cudf::detail::make_counting_transform_iterator(
-    0, [source_size](auto i) { return TypeParam{i - source_size / 2}; });
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_durations(data, data + source_size);
-  auto results = cudf::strings::from_durations(source_durations, "%D days %H:%M:%S");
-  cudf::strings_column_view source_string(*results);
-  auto output_type = cudf::data_type(cudf::type_to_id<TypeParam>());
-
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::strings::to_durations(source_string, output_type, "%D days %H:%M:%S");
-  }
-
-  state.SetBytesProcessed(state.iterations() * source_size * sizeof(TypeParam));
-}
-
-#define DSBM_BENCHMARK_DEFINE(name, type)                                 \
-  BENCHMARK_DEFINE_F(DurationsToString, name)(::benchmark::State & state) \
-  {                                                                       \
-    BM_convert_from_durations<type>(state);                               \
-  }                                                                       \
-  BENCHMARK_REGISTER_F(DurationsToString, name)                           \
-    ->RangeMultiplier(1 << 5)                                             \
-    ->Range(1 << 10, 1 << 25)                                             \
-    ->UseManualTime()                                                     \
-    ->Unit(benchmark::kMicrosecond);
-
-#define SDBM_BENCHMARK_DEFINE(name, type)                                 \
-  BENCHMARK_DEFINE_F(StringToDurations, name)(::benchmark::State & state) \
-  {                                                                       \
-    BM_convert_to_durations<type>(state);                                 \
-  }                                                                       \
-  BENCHMARK_REGISTER_F(StringToDurations, name)                           \
-    ->RangeMultiplier(1 << 5)                                             \
-    ->Range(1 << 10, 1 << 25)                                             \
-    ->UseManualTime()                                                     \
-    ->Unit(benchmark::kMicrosecond);
-
-DSBM_BENCHMARK_DEFINE(from_durations_D, cudf::duration_D);
-DSBM_BENCHMARK_DEFINE(from_durations_s, cudf::duration_s);
-DSBM_BENCHMARK_DEFINE(from_durations_ms, cudf::duration_ms);
-DSBM_BENCHMARK_DEFINE(from_durations_us, cudf::duration_us);
-DSBM_BENCHMARK_DEFINE(from_durations_ns, cudf::duration_ns);
-
-SDBM_BENCHMARK_DEFINE(to_durations_D, cudf::duration_D);
-SDBM_BENCHMARK_DEFINE(to_durations_s, cudf::duration_s);
-SDBM_BENCHMARK_DEFINE(to_durations_ms, cudf::duration_ms);
-SDBM_BENCHMARK_DEFINE(to_durations_us, cudf::duration_us);
-SDBM_BENCHMARK_DEFINE(to_durations_ns, cudf::duration_ns);
+NVBENCH_BENCH_TYPES(bench_convert_duration, NVBENCH_TYPE_AXES(Types))
+  .set_name("duration")
+  .set_type_axes_names({"DataType"})
+  .add_string_axis("dir", {"to", "from"})
+  .add_int64_axis("num_rows", {1 << 10, 1 << 15, 1 << 20, 1 << 25});

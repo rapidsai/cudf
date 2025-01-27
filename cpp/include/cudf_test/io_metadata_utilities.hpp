@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace cudf::test {
+namespace CUDF_EXPORT cudf {
+namespace test {
 
 void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
                            cudf::io::table_metadata out_meta);
@@ -28,4 +30,5 @@ void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
  */
 void expect_metadata_equal(cudf::io::table_metadata lhs_meta, cudf::io::table_metadata rhs_meta);
 
-}  // namespace cudf::test
+}  // namespace test
+}  // namespace CUDF_EXPORT cudf

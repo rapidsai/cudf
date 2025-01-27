@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/types.hpp>
 
 #include <unordered_map>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 struct pair_column_aggregation_equal_to {
   bool operator()(std::pair<column_view, aggregation const&> const& lhs,
@@ -66,4 +65,4 @@ class result_cache {
 };
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

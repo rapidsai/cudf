@@ -22,6 +22,7 @@ Attributes
    Series.values
    Series.data
    Series.dtype
+   Series.dtypes
    Series.shape
    Series.ndim
    Series.nullable
@@ -138,6 +139,7 @@ Computations / descriptive stats
    Series.describe
    Series.diff
    Series.digitize
+   Series.ewm
    Series.factorize
    Series.kurt
    Series.max
@@ -402,3 +404,5 @@ Serialization / IO / conversion
    Series.from_masked_array
    Series.from_pandas
    Series.hash_values
+   Series.to_pylibcudf
+   Series.from_pylibcudf

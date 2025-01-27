@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,43 @@
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
-#include <cctype>
-#include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf {
 namespace jit {
-constexpr char percent_escape[] = "_";
+namespace {
 
 inline bool is_white(char const c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+
+std::string remove_comments(std::string const& src)
+{
+  std::string output;
+  auto f = src.cbegin();
+  while (f < src.cend()) {
+    auto l = std::find(f, src.cend(), '/');
+    output.append(f, l);  // push chunk instead of 1 char at a time
+    f = std::next(l);     // skip over '/'
+    if (l < src.cend()) {
+      char const n = f < src.cend() ? *f : '?';
+      if (n == '/') {                        // found "//"
+        f = std::find(f, src.cend(), '\n');  // skip to end of line
+      } else if (n == '*') {                 // found "/*"
+        auto term = std::string("*/");       // skip to end of next "*/"
+        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
+      } else {
+        output.push_back('/');  // lone '/' should be pushed into output
+      }
+    }
+  }
+  return output;
+}
+
+}  // namespace
+
+constexpr char percent_escape[] = "_";  // NOLINT
 
 std::string ptx_parser::escape_percent(std::string const& src)
 {
@@ -107,7 +133,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
   std::string output;
   std::string suffix;
 
-  std::string original_code = "\n   /**   " + src + "  */\n";
+  std::string const original_code = "\n   /**   " + src + "  */\n";
 
   int piece_count = 0;
 
@@ -207,7 +233,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
       } else if (is_pragma_instruction) {
         // quote any string
         std::string transformed_piece;
-        for (const auto& c : piece) {
+        for (auto const& c : piece) {
           if (c == '"') {
             transformed_piece += "\\\"";
           } else {
@@ -317,33 +343,10 @@ std::string ptx_parser::parse_function_header(std::string const& src)
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
-std::string remove_comments(std::string const& src)
-{
-  std::string output;
-  auto f = src.cbegin();
-  while (f < src.cend()) {
-    auto l = std::find(f, src.cend(), '/');
-    output.append(f, l);  // push chunk instead of 1 char at a time
-    f = std::next(l);     // skip over '/'
-    if (l < src.cend()) {
-      char n = f < src.cend() ? *f : '?';
-      if (n == '/') {                        // found "//"
-        f = std::find(f, src.cend(), '\n');  // skip to end of line
-      } else if (n == '*') {                 // found "/*"
-        auto term = std::string("*/");       // skip to end of next "*/"
-        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
-      } else {
-        output.push_back('/');  // lone '/' should be pushed into output
-      }
-    }
-  }
-  return output;
-}
-
 // The interface
 std::string ptx_parser::parse()
 {
-  std::string no_comments = remove_comments(ptx);
+  std::string const no_comments = remove_comments(ptx);
 
   input_arg_list.clear();
   auto const _func = std::string(".func");  // Go directly to the .func mark
@@ -378,13 +381,13 @@ std::string ptx_parser::parse()
   return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
-ptx_parser::ptx_parser(std::string const& ptx_,
-                       std::string const& function_name_,
-                       std::string const& output_arg_type_,
+ptx_parser::ptx_parser(std::string ptx_,
+                       std::string function_name_,
+                       std::string output_arg_type_,
                        std::set<int> const& pointer_arg_list_)
-  : ptx(ptx_),
-    function_name(function_name_),
-    output_arg_type(output_arg_type_),
+  : ptx(std::move(ptx_)),
+    function_name(std::move(function_name_)),
+    output_arg_type(std::move(output_arg_type_)),
     pointer_arg_list(pointer_arg_list_)
 {
 }

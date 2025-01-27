@@ -2,5 +2,5 @@
 concatenate
 ===========
 
-.. automodule:: cudf._lib.pylibcudf.concatenate
+.. automodule:: pylibcudf.concatenate
    :members:

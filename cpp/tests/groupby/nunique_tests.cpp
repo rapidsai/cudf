@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,8 +125,9 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::NUNIQUE>;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                 {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+    {true, true, true, true, true, true, true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                                  {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
@@ -150,8 +151,9 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::NUNIQUE>;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                                 {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+    {true, true, true, true, true, true, true, true, false, true, true, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
                                                  {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
@@ -176,8 +178,9 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::NUNIQUE>;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                                 {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+    {true, true, true, true, true, true, true, true, false, true, true, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
                                                  {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
@@ -204,7 +207,7 @@ TYPED_TEST(groupby_nunique_test, dictionary)
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 3, 1, 2, 2, 1, 0, 3, 2, 4, 4, 2},
-                                     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+                                     {true, true, true, true, true, true, true, true, false, true, true, true, true, true});
   cudf::test::dictionary_column_wrapper<V>  vals({0, 1, 2, 2, 3, 4, 0, 6, 7, 8, 9, 0, 0, 0},
                                      {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 

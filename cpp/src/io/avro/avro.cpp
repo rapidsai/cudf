@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include "avro.hpp"
 
-#include <cstring>
+#include <array>
 #include <unordered_map>
 
 namespace cudf {
@@ -199,8 +199,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     // Read the next sync markers and ensure they match the first ones we
     // encountered.  If they don't, we have to assume the data is corrupted,
     // and thus, we terminate processing immediately.
-    uint64_t const sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
-    bool valid_sync_markers =
+    std::array const sync_marker = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    bool const valid_sync_markers =
       ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
     if (!valid_sync_markers) { return false; }
   }
@@ -218,10 +218,10 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->selected_data_size = m_cur - m_start;
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {
-    type_kind_e kind                = md->schema[i].kind;
-    logicaltype_kind_e logical_kind = md->schema[i].logical_kind;
+    type_kind_e const kind                = md->schema[i].kind;
+    logicaltype_kind_e const logical_kind = md->schema[i].logical_kind;
 
-    bool is_supported_kind = ((kind > type_null) && (kind < type_record));
+    bool const is_supported_kind = ((kind > type_null) && (kind < type_record));
     if (is_supported_logical_type(logical_kind) || is_supported_kind) {
       column_desc col;
       int parent_idx       = md->schema[i].parent_idx;
@@ -302,7 +302,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
   // Empty schema
   if (json_str == "[]") return true;
 
-  char depthbuf[MAX_SCHEMA_DEPTH];
+  std::array<char, MAX_SCHEMA_DEPTH> depthbuf{};
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
@@ -341,7 +341,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
   m_cur               = m_base;
   m_end               = m_base + json_str.length();
   while (more_data()) {
-    int c = *m_cur++;
+    int const c = *m_cur++;
     switch (c) {
       case '"':
         str = get_str();
@@ -485,8 +485,8 @@ std::string schema_parser::get_str()
   char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
-  int32_t len = static_cast<int32_t>(cur - start - 1);
-  m_cur       = cur;
+  auto len = static_cast<int32_t>(cur - start - 1);
+  m_cur    = cur;
   return s.assign(start, std::max(len, 0));
 }
 

@@ -24,11 +24,13 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -36,7 +38,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <limits>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -251,7 +252,7 @@ struct HasherDispatcher {
   {
     Element const& key = input_col.element<Element>(row_index);
     if (isnan(key)) {
-      Element nan = std::numeric_limits<Element>::quiet_NaN();
+      Element nan = cuda::std::numeric_limits<Element>::quiet_NaN();
       hasher->process_fixed_width(nan);
     } else if (key == Element{0.0}) {
       hasher->process_fixed_width(Element{0.0});
@@ -503,7 +504,7 @@ bool inline sha_leaf_type_check(data_type dt)
 template <typename Hasher>
 std::unique_ptr<column> sha_hash(table_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   if (input.num_rows() == 0) { return cudf::make_empty_column(cudf::type_id::STRING); }
 
@@ -512,12 +513,13 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   CUDF_EXPECTS(
     std::all_of(
       input.begin(), input.end(), [](auto const& col) { return sha_leaf_type_check(col.type()); }),
-    "Unsupported column type for hash function.");
+    "Unsupported column type for hash function.",
+    cudf::data_type_error);
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(Hasher::digest_size);
   auto [offsets_column, bytes] =
-    cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
   auto chars   = rmm::device_uvector<char>(bytes, stream, mr);
   auto d_chars = chars.data();
@@ -525,19 +527,20 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(input.num_rows()),
-                   [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     Hasher hasher(d_chars + (row_index * Hasher::digest_size));
-                     for (auto const& col : device_input) {
-                       if (col.is_valid(row_index)) {
-                         cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), HasherDispatcher(&hasher, col), row_index);
-                       }
-                     }
-                     hasher.finalize();
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    [d_chars, device_input = *device_input] __device__(auto row_index) {
+      Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * Hasher::digest_size));
+      for (auto const& col : device_input) {
+        if (col.is_valid(row_index)) {
+          cudf::type_dispatcher<dispatch_storage_type>(
+            col.type(), HasherDispatcher(&hasher, col), row_index);
+        }
+      }
+      hasher.finalize();
+    });
 
   return make_strings_column(input.num_rows(), std::move(offsets_column), chars.release(), 0, {});
 }

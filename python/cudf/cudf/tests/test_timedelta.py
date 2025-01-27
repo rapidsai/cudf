@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import _utils as utils
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils, assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -1467,3 +1467,64 @@ def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
         got = op(gsr1, gsr2)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "method, kwargs",
+    [
+        ["sum", {}],
+        ["mean", {}],
+        ["median", {}],
+        ["std", {}],
+        ["std", {"ddof": 0}],
+    ],
+)
+def test_tdi_reductions(method, kwargs):
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = getattr(pd_tdi, method)(**kwargs)
+    expected = getattr(cudf_tdi, method)(**kwargs)
+    assert result == expected
+
+
+def test_tdi_asi8():
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.asi8
+    expected = cudf_tdi.asi8
+    assert_eq(result, expected)
+
+
+def test_tdi_unit():
+    pd_tdi = pd.TimedeltaIndex(
+        ["1 day", "2 days", "3 days"], dtype="timedelta64[ns]"
+    )
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.unit
+    expected = cudf_tdi.unit
+    assert result == expected
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_series_total_seconds(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.total_seconds()
+    actual = gsr.dt.total_seconds()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_index_total_seconds(request, data, dtype):
+    gi = cudf.Index(data, dtype=dtype)
+    pi = gi.to_pandas()
+
+    expected = pi.total_seconds()
+    actual = gi.total_seconds()
+    assert_eq(expected, actual)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
  * @brief Class definition for cudf::struct_view.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A non-owning, immutable view of device data that represents
@@ -29,4 +29,4 @@ namespace cudf {
  */
 class struct_view {};
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

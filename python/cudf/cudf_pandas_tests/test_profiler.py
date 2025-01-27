@@ -1,9 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
 import subprocess
+
+import pytest
 
 from cudf.pandas import LOADED, Profiler
 
@@ -13,14 +15,20 @@ if not LOADED:
 import numpy as np
 import pandas as pd
 
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="function names change across versions of pandas, so making sure it only runs on latest version of pandas",
+)
 def test_profiler():
-    np.random.seed(42)
+    rng = np.random.default_rng(seed=42)
     with Profiler() as profiler:
         df = pd.DataFrame(
             {
-                "idx": np.random.randint(0, 10, 1000),
-                "data": np.random.rand(1000),
+                "idx": rng.integers(0, 10, 1000),
+                "data": rng.random(1000),
             }
         )
         sums = df.groupby("idx").sum()
@@ -30,11 +38,14 @@ def test_profiler():
 
     per_function_stats = profiler.per_function_stats
     assert set(per_function_stats) == {
+        "Timestamp",
         "DataFrame",
         "DataFrame.groupby",
-        "DataFrameGroupBy.sum",
+        "GroupBy.sum",
         "DataFrame.sum",
         "Series.__getitem__",
+        "Timedelta",
+        "_Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
         assert (
@@ -47,8 +58,8 @@ def test_profiler():
     calls = [
         "pd.DataFrame",
         "",
-        "np.random.randint",
-        "np.random.rand",
+        "rng.integers",
+        "rng.random",
         'df.groupby("idx").sum',
         'df.sum()["data"]',
         "np.isclose",

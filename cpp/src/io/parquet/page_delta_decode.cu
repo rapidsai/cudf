@@ -315,7 +315,7 @@ CUDF_KERNEL void __launch_bounds__(96)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -440,7 +440,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_byte_array_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -579,15 +579,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets
-  int value_count = nesting_info_base[leaf_level_index].value_count;
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
+  if (not s->col.is_large_string_col) {
+    int value_count = nesting_info_base[leaf_level_index].value_count;
 
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (!has_repetition) { value_count -= s->first_row; }
 
-  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -605,7 +608,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
   __shared__ __align__(8) uint8_t const* page_string_data;
   __shared__ size_t string_offset;
 
@@ -738,15 +741,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets
-  int value_count = nesting_info_base[leaf_level_index].value_count;
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
+  if (not s->col.is_large_string_col) {
+    int value_count = nesting_info_base[leaf_level_index].value_count;
 
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (!has_repetition) { value_count -= s->first_row; }
 
-  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  }
 
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;

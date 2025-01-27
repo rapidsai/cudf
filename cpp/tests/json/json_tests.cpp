@@ -19,7 +19,6 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/json/json.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -76,7 +75,7 @@ std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
   cudf::strings_column_view strings(col);
   cudf::strings_column_view targets(whitespace);
   cudf::strings_column_view replacements(repl);
-  return cudf::strings::replace(strings, targets, replacements);
+  return cudf::strings::replace_multiple(strings, targets, replacements);
 }
 
 struct JsonPathTests : public cudf::test::BaseFixture {};
@@ -454,8 +453,8 @@ TEST_F(JsonPathTests, GetJsonObjectFilter)
 TEST_F(JsonPathTests, GetJsonObjectNullInputs)
 {
   {
-    std::string str("{\"a\" : \"b\"}");
-    cudf::test::strings_column_wrapper input({str, str, str, str}, {1, 0, 1, 0});
+    std::string str(R"({"a" : "b"})");
+    cudf::test::strings_column_wrapper input({str, str, str, str}, {true, false, true, false});
 
     std::string json_path("$.a");
     auto result_raw = cudf::get_json_object(cudf::strings_column_view(input), json_path);
@@ -652,7 +651,7 @@ TEST_F(JsonPathTests, MixedOutput)
   // various queries on:
   // clang-format off
   std::vector<std::string> input_strings {
-    "{\"a\": {\"b\" : \"c\"}}",
+    R"({"a": {"b" : "c"}})",
 
     "{"
       "\"a\": {\"b\" : \"c\"},"
@@ -786,7 +785,7 @@ TEST_F(JsonPathTests, StripQuotes)
   // but with string_quotes_from_single_strings false, we expect
   // "b"   (with quotes)
   {
-    std::string str("{\"a\" : \"b\"}");
+    std::string str(R"({"a" : "b"})");
     cudf::test::strings_column_wrapper input({str, str});
 
     cudf::get_json_object_options options;
@@ -827,7 +826,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
   // various queries on:
   std::vector<std::string> input_strings{
     // clang-format off
-    "{\'a\': {\'b\' : \'c\'}}",
+    R"({'a': {'b' : 'c'}})",
 
     "{"
       "\'a\': {\'b\' : \"c\"},"
@@ -902,7 +901,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
   {
     std::vector<std::string> input_strings{
       // clang-format off
-      "{\"item\" : [{\"key\" : \"value[\"}]}",
+      R"({"item" : [{"key" : "value["}]})",
       // clang-format on
     };
 
@@ -927,7 +926,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
   {
     std::vector<std::string> input_strings{
       // clang-format off
-      "{\"a\" : \"[}{}][][{[\\\"}}[\\\"]\"}",
+      R"({"a" : "[}{}][][{[\"}}[\"]"})",
       // clang-format on
     };
 
@@ -958,8 +957,8 @@ TEST_F(JsonPathTests, EscapeSequences)
 
   std::vector<std::string> input_strings{
     // clang-format off
-    "{\"a\" : \"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"}",
-    "{\"a\" : \"\\u1248 \\uacdf \\uACDF \\u10EF\"}"
+    R"({"a" : "\" \\ \/ \b \f \n \r \t"})",
+    R"({"a" : "\u1248 \uacdf \uACDF \u10EF"})"
     // clang-format on
   };
 

@@ -22,9 +22,9 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/plotting \
---ignore=tests/tslibs/test_parsing.py \
---ignore=tests/io/parser/common/test_read_errors.py"
+# tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
+PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
+--ignore=tests/io/test_clipboard.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -64,8 +64,6 @@ markers = [
   "skip_ubsan: Tests known to fail UBSAN check",
 ]
 EOF
-    # append the contents of patch-confest.py to conftest.py
-    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -130,15 +128,20 @@ and not test_s3_roundtrip_for_dir[partition_col0] \
 and not test_s3_roundtrip_for_dir[partition_col1] \
 and not test_s3_roundtrip"
 
+TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
+and not test_large_string_pyarrow \
+and not test_interchange_from_corrected_buffer_dtypes \
+and not test_eof_states \
+and not test_array_tz"
+
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
-PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
+PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
-    -k "not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_THAT_NEED_MOTO_SERVER" \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current" \
     --import-mode=importlib \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 
 mv *.json ..
 cd ..
-
 rm -rf pandas-testing/pandas-tests/

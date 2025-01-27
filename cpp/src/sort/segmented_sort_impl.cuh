@@ -23,10 +23,10 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
 
@@ -76,8 +76,10 @@ struct column_fast_sort_fn {
                                                 input.size(),
                                                 mask_allocation_policy::NEVER,
                                                 stream,
-                                                rmm::mr::get_current_device_resource());
+                                                cudf::get_current_device_resource_ref());
     mutable_column_view output_view = temp_col->mutable_view();
+    auto temp_indices               = cudf::column(
+      cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0), stream);
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -117,7 +119,7 @@ struct column_fast_sort_fn {
     fast_sort_impl(ascending,
                    input.begin<T>(),
                    output_view.begin<T>(),
-                   indices.begin<size_type>(),
+                   temp_indices.view().begin<size_type>(),
                    indices.begin<size_type>(),
                    input.size(),
                    segment_offsets.size() - 1,
@@ -160,7 +162,7 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                     column_view const& segment_offsets,
                                                     order const& column_order,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
@@ -227,7 +229,7 @@ std::unique_ptr<column> segmented_sorted_order_common(
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   if (keys.num_rows() == 0 || keys.num_columns() == 0) {
     return cudf::make_empty_column(type_to_id<size_type>());
@@ -304,16 +306,17 @@ std::unique_ptr<table> segmented_sort_by_key_common(table_view const& values,
                                                     std::vector<order> const& column_order,
                                                     std::vector<null_order> const& null_precedence,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");
-  auto sorted_order = segmented_sorted_order_common<method>(keys,
-                                                            segment_offsets,
-                                                            column_order,
-                                                            null_precedence,
-                                                            stream,
-                                                            rmm::mr::get_current_device_resource());
+  auto sorted_order =
+    segmented_sorted_order_common<method>(keys,
+                                          segment_offsets,
+                                          column_order,
+                                          null_precedence,
+                                          stream,
+                                          cudf::get_current_device_resource_ref());
   // Gather segmented sort of child value columns
   return detail::gather(values,
                         sorted_order->view(),

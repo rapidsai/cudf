@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/udf/udf_apis.hpp>
 #include <cudf/strings/udf/udf_string.cuh>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -69,8 +70,8 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
                                                          rmm::cuda_stream_view stream)
 {
   return std::make_unique<rmm::device_buffer>(
-    std::move(cudf::strings::detail::create_string_vector_from_column(
-                cudf::strings_column_view(input), stream, rmm::mr::get_current_device_resource())
+    std::move(cudf::strings::create_string_vector_from_column(
+                cudf::strings_column_view(input), stream, cudf::get_current_device_resource_ref())
                 .release()));
 }
 
@@ -159,6 +160,8 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
 }  // namespace detail
 
 // external APIs
+
+int get_cuda_build_version() { return CUDA_VERSION; }
 
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {

@@ -1,8 +1,9 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import subprocess
 import sys
 
 import pytest
+from packaging import version
 
 IS_CUDA_11 = False
 IS_CUDA_12 = False
@@ -14,9 +15,12 @@ except ModuleNotFoundError:
 # do not test cuda 12 if pynvjitlink isn't present
 HAVE_PYNVJITLINK = False
 try:
+    import numba
     import pynvjitlink  # noqa: F401
 
-    HAVE_PYNVJITLINK = True
+    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse(
+        "0.58"
+    )
 except ModuleNotFoundError:
     pass
 

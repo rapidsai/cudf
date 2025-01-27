@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
 /**
@@ -23,7 +22,7 @@
  * @brief Class definition for cudf::dictionary_column_view
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
@@ -47,7 +46,7 @@ class dictionary_column_view : private column_view {
   dictionary_column_view(column_view const& dictionary_column);
   dictionary_column_view(dictionary_column_view&&)      = default;  ///< Move constructor
   dictionary_column_view(dictionary_column_view const&) = default;  ///< Copy constructor
-  ~dictionary_column_view()                             = default;
+  ~dictionary_column_view() override                    = default;
 
   /**
    * @brief Move assignment operator
@@ -124,4 +123,4 @@ class dictionary_column_view : private column_view {
 namespace dictionary {  // defined here for doxygen output
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

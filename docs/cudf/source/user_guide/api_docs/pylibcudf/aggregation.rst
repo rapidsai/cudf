@@ -2,5 +2,5 @@
 aggregation
 ===========
 
-.. automodule:: cudf._lib.pylibcudf.aggregation
+.. automodule:: pylibcudf.aggregation
    :members:

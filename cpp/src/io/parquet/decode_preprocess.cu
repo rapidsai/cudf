@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
+
+namespace cg = cooperative_groups;
 
 namespace {
 
@@ -55,7 +57,7 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
     delta_binary_decoder string_lengths;
     auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
     // distance is size of string data
-    return static_cast<size_type>(std::distance(string_start, s->data_end));
+    return static_cast<size_type>(thrust::distance(string_start, s->data_end));
   }
   return 0;
 }
@@ -163,7 +165,8 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
       // expensive to compute. For now we're going with the latter.
       else {
-        str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
+        str_len = gpuInitStringDescriptors<true, unused_state_buf>(
+          s, nullptr, target_pos, cg::this_thread_block());
       }
       break;
 
@@ -340,8 +343,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // the level stream decoders
-  __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
-  __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
+  __shared__ rle_run def_runs[rle_run_buffer_size];
+  __shared__ rle_run rep_runs[rle_run_buffer_size];
   rle_stream<level_t, preprocess_block_size, rolling_buf_size>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
