@@ -122,6 +122,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_filter_and_limit[single-parquet-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_csv-write_csv]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_parquet-write_parquet]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_csv-write_csv]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_ndjson-write_ndjson]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[read_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[<lambda>-write_csv]": "Need to add include_file_path to IR",
@@ -209,6 +211,8 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
+    # Fails in CI, but passes locally
+    "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
 }
 
 
