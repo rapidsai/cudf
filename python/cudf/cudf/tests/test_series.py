@@ -3019,3 +3019,24 @@ def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)
     actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)
+
+
+def test_non_strings_dtype_object_pandas_compat_raises():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            cudf.Series([1], dtype=object)
+
+
+def test_series_dataframe_count_float():
+    gs = cudf.Series([1, 2, 3, None, np.nan, 10], nan_as_null=False)
+    ps = cudf.Series([1, 2, 3, None, np.nan, 10])
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(ps.count(), gs.count())
+        assert_eq(ps.to_frame().count(), gs.to_frame().count())
+    with cudf.option_context("mode.pandas_compatible", False):
+        assert_eq(gs.count(), gs.to_pandas(nullable=True).count())
+        assert_eq(
+            gs.to_frame().count(),
+            gs.to_frame().to_pandas(nullable=True).count(),
+        )

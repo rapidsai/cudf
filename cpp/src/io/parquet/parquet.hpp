@@ -20,6 +20,8 @@
 
 #include <cudf/types.hpp>
 
+#include <cuda/std/optional>
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -92,10 +94,10 @@ struct LogicalType {
     BSON
   };
   Type type;
-  std::optional<DecimalType> decimal_type;
-  std::optional<TimeType> time_type;
-  std::optional<TimestampType> timestamp_type;
-  std::optional<IntType> int_type;
+  cuda::std::optional<DecimalType> decimal_type;
+  cuda::std::optional<TimeType> time_type;
+  cuda::std::optional<TimestampType> timestamp_type;
+  cuda::std::optional<IntType> int_type;
 
   LogicalType(Type tp = UNDEFINED) : type(tp) {}
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
@@ -103,36 +105,36 @@ struct LogicalType {
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
-  [[nodiscard]] constexpr bool is_time_millis() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_millis() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
   }
 
-  [[nodiscard]] constexpr bool is_time_micros() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_micros() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MICROS;
   }
 
-  [[nodiscard]] constexpr bool is_time_nanos() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_nanos() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::NANOS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_millis() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_millis() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_micros() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_micros() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_nanos() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_nanos() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
   }
-  [[nodiscard]] constexpr int8_t bit_width() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int8_t bit_width() const
   {
     return type == INTEGER ? int_type->bitWidth : -1;
   }
@@ -144,7 +146,7 @@ struct LogicalType {
     return type == DECIMAL ? decimal_type->scale : -1;
   }
 
-  [[nodiscard]] constexpr int32_t precision() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t precision() const
   {
     return type == DECIMAL ? decimal_type->precision : -1;
   }
