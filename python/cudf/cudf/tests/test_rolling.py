@@ -526,3 +526,7 @@ def test_pandas_compat_int_nan_min_periods(klass):
         result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
     expected = getattr(pd, klass)(data).rolling(2, min_periods=1).sum()
     assert_eq(result, expected)
+
+    result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
+    expected = getattr(cudf, klass)([None, 1, 3, 2, 4, 10, 17])
+    assert_eq(result, expected)
