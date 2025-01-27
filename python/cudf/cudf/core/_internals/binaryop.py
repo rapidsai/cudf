@@ -50,10 +50,10 @@ def binaryop(
         plc.binaryop.binary_operation(
             lhs.to_pylibcudf(mode="read")
             if isinstance(lhs, Column)
-            else lhs.device_value.c_value,
+            else lhs.device_value,
             rhs.to_pylibcudf(mode="read")
             if isinstance(rhs, Column)
-            else rhs.device_value.c_value,
+            else rhs.device_value,
             plc.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),
         )
