@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ struct delta_binary_decoder {
 
   // returns the value stored in the `value` array at index
   // `rolling_index<delta_rolling_buf_size>(idx)`. If `idx` is `0`, then return `first_value`.
-  constexpr zigzag128_t value_at(size_type idx)
+  __device__ constexpr zigzag128_t value_at(size_type idx)
   {
     return idx == 0 ? first_value : value[rolling_index<delta_rolling_buf_size>(idx)];
   }
@@ -113,7 +113,7 @@ struct delta_binary_decoder {
   // returns the number of values encoded in the block data. when all_values is true,
   // account for the first value in the header. otherwise just count the values encoded
   // in the mini-block data.
-  constexpr uint32_t num_encoded_values(bool all_values)
+  __device__ constexpr uint32_t num_encoded_values(bool all_values)
   {
     return value_count == 0 ? 0 : all_values ? value_count : value_count - 1;
   }
