@@ -23,6 +23,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -328,21 +329,19 @@ character_normalizer::character_normalizer(bool do_lower_case,
   auto sorted = std::move(
     cudf::sort(cudf::table_view({special_tokens.parent()}), {}, {}, stream)->release().front());
   if (do_lower_case) {
-    sorted = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
+    auto lower = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
+    auto upper = cudf::strings::to_upper(cudf::strings_column_view(sorted->view()), stream);
+    sorted     = cudf::concatenate(std::vector{lower->view(), upper->view()}, stream);
   }
   auto tokens_view = cudf::strings::detail::create_string_vector_from_column(
     cudf::strings_column_view(sorted->view()), stream, cudf::get_current_device_resource_ref());
   auto const begin =
     cudf::detail::make_counting_transform_iterator(0, size_bytes_fn{tokens_view.data()});
-  auto const end       = begin + tokens_view.size();
-  auto const min_width = thrust::reduce(rmm::exec_policy(stream),
-                                        begin,
-                                        end,
-                                        std::numeric_limits<cudf::size_type>::max(),
-                                        thrust::minimum<cudf::size_type>{});
-  auto const max_width =
-    thrust::reduce(rmm::exec_policy(stream), begin, end, 0, thrust::maximum<cudf::size_type>{});
-  printf("%ld special tokens, min=%d, max=%d\n", tokens_view.size(), min_width, max_width);
+  auto const end      = begin + tokens_view.size();
+  auto const init_min = std::numeric_limits<cudf::size_type>::max();
+  auto const min_width =
+    thrust::reduce(rmm::exec_policy(stream), begin, end, init_min, thrust::minimum{});
+  auto const max_width = thrust::reduce(rmm::exec_policy(stream), begin, end, 0, thrust::maximum{});
   CUDF_EXPECTS(tokens_view.is_empty() || (min_width > 2 && max_width <= 6),
                "Expected special tokens to be between 3 and 6 bytes including [] brackets",
                std::invalid_argument);
@@ -376,11 +375,10 @@ __device__ bool check_special_token(cudf::device_span<cudf::string_view const> s
                                     int64_t total_bytes)
 {
   char const ch  = d_chars[idx];
-  auto begin     = (ch == '[' || idx <= 6) ? d_chars + idx : d_chars + idx - 6L;
+  auto begin     = ch == '[' ? d_chars + idx : d_chars + std::max(0L, idx - 6);
   auto end       = ch == ']' ? d_chars + idx + 1 : d_chars + idx + std::min(6L, total_bytes - idx);
   char const mch = ch == '[' ? ']' : '[';
-  // printf("(%p,%ld),%c,(%p,%p)\n", d_chars, total_bytes, ch, begin, end);
-  auto fnd = thrust::find(thrust::seq, begin, end, mch);
+  auto fnd       = thrust::find(thrust::seq, begin, end, mch);
   if (fnd == end) { return false; }
   if (mch == ']') {
     end = fnd + 1;  // include ']'
@@ -389,12 +387,8 @@ __device__ bool check_special_token(cudf::device_span<cudf::string_view const> s
   }
   auto const size  = static_cast<cudf::size_type>(thrust::distance(begin, end));
   auto const token = cudf::string_view(begin, size);
-  char p[8]        = {0};
-  memcpy(p, begin, min(size, 7));
-  p[min(size, 7)] = 0;
   auto rtn = thrust::find(thrust::seq, special_tokens.begin(), special_tokens.end(), token) !=
              special_tokens.end();
-  printf("(%p,%d)=%s: %c/%d\n", begin, size, p, ch, int(rtn));
   return rtn;
 }
 
@@ -451,12 +445,6 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
         auto const new_cp = replacement[k];
         if (new_cp) {
           num_new_bytes += cp_to_utf8(new_cp, reinterpret_cast<char*>(replacement + k));
-          // printf("%ld: k=%d, ncp=0x%04x, u8=0x%04x, bytes=%d\n",
-          //        idx,
-          //        k,
-          //        new_cp,
-          //        replacement[k],
-          //        num_new_bytes);
         }
       }
     }
@@ -464,16 +452,11 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
 
   if (idx < total_bytes) {
     chars_per_thread[idx] = num_new_bytes;
-    // printf("%ld: nb=%d\n", idx, (int)num_new_bytes);
-
     d_output += idx * MAX_NEW_CHARS;
 #pragma unroll
     for (int k = 0; k < MAX_NEW_CHARS; ++k) {
       *d_output++ = replacement[k];
     }
-    // printf(
-    //   "%ld: r0=0x%04x,r1=0x%04x,r2=0x%04x\n", idx, replacement[0], replacement[1],
-    //   replacement[2]);
   }
 }
 
@@ -516,6 +499,27 @@ rmm::device_uvector<cudf::size_type> compute_sizes(int8_t const* sizes,
 
   return output_sizes;
 }
+
+template <typename InputIterator, typename OutputIterator, typename T>
+OutputIterator remove_copy_safe(InputIterator first,
+                                InputIterator last,
+                                OutputIterator result,
+                                T const& value,
+                                rmm::cuda_stream_view stream)
+{
+  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                                  static_cast<std::size_t>(std::numeric_limits<int>::max()));
+
+  auto itr = first;
+  while (itr != last) {
+    auto const copy_end =
+      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    result = thrust::remove_copy(rmm::exec_policy(stream), itr, copy_end, result, value);
+    itr    = copy_end;
+  }
+  return result;
+}
+
 }  // namespace
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    character_normalizer const& normalizer,
@@ -544,6 +548,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto d_code_points = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   auto d_sizes       = rmm::device_uvector<int8_t>(chars_size, stream);
+  nvtxRangePushA("normalizer_kernel");
   normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
     chars_size,
@@ -553,6 +558,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     parameters->get_special_tokens(),
     d_code_points.data(),
     d_sizes.data());
+  stream.synchronize();
+  nvtxRangePop();
 
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
@@ -565,17 +572,15 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto [offsets, total_size] = cudf::strings::detail::make_offsets_child_column(
     output_sizes.begin(), output_sizes.end(), stream, mr);
 
-  // printf("total_size=%ld\n", total_size);
-
   // create output chars and use remove-copy(0) on d_code_points
   rmm::device_uvector<char> chars(total_size, stream, mr);
   auto begin = reinterpret_cast<char const*>(d_code_points.begin());
   auto end   = reinterpret_cast<char const*>(d_code_points.end());
-  // thrust::for_each_n(rmm::exec_policy(stream),
-  //                    thrust::make_counting_iterator<int>(0),
-  //                    d_code_points.size(),
-  //                    [begin] __device__(auto idx) { printf("0x%02x\n", (int)begin[idx]); });
-  thrust::remove_copy(rmm::exec_policy_nosync(stream), begin, end, chars.data(), 0);
+  nvtxRangePushA("remove_copy");
+  // thrust::remove_copy(rmm::exec_policy_nosync(stream), begin, end, chars.data(), 0);
+  remove_copy_safe(begin, end, chars.data(), 0, stream);
+  stream.synchronize();
+  nvtxRangePop();
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),

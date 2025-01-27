@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -48,8 +49,11 @@ static void bench_normalize(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = nvtext::normalize_spaces(input); });
   } else {
     bool const to_lower = (normalize_type == "to_lower");
+    auto spt = cudf::strings_column_view(cudf::make_empty_column(cudf::type_id::STRING)->view());
+    auto normalizer = nvtext::create_character_normalizer(to_lower, spt);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = nvtext::normalize_characters(input, to_lower);
+      // auto result = nvtext::normalize_characters(input, to_lower);
+      auto result = nvtext::normalize_characters(input, *normalizer);
     });
   }
 }
@@ -57,6 +61,6 @@ static void bench_normalize(nvbench::state& state)
 NVBENCH_BENCH(bench_normalize)
   .set_name("normalize")
   .add_int64_axis("min_width", {0})
-  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("max_width", {128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("type", {"spaces", "characters", "to_lower"});
