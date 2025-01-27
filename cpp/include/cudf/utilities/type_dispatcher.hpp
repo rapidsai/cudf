@@ -46,14 +46,14 @@ namespace CUDF_EXPORT cudf {
  * For example:
  *
  * ```
- * return cudf::type_to_id<int32_t>();        // Returns INT32
+ * return cudf::base_type_to_id<int32_t>();        // Returns INT32
  * ```
  *
- * @tparam T The type to map to a `cudf::type_id`
+ * @tparam T The non-cv type to map to a `cudf::type_id`
  * @return The `cudf::type_id` corresponding to the specified type
  */
 template <typename T>
-CUDF_HOST_DEVICE inline constexpr type_id type_to_id()
+CUDF_HOST_DEVICE inline constexpr type_id base_type_to_id()
 {
   return type_id::EMPTY;
 };
@@ -131,6 +131,27 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 }
 
 /**
+ * @brief Maps a C++ type to its corresponding `cudf::type_id`
+ *
+ * When explicitly passed a template argument of a given type, returns the
+ * appropriate `type_id` enum for the specified C++ type.
+ *
+ * For example:
+ *
+ * ```
+ * return cudf::type_to_id<int32_t>();        // Returns INT32
+ * ```
+ *
+ * @tparam T The type to map to a `cudf::type_id`
+ * @return The `cudf::type_id` corresponding to the specified type
+ */
+template <typename T>
+constexpr inline type_id type_to_id()
+{
+  return base_type_to_id<std::remove_cv_t<T>>();
+}
+
+/**
  * @brief Macro used to define a mapping between a concrete C++ type and a
  *`cudf::type_id` enum.
 
@@ -140,7 +161,7 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 #ifndef CUDF_TYPE_MAPPING
 #define CUDF_TYPE_MAPPING(Type, Id)                        \
   template <>                                              \
-  constexpr inline type_id type_to_id<Type>()              \
+  constexpr inline type_id base_type_to_id<Type>()       \
   {                                                        \
     return Id;                                             \
   }                                                        \
@@ -194,7 +215,7 @@ CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT)
  * @return id for 'char' type
  */
 template <>  // CUDF_TYPE_MAPPING(char,INT8) causes duplicate id_to_type_impl definition
-constexpr inline type_id type_to_id<char>()
+constexpr inline type_id base_type_to_id<char>()
 {
   return type_id::INT8;
 }
