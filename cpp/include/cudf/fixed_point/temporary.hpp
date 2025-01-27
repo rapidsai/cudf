@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ auto to_string(T value) -> std::string
 }
 
 template <typename T>
-constexpr auto abs(T value)
+CUDF_HOST_DEVICE constexpr auto abs(T value)
 {
   return value >= 0 ? value : -value;
 }
@@ -72,7 +72,7 @@ CUDF_HOST_DEVICE inline auto max(T lhs, T rhs)
 }
 
 template <typename BaseType>
-constexpr auto exp10(int32_t exponent)
+CUDF_HOST_DEVICE constexpr auto exp10(int32_t exponent)
 {
   BaseType value = 1;
   while (exponent > 0)

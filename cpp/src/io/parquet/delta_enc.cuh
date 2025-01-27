@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
 
 namespace cudf::io::parquet::detail {
 
@@ -57,7 +59,7 @@ constexpr int buffer_size           = 2 * block_size;
 static_assert(block_size % 128 == 0);
 static_assert(values_per_mini_block % 32 == 0);
 
-constexpr int rolling_idx(int index) { return rolling_index<buffer_size>(index); }
+__device__ constexpr int rolling_idx(int index) { return rolling_index<buffer_size>(index); }
 
 // Version of bit packer that can handle up to 64 bits values.
 // T is the type to use for processing. if nbits <= 32 use uint32_t, otherwise unsigned long long
@@ -67,8 +69,8 @@ template <typename scratch_type>
 inline __device__ void bitpack_mini_block(
   uint8_t* dst, uleb128_t val, uint32_t count, uint8_t nbits, void* temp_space)
 {
-  using wide_type =
-    std::conditional_t<std::is_same_v<scratch_type, unsigned long long>, __uint128_t, uint64_t>;
+  using wide_type = cuda::std::
+    conditional_t<cuda::std::is_same_v<scratch_type, unsigned long long>, __uint128_t, uint64_t>;
   using cudf::detail::warp_size;
   scratch_type constexpr mask = sizeof(scratch_type) * 8 - 1;
   auto constexpr div          = sizeof(scratch_type) * 8;
@@ -235,7 +237,7 @@ class delta_binary_packer {
     size_type const idx = _current_idx + t;
     T const delta       = idx < _num_values ? subtract(_buffer[delta::rolling_idx(idx)],
                                                  _buffer[delta::rolling_idx(idx - 1)])
-                                            : std::numeric_limits<T>::max();
+                                            : cuda::std::numeric_limits<T>::max();
 
     // Find min delta for the block.
     auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cub::Min());
