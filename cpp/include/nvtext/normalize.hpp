@@ -130,6 +130,9 @@ std::unique_ptr<cudf::column> normalize_characters(
  * and lower-casing cannot be performed without also removing accents.
  * However, if the accented character is already lower-case, then only the
  * accent is removed.
+ *
+ * If `special_tokens` are included the padding around the `[]` is not
+ * enforced if the character between them match one of the given tokens.
  */
 struct character_normalizer {
   /**
@@ -140,14 +143,13 @@ struct character_normalizer {
    * @param do_lower_case If true, upper-case characters are converted to
    *        lower-case and accents are stripped from those characters.
    *        If false, accented and upper-case characters are not transformed.
-   * @param allow_special_tokens If true, the following character sequences are not
-   *        normalized if encountered in the input:
-   *        `[BOS] [EOS] [UNK] [SEP] [PAD] [CLS] [MASK]`
+   * @param special_tokens Individual sequences including `[]` brackets.
+   *        For example: `[BOS]`, `[EOS]`, `[UNK]`, `[SEP]`, `[PAD]`, `[CLS]`, `[MASK]`
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    */
   character_normalizer(bool do_lower_case,
-                       bool allow_special_tokens         = true,
+                       cudf::strings_column_view const& special_tokens,
                        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   ~character_normalizer();
@@ -167,16 +169,14 @@ struct character_normalizer {
  * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
- * @param allow_special_tokens If true, the following character sequences are not
- *        normalized if encountered in the input:
- *        `[BOS] [EOS] [UNK] [SEP] [PAD] [CLS] [MASK]`
+ * @param special_tokens Individual sequences including `[]` brackets
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Object to be used with nvtext::tokenize_with_vocabulary
  */
 std::unique_ptr<character_normalizer> create_character_normalizer(
   bool do_lower_case,
-  bool allow_special_tokens         = true,
+  cudf::strings_column_view const& special_tokens,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
