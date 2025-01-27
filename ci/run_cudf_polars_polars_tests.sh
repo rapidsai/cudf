@@ -38,8 +38,11 @@ else
     fi
 fi
 
-# Reusing a variable defined as an array as a string
-DESELECTED_TEST_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
+DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
+
+# Don't quote the `DESELECTED_...` variable because `pytest` can't handle
+# multiple quoted arguments inline
+# shellcheck disable=SC2086
 python -m pytest \
        --import-mode=importlib \
        --cache-clear \
@@ -47,6 +50,6 @@ python -m pytest \
        -p cudf_polars.testing.plugin \
        -v \
        --tb=native \
-       "${DESELECTED_TEST_STR}" \
+       $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests
