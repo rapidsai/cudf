@@ -71,7 +71,7 @@
 namespace cudf::io::orc::detail {
 
 template <typename T>
-[[nodiscard]] constexpr int varint_size(T val)
+[[nodiscard]] CUDF_HOST_DEVICE constexpr int varint_size(T val)
 {
   auto len = 1u;
   while (val > 0x7f) {
