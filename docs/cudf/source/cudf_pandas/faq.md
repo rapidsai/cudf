@@ -154,6 +154,8 @@ The following methods can be used to retrieve the actual `cudf` or `pandas` obje
 - `as_gpu_object()`: This method returns the `cudf` object from the proxy.
 - `as_cpu_object()`: This method returns the `pandas` object from the proxy.
 
+If, `as_gpu_object()` is called on a proxy array, it will return a `cupy` array and `as_cpu_object` will return a `numpy` array.
+
 Here is an example of how to use these methods:
 
 ```python
