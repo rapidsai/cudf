@@ -142,6 +142,26 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
+## How do I know if an object is a `cudf.pandas` proxy object?
+
+To determine if an object is a `cudf.pandas` proxy object, you can use the `is_cudf_pandas_obj` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
+
+```python
+from cudf.pandas import is_cudf_pandas_obj
+
+obj = ...  # Your object here
+if is_cudf_pandas_obj(obj):
+    print("The object is a cudf.pandas proxy object.")
+else:
+    print("The object is not a cudf.pandas proxy object.")
+```
+
+There are various APIs to detect `Series`, `DataFrame`, `Index` and `ndarray`'s separately:
+
+* `is_cudf_pandas_series`: Detects if the object is a `cudf.pandas` proxy `Series`.
+* `is_cudf_pandas_dataframe`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
+* `is_cudf_pandas_index`: Detects if the object is a `cudf.pandas` proxy `Index`.
+* `is_cudf_pandas_nd_array`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
 
 ## How can I access the underlying GPU or CPU objects?
 
