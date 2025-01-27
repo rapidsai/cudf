@@ -1348,12 +1348,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search.search_sorted(
-            sources,
-            values,
-            side,
-            ascending=ascending,
-            na_position=na_position,
+        outcol = ColumnBase.from_pylibcudf(
+            search.search_sorted(
+                sources,
+                values,
+                side,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
 
         # Return result as cupy array if the values is non-scalar

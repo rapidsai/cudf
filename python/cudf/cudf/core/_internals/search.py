@@ -1,12 +1,14 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+
+if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
 
 
 @acquire_spill_lock()
@@ -16,7 +18,7 @@ def search_sorted(
     side: Literal["left", "right"],
     ascending: bool = True,
     na_position: Literal["first", "last"] = "last",
-) -> ColumnBase:
+) -> plc.Column:
     """Find indices where elements should be inserted to maintain order
 
     Parameters
@@ -43,11 +45,9 @@ def search_sorted(
         plc.search,
         "lower_bound" if side == "left" else "upper_bound",
     )
-    return ColumnBase.from_pylibcudf(
-        func(
-            plc.Table([col.to_pylibcudf(mode="read") for col in source]),
-            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
-            column_order,
-            null_precedence,
-        )
+    return func(
+        plc.Table([col.to_pylibcudf(mode="read") for col in source]),
+        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+        column_order,
+        null_precedence,
     )

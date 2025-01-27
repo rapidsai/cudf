@@ -121,17 +121,21 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="left",
-        ascending=sort_vals.is_monotonic_increasing,
+    lower_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="left",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
-    upper_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="right",
-        ascending=sort_vals.is_monotonic_increasing,
+    upper_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="right",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds

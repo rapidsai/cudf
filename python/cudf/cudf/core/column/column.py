@@ -1812,12 +1812,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 "Column searchsorted expects values to be column of same dtype"
             )
-        return search.search_sorted(  # type: ignore[return-value]
-            [self],
-            [value],
-            side=side,
-            ascending=ascending,
-            na_position=na_position,
+        return ColumnBase.from_pylibcudf(
+            search.search_sorted(  # type: ignore[return-value]
+                [self],
+                [value],
+                side=side,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
 
     def unique(self) -> Self:
