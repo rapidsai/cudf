@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,6 +8,13 @@ import warnings
 import pylibcudf
 import rmm.mr
 
+from ._wrappers.numpy import is_cudf_pandas_nd_array
+from ._wrappers.pandas import (
+    is_cudf_pandas_dataframe,
+    is_cudf_pandas_index,
+    is_cudf_pandas_obj,
+    is_cudf_pandas_series,
+)
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler

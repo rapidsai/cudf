@@ -65,6 +65,14 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
+from cudf.pandas import (
+    is_cudf_pandas_dataframe,
+    is_cudf_pandas_index,
+    is_cudf_pandas_nd_array,
+    is_cudf_pandas_obj,
+    is_cudf_pandas_series,
+)
+
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
 cudf = xpd._fsproxy_fast
@@ -1891,3 +1899,34 @@ def test_dataframe_get_fast_slow_methods():
     df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     assert isinstance(df.as_gpu_object(), cudf.DataFrame)
     assert isinstance(df.as_cpu_object(), pd.DataFrame)
+
+
+def test_is_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    index = xpd.Index([1, 2, 3])
+    assert is_cudf_pandas_obj(s)
+    assert is_cudf_pandas_obj(df)
+    assert is_cudf_pandas_obj(index)
+    assert is_cudf_pandas_obj(index.values)
+
+    assert is_cudf_pandas_series(s)
+    assert is_cudf_pandas_dataframe(df)
+    assert is_cudf_pandas_index(index)
+    assert is_cudf_pandas_nd_array(index.values)
+
+    for obj in [s, df, index, index.values]:
+        assert not is_cudf_pandas_obj(obj._fsproxy_slow)
+        assert not is_cudf_pandas_obj(obj._fsproxy_fast)
+
+        assert not is_cudf_pandas_series(obj._fsproxy_slow)
+        assert not is_cudf_pandas_series(obj._fsproxy_fast)
+
+        assert not is_cudf_pandas_dataframe(obj._fsproxy_slow)
+        assert not is_cudf_pandas_dataframe(obj._fsproxy_fast)
+
+        assert not is_cudf_pandas_index(obj._fsproxy_slow)
+        assert not is_cudf_pandas_index(obj._fsproxy_fast)
+
+        assert not is_cudf_pandas_nd_array(obj._fsproxy_slow)
+        assert not is_cudf_pandas_nd_array(obj._fsproxy_fast)

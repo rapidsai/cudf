@@ -37,6 +37,7 @@ from ..fast_slow_proxy import (
     _FunctionProxy,
     _maybe_wrap_result,
     _Unusable,
+    is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
@@ -1710,6 +1711,22 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
+
+
+def is_cudf_pandas_obj(obj):
+    return is_proxy_object(obj)
+
+
+def is_cudf_pandas_dataframe(obj):
+    return is_proxy_object(obj) and isinstance(obj, DataFrame)
+
+
+def is_cudf_pandas_series(obj):
+    return is_proxy_object(obj) and isinstance(obj, Series)
+
+
+def is_cudf_pandas_index(obj):
+    return is_proxy_object(obj) and isinstance(obj, Index)
 
 
 # timestamps and timedeltas are not proxied, but non-proxied

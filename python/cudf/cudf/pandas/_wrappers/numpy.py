@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -176,3 +176,7 @@ _ndarray_flags = make_intermediate_proxy_type(
     cupy._core.flags.Flags,
     _numpy_flagsobj,
 )
+
+
+def is_cudf_pandas_nd_array(obj):
+    return is_proxy_object(obj) and isinstance(obj, ndarray)
