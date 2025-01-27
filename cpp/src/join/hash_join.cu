@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,11 +371,16 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{compute_hash_table_size(build.num_rows()),
-                cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-                cuco::empty_value{cudf::detail::JoinNoneValue},
-                stream.value(),
-                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}},
+    _hash_table{build.num_rows(),
+                CUCO_DESIRED_LOAD_FACTOR,
+                cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
+                                           cudf::detail::JoinNoneValue}},
+                {},
+                {},
+                {},
+                {},
+                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+                stream.value()},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}

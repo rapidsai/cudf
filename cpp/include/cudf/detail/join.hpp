@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/static_multimap.cuh>
+#include <cuco/static_multiset.cuh>
 
 #include <cstddef>
 #include <memory>
@@ -55,12 +55,14 @@ enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_AN
 template <typename Hasher>
 struct hash_join {
  public:
-  using map_type =
-    cuco::static_multimap<hash_value_type,
-                          cudf::size_type,
-                          cuda::thread_scope_device,
-                          cudf::detail::cuco_allocator<char>,
-                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+  using map_type = cuco::static_multiset<
+    cuco::pair<cudf::hash_value_type, cudf::size_type>,
+    cuco::extent<std::size_t>,
+    cuda::thread_scope_device,
+    thrust::equal_to<cuco::pair<cudf::hash_value_type, cudf::size_type>>
+      cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<cudf::hash_value_type>, Hasher>,
+    cudf::detail::cuco_allocator<char>,
+    cuco::storage<2>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
