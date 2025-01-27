@@ -327,6 +327,9 @@ def _(
 
     with set_node(translator.visitor, node.input_left):
         inp_left = translator.translate_ir(n=None)
+        # TODO: There's bug in the polars type coercion phase. Use
+        # translate_named_expr directly once it is resolved.
+        # Tracking issue: https://github.com/pola-rs/polars/issues/20935
         left_on = translate_expr_and_maybe_fix_binop_args(translator, node.left_on)
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
