@@ -74,12 +74,13 @@ TypeLhs scalar_host_value(cudf::scalar const& lhs)
 {
   auto sclr   = static_cast<ScalarType const&>(lhs);
   auto stream = cudf::get_default_stream();
-  if constexpr (std::is_same_v<ScalarType, cudf::string_scalar>)
+  if constexpr (std::is_same_v<ScalarType, cudf::string_scalar>) {
     return sclr.to_string(stream);
-  else if constexpr (std::is_same_v<ScalarType, cudf::fixed_point_scalar<TypeLhs>>)
+  } else if constexpr (std::is_same_v<ScalarType, cudf::fixed_point_scalar<TypeLhs>>) {
     return sclr.fixed_point_value(stream);
-  else
+  } else {
     return sclr.value(stream);
+  }
 }
 
 template <typename TypeOut,
