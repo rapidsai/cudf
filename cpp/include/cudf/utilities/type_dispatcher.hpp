@@ -161,7 +161,7 @@ constexpr inline type_id type_to_id()
 #ifndef CUDF_TYPE_MAPPING
 #define CUDF_TYPE_MAPPING(Type, Id)                        \
   template <>                                              \
-  constexpr inline type_id base_type_to_id<Type>()       \
+  constexpr inline type_id base_type_to_id<Type>()         \
   {                                                        \
     return Id;                                             \
   }                                                        \
