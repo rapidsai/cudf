@@ -114,7 +114,7 @@ def np_to_pa_dtype(dtype: np.dtype) -> pa.DataType:
             return pa.duration(time_unit)
         # default fallback unit is ns
         return pa.duration("ns")
-    return _np_pa_dtypes[cudf.dtype(dtype).type]
+    return _np_pa_dtypes[dtype.type]
 
 
 def _find_common_type_decimal(dtypes):
@@ -669,7 +669,7 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.LIST] = np.dtype("object")
 
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.STRING]
+CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]
 
 # Type dispatch loops similar to what are found in `np.add.types`
 # In NumPy, whether or not an op can be performed between two
