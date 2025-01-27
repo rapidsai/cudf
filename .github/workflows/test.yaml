@@ -39,7 +39,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1-testing"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
@@ -92,7 +92,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1-testing"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
