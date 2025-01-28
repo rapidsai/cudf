@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -67,7 +67,7 @@ def scatter(
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
         if isinstance(sources[0], cudf._lib.column.Column)
-        else [slr.device_value.c_value for slr in sources],  # type: ignore[union-attr]
+        else [slr.device_value for slr in sources],  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )

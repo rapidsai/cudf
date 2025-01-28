@@ -438,12 +438,21 @@ dependencies:
         matrices:
           - matrix:
               cuda: "12.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu12==4.1.0.6
           - matrix:
               cuda: "11.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu11==4.1.0.6
+          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
+          # (e.g. for DLFW and pip devcontainers)
+          - matrix:
+              use_cuda_wheels: "false"
+            packages:
+          # if no matching matrix selectors passed, list the unsuffixed packages
+          # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
               - nvidia-nvcomp==4.1.0.6
@@ -474,7 +483,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=14.0.0,<19.0.0a0
+          - pyarrow>=14.0.0,<20.0.0a0
       - output_types: [requirements, pyproject]
         packages:
           # pyarrow 17.0.0 wheels have a subtle issue around threading that
@@ -482,8 +491,8 @@ dependencies:
           # be highly dependent on the exact build configuration, so we'll just
           # avoid 17.0.0 for now unless we observe similar issues in future
           # releases as well.
-          - pyarrow>=14.0.0,<19.0.0a0; platform_machine=='x86_64'
-          - pyarrow>=14.0.0,<19.0.0a0,!=17.0.0; platform_machine=='aarch64'
+          - pyarrow>=14.0.0,<20.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<20.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -708,7 +717,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0a0
+          - &numba-dep numba>=0.59.1,<0.61.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -835,6 +845,7 @@ dependencies:
           - matrix: {dependencies: "latest"}
             packages:
               - *numba-cuda-dep
+              - *numba-dep
               - pandas==2.2.3
           - matrix:
             packages:
@@ -917,6 +928,7 @@ dependencies:
         packages:
           - dask-cuda==25.2.*,>=0.0.0a0
           - *numba-cuda-dep
+          - *numba-dep
     specific:
       - output_types: [conda, requirements]
         matrices:
