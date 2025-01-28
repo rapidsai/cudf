@@ -1711,9 +1711,9 @@ def test_notebook_slow_repr():
         "tbody",
         "</table>",
     }:
-        assert (
-            string in html_result
-        ), f"Expected string {string} not found in the output"
+        assert string in html_result, (
+            f"Expected string {string} not found in the output"
+        )
 
 
 def test_numpy_ndarray_isinstancecheck(array):

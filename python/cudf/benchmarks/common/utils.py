@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Common utilities for fixture creation and benchmarking."""
 
@@ -101,13 +101,13 @@ def benchmark_with_object(
         "frame_or_index",
     )
     assert cls in supported_classes, (
-        f"cls {cls} is invalid, choose from " f"{', '.join(supported_classes)}"
+        f"cls {cls} is invalid, choose from {', '.join(supported_classes)}"
     )
 
     if not isinstance(dtype, list):
         dtype = [dtype]
     assert all(dt in column_generators for dt in dtype), (
-        f"The only supported dtypes are " f"{', '.join(column_generators)}"
+        f"The only supported dtypes are {', '.join(column_generators)}"
     )
 
     dtype_str = "_dtype_" + "_or_".join(dtype)
