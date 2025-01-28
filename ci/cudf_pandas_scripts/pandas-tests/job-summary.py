@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -68,17 +68,27 @@ def emoji_failed(x):
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
 main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
 total_usage = main_df["_slow_function_call"] + main_df["_fast_function_call"]
-main_df["CPU Usage"] = ((main_df["_slow_function_call"] / total_usage) * 100.0).round(1)
-main_df["GPU Usage"] = ((main_df["_fast_function_call"] / total_usage) * 100.0).round(1)
+main_df["CPU Usage"] = (
+    (main_df["_slow_function_call"] / total_usage) * 100.0
+).round(1)
+main_df["GPU Usage"] = (
+    (main_df["_fast_function_call"] / total_usage) * 100.0
+).round(1)
 
 total_usage = pr_df["_slow_function_call"] + pr_df["_fast_function_call"]
-pr_df["CPU Usage"] = ((pr_df["_slow_function_call"] / total_usage) * 100.0).round(1)
-pr_df["GPU Usage"] = ((pr_df["_fast_function_call"] / total_usage) * 100.0).round(1)
+pr_df["CPU Usage"] = (
+    (pr_df["_slow_function_call"] / total_usage) * 100.0
+).round(1)
+pr_df["GPU Usage"] = (
+    (pr_df["_fast_function_call"] / total_usage) * 100.0
+).round(1)
 
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
 
-gpu_usage_rate_change = abs(pr_df["GPU Usage"].mean() - main_df["GPU Usage"].mean())
+gpu_usage_rate_change = abs(
+    pr_df["GPU Usage"].mean() - main_df["GPU Usage"].mean()
+)
 pr_df["CPU Usage"] = pr_df["CPU Usage"].fillna(0)
 pr_df["GPU Usage"] = pr_df["GPU Usage"].fillna(0)
 main_df["CPU Usage"] = main_df["CPU Usage"].fillna(0)
@@ -92,8 +102,12 @@ diff_df["GPU Usage"] = diff_df["GPU Usage"].round(1).fillna(0)
 pr_df["CPU Usage"] = pr_df["CPU Usage"].astype(str) + "%"
 pr_df["GPU Usage"] = pr_df["GPU Usage"].astype(str) + "%"
 
-pr_df = pr_df[["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]]
-diff_df = diff_df[["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]]
+pr_df = pr_df[
+    ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
+]
+diff_df = diff_df[
+    ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
+]
 diff_df.columns = diff_df.columns + "_diff"
 diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
 diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
