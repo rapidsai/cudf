@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -57,7 +57,7 @@ def test_run_cudf_pandas_with_script_with_cmd_args_check_cudf():
     expect = _run_python(cudf_pandas=False, command=input_args_and_code)
 
     assert "cudf" in res.stdout
-    assert "cudf" not in expect.stdout
+    assert "<module 'pandas' from" in expect.stdout
 
 
 def test_cudf_pandas_script_repl():

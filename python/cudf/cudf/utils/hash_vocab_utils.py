@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -290,8 +290,8 @@ def hash_vocab(
             inner_table_coeffs,
             offsets_into_ht,
         )
-        assert (
-            val == value
-        ), f"Incorrect value found. Got {val} expected {value}"
+        assert val == value, (
+            f"Incorrect value found. Got {val} expected {value}"
+        )
 
     print("All present tokens return correct value.")

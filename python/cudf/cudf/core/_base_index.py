@@ -322,11 +322,11 @@ class BaseIndex(Serializable):
         elif is_integer(level):
             if level != 0:
                 raise IndexError(
-                    f"Cannot get level: {level} " f"for index with 1 level"
+                    f"Cannot get level: {level} for index with 1 level"
                 )
             return self
         else:
-            raise KeyError(f"Requested level with name {level} " "not found")
+            raise KeyError(f"Requested level with name {level} not found")
 
     @property
     def names(self):

@@ -2051,7 +2051,7 @@ def as_column(
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = cudf.dtype(
-                f'i{cudf.get_option("default_integer_bitwidth")//8}'
+                f"i{cudf.get_option('default_integer_bitwidth') // 8}"
             )
         if dtype is not None:
             return column.astype(dtype)
@@ -2394,7 +2394,7 @@ def as_column(
     }:
         if isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)):
             dtype = dtype.to_pandas()
-        elif dtype == object:
+        elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
             # Unlike pandas, interpret object as "str" instead of "python object"
             dtype = "str"
         ser = pd.Series(arbitrary, dtype=dtype)
@@ -2600,7 +2600,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     newsize = sum(map(len, objs))
     if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
         raise MemoryError(
-            f"Result of concat cannot have " f"size > {SIZE_TYPE_DTYPE}_MAX"
+            f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
         )
     elif newsize == 0:
         return column_empty(0, head.dtype)
