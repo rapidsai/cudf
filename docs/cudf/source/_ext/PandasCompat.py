@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION
+# Copyright (c) 2021-2025, NVIDIA CORPORATION
 
 # This file is adapted from official sphinx tutorial for `todo` extension:
 # https://www.sphinx-doc.org/en/master/development/tutorials/todo.html
@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import cast
 
 from docutils import nodes
-from docutils.nodes import Element
 from docutils.parsers.rst import Directive
 from docutils.parsers.rst.directives.admonitions import BaseAdmonition
 from sphinx import addnodes
@@ -39,7 +38,6 @@ class PandasCompatListDirective(Directive):
 
 
 class PandasCompatDirective(BaseAdmonition, SphinxDirective):
-
     # this enables content in the directive
     has_content = True
 
@@ -119,18 +117,24 @@ class PandasCompatListProcessor:
         self.builder = app.builder
         self.config = app.config
         self.env = app.env
-        self.domain = cast(PandasCompatDomain, app.env.get_domain("pandascompat"))
+        self.domain = cast(
+            PandasCompatDomain, app.env.get_domain("pandascompat")
+        )
         self.document = new_document("")
         self.process(doctree, docname)
 
     def process(self, doctree: nodes.document, docname: str) -> None:
-        pandascompats = [v for vals in self.domain.pandascompats.values() for v in vals]
+        pandascompats = [
+            v for vals in self.domain.pandascompats.values() for v in vals
+        ]
         for node in doctree.findall(PandasCompatList):
             if not self.config.include_pandas_compat:
                 node.parent.remove(node)
                 continue
 
-            content: list[Element | None] = [nodes.target()] if node.get("ids") else []
+            content: list[nodes.Element | None] = (
+                [nodes.target()] if node.get("ids") else []
+            )
 
             for pandascompat in pandascompats:
                 # Create a copy of the pandascompat node
@@ -149,13 +153,16 @@ class PandasCompatListProcessor:
         para = nodes.paragraph()
         newnode = nodes.reference("", "")
         innernode = nodes.emphasis(
-            get_translation_sphinx("[source]"), get_translation_sphinx("[source]")
+            get_translation_sphinx("[source]"),
+            get_translation_sphinx("[source]"),
         )
         newnode["refdocname"] = pandascompat["docname"]
         try:
-            newnode["refuri"] = self.builder.get_relative_uri(
-                docname, pandascompat["docname"]
-            ) + "#" + pandascompat["target"]["refid"]
+            newnode["refuri"] = (
+                self.builder.get_relative_uri(docname, pandascompat["docname"])
+                + "#"
+                + pandascompat["target"]["refid"]
+            )
         except NoUri:
             # ignore if no URI can be determined, e.g. for LaTeX output
             pass

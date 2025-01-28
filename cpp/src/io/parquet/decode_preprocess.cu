@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
     delta_binary_decoder string_lengths;
     auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
     // distance is size of string data
-    return static_cast<size_type>(std::distance(string_start, s->data_end));
+    return static_cast<size_type>(thrust::distance(string_start, s->data_end));
   }
   return 0;
 }
