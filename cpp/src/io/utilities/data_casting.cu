@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,7 @@ __device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
  * @brief Writes the UTF-8 byte sequence to \p out_it and returns the number of bytes written to
  * \p out_it
  */
-constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
+__device__ constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
 {
   auto const bytes = (out_it == nullptr) ? strings::detail::bytes_in_char_utf8(character)
                                          : strings::detail::from_char_utf8(character, out_it);

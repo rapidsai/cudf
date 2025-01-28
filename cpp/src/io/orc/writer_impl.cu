@@ -71,7 +71,7 @@
 namespace cudf::io::orc::detail {
 
 template <typename T>
-[[nodiscard]] constexpr int varint_size(T val)
+[[nodiscard]] CUDF_HOST_DEVICE constexpr int varint_size(T val)
 {
   auto len = 1u;
   while (val > 0x7f) {
@@ -509,7 +509,7 @@ size_t RLE_stream_size(TypeKind kind, size_t count)
     case TypeKind::DOUBLE:
       return div_rounding_up_unsafe(count, gpu::encode_block_size) *
              (gpu::encode_block_size * max_varint_size<int64_t>() + 2);
-    default: CUDF_FAIL("Unsupported ORC type for RLE stream size");
+    default: CUDF_FAIL("Unsupported ORC type for RLE stream size: " + std::to_string(kind));
   }
 }
 

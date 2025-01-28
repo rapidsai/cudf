@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ class split_device_span {
   {
   }
 
-  [[nodiscard]] constexpr reference operator[](size_type i) const
+  [[nodiscard]] __device__ constexpr reference operator[](size_type i) const
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }

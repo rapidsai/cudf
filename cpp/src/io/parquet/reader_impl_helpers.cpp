@@ -30,6 +30,7 @@
 
 #include <functional>
 #include <numeric>
+#include <optional>
 #include <regex>
 
 namespace cudf::io::parquet::detail {
