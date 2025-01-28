@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import operator
 import warnings
@@ -287,8 +287,7 @@ def test_binary_ufunc_series_array(
                 and has_nulls
             ),
             reason=(
-                "cudf and pandas incompatible casting nans "
-                "to nulls in binops"
+                "cudf and pandas incompatible casting nans to nulls in binops"
             ),
         )
     )
