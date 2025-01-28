@@ -68,9 +68,6 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import (
-    _extract_from_proxy,
-)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -630,19 +627,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
-        if cudf.get_option("mode.pandas_compatible"):
-            data, data_extracted = _extract_from_proxy(data)
-            index, _ = _extract_from_proxy(index)
-
-            if (
-                data_extracted
-                and index is None
-                and dtype is None
-                and name is None
-                and copy is False
-            ):
-                self.__dict__.update(data.__dict__)
-                return
         index_from_data = None
         name_from_data = None
         if data is None:
