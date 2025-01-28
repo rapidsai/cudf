@@ -186,7 +186,8 @@ pandas_obj = proxy_obj.as_cpu_object()
 # Now you can use `cudf_obj` and `pandas_obj` with libraries that are cudf or pandas aware
 ```
 
-Be aware that if `cudf.pandas` objects are converted to their underlying `cudf` or `pandas` types, the `cudf.pandas` proxy no longer controls them. This means that automatic conversion between GPU and CPU types and automatic fallback from GPU to CPU functionality will not occur.
+Be aware that if `cudf.pandas` objects are converted to their underlying `cudf` or `pandas` types, the `cudf.pandas` proxy no longer controls them.
+This means that automatic conversion between GPU and CPU types and automatic fallback from GPU to CPU functionality will not occur.
 
 (are-there-any-known-limitations)=
 ## Are there any known limitations?
