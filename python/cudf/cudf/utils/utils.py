@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -451,17 +451,3 @@ def _datetime_timedelta_find_and_replace(
     except TypeError:
         result_col = original_column.copy(deep=True)
     return result_col  # type: ignore
-
-
-def _extract_from_proxy(proxy: Any, fast: bool = True) -> tuple[Any, bool]:
-    """
-    Extract the object from a proxy object.
-    """
-    try:
-        return (
-            (proxy.as_gpu_object(), True)
-            if fast
-            else (proxy.as_cpu_object(), True)
-        )
-    except AttributeError:
-        return (proxy, False)
