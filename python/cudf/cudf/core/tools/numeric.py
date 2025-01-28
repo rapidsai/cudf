@@ -158,7 +158,7 @@ def to_numeric(
         raise ValueError("Unrecognized datatype")
 
     # str->float conversion may require lower precision
-    if col.dtype == np.dtype(np.int32):
+    if col.dtype == np.dtype(np.float32):
         col = col.astype(np.dtype(np.float64))
 
     if downcast:

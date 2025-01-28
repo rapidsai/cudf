@@ -369,7 +369,7 @@ class ListDtype(_BaseDtype):
             self._typ = pa.list_(element_type._typ)
         else:
             element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
-                element_type
+                cudf.dtype(element_type)
             )
             self._typ = pa.list_(element_type)
 
@@ -580,7 +580,7 @@ class StructDtype(_BaseDtype):
 
     def __init__(self, fields):
         pa_fields = {
-            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(v)
+            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(cudf.dtype(v))
             for k, v in fields.items()
         }
         self._typ = pa.struct(pa_fields)
