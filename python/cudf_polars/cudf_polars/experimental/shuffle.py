@@ -52,7 +52,7 @@ class Shuffle(IR):
         self.schema = schema
         self.keys = keys
         self.options = options
-        self._non_child_args = ()
+        self._non_child_args = (schema, keys, options)
         self.children = (df,)
 
     def get_hashable(self) -> Hashable:
@@ -66,9 +66,16 @@ class Shuffle(IR):
         )
 
     @classmethod
-    def do_evaluate(cls, df: DataFrame):  # pragma: no cover
+    def do_evaluate(
+        cls,
+        schema: Schema,
+        keys: tuple[NamedExpr, ...],
+        options: dict[str, Any],
+        df: DataFrame,
+    ):  # pragma: no cover
         """Evaluate and return a dataframe."""
-        raise NotImplementedError("Shuffle.do_evaluate is not supported.")
+        # Single-partition Shuffle evaluation is a no-op
+        return df
 
 
 def _partition_dataframe(
