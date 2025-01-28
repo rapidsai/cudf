@@ -132,6 +132,8 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@test-nvks-runners
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
   cpp-linters:
     secrets: inherit
@@ -153,12 +155,16 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@test-nvks-runners
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@test-nvks-runners
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
   conda-python-cudf-tests:
     needs: [conda-python-build, changed-files]
@@ -166,6 +172,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@test-nvks-runners
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
@@ -175,6 +183,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@test-nvks-runners
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: "ci/test_python_other.sh"
   conda-java-tests:
@@ -184,7 +194,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
     with:
       build_type: pull-request
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1-testing"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
@@ -215,7 +225,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@test-nvks-runners
     with:
       build_type: pull-request
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1-testing"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
@@ -225,7 +235,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@test-nvks-runners
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
-      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
       script: "ci/build_wheel_libcudf.sh"
   wheel-build-pylibcudf:
@@ -233,6 +244,8 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@test-nvks-runners
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: "ci/build_wheel_pylibcudf.sh"
   wheel-build-cudf:
@@ -240,6 +253,8 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@test-nvks-runners
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
@@ -248,6 +263,8 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@test-nvks-runners
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
+      # Only test amd64 nodes on NVKS, there is no ARM capacity yet
+      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
   wheel-build-cudf-polars:
