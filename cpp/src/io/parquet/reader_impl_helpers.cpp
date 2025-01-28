@@ -1040,8 +1040,7 @@ std::tuple<int64_t,
            std::vector<row_group_info>,
            std::vector<size_t>,
            size_type,
-           size_type,
-           size_type>
+           surviving_row_groups>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
@@ -1070,9 +1069,9 @@ aggregate_reader_metadata::select_row_groups(
     }
   }();
 
-  // Initialize to the total number of row groups
-  size_type num_stats_filtered_row_groups = total_row_groups;
-  size_type num_bloom_filtered_row_groups = total_row_groups;
+  // Pair to store the number of row groups after stats and bloom filtering respectively. Initialize
+  // to total_row_groups.
+  surviving_row_groups num_row_groups_after_filters{total_row_groups, total_row_groups};
 
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
   // if filter is not empty, then gather row groups to read after predicate pushdown
@@ -1094,8 +1093,7 @@ aggregate_reader_metadata::select_row_groups(
       input_row_group_indices = row_group_indices;
     }
     // Predicate pushdown: Filter row groups using stats and bloom filters
-    std::tie(
-      filtered_row_group_indices, num_stats_filtered_row_groups, num_bloom_filtered_row_groups) =
+    std::tie(filtered_row_group_indices, num_row_groups_after_filters) =
       filter_row_groups(sources,
                         input_row_group_indices,
                         total_row_groups,
@@ -1181,9 +1179,10 @@ aggregate_reader_metadata::select_row_groups(
         }
       }
     }
-    // Since no filtering was applied, set these to the number of adjusted input row groups
-    num_stats_filtered_row_groups = total_row_groups;
-    num_bloom_filtered_row_groups = total_row_groups;
+
+    // Since no row groups were filtered, set the number of row groups after filters to the number
+    // of adjusted input row groups
+    num_row_groups_after_filters = {total_row_groups, total_row_groups};
   }
 
   return {rows_to_skip,
@@ -1191,8 +1190,7 @@ aggregate_reader_metadata::select_row_groups(
           std::move(selection),
           std::move(num_rows_per_source),
           total_row_groups,
-          num_stats_filtered_row_groups,
-          num_bloom_filtered_row_groups};
+          std::move(num_row_groups_after_filters)};
 }
 
 std::tuple<std::vector<input_column_info>,

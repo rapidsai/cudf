@@ -1724,8 +1724,12 @@ TEST_F(ParquetReaderTest, FilterSupported2)
     auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr);
     auto table_with_metadata = cudf::io::read_parquet(builder);
     auto result              = table_with_metadata.tbl->view();
+    auto const& metadata     = table_with_metadata.metadata;
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
+    EXPECT_EQ(metadata.num_input_row_groups, 4);
+    EXPECT_FALSE(metadata.num_row_groups_after_stats_filter.has_value());
+    EXPECT_FALSE(metadata.num_row_groups_after_bloom_filter.has_value());
   };
 
   // row groups min, max:
@@ -2682,59 +2686,100 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterTyped.parquet");
   auto const written_table   = src.view();
 
-  // Filtering AST
-  auto literal_value = []() {
-    if constexpr (cudf::is_timestamp<T>()) {
-      // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
-      return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
-    } else if constexpr (cudf::is_duration<T>()) {
-      // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
-      return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
-    } else if constexpr (std::is_same_v<T, cudf::string_view>) {
-      // table[0] < "000010000"
-      return cudf::string_scalar("000010000");  // i (0-20,000)
+  auto const test_predicate_pushdown = [&](
+                                         cudf::ast::literal const& literal,
+                                         cudf::size_type const expected_total_row_groups,
+                                         cudf::size_type const expected_stats_filtered_row_groups) {
+    auto col_name_0 = cudf::ast::column_name_reference("col0");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+    // Expected result
+    auto predicate = cudf::compute_column(written_table, ref_filter);
+    EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+      << "Predicate filter should return a boolean";
+    auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+
+    // Reading with Predicate Pushdown
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .filter(filter_expression);
+    auto result       = cudf::io::read_parquet(read_opts);
+    auto result_table = result.tbl->view();
+
+    // Tests
+    EXPECT_EQ(static_cast<int>(written_table.column(0).type().id()),
+              static_cast<int>(result_table.column(0).type().id()))
+      << "col0 type mismatch";
+
+    // To make sure AST filters out some elements if row groups must be filtered
+    if (expected_stats_filtered_row_groups < expected_total_row_groups) {
+      EXPECT_LT(expected->num_rows(), written_table.num_rows());
     } else {
-      // table[0] < 0 or 100u
-      return cudf::numeric_scalar<T>((100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+      EXPECT_LE(expected->num_rows(), written_table.num_rows());
     }
-  }();
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+    EXPECT_EQ(result.metadata.num_input_row_groups, expected_total_row_groups);
+    EXPECT_TRUE(result.metadata.num_row_groups_after_stats_filter.has_value());
+    EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
+              expected_stats_filtered_row_groups);
+    EXPECT_TRUE(result.metadata.num_row_groups_after_bloom_filter.has_value());
+    EXPECT_EQ(result.metadata.num_row_groups_after_bloom_filter.value(),
+              expected_stats_filtered_row_groups);
+  };
 
   // The `literal_value` and stats should filter out 2 out of 4 row groups.
-  auto constexpr expected_total_row_groups          = 4;
-  auto constexpr expected_stats_filtered_row_groups = 2;
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 2;
 
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_name_0        = cudf::ast::column_name_reference("col0");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
-  auto col_ref_0         = cudf::ast::column_reference(0);
-  auto ref_filter        = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    // Filtering AST
+    auto literal_value = []() {
+      if constexpr (cudf::is_timestamp<T>()) {
+        // table[0] < 10000 timestamp days/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::timestamp_scalar<T>(T(typename T::duration(10000)));  // i (0-20,000)
+      } else if constexpr (cudf::is_duration<T>()) {
+        // table[0] < 10000 day/seconds/milliseconds/microseconds/nanoseconds
+        return cudf::duration_scalar<T>(T(10000));  // i (0-20,000)
+      } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+        // table[0] < "000010000"
+        return cudf::string_scalar("000010000");  // i (0-20,000)
+      } else {
+        // table[0] < 0 or 100u
+        return cudf::numeric_scalar<T>(
+          (100 - 100 * std::is_signed_v<T>));  // i/100 (-100-100/ 0-200)
+      }
+    }();
 
-  // Expected result
-  auto predicate = cudf::compute_column(written_table, ref_filter);
-  EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
-    << "Predicate filter should return a boolean";
-  auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+    auto literal = cudf::ast::literal(literal_value);
+    test_predicate_pushdown(literal, expected_total_row_groups, expected_stats_filtered_row_groups);
+  }
 
-  // Reading with Predicate Pushdown
-  cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .filter(filter_expression);
-  auto result       = cudf::io::read_parquet(read_opts);
-  auto result_table = result.tbl->view();
+  // The `literal_value` and stats should not filter any of the 4 row groups.
+  {
+    auto constexpr expected_total_row_groups          = 4;
+    auto constexpr expected_stats_filtered_row_groups = 4;
 
-  // tests
-  EXPECT_EQ(int(written_table.column(0).type().id()), int(result_table.column(0).type().id()))
-    << "col0 type mismatch";
-  // To make sure AST filters out some elements
-  EXPECT_LT(expected->num_rows(), written_table.num_rows());
-  EXPECT_EQ(result_table.num_rows(), expected->num_rows());
-  EXPECT_EQ(result_table.num_columns(), expected->num_columns());
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+    // Filtering AST (minimum value)
+    auto literal_value = []() {
+      if constexpr (cudf::is_timestamp<T>()) {
+        return cudf::timestamp_scalar<T>(T(typename T::duration(0)));
+      } else if constexpr (cudf::is_duration<T>()) {
+        return cudf::duration_scalar<T>(T(0));
+      } else if constexpr (std::is_same_v<T, cudf::string_view>) {
+        // table[0] < "000010000"
+        return cudf::string_scalar("000000000");
+      } else {
+        // table[0] < 0 or 100u
+        return cudf::numeric_scalar<T>(0);
+      }
+    }();
 
-  // To make sure we filtered row groups
-  EXPECT_EQ(result.metadata.num_input_row_groups, expected_total_row_groups);
-  EXPECT_EQ(result.metadata.num_stats_filtered_row_groups, expected_stats_filtered_row_groups);
-  EXPECT_LE(result.metadata.num_stats_filtered_row_groups, result.metadata.num_input_row_groups);
+    auto literal = cudf::ast::literal(literal_value);
+    test_predicate_pushdown(literal, expected_total_row_groups, expected_stats_filtered_row_groups);
+  }
 }
 
 //////////////////////

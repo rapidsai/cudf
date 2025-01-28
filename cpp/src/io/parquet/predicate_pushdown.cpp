@@ -388,7 +388,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::tuple<std::optional<std::vector<std::vector<size_type>>>, size_type, size_type>
+std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_groups>
 aggregate_reader_metadata::filter_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> input_row_group_indices,
@@ -478,8 +478,7 @@ aggregate_reader_metadata::filter_row_groups(
   // Return bloom filtered row group indices iff collected
   return {
     bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : filtered_row_group_indices,
-    num_stats_filtered_row_groups,
-    num_bloom_filtered_row_groups};
+    {num_stats_filtered_row_groups, num_bloom_filtered_row_groups}};
 }
 
 // convert column named expression to column index reference expression
