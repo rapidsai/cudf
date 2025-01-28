@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -703,7 +703,7 @@ class ColumnAccessor(abc.MutableMapping):
                 level = 0
             if level != 0:
                 raise IndexError(
-                    f"Too many levels: Index has only 1 level, not {level+1}"
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
                 )
 
             if isinstance(mapper, Mapping):

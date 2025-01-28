@@ -8811,7 +8811,9 @@ def test_dataframe_mode(df, numeric_only, dropna):
 
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
-
+    if len(actual.columns) == 0:
+        # pandas < 3.0 returns an Index[object] instead of RangeIndex
+        actual.columns = expected.columns
     assert_eq(expected, actual, check_dtype=False)
 
 
@@ -11253,3 +11255,17 @@ def test_dataframe_multiindex_column_names(names):
     df.columns.names = names
     assert_eq(df, pdf)
     assert_eq(df.columns.names, pdf.columns.names)
+
+
+@pytest.mark.parametrize("pdf", _dataframe_na_data())
+def test_roundtrip_dataframe_plc_table(pdf):
+    expect = cudf.DataFrame.from_pandas(pdf)
+    actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("data", [None, {}])
+def test_empty_construction_rangeindex_columns(data):
+    result = cudf.DataFrame(data=data).columns
+    expected = pd.RangeIndex(0)
+    pd.testing.assert_index_equal(result, expected, exact=True)
