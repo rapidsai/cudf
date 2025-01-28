@@ -64,9 +64,9 @@ void transform_operation(mutable_column_view output,
 
     unsigned int arg = 0;
     arg_types.emplace(arg++, index_type);
-    arg_types.emplace(arg++, device_storage_type_name(output.type()) + " * ");
+    arg_types.emplace(arg++, device_storage_type_name(output.type()) + "  *  __restrict__");
     std::for_each(inputs.begin(), inputs.end(), [&arg, &arg_types](column_view const& input) {
-      arg_types.emplace(arg++, device_storage_type_name(input.type()) + " const * ");
+      arg_types.emplace(arg++, device_storage_type_name(input.type()) + " const  * __restrict__");
     });
   }
 

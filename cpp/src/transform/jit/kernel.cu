@@ -35,7 +35,7 @@ namespace transformation {
 namespace jit {
 
 template <typename... column_types>
-CUDF_KERNEL void kernel(cudf::size_type num_rows, column_types*... columns)
+CUDF_KERNEL void kernel(cudf::size_type num_rows, column_types* __restrict__... columns)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
