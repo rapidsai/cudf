@@ -31,7 +31,6 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
@@ -628,12 +627,7 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
-            if POLARS_VERSION_GT_112:
-                # If we sliced away some data from the start, that
-                # shifts the row index.
-                # But prior to 1.13, polars had this wrong, so we match behaviour
-                # https://github.com/pola-rs/polars/issues/19607
-                offset += skip_rows
+            offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
@@ -763,11 +757,7 @@ class DataFrameScan(IR):
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
-        if predicate is not None:
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
-            return df.filter(mask)
-        else:
-            return df
+        return df
 
 
 class Select(IR):
@@ -1107,7 +1097,7 @@ class Join(IR):
     right_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+        Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
         bool,
         tuple[int, int] | None,
         str,
@@ -1142,50 +1132,45 @@ class Join(IR):
         # TODO: Implement maintain_order
         if options[5] != "none":
             raise NotImplementedError("maintain_order not implemented yet")
-        if any(
-            isinstance(e.value, expr.Literal)
-            for e in itertools.chain(self.left_on, self.right_on)
-        ):
-            raise NotImplementedError("Join with literal as join key.")
 
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "right", "full", "semi", "anti"],
+        how: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
-        if how == "inner":
+        if how == "Inner":
             return (
                 plc.join.inner_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left" or how == "right":
+        elif how == "Left" or how == "Right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "full":
+        elif how == "Full":
             return (
                 plc.join.full_join,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "semi":
+        elif how == "Semi":
             return (
                 plc.join.left_semi_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        elif how == "anti":
+        elif how == "Anti":
             return (
                 plc.join.left_anti_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)
+        assert_never(how)  # pragma: no cover
 
     @staticmethod
     def _reorder_maps(
@@ -1246,7 +1231,7 @@ class Join(IR):
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
-            Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+            Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
             tuple[int, int] | None,
             str,
@@ -1258,7 +1243,7 @@ class Join(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         how, join_nulls, zlice, suffix, coalesce, _ = options
-        if how == "cross":
+        if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
@@ -1295,25 +1280,32 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
-            if how == "right":
+            if how == "Right":
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "left" or how == "right":
+            if how == "Left" or how == "Right":
                 # Order of left table is preserved
                 lg, rg = cls._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
-            if coalesce and how == "inner":
-                right = right.discard_columns(right_on.column_names_set)
+            if coalesce:
+                if how == "Full":
+                    # In this case, keys must be column references,
+                    # possibly with dtype casting. We should use them in
+                    # preference to the columns from the original tables.
+                    left = left.with_columns(left_on.columns, replace_only=True)
+                    right = right.with_columns(right_on.columns, replace_only=True)
+                else:
+                    right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
             right = DataFrame.from_table(
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
-            if coalesce and how != "inner":
+            if coalesce and how == "Full":
                 left = left.with_columns(
                     (
                         Column(
@@ -1329,7 +1321,7 @@ class Join(IR):
                     replace_only=True,
                 )
                 right = right.discard_columns(right_on.column_names_set)
-            if how == "right":
+            if how == "Right":
                 # Undo the swap for right join before gluing together.
                 left, right = right, left
             right = right.rename_columns(
@@ -1374,7 +1366,9 @@ class HStack(IR):
         """Evaluate and return a dataframe."""
         columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
-            columns = broadcast(*columns, target_length=df.num_rows)
+            columns = broadcast(
+                *columns, target_length=df.num_rows if df.num_columns != 0 else None
+            )
         else:
             # Polars ensures this is true, but let's make sure nothing
             # went wrong. In this case, the parent node is a
@@ -1769,8 +1763,6 @@ class Union(IR):
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
-        if not all(s.schema == schema for s in self.children[1:]):
-            raise NotImplementedError("Schema mismatch")
 
     @classmethod
     def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:

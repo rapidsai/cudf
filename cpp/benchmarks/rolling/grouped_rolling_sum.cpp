@@ -68,3 +68,12 @@ NVBENCH_BENCH_TYPES(bench_row_grouped_rolling_sum,
   .add_int64_axis("following_size", {2})
   .add_int64_axis("min_periods", {1})
   .add_int64_axis("cardinality", {10, 100, 1'000'000, 100'000'000});
+
+NVBENCH_BENCH_TYPES(bench_row_grouped_rolling_sum,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t>))
+  .set_name("row_grouped_rolling_sum_large_windows")
+  .add_int64_power_of_two_axis("num_rows", {28})
+  .add_int64_axis("preceding_size", {10'000, 40'000})
+  .add_int64_axis("following_size", {0})
+  .add_int64_axis("min_periods", {1})
+  .add_int64_axis("cardinality", {10, 100});

@@ -31,7 +31,7 @@ def _get_cudf_schema_element_from_dtype(
     dtype = cudf.dtype(dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
-            "CategoricalDtype as dtype is not yet " "supported in JSON reader"
+            "CategoricalDtype as dtype is not yet supported in JSON reader"
         )
 
     lib_type = dtype_to_pylibcudf_type(dtype)
