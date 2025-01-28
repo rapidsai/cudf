@@ -2685,17 +2685,13 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 
   auto const [src, filepath] = create_parquet_typed_with_stats<T>("FilterTyped.parquet");
   auto const written_table   = src.view();
+  auto const col_name_0      = cudf::ast::column_name_reference("col0");
+  auto const col_ref_0       = cudf::ast::column_reference(0);
 
-  auto const test_predicate_pushdown = [&](
-                                         cudf::ast::literal const& literal,
-                                         cudf::size_type const expected_total_row_groups,
-                                         cudf::size_type const expected_stats_filtered_row_groups) {
-    auto col_name_0 = cudf::ast::column_name_reference("col0");
-    auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
-    auto col_ref_0  = cudf::ast::column_reference(0);
-    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
+  auto const test_predicate_pushdown = [&](cudf::ast::operation const& filter_expression,
+                                           cudf::ast::operation const& ref_filter,
+                                           cudf::size_type expected_total_row_groups,
+                                           cudf::size_type expected_stats_filtered_row_groups) {
     // Expected result
     auto predicate = cudf::compute_column(written_table, ref_filter);
     EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
@@ -2754,7 +2750,11 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
     }();
 
     auto literal = cudf::ast::literal(literal_value);
-    test_predicate_pushdown(literal, expected_total_row_groups, expected_stats_filtered_row_groups);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
+    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    test_predicate_pushdown(
+      filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
 
   // The `literal_value` and stats should not filter any of the 4 row groups.
@@ -2762,23 +2762,25 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
     auto constexpr expected_total_row_groups          = 4;
     auto constexpr expected_stats_filtered_row_groups = 4;
 
-    // Filtering AST (minimum value)
+    // Filtering AST
     auto literal_value = []() {
       if constexpr (cudf::is_timestamp<T>()) {
-        return cudf::timestamp_scalar<T>(T(typename T::duration(0)));
+        return cudf::timestamp_scalar<T>(T(typename T::duration(20000)));
       } else if constexpr (cudf::is_duration<T>()) {
-        return cudf::duration_scalar<T>(T(0));
+        return cudf::duration_scalar<T>(T(20000));
       } else if constexpr (std::is_same_v<T, cudf::string_view>) {
-        // table[0] < "000010000"
-        return cudf::string_scalar("000000000");
+        return cudf::string_scalar("000020000");
       } else {
-        // table[0] < 0 or 100u
-        return cudf::numeric_scalar<T>(0);
+        return cudf::numeric_scalar<T>(std::numeric_limits<T>::max());
       }
     }();
 
     auto literal = cudf::ast::literal(literal_value);
-    test_predicate_pushdown(literal, expected_total_row_groups, expected_stats_filtered_row_groups);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_name_0, literal);
+    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, literal);
+    test_predicate_pushdown(
+      filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
 }
 
