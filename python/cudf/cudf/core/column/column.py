@@ -421,7 +421,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def _fill(
         self,
-        fill_value: ScalarLike,
+        fill_value: plc.Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -431,7 +431,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         # Constructing a cuDF scalar can cut unnecessary DtoH copy if
         # the scalar is None when calling `is_valid`.
-        slr = cudf.Scalar(fill_value, dtype=self.dtype)
+        # slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
         if not inplace or is_string_dtype(self.dtype):
             with acquire_spill_lock():
@@ -440,14 +440,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         self.to_pylibcudf(mode="read"),
                         begin,
                         end,
-                        slr.device_value,
+                        fill_value,
                     )
                 )
             if is_string_dtype(self.dtype):
                 return self._mimic_inplace(result, inplace=True)
             return result  # type: ignore[return-value]
 
-        if not slr.is_valid() and not self.nullable:
+        if not fill_value.is_valid() and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
                     self.size, plc.null_mask.MaskState.ALL_VALID
@@ -460,7 +460,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="write"),
                 begin,
                 end,
-                slr.device_value,
+                fill_value,
             )
         return self
 
@@ -629,8 +629,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
 
         # Normalize value to scalar/column
-        value_normalized: cudf.Scalar | ColumnBase = (
-            cudf.Scalar(value, dtype=self.dtype)
+        value_normalized: plc.Scalar | ColumnBase = (
+            cudf.Scalar(value, dtype=self.dtype).device_value
             if is_scalar(value)
             else as_column(value, dtype=self.dtype)
         )
@@ -658,7 +658,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_slice(
         self,
         key: builtins.slice,
-        value: cudf.core.scalar.Scalar | ColumnBase,
+        value: plc.Scalar | ColumnBase,
     ) -> Self | None:
         """If this function returns None, it's either a no-op (slice is empty),
         or the inplace replacement is already performed (fill-in-place).
@@ -672,12 +672,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self._check_scatter_key_length(num_keys, value)
 
         if step == 1 and not isinstance(
-            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+            self.dtype, (cudf.StructDtype, cudf.ListDtype)
         ):
             # NOTE: List & Struct dtypes aren't supported by both
             # inplace & out-of-place fill. Hence we need to use scatter for
             # these two types.
-            if isinstance(value, cudf.core.scalar.Scalar):
+            if isinstance(value, plc.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
                 with acquire_spill_lock():
@@ -705,7 +705,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_column(
         self,
         key: cudf.core.column.NumericalColumn,
-        value: cudf.core.scalar.Scalar | ColumnBase,
+        value: plc.Scalar | ColumnBase,
         bounds_check: bool = True,
     ) -> Self:
         if key.dtype.kind == "b":
@@ -738,7 +738,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 plc_table = plc.copying.boolean_mask_scatter(
                     plc.Table([value.to_pylibcudf(mode="read")])
                     if isinstance(value, Column)
-                    else [value.device_value],
+                    else [value],
                     plc.Table([self.to_pylibcudf(mode="read")]),
                     key.to_pylibcudf(mode="read"),
                 )
@@ -753,7 +753,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )[0]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
-        self, num_keys: int, value: cudf.core.scalar.Scalar | ColumnBase
+        self, num_keys: int, value: plc.Scalar | ColumnBase
     ) -> None:
         """`num_keys` is the number of keys to scatter. Should equal to the
         number of rows in ``value`` if ``value`` is a column.

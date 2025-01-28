@@ -20,6 +20,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -49,6 +50,7 @@ from cudf.core.index import RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.utils import (
     _compile_or_get,
     _get_input_args_from_frame,
@@ -3258,7 +3260,7 @@ class IndexedFrame(Frame):
             True, length=len(self), dtype=bool
         )._scatter_by_column(
             distinct,
-            cudf.Scalar(False),
+            pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
         return cudf.Series._from_column(result, index=self.index, name=name)

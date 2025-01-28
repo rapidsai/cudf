@@ -11,10 +11,13 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     find_common_type,
@@ -657,7 +660,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _fill(
         self,
-        fill_value: ScalarLike,
+        fill_value: plc.Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
@@ -665,9 +668,14 @@ class CategoricalColumn(column.ColumnBase):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        fill_code = self._encode(fill_value)
+        fill_code = self._encode(plc.interop.to_arrow(fill_value))
         result = self if inplace else self.copy()
-        result.codes._fill(fill_code, begin, end, inplace=True)
+        result.codes._fill(
+            pa_scalar_to_plc_scalar(pa.scalar(fill_code)),
+            begin,
+            end,
+            inplace=True,
+        )
         return result
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
