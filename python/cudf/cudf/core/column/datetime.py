@@ -1086,9 +1086,7 @@ class DatetimeTZColumn(DatetimeColumn):
             pa.timestamp(self.dtype.unit, str(self.dtype.tz))
         )
         return (
-            f"{object.__repr__(self)}\n"
-            f"{arr.to_string()}\n"
-            f"dtype: {self.dtype}"
+            f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
         )
 
     def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):

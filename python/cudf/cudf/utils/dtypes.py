@@ -207,8 +207,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if not cudf.api.types._is_scalar_or_zero_d_array(val):
         raise ValueError(
-            f"Cannot convert value of type {type(val).__name__} "
-            "to cudf scalar"
+            f"Cannot convert value of type {type(val).__name__} to cudf scalar"
         )
 
     if isinstance(val, Decimal):
@@ -588,11 +587,11 @@ def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
     """
     if ib := cudf.get_option("default_integer_bitwidth"):
         if dtype.kind == "i":
-            return cudf.dtype(f"i{ib//8}")
+            return cudf.dtype(f"i{ib // 8}")
         elif dtype.kind == "u":
-            return cudf.dtype(f"u{ib//8}")
+            return cudf.dtype(f"u{ib // 8}")
     if (fb := cudf.get_option("default_float_bitwidth")) and dtype.kind == "f":
-        return cudf.dtype(f"f{fb//8}")
+        return cudf.dtype(f"f{fb // 8}")
     return dtype
 
 

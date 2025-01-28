@@ -468,10 +468,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def __repr__(self) -> str:
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return (
-            f"{self.__class__.__name__}"
-            f"({self.value!s}, dtype={self.dtype})"
-        )
+        return f"{self.__class__.__name__}({self.value!s}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:

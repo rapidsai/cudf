@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numba
 import numpy as np
@@ -18,6 +19,9 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
+
+if TYPE_CHECKING:
+    from cudf.core.indexed_frame import IndexedFrame
 
 
 class _RollingBase:
@@ -200,7 +204,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     def __init__(
         self,
-        obj,
+        obj: IndexedFrame,
         window,
         min_periods=None,
         center: bool = False,
@@ -211,7 +215,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         step: int | None = None,
         method: str = "single",
     ):
-        self.obj = obj
+        if cudf.get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
+        self.obj = obj  # type: ignore[assignment]
         self.window = window
         self.min_periods = min_periods
         self.center = center
