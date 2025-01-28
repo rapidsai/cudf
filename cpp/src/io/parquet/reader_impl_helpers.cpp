@@ -1182,7 +1182,13 @@ aggregate_reader_metadata::select_row_groups(
 
     // If filter had a value and no row groups were filtered, set the number of row groups after
     // filters to the number of adjusted input row groups
-    if (filter.has_value()) { num_row_groups_after_filters = {total_row_groups, total_row_groups}; }
+    auto const after_stats_filter = num_row_groups_after_filters.after_stats_filter.has_value()
+                                      ? std::make_optional(total_row_groups)
+                                      : std::nullopt;
+    auto const after_bloom_filter = num_row_groups_after_filters.after_bloom_filter.has_value()
+                                      ? std::make_optional(total_row_groups)
+                                      : std::nullopt;
+    num_row_groups_after_filters  = {after_stats_filter, after_bloom_filter};
   }
 
   return {rows_to_skip,

@@ -1328,6 +1328,26 @@ TEST_F(ParquetReaderTest, ReorderedReadMultipleFiles)
   CUDF_TEST_EXPECT_TABLES_EQUAL(sliced[1], swapped2);
 }
 
+TEST_F(ParquetReaderTest, NoFilter)
+{
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(9, 9, false);
+
+  auto filepath = temp_env->get_temp_filepath("FilterSimple.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  EXPECT_EQ(result.metadata.num_input_row_groups, 1);
+  EXPECT_FALSE(result.metadata.num_row_groups_after_stats_filter.has_value());
+  EXPECT_FALSE(result.metadata.num_row_groups_after_bloom_filter.has_value());
+}
+
 TEST_F(ParquetReaderTest, FilterSimple)
 {
   srand(31337);
@@ -2717,9 +2737,7 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
     EXPECT_TRUE(result.metadata.num_row_groups_after_stats_filter.has_value());
     EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter.value(),
               expected_stats_filtered_row_groups);
-    EXPECT_TRUE(result.metadata.num_row_groups_after_bloom_filter.has_value());
-    EXPECT_EQ(result.metadata.num_row_groups_after_bloom_filter.value(),
-              expected_stats_filtered_row_groups);
+    EXPECT_FALSE(result.metadata.num_row_groups_after_bloom_filter.has_value());
   };
 
   // The `literal_value` and stats should filter out 2 out of 4 row groups.

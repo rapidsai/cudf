@@ -129,8 +129,8 @@ struct arrow_schema_data_types {
  * @brief Struct to store the number of row groups surviving each predicate pushdown filter.
  */
 struct num_surviving_row_groups {
-  size_type after_stats_filter{0};  // number of surviving row groups after stats filter
-  size_type after_bloom_filter{0};  // number of surviving row groups after bloom filter
+  std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
+  std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
 class aggregate_reader_metadata {
@@ -396,16 +396,17 @@ class aggregate_reader_metadata {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices, if any is filtered
+   * @return A pair of filtered row group indices if any is filtered, and a boolean indicating if
+   *         bloom filtering was applied
    */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> input_row_group_indices,
-    size_type total_row_groups,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::pair<std::optional<std::vector<std::vector<size_type>>>, bool>
+  apply_bloom_filters(host_span<std::unique_ptr<datasource> const> sources,
+                      host_span<std::vector<size_type> const> input_row_group_indices,
+                      size_type total_row_groups,
+                      host_span<data_type const> output_dtypes,
+                      host_span<int const> output_column_schemas,
+                      std::reference_wrapper<ast::expression const> filter,
+                      rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups

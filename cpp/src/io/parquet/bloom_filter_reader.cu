@@ -599,7 +599,8 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
   return parquet_types;
 }
 
-std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
+std::pair<std::optional<std::vector<std::vector<size_type>>>, bool>
+aggregate_reader_metadata::apply_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> input_row_group_indices,
   size_type total_row_groups,
@@ -625,7 +626,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   [](auto& eq_literals) { return not eq_literals.empty(); });
 
   // Return early if no column with equality predicate(s)
-  if (equality_col_schemas.empty()) { return std::nullopt; }
+  if (equality_col_schemas.empty()) { return {std::nullopt, false}; }
 
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
@@ -645,7 +646,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream, aligned_mr);
 
   // No bloom filter buffers, return the original row group indices
-  if (bloom_filter_data.empty()) { return std::nullopt; }
+  if (bloom_filter_data.empty()) { return {std::nullopt, false}; }
 
   // Get parquet types for the predicate columns
   auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
@@ -706,10 +707,11 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
-  return collect_filtered_row_group_indices(bloom_filter_membership_table,
-                                            bloom_filter_expr.get_bloom_filter_expr(),
-                                            input_row_group_indices,
-                                            stream);
+  return {collect_filtered_row_group_indices(bloom_filter_membership_table,
+                                             bloom_filter_expr.get_bloom_filter_expr(),
+                                             input_row_group_indices,
+                                             stream),
+          true};
 }
 
 }  // namespace cudf::io::parquet::detail

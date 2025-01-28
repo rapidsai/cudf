@@ -456,29 +456,32 @@ aggregate_reader_metadata::filter_row_groups(
       : input_row_group_indices;
 
   // Apply bloom filtering on the bloom filter input row groups
-  auto const bloom_filtered_row_groups = apply_bloom_filters(sources,
-                                                             bloom_filter_input_row_groups,
-                                                             num_stats_filtered_row_groups,
-                                                             output_dtypes,
-                                                             output_column_schemas,
-                                                             filter,
-                                                             stream);
+  auto const [bloom_filtered_row_groups, bloom_filters_exist] =
+    apply_bloom_filters(sources,
+                        bloom_filter_input_row_groups,
+                        num_stats_filtered_row_groups,
+                        output_dtypes,
+                        output_column_schemas,
+                        filter,
+                        stream);
 
   // Number of surviving row groups after applying bloom filter
   auto const num_bloom_filtered_row_groups =
-    bloom_filtered_row_groups.has_value()
-      ? std::accumulate(bloom_filtered_row_groups.value().cbegin(),
-                        bloom_filtered_row_groups.value().cend(),
-                        size_type{0},
-                        [](auto& sum, auto const& per_file_row_groups) {
-                          return sum + per_file_row_groups.size();
-                        })
-      : num_stats_filtered_row_groups;
+    bloom_filters_exist
+      ? (bloom_filtered_row_groups.has_value()
+           ? std::make_optional(std::accumulate(bloom_filtered_row_groups.value().cbegin(),
+                                                bloom_filtered_row_groups.value().cend(),
+                                                size_type{0},
+                                                [](auto& sum, auto const& per_file_row_groups) {
+                                                  return sum + per_file_row_groups.size();
+                                                }))
+           : std::make_optional(num_stats_filtered_row_groups))
+      : std::nullopt;
 
   // Return bloom filtered row group indices iff collected
   return {
     bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : filtered_row_group_indices,
-    {num_stats_filtered_row_groups, num_bloom_filtered_row_groups}};
+    {std::make_optional(num_stats_filtered_row_groups), num_bloom_filtered_row_groups}};
 }
 
 // convert column named expression to column index reference expression
