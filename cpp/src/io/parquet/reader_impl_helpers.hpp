@@ -128,9 +128,9 @@ struct arrow_schema_data_types {
 /**
  * @brief Struct to store the number of row groups surviving each predicate pushdown filter.
  */
-struct surviving_row_groups {
-  size_type after_stats_filter;  // number of surviving row groups after stats filter
-  size_type after_bloom_filter;  // number of surviving row groups after bloom filter
+struct num_surviving_row_groups {
+  size_type after_stats_filter{0};  // number of surviving row groups after stats filter
+  size_type after_bloom_filter{0};  // number of surviving row groups after bloom filter
 };
 
 class aggregate_reader_metadata {
@@ -375,7 +375,8 @@ class aggregate_reader_metadata {
    * @return A pair of a list of filtered row group indices if any are filtered, and a struct
    *         containing the number of row groups surviving each predicate pushdown filter
    */
-  [[nodiscard]] std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_groups>
+  [[nodiscard]] std::pair<std::optional<std::vector<std::vector<size_type>>>,
+                          num_surviving_row_groups>
   filter_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> input_row_group_indices,
                     size_type total_row_groups,
@@ -429,7 +430,7 @@ class aggregate_reader_metadata {
                            std::vector<row_group_info>,
                            std::vector<size_t>,
                            size_type,
-                           surviving_row_groups>
+                           num_surviving_row_groups>
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
