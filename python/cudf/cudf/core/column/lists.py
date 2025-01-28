@@ -714,7 +714,7 @@ class ListMethods(ColumnMethods):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
             raise ValueError(
-                "lists_indices and list column is of different " "size."
+                "lists_indices and list column is of different size."
             )
         if (
             not _is_non_decimal_numeric_dtype(

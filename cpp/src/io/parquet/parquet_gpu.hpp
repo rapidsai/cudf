@@ -876,6 +876,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -884,6 +885,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -898,6 +900,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -906,6 +909,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
+                                cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream);
 
@@ -921,6 +925,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -930,6 +935,7 @@ void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                     size_t min_row,
                     int level_type_size,
                     decode_kernel_mask kernel_mask,
+                    cudf::device_span<size_t> initial_str_offsets,
                     kernel_error::pointer error_code,
                     rmm::cuda_stream_view stream);
 
