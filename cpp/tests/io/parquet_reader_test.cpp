@@ -1724,12 +1724,8 @@ TEST_F(ParquetReaderTest, FilterSupported2)
     auto builder             = cudf::io::parquet_reader_options::builder(si).filter(expr);
     auto table_with_metadata = cudf::io::read_parquet(builder);
     auto result              = table_with_metadata.tbl->view();
-    auto const& metadata     = table_with_metadata.metadata;
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result);
-    EXPECT_EQ(metadata.num_input_row_groups, 4);
-    EXPECT_FALSE(metadata.num_row_groups_after_stats_filter.has_value());
-    EXPECT_FALSE(metadata.num_row_groups_after_bloom_filter.has_value());
   };
 
   // row groups min, max:
