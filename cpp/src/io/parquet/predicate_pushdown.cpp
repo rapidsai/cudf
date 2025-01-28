@@ -428,11 +428,6 @@ aggregate_reader_metadata::filter_row_groups(
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   stats_expression_converter const stats_expr{filter.get(),
                                               static_cast<size_type>(output_dtypes.size())};
-  auto stats_ast     = stats_expr.get_stats_expr();
-  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
-  auto predicate     = predicate_col->view();
-  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
-               "Filter expression must return a boolean column");
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   auto const filtered_row_group_indices = collect_filtered_row_group_indices(
