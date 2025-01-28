@@ -121,6 +121,10 @@ void BM_parquet_read_long_strings(nvbench::state& state)
       cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);  // THIS
     auto const view = tbl->view();
 
+    // set smaller threshold to reduce file size and execution time
+    auto const threshold = 1;
+    setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
+
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression);
@@ -129,6 +133,7 @@ void BM_parquet_read_long_strings(nvbench::state& state)
   }();
 
   parquet_read_common(num_rows_written, num_cols, source_sink, state);
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }
 
 template <data_type DataType>
