@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,28 @@
 namespace cudf {
 namespace hashing {
 namespace detail {
+
+template struct MurmurHash3_x86_32<cuda::std::byte>;
+template struct MurmurHash3_x86_32<bool>;
+
+template struct MurmurHash3_x86_32<int8_t>;
+template struct MurmurHash3_x86_32<int16_t>;
+template struct MurmurHash3_x86_32<int32_t>;
+template struct MurmurHash3_x86_32<int64_t>;
+template struct MurmurHash3_x86_32<uint8_t>;
+template struct MurmurHash3_x86_32<uint16_t>;
+template struct MurmurHash3_x86_32<uint32_t>;
+template struct MurmurHash3_x86_32<uint64_t>;
+
+template struct MurmurHash3_x86_32<float>;
+template struct MurmurHash3_x86_32<double>;
+
+template struct MurmurHash3_x86_32<string_view>;
+template struct MurmurHash3_x86_32<numeric::decimal32>;
+template struct MurmurHash3_x86_32<numeric::decimal64>;
+template struct MurmurHash3_x86_32<numeric::decimal128>;
+template struct MurmurHash3_x86_32<list_view>;
+template struct MurmurHash3_x86_32<struct_view>;
 
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
