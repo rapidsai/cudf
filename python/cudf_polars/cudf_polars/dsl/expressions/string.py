@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -41,7 +41,7 @@ class StringFunction(Expr):
         ConcatHorizontal = auto()
         ConcatVertical = auto()
         Contains = auto()
-        ContainsMany = auto()
+        ContainsAny = auto()
         CountMatches = auto()
         EndsWith = auto()
         EscapeRegex = auto()
@@ -57,6 +57,7 @@ class StringFunction(Expr):
         LenBytes = auto()
         LenChars = auto()
         Lowercase = auto()
+        Normalize = auto()
         PadEnd = auto()
         PadStart = auto()
         Replace = auto()
