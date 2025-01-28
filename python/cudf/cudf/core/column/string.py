@@ -2647,8 +2647,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2828,8 +2827,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all

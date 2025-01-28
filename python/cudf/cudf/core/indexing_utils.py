@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -152,13 +152,12 @@ def destructure_dataframe_iloc_indexer(
         )
     except TypeError:
         raise TypeError(
-            "Column indices must be integers, slices, "
-            "or list-like of integers"
+            "Column indices must be integers, slices, or list-like of integers"
         )
     if scalar:
-        assert (
-            len(column_names) == 1
-        ), "Scalar column indexer should not produce more than one column"
+        assert len(column_names) == 1, (
+            "Scalar column indexer should not produce more than one column"
+        )
 
     return rows, (scalar, column_names)
 
