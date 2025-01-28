@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
 import operator
@@ -961,6 +962,139 @@ def _slow_function_call():
     return None
 
 
+async def _run_fast_function_call(func: Callable, *args, **kwargs) -> Any:
+    """
+    Call `func` with all `args` and `kwargs` converted to their
+    respective fast type.
+    """
+    from .module_accelerator import disable_module_accelerator
+
+    with nvtx.annotate(
+        "EXECUTE_FAST",
+        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_FAST"],
+        domain="cudf_pandas",
+    ):
+        fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
+        result = func(*fast_args, **fast_kwargs)
+        if result is NotImplemented:
+            raise Exception()
+        _fast_function_call()
+        if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
+            try:
+                with nvtx.annotate(
+                    "EXECUTE_SLOW_DEBUG",
+                    color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+                    domain="cudf_pandas",
+                ):
+                    slow_args, slow_kwargs = (
+                        _slow_arg(args),
+                        _slow_arg(kwargs),
+                    )
+                    with disable_module_accelerator():
+                        slow_result = func(*slow_args, **slow_kwargs)
+            except Exception as e:
+                warnings.warn(
+                    "The result from pandas could not be computed. "
+                    f"The exception was {e}."
+                )
+            else:
+                try:
+                    _assert_fast_slow_eq(result, slow_result)
+                except AssertionError as e:
+                    warnings.warn(
+                        "The results from cudf and pandas were different. "
+                        f"The exception was {e}."
+                    )
+                except Exception as e:
+                    warnings.warn(
+                        "Pandas debugging mode failed. "
+                        f"The exception was {e}."
+                    )
+        return (True, result)
+
+
+async def _run_slow_function_call(func: Callable, *args, **kwargs) -> Any:
+    """
+    Call `func` with all `args` and `kwargs` converted to their
+    respective slow type.
+    """
+    from .module_accelerator import disable_module_accelerator
+
+    with nvtx.annotate(
+        "EXECUTE_SLOW",
+        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+        domain="cudf_pandas",
+    ):
+        slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+        # if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+        #     _raise_fallback_error(err, slow_args[0].__name__)
+        # if _env_get_bool("LOG_FAST_FALLBACK", False):
+        #     from ._logger import log_fallback
+
+        #     log_fallback(slow_args, slow_kwargs, err)
+        _slow_function_call()
+        with disable_module_accelerator():
+            result = func(*slow_args, **slow_kwargs)
+        return (False, result)
+
+
+async def run_tasks(func, *args, **kwargs):
+    # Same calls to slow_task and fast_task as before:
+    task_slow = asyncio.create_task(
+        _run_fast_function_call(func, *args, **kwargs)
+    )
+    task_fast = asyncio.create_task(
+        _run_slow_function_call(func, *args, **kwargs)
+    )
+
+    # Wait for whichever task completes first
+    done, pending = await asyncio.wait(
+        {task_slow, task_fast}, return_when=asyncio.FIRST_COMPLETED
+    )
+
+    # "done" contains exactly one finished task
+    first_finished_task = done.pop()
+    first_exception = first_finished_task.exception()
+
+    if first_exception is None:
+        # The first-completed task succeeded, so get its result
+        result = first_finished_task.result()
+        # Cancel the other (still-pending) task
+        for task in pending:
+            task.cancel()
+        for task in done:
+            _ = task.exception()
+    else:
+        # The first-completed task *failed*, so wait on the second
+        # task in "pending". We let it finish and use its result.
+        if pending:
+            done2, _ = await asyncio.wait(
+                pending, return_when=asyncio.ALL_COMPLETED
+            )
+            second_finished_task = done2.pop()
+            second_exception = second_finished_task.exception()
+
+            if second_exception is None:
+                # Second task succeeded
+                result = second_finished_task.result()
+            else:
+                # Second task also failed, so raise that error
+                raise second_exception
+        elif done:
+            second_finished_task = done.pop()
+            second_exception = second_finished_task.exception()
+
+            if second_exception is None:
+                # Second task succeeded
+                result = second_finished_task.result()
+            else:
+                # Second task also failed, so raise that error
+                raise second_exception
+        else:
+            raise first_exception
+    return result
+
+
 def _fast_slow_function_call(
     func: Callable,
     /,
@@ -975,69 +1109,14 @@ def _fast_slow_function_call(
     Wrap the result in a fast-slow proxy if it is a type we know how
     to wrap.
     """
-    from .module_accelerator import disable_module_accelerator
+    # from .module_accelerator import disable_module_accelerator
 
-    fast = False
-    try:
-        with nvtx.annotate(
-            "EXECUTE_FAST",
-            color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_FAST"],
-            domain="cudf_pandas",
-        ):
-            fast_args, fast_kwargs = _fast_arg(args), _fast_arg(kwargs)
-            result = func(*fast_args, **fast_kwargs)
-            if result is NotImplemented:
-                # try slow path
-                raise Exception()
-            fast = True
-            _fast_function_call()
-            if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
-                try:
-                    with nvtx.annotate(
-                        "EXECUTE_SLOW_DEBUG",
-                        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
-                        domain="cudf_pandas",
-                    ):
-                        slow_args, slow_kwargs = (
-                            _slow_arg(args),
-                            _slow_arg(kwargs),
-                        )
-                        with disable_module_accelerator():
-                            slow_result = func(*slow_args, **slow_kwargs)
-                except Exception as e:
-                    warnings.warn(
-                        "The result from pandas could not be computed. "
-                        f"The exception was {e}."
-                    )
-                else:
-                    try:
-                        _assert_fast_slow_eq(result, slow_result)
-                    except AssertionError as e:
-                        warnings.warn(
-                            "The results from cudf and pandas were different. "
-                            f"The exception was {e}."
-                        )
-                    except Exception as e:
-                        warnings.warn(
-                            "Pandas debugging mode failed. "
-                            f"The exception was {e}."
-                        )
-    except Exception as err:
-        with nvtx.annotate(
-            "EXECUTE_SLOW",
-            color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
-            domain="cudf_pandas",
-        ):
-            slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
-            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-                _raise_fallback_error(err, slow_args[0].__name__)
-            if _env_get_bool("LOG_FAST_FALLBACK", False):
-                from ._logger import log_fallback
-
-                log_fallback(slow_args, slow_kwargs, err)
-            _slow_function_call()
-            with disable_module_accelerator():
-                result = func(*slow_args, **slow_kwargs)
+    # fast = False
+    # try:
+    #     fast, result = _run_fast_function_call(func, *args, **kwargs)
+    # except Exception:
+    #     fast, result = _run_slow_function_call(func, *args, **kwargs)
+    fast, result = asyncio.run(run_tasks(func, *args, **kwargs))
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 
