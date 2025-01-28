@@ -84,7 +84,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (4, 3):
+        if (version := self.visitor.version()) >= (5, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -302,25 +302,52 @@ def _(
     # Join key dtypes are dependent on the schema of the left and
     # right inputs, so these must be translated with the relevant
     # input active.
+    def adjust_literal_dtype(literal: expr.Literal) -> expr.Literal:
+        if literal.dtype.id() == plc.types.TypeId.INT32:
+            plc_int64 = plc.types.DataType(plc.types.TypeId.INT64)
+            return expr.Literal(
+                plc_int64,
+                pa.scalar(literal.value.as_py(), type=plc.interop.to_arrow(plc_int64)),
+            )
+        return literal
+
+    def maybe_adjust_binop(e) -> expr.Expr:
+        if isinstance(e.value, expr.BinOp):
+            left, right = e.value.children
+            if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
+                e.value.children = (left, adjust_literal_dtype(right))
+            elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
+                e.value.children = (adjust_literal_dtype(left), right)
+        return e
+
+    def translate_expr_and_maybe_fix_binop_args(translator, exprs):
+        return [
+            maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
+        ]
+
     with set_node(translator.visitor, node.input_left):
         inp_left = translator.translate_ir(n=None)
-        left_on = [translate_named_expr(translator, n=e) for e in node.left_on]
+        # TODO: There's bug in the polars type coercion phase. Use
+        # translate_named_expr directly once it is resolved.
+        # Tracking issue: https://github.com/pola-rs/polars/issues/20935
+        left_on = translate_expr_and_maybe_fix_binop_args(translator, node.left_on)
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
-        right_on = [translate_named_expr(translator, n=e) for e in node.right_on]
+        right_on = translate_expr_and_maybe_fix_binop_args(translator, node.right_on)
+
     if (how := node.options[0]) in {
-        "inner",
-        "left",
-        "right",
-        "full",
-        "cross",
-        "semi",
-        "anti",
+        "Inner",
+        "Left",
+        "Right",
+        "Full",
+        "Cross",
+        "Semi",
+        "Anti",
     }:
         return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
     else:
-        how, op1, op2 = how
-        if how != "ie_join":
+        how, op1, op2 = node.options[0]
+        if how != "IEJoin":
             raise NotImplementedError(
                 f"Unsupported join type {how}"
             )  # pragma: no cover; asof joins not yet exposed
