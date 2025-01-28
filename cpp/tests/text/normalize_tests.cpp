@@ -198,7 +198,6 @@ TEST_F(TextNormalizeTest, SpecialTokens)
      " [bos] these should [sep] work too [eos] ",
      "some [ non ] tokens [ eol ] too"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
   normalizer = nvtext::create_character_normalizer(false, stv);
   results    = nvtext::normalize_characters(sv, *normalizer);
   // cudf::test::print(results->view());

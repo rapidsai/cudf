@@ -113,29 +113,6 @@ __device__ int8_t cp_to_utf8(uint32_t codepoint, char* out)
 {
   auto utf8 = cudf::strings::detail::codepoint_to_utf8(codepoint);
   return cudf::strings::detail::from_char_utf8(utf8, out);
-#if 0
-  auto out_ptr = out;
-  if (codepoint < UTF8_1BYTE)  // ASCII range
-    *out_ptr++ = static_cast<char>(codepoint);
-  else if (codepoint < UTF8_2BYTE) {  // create two-byte UTF-8
-    // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy
-    *out_ptr++ = static_cast<char>((((codepoint << 2) & 0x00'1F00) | 0x00'C000) >> 8);
-    *out_ptr++ = static_cast<char>((codepoint & 0x3F) | 0x0080);
-  } else if (codepoint < UTF8_3BYTE) {  // create three-byte UTF-8
-    // bxxxxxxxx:byyyyyyyy => b1110xxxx:b10xxxxyy:b10yyyyyy
-    *out_ptr++ = static_cast<char>((((codepoint << 4) & 0x0F'0000) | 0x00E0'0000) >> 16);
-    *out_ptr++ = static_cast<char>((((codepoint << 2) & 0x00'3F00) | 0x00'8000) >> 8);
-    *out_ptr++ = static_cast<char>((codepoint & 0x3F) | 0x0080);
-  } else {  // create four-byte UTF-8
-    // maximum code-point value is 0x0011'0000
-    // b000xxxxx:byyyyyyyy:bzzzzzzzz => b11110xxx:b10xxyyyy:b10yyyyzz:b10zzzzzz
-    *out_ptr++ = static_cast<char>((((codepoint << 6) & 0x0700'0000u) | 0xF000'0000u) >> 24);
-    *out_ptr++ = static_cast<char>((((codepoint << 4) & 0x003F'0000u) | 0x0080'0000u) >> 16);
-    *out_ptr++ = static_cast<char>((((codepoint << 2) & 0x00'3F00u) | 0x00'8000u) >> 8);
-    *out_ptr++ = static_cast<char>((codepoint & 0x3F) | 0x0080);
-  }
-  return static_cast<int8_t>(thrust::distance(out, out_ptr));
-#endif
 }
 
 /**
@@ -284,8 +261,6 @@ struct character_normalizer::character_normalizer_impl {
   bool do_lower_case;
   std::unique_ptr<cudf::column> special_tokens;
   rmm::device_uvector<cudf::string_view> special_tokens_view;
-  cudf::size_type min_token_width;
-  cudf::size_type max_token_width;
 
   cudf::device_span<cudf::string_view const> get_special_tokens() const
   {
@@ -296,16 +271,12 @@ struct character_normalizer::character_normalizer_impl {
                             rmm::device_uvector<aux_codepoint_data_type>&& aux_table,
                             bool do_lower_case,
                             std::unique_ptr<cudf::column>&& special_tokens,
-                            rmm::device_uvector<cudf::string_view>&& special_tokens_view,
-                            cudf::size_type min_token_width,
-                            cudf::size_type max_token_width)
+                            rmm::device_uvector<cudf::string_view>&& special_tokens_view)
     : cp_metadata(std::move(cp_metadata)),
       aux_table(std::move(aux_table)),
       do_lower_case{do_lower_case},
       special_tokens{std::move(special_tokens)},
-      special_tokens_view{std::move(special_tokens_view)},
-      min_token_width{min_token_width},
-      max_token_width{max_token_width}
+      special_tokens_view{std::move(special_tokens_view)}
   {
   }
 };
@@ -329,31 +300,20 @@ character_normalizer::character_normalizer(bool do_lower_case,
   auto sorted = std::move(
     cudf::sort(cudf::table_view({special_tokens.parent()}), {}, {}, stream)->release().front());
   if (do_lower_case) {
-    auto lower = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
-    auto upper = cudf::strings::to_upper(cudf::strings_column_view(sorted->view()), stream);
-    sorted     = cudf::concatenate(std::vector{lower->view(), upper->view()}, stream);
+    // lower case the tokens so they will match the normalized input
+    sorted = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
   }
+
   auto tokens_view = cudf::strings::detail::create_string_vector_from_column(
     cudf::strings_column_view(sorted->view()), stream, cudf::get_current_device_resource_ref());
-  auto const begin =
-    cudf::detail::make_counting_transform_iterator(0, size_bytes_fn{tokens_view.data()});
-  auto const end      = begin + tokens_view.size();
-  auto const init_min = std::numeric_limits<cudf::size_type>::max();
-  auto const min_width =
-    thrust::reduce(rmm::exec_policy(stream), begin, end, init_min, thrust::minimum{});
-  auto const max_width = thrust::reduce(rmm::exec_policy(stream), begin, end, 0, thrust::maximum{});
-  CUDF_EXPECTS(tokens_view.is_empty() || (min_width > 2 && max_width <= 6),
-               "Expected special tokens to be between 3 and 6 bytes including [] brackets",
-               std::invalid_argument);
 
   _impl = new character_normalizer_impl(std::move(cp_metadata),
                                         std::move(aux_table),
                                         do_lower_case,
                                         std::move(sorted),
-                                        std::move(tokens_view),
-                                        min_width,
-                                        max_width);
+                                        std::move(tokens_view));
 }
+
 character_normalizer::~character_normalizer() { delete _impl; }
 
 std::unique_ptr<character_normalizer> create_character_normalizer(
@@ -369,27 +329,40 @@ std::unique_ptr<character_normalizer> create_character_normalizer(
 namespace detail {
 namespace {
 
-__device__ bool check_special_token(cudf::device_span<cudf::string_view const> special_tokens,
-                                    char const* d_chars,
-                                    int64_t idx,
-                                    int64_t total_bytes)
+CUDF_KERNEL void special_tokens_kernel(uint32_t* d_utf8chars,
+                                       int64_t total_count,
+                                       cudf::device_span<cudf::string_view const> special_tokens,
+                                       int8_t* chars_per_thread)
 {
-  char const ch  = d_chars[idx];
-  auto begin     = ch == '[' ? d_chars + idx : d_chars + std::max(0L, idx - 6);
-  auto end       = ch == ']' ? d_chars + idx + 1 : d_chars + idx + std::min(6L, total_bytes - idx);
-  char const mch = ch == '[' ? ']' : '[';
-  auto fnd       = thrust::find(thrust::seq, begin, end, mch);
-  if (fnd == end) { return false; }
-  if (mch == ']') {
-    end = fnd + 1;  // include ']'
-  } else {
-    begin = fnd;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= total_count) { return; }
+  auto const begin = d_utf8chars + (idx * MAX_NEW_CHARS) + 1;
+  if (*begin != '[') { return; }
+  auto const end   = begin + std::min(6L, total_count - idx) * MAX_NEW_CHARS;
+  auto const match = thrust::find(thrust::seq, begin, end, static_cast<uint32_t>(']'));
+  if (match == end) { return; }
+  char candidate[8];
+  auto itr  = thrust::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
+  auto eitr = itr + thrust::distance(begin, match + 1);
+  auto last =
+    thrust::copy_if(thrust::seq, itr, eitr, candidate, [](auto c) { return c != 0 && c != ' '; });
+  *last = 0;  // only needed for debug
+
+  auto const size  = static_cast<cudf::size_type>(thrust::distance(candidate, last));
+  auto const token = cudf::string_view(candidate, size);
+  if (thrust::find(thrust::seq, special_tokens.begin(), special_tokens.end(), token) ==
+      special_tokens.end()) {
+    return;
   }
-  auto const size  = static_cast<cudf::size_type>(thrust::distance(begin, end));
-  auto const token = cudf::string_view(begin, size);
-  auto rtn = thrust::find(thrust::seq, special_tokens.begin(), special_tokens.end(), token) !=
-             special_tokens.end();
-  return rtn;
+
+  // fix up chars to remove the extra spaces
+  *(begin + 1) = 0;
+  *(match - 1) = 0;
+
+  auto const match_idx = idx + (thrust::distance(begin, match) / MAX_NEW_CHARS);
+
+  chars_per_thread[idx]       = 2;  // leading space plus '['
+  chars_per_thread[match_idx] = 2;  // ']' plus trailing space
 }
 
 CUDF_KERNEL void normalizer_kernel(char const* d_chars,
@@ -397,7 +370,6 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
                                    codepoint_metadata_type const* cp_metadata,
                                    aux_codepoint_data_type const* aux_table,
                                    bool do_lower_case,
-                                   cudf::device_span<cudf::string_view const> special_tokens,
                                    uint32_t* d_output,
                                    int8_t* chars_per_thread)
 {
@@ -428,15 +400,10 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
       }
 
       if (should_add_spaces(metadata, do_lower_case) && (num_new_chars == 1)) {
-        // check for possible special tokens here
-        auto const ch = d_chars[idx];
-        auto sp_found = !special_tokens.empty() && (ch == '[' || ch == ']') &&
-                        check_special_token(special_tokens, d_chars, idx, total_bytes);
-
         // write the required spaces at each end
         replacement[1] = replacement[0];
-        replacement[0] = sp_found && ch == ']' ? 0 : SPACE_CODE_POINT;
-        replacement[2] = sp_found && ch == '[' ? 0 : SPACE_CODE_POINT;
+        replacement[0] = SPACE_CODE_POINT;
+        replacement[2] = SPACE_CODE_POINT;
         num_new_chars  = 3;
       }
 
@@ -481,13 +448,9 @@ rmm::device_uvector<cudf::size_type> compute_sizes(int8_t const* sizes,
       d_temp.data(), temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
   } else {
     // offsets need to be normalized for segmented-reduce to work efficiently
-    auto d_offsets = rmm::device_uvector<cudf::size_type>(size + 1, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      offsets,
-                      offsets + size + 1,
-                      d_offsets.begin(),
-                      [offset] __device__(auto o) { return o - offset; });
-    auto const offsets_itr = d_offsets.begin();
+    auto offsets_itr = thrust::transform_iterator(
+      offsets,
+      cuda::proclaim_return_type<int64_t>([offset] __device__(auto o) { return o - offset; }));
     cub::DeviceSegmentedReduce::Sum(
       nullptr, temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
     auto d_temp = rmm::device_buffer{temp, stream};
@@ -555,11 +518,22 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     parameters->cp_metadata.data(),
     parameters->aux_table.data(),
     parameters->do_lower_case,
-    parameters->get_special_tokens(),
     d_code_points.data(),
     d_sizes.data());
   stream.synchronize();
   nvtxRangePop();
+
+  // This removes space adding around any special tokens in the form of [ttt].
+  // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
+  // before returning the output strings column.
+  auto const special_tokens = parameters->get_special_tokens();
+  if (!special_tokens.empty()) {
+    nvtxRangePushA("special_tokens_kernel");
+    special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      d_code_points.data(), chars_size, special_tokens, d_sizes.data());
+    stream.synchronize();
+    nvtxRangePop();
+  }
 
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
