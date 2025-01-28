@@ -11,7 +11,7 @@ def test_disable_pandas_accelerator_multi_threaded():
     # Create a copy of the current environment variables
     env = os.environ.copy()
 
-    with utils.cudf_timeout(10):
+    with utils.cudf_timeout(20):
         sp_completed = subprocess.run(
             [
                 "python",

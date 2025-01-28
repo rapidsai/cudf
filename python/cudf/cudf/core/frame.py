@@ -778,9 +778,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if method:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
