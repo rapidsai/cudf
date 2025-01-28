@@ -114,23 +114,6 @@ using device_storage_type_t =
 // clang-format on
 
 /**
- * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
- * stored type id
- *
- * @tparam     T The type that is stored on the device
- * @param id   The `data_type::id` of the column
- * @return     `true` If T matches the stored column `type_id`
- * @return     `false` If T does not match the stored column `type_id`
- */
-template <typename T>
-constexpr bool type_id_matches_device_storage_type(type_id id)
-{
-  return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
-         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
-}
-
-/**
  * @brief Maps a C++ type to its corresponding `cudf::type_id`
  *
  * When explicitly passed a template argument of a given type, returns the
@@ -218,6 +201,23 @@ template <>  // CUDF_TYPE_MAPPING(char,INT8) causes duplicate id_to_type_impl de
 constexpr inline type_id base_type_to_id<char>()
 {
   return type_id::INT8;
+}
+
+/**
+ * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
+ * stored type id
+ *
+ * @tparam     T The type that is stored on the device
+ * @param id   The `data_type::id` of the column
+ * @return     `true` If T matches the stored column `type_id`
+ * @return     `false` If T does not match the stored column `type_id`
+ */
+template <typename T>
+constexpr bool type_id_matches_device_storage_type(type_id id)
+{
+  return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
+         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
 }
 
 /**
