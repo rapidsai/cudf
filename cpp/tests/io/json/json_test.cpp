@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3459,6 +3459,23 @@ TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
       .build();
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
+}
+
+TEST_F(JsonReaderTest, EmptyLastBatch)
+{
+  std::string data = R"(
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  )";
+  setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(data.size() - 5).c_str(), 1);
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .build();
+  auto res = cudf::io::read_json(opts);
+  unsetenv("LIBCUDF_JSON_BATCH_SIZE");
 }
 
 CUDF_TEST_PROGRAM_MAIN()
