@@ -1,25 +1,207 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import copy
 import decimal
 import functools
 import operator
 from collections import OrderedDict
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.dtypes import (
+    Decimal32Dtype,
+    Decimal64Dtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
+    from cudf._typing import Dtype, ScalarLike
+
+
+def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
+    """
+    Preprocess a value and dtype for host-side cudf.Scalar
+
+    Parameters
+    ----------
+    value: Scalarlike
+    dtype: dtypelike or None
+
+    Returns
+    -------
+    tuple[ScalarLike, Dtype]
+    """
+    valid = not cudf.utils.utils._is_null_host_scalar(value)
+
+    if isinstance(value, list):
+        if dtype is not None:
+            raise TypeError("Lists may not be cast to a different dtype")
+        else:
+            dtype = ListDtype.from_arrow(
+                pa.infer_type([value], from_pandas=True)
+            )
+            return value, dtype
+    elif isinstance(dtype, ListDtype):
+        if value not in {None, NA}:
+            raise ValueError(f"Can not coerce {value} to ListDtype")
+        else:
+            return NA, dtype
+
+    if isinstance(value, dict):
+        if dtype is None:
+            dtype = StructDtype.from_arrow(
+                pa.infer_type([value], from_pandas=True)
+            )
+        return value, dtype
+    elif isinstance(dtype, StructDtype):
+        if value not in {None, NA}:
+            raise ValueError(f"Can not coerce {value} to StructDType")
+        else:
+            return NA, dtype
+
+    if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+        value = pa.scalar(
+            value, type=pa.decimal128(dtype.precision, dtype.scale)
+        ).as_py()
+    if isinstance(value, decimal.Decimal) and dtype is None:
+        dtype = cudf.Decimal128Dtype._from_decimal(value)
+
+    value = to_cudf_compatible_scalar(value, dtype=dtype)
+
+    if dtype is None:
+        if not valid:
+            if value is NaT:
+                value = value.to_numpy()
+
+            if isinstance(value, (np.datetime64, np.timedelta64)):
+                unit, _ = np.datetime_data(value)
+                if unit == "generic":
+                    raise TypeError("Cant convert generic NaT to null scalar")
+                else:
+                    dtype = value.dtype
+            else:
+                raise TypeError(
+                    "dtype required when constructing a null scalar"
+                )
+        else:
+            dtype = value.dtype
+
+    if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+        dtype = cudf.dtype(dtype)
+
+    if not valid:
+        value = NaT if dtype.kind in "mM" else NA
+
+    return value, dtype
+
+
+def _replace_nested(obj, check, replacement):
+    if isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if check(item):
+                obj[i] = replacement
+            elif isinstance(item, (dict, list)):
+                _replace_nested(item, check, replacement)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if check(v):
+                obj[k] = replacement
+            elif isinstance(v, (dict, list)):
+                _replace_nested(v, check, replacement)
+
+
+def _maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
+    """
+    Convert a "nested" pyarrow scalar to a Python object.
+
+    These scalars come from pylibcudf.Scalar where field names can be
+    duplicate empty strings.
+
+    Parameters
+    ----------
+    pa_scalar: pa.Scalar
+
+    Returns
+    -------
+    Any
+        Python scalar
+    """
+    if not pa_scalar.is_valid:
+        return pa_scalar.as_py()
+    elif pa.types.is_struct(pa_scalar.type):
+        return {
+            str(i): _maybe_nested_pa_scalar_to_py(val)
+            for i, (_, val) in enumerate(pa_scalar.items())
+        }
+    elif pa.types.is_list(pa_scalar.type):
+        return [_maybe_nested_pa_scalar_to_py(val) for val in pa_scalar]
+    else:
+        return pa_scalar.as_py()
+
+
+def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
+    """
+    Convert a value and dtype to a pylibcudf Scalar for device-side cudf.Scalar
+
+    Parameters
+    ----------
+    value: Scalarlike
+    dtype: dtypelike
+
+    Returns
+    -------
+    plc.Scalar
+    """
+    if cudf.utils.utils.is_na_like(value):
+        value = None
+    else:
+        # TODO: For now we deepcopy the input value for nested values to avoid
+        # overwriting the input values when replacing nulls. Since it's
+        # just host values it's not that expensive, but we could consider
+        # alternatives.
+        if isinstance(value, (list, dict)):
+            value = copy.deepcopy(value)
+        _replace_nested(value, cudf.utils.utils.is_na_like, None)
+
+    if isinstance(dtype, cudf.core.dtypes._BaseDtype):
+        pa_type = dtype.to_arrow()
+    elif pd.api.types.is_string_dtype(dtype):
+        # Have to manually convert object types, which we use internally
+        # for strings but pyarrow only supports as unicode 'U'
+        pa_type = pa.string()
+    else:
+        pa_type = pa.from_numpy_dtype(dtype)
+
+    pa_scalar = pa.scalar(value, type=pa_type)
+    plc_scalar = plc.interop.from_arrow(pa_scalar)
+    if isinstance(dtype, (Decimal32Dtype, Decimal64Dtype)):
+        # pyarrow only supports decimal128
+        if isinstance(dtype, Decimal32Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
+        elif isinstance(dtype, Decimal64Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
+        plc_column = plc.unary.cast(
+            plc.Column.from_scalar(plc_scalar, 1), plc_type
+        )
+        plc_scalar = plc.copying.get_element(plc_column, 0)
+    return plc_scalar
 
 
 @functools.lru_cache(maxsize=128)
@@ -138,7 +320,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def __init__(self, value, dtype=None):
         self._host_value = None
         self._host_dtype = None
-        self._device_value = None
+        self._device_value: plc.Scalar | None = None
 
         if isinstance(value, Scalar):
             if value._is_host_value_current:
@@ -147,37 +329,34 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             else:
                 self._device_value = value._device_value
         else:
-            self._host_value, self._host_dtype = self._preprocess_host_value(
+            self._host_value, self._host_dtype = _preprocess_host_value(
                 value, dtype
             )
 
     @classmethod
-    def from_device_scalar(cls, device_scalar):
-        if not isinstance(device_scalar, cudf._lib.scalar.DeviceScalar):
+    def from_pylibcudf(cls, scalar: plc.Scalar) -> Self:
+        if not isinstance(scalar, plc.Scalar):
             raise TypeError(
-                "Expected an instance of DeviceScalar, "
-                f"got {type(device_scalar).__name__}"
+                "Expected an instance of pylibcudf.Scalar, "
+                f"got {type(scalar).__name__}"
             )
         obj = object.__new__(cls)
         obj._host_value = None
         obj._host_dtype = None
-        obj._device_value = device_scalar
+        obj._device_value = scalar
         return obj
 
     @property
-    def _is_host_value_current(self):
+    def _is_host_value_current(self) -> bool:
         return self._host_value is not None
 
     @property
-    def _is_device_value_current(self):
+    def _is_device_value_current(self) -> bool:
         return self._device_value is not None
 
     @property
-    def device_value(self):
-        if self._device_value is None:
-            self._device_value = cudf._lib.scalar.DeviceScalar(
-                self._host_value, self._host_dtype
-            )
+    def device_value(self) -> plc.Scalar:
+        self._sync()
         return self._device_value
 
     @property
@@ -186,92 +365,55 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             self._device_value_to_host()
         return self._host_value
 
-    # todo: change to cached property
+    # TODO: change to @functools.cached_property
     @property
     def dtype(self):
-        if self._is_host_value_current:
-            if isinstance(self._host_value, str):
-                return cudf.dtype("object")
-            else:
-                return self._host_dtype
-        else:
-            return self.device_value.dtype
+        if self._host_dtype is not None:
+            return self._host_dtype
+        if not self._is_host_value_current:
+            self._device_value_to_host()
+        _, host_dtype = _preprocess_host_value(self._host_value, None)
+        self._host_dtype = host_dtype
+        return self._host_dtype
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         if not self._is_host_value_current:
             self._device_value_to_host()
         return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
-    def _device_value_to_host(self):
-        self._host_value = self._device_value._to_host_scalar()
-
-    def _preprocess_host_value(self, value, dtype):
-        valid = not cudf.utils.utils._is_null_host_scalar(value)
-
-        if isinstance(value, list):
-            if dtype is not None:
-                raise TypeError("Lists may not be cast to a different dtype")
+    def _device_value_to_host(self) -> None:
+        ps = plc.interop.to_arrow(self._device_value)
+        is_datetime = pa.types.is_timestamp(ps.type)
+        is_timedelta = pa.types.is_duration(ps.type)
+        if not ps.is_valid:
+            if is_datetime or is_timedelta:
+                self._host_value = NaT
             else:
-                dtype = ListDtype.from_arrow(
-                    pa.infer_type([value], from_pandas=True)
-                )
-                return value, dtype
-        elif isinstance(dtype, ListDtype):
-            if value not in {None, NA}:
-                raise ValueError(f"Can not coerce {value} to ListDtype")
+                self._host_value = NA
+        else:
+            # TODO: The special handling of specific types below does not currently
+            # extend to nested types containing those types (e.g. List[timedelta]
+            # where the timedelta would overflow). We should eventually account for
+            # those cases, but that will require more careful consideration of how
+            # to traverse the contents of the nested data.
+            if is_datetime or is_timedelta:
+                time_unit = ps.type.unit
+                # Cast to int64 to avoid overflow
+                ps_cast = ps.cast(pa.int64()).as_py()
+                out_type = np.datetime64 if is_datetime else np.timedelta64
+                self._host_value = out_type(ps_cast, time_unit)
+            elif (
+                pa.types.is_integer(ps.type)
+                or pa.types.is_floating(ps.type)
+                or pa.types.is_boolean(ps.type)
+            ):
+                self._host_value = ps.type.to_pandas_dtype()(ps.as_py())
             else:
-                return NA, dtype
+                host_value = _maybe_nested_pa_scalar_to_py(ps)
+                _replace_nested(host_value, lambda item: item is None, NA)
+                self._host_value = host_value
 
-        if isinstance(value, dict):
-            if dtype is None:
-                dtype = StructDtype.from_arrow(
-                    pa.infer_type([value], from_pandas=True)
-                )
-            return value, dtype
-        elif isinstance(dtype, StructDtype):
-            if value not in {None, NA}:
-                raise ValueError(f"Can not coerce {value} to StructDType")
-            else:
-                return NA, dtype
-
-        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            value = pa.scalar(
-                value, type=pa.decimal128(dtype.precision, dtype.scale)
-            ).as_py()
-        if isinstance(value, decimal.Decimal) and dtype is None:
-            dtype = cudf.Decimal128Dtype._from_decimal(value)
-
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
-
-        if dtype is None:
-            if not valid:
-                if value is NaT:
-                    value = value.to_numpy()
-
-                if isinstance(value, (np.datetime64, np.timedelta64)):
-                    unit, _ = np.datetime_data(value)
-                    if unit == "generic":
-                        raise TypeError(
-                            "Cant convert generic NaT to null scalar"
-                        )
-                    else:
-                        dtype = value.dtype
-                else:
-                    raise TypeError(
-                        "dtype required when constructing a null scalar"
-                    )
-            else:
-                dtype = value.dtype
-
-        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            dtype = cudf.dtype(dtype)
-
-        if not valid:
-            value = NaT if dtype.kind in "mM" else NA
-
-        return value, dtype
-
-    def _sync(self):
+    def _sync(self) -> None:
         """
         If the cache is not synched, copy either the device or host value
         to the host or device respectively. If cache is valid, do nothing
@@ -279,27 +421,27 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         if self._is_host_value_current and self._is_device_value_current:
             return
         elif self._is_host_value_current and not self._is_device_value_current:
-            self._device_value = cudf._lib.scalar.DeviceScalar(
+            self._device_value = _to_plc_scalar(
                 self._host_value, self._host_dtype
             )
         elif self._is_device_value_current and not self._is_host_value_current:
-            self._host_value = self._device_value.value
+            self._device_value_to_host()
             self._host_dtype = self._host_value.dtype
         else:
             raise ValueError("Invalid cudf.Scalar")
 
-    def __index__(self):
+    def __index__(self) -> int:
         if self.dtype.kind not in {"u", "i"}:
             raise TypeError("Only Integer typed scalars may be used in slices")
         return int(self)
 
-    def __int__(self):
+    def __int__(self) -> int:
         return int(self.value)
 
-    def __float__(self):
+    def __float__(self) -> float:
         return float(self.value)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.value)
 
     def __round__(self, n):
@@ -321,13 +463,10 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def __neg__(self):
         return self._scalar_unaop("__neg__")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return (
-            f"{self.__class__.__name__}"
-            f"({self.value!s}, dtype={self.dtype})"
-        )
+        return f"{self.__class__.__name__}({self.value!s}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
@@ -403,13 +542,13 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 return cudf.dtype("float64")
         return self.dtype
 
-    def _scalar_unaop(self, op):
+    def _scalar_unaop(self, op) -> None | Self:
         out_dtype = self._unaop_result_type_or_error(op)
         if not self.is_valid():
-            result = None
+            return None
         else:
             result = self._dispatch_scalar_unaop(op)
-            return Scalar(result, dtype=out_dtype)
+            return Scalar(result, dtype=out_dtype)  # type: ignore[return-value]
 
     def _dispatch_scalar_unaop(self, op):
         if op == "__floor__":
@@ -418,7 +557,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             return np.ceil(self.value)
         return getattr(self.value, op)()
 
-    def astype(self, dtype):
+    def astype(self, dtype) -> Self:
         if self.dtype == dtype:
             return self
-        return Scalar(self.value, dtype)
+        return Scalar(self.value, dtype)  # type: ignore[return-value]

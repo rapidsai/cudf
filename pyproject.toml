@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -116,17 +116,12 @@ ignore = [
 ]
 fixable = ["ALL"]
 exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
-]
-
-[tool.ruff.format]
-exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
+    "cpp/scripts/gdb-pretty-printers.py",
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# We use "== None" to demonstrate null handling in this notebook
+"docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
