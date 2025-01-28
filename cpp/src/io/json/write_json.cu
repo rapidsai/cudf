@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -376,6 +376,48 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     {});
 }
 
+struct scatter_fn {
+  column_device_view _col;
+  size_type* _d_strview_offsets;
+  string_view* _d_strviews;
+  size_type const* _labels;
+  size_type const* _list_offsets;
+  column_device_view _d_strings_children;
+  string_view _element_seperator;
+  string_view _element_narep;
+
+  scatter_fn(column_device_view col,
+             size_type* d_strview_offsets,
+             string_view* d_strviews,
+             size_type const* labels,
+             size_type const* list_offsets,
+             column_device_view d_strings_children,
+             string_view const element_separator,
+             string_view const element_narep) noexcept
+    : _col{col},
+      _d_strview_offsets{d_strview_offsets},
+      _d_strviews{d_strviews},
+      _labels{labels},
+      _list_offsets{list_offsets},
+      _d_strings_children{d_strings_children},
+      _element_seperator{element_separator},
+      _element_narep{element_narep}
+  {
+  }
+
+  __device__ void operator()(size_type idx) const
+  {
+    auto const label         = _labels[idx];
+    auto const sublist_index = idx - _list_offsets[label];
+    auto const strview_index = _d_strview_offsets[label] + sublist_index * 2 + 1;
+    // value or na_rep
+    auto const strview         = _d_strings_children.element<cudf::string_view>(idx);
+    _d_strviews[strview_index] = _d_strings_children.is_null(idx) ? _element_narep : strview;
+    // separator
+    if (sublist_index != 0) { _d_strviews[strview_index - 1] = _element_seperator; }
+  }
+};
+
 /**
  * @brief Concatenates a list of strings columns into a single strings column.
  *
@@ -461,24 +503,14 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_strings),
-                   [col                = *col_device_view,
-                    d_strview_offsets  = d_strview_offsets.begin(),
-                    d_strviews         = d_strviews.begin(),
-                    labels             = labels->view().begin<size_type>(),
-                    list_offsets       = offsets.begin<size_type>(),
-                    d_strings_children = *d_strings_children,
-                    element_separator,
-                    element_narep] __device__(auto idx) {
-                     auto const label         = labels[idx];
-                     auto const sublist_index = idx - list_offsets[label];
-                     auto const strview_index = d_strview_offsets[label] + sublist_index * 2 + 1;
-                     // value or na_rep
-                     auto const strview = d_strings_children.element<cudf::string_view>(idx);
-                     d_strviews[strview_index] =
-                       d_strings_children.is_null(idx) ? element_narep : strview;
-                     // separator
-                     if (sublist_index != 0) { d_strviews[strview_index - 1] = element_separator; }
-                   });
+                   scatter_fn{*col_device_view,
+                              d_strview_offsets.data(),
+                              d_strviews.data(),
+                              labels->view().data<size_type>(),
+                              offsets.data<size_type>(),
+                              *d_strings_children,
+                              element_separator,
+                              element_narep});
 
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
