@@ -1713,20 +1713,8 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
     )
 
 
-def is_cudf_pandas_obj(obj):
-    return is_proxy_object(obj)
-
-
-def is_cudf_pandas_dataframe(obj):
-    return is_proxy_object(obj) and isinstance(obj, DataFrame)
-
-
-def is_cudf_pandas_series(obj):
-    return is_proxy_object(obj) and isinstance(obj, Series)
-
-
-def is_cudf_pandas_index(obj):
-    return is_proxy_object(obj) and isinstance(obj, Index)
+def isinstance_cudf_pandas(obj, type_name):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type_name
 
 
 # timestamps and timedeltas are not proxied, but non-proxied

@@ -66,11 +66,7 @@ from pandas.tseries.holiday import (
 )
 
 from cudf.pandas import (
-    is_cudf_pandas_dataframe,
-    is_cudf_pandas_index,
-    is_cudf_pandas_ndarray,
-    is_cudf_pandas_obj,
-    is_cudf_pandas_series,
+    isinstance_cudf_pandas,
 )
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
@@ -1905,28 +1901,21 @@ def test_is_cudf_pandas():
     s = xpd.Series([1, 2, 3])
     df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     index = xpd.Index([1, 2, 3])
-    assert is_cudf_pandas_obj(s)
-    assert is_cudf_pandas_obj(df)
-    assert is_cudf_pandas_obj(index)
-    assert is_cudf_pandas_obj(index.values)
 
-    assert is_cudf_pandas_series(s)
-    assert is_cudf_pandas_dataframe(df)
-    assert is_cudf_pandas_index(index)
-    assert is_cudf_pandas_ndarray(index.values)
+    assert isinstance_cudf_pandas(s, "Series")
+    assert isinstance_cudf_pandas(df, "DataFrame")
+    assert isinstance_cudf_pandas(index, "Index")
+    assert isinstance_cudf_pandas(index.values, "ndarray")
 
     for obj in [s, df, index, index.values]:
-        assert not is_cudf_pandas_obj(obj._fsproxy_slow)
-        assert not is_cudf_pandas_obj(obj._fsproxy_fast)
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "Series")
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "Series")
 
-        assert not is_cudf_pandas_series(obj._fsproxy_slow)
-        assert not is_cudf_pandas_series(obj._fsproxy_fast)
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "DataFrame")
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "DataFrame")
 
-        assert not is_cudf_pandas_dataframe(obj._fsproxy_slow)
-        assert not is_cudf_pandas_dataframe(obj._fsproxy_fast)
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "Index")
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "Index")
 
-        assert not is_cudf_pandas_index(obj._fsproxy_slow)
-        assert not is_cudf_pandas_index(obj._fsproxy_fast)
-
-        assert not is_cudf_pandas_nd_array(obj._fsproxy_slow)
-        assert not is_cudf_pandas_nd_array(obj._fsproxy_fast)
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "ndarray")
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "ndarray")

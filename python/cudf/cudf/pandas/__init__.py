@@ -8,12 +8,8 @@ import warnings
 import pylibcudf
 import rmm.mr
 
-from ._wrappers.numpy import is_cudf_pandas_nd_array
 from ._wrappers.pandas import (
-    is_cudf_pandas_dataframe,
-    is_cudf_pandas_index,
-    is_cudf_pandas_obj,
-    is_cudf_pandas_series,
+    isinstance_cudf_pandas,
 )
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension

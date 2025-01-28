@@ -144,24 +144,24 @@ provides a similar configuration-based plugin for Spark.
 
 ## How do I know if an object is a `cudf.pandas` proxy object?
 
-To determine if an object is a `cudf.pandas` proxy object, you can use the `is_cudf_pandas_obj` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
+To determine if an object is a `cudf.pandas` proxy object, you can use the `isinstance_cudf_pandas` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
 
 ```python
-from cudf.pandas import is_cudf_pandas_obj
+from cudf.pandas import isinstance_cudf_pandas
 
 obj = ...  # Your object here
-if is_cudf_pandas_obj(obj):
-    print("The object is a cudf.pandas proxy object.")
+if isinstance_cudf_pandas(obj, "Series"):
+    print("The object is a cudf.pandas proxy Series object.")
 else:
-    print("The object is not a cudf.pandas proxy object.")
+    print("The object is not a cudf.pandas proxy Series object.")
 ```
 
-There are APIs to detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately:
+To detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately, you can pass the type names as the second parameter:
 
-* `is_cudf_pandas_series`: Detects if the object is a `cudf.pandas` proxy `Series`.
-* `is_cudf_pandas_dataframe`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
-* `is_cudf_pandas_index`: Detects if the object is a `cudf.pandas` proxy `Index`.
-* `is_cudf_pandas_ndarray`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
+* `isinstance_cudf_pandas(obj, "Series")`: Detects if the object is a `cudf.pandas` proxy `Series`.
+* `isinstance_cudf_pandas(obj, "DataFrame")`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
+* `isinstance_cudf_pandas(obj, "Index")`: Detects if the object is a `cudf.pandas` proxy `Index`.
+* `isinstance_cudf_pandas(obj, "ndarray")`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
 
 ## How can I access the underlying GPU or CPU objects?
 
