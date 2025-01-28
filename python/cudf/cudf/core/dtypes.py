@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -57,7 +57,8 @@ def dtype(arbitrary):
         if np_dtype.kind in set("OU"):
             return np.dtype("object")
         elif (
-            np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+            np_dtype
+            not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
         ):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
@@ -517,6 +518,28 @@ class ListDtype(_BaseDtype):
     def itemsize(self):
         return self.element_type.itemsize
 
+    def _recursively_replace_fields(self, result: list) -> list:
+        """
+        Return a new list result but with the keys of dict element by the keys in StructDtype.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        if isinstance(self.element_type, StructDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, dict)
+                else res
+                for res in result
+            ]
+        elif isinstance(self.element_type, ListDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, list)
+                else res
+                for res in result
+            ]
+        return result
+
 
 class StructDtype(_BaseDtype):
     """
@@ -675,6 +698,26 @@ class StructDtype(_BaseDtype):
             cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
             for field in self._typ
         )
+
+    def _recursively_replace_fields(self, result: dict) -> dict:
+        """
+        Return a new dict result but with the keys replaced by the keys in self.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        new_result = {}
+        for (new_field, field_dtype), result_value in zip(
+            self.fields.items(), result.values()
+        ):
+            if isinstance(field_dtype, StructDtype) and isinstance(
+                result_value, dict
+            ):
+                new_result[new_field] = (
+                    field_dtype._recursively_replace_fields(result_value)
+                )
+            else:
+                new_result[new_field] = result_value
+        return new_result
 
 
 decimal_dtype_template = textwrap.dedent(

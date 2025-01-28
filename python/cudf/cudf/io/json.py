@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import os
@@ -14,10 +14,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf.core.buffer import acquire_spill_lock
 from cudf.utils import ioutils
-from cudf.utils.dtypes import _maybe_convert_to_default_type
+from cudf.utils.dtypes import (
+    _maybe_convert_to_default_type,
+    dtype_to_pylibcudf_type,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -29,7 +31,7 @@ def _get_cudf_schema_element_from_dtype(
     dtype = cudf.dtype(dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
-            "CategoricalDtype as dtype is not yet " "supported in JSON reader"
+            "CategoricalDtype as dtype is not yet supported in JSON reader"
         )
 
     lib_type = dtype_to_pylibcudf_type(dtype)

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -424,6 +424,14 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # * reshape benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+
+# ##################################################################################################
+# * rolling benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(
+  ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
+  rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+)
 
 add_custom_target(
   run_benchmarks

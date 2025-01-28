@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import json
 import re
@@ -2048,26 +2048,26 @@ def test_string_starts_ends(data, pat):
     [
         (
             ["abc", "xyz", "a", "ab", "123", "097"],
-            ["abc", "x", "a", "b", "3", "7"],
+            ("abc", "x", "a", "b", "3", "7"),
         ),
-        (["A B", "1.5", "3,000"], ["A ", ".", ","]),
-        (["23", "³", "⅕", ""], ["23", "³", "⅕", ""]),
-        ([" ", "\t\r\n ", ""], ["d", "\n ", ""]),
+        (["A B", "1.5", "3,000"], ("A ", ".", ",")),
+        (["23", "³", "⅕", ""], ("23", "³", "⅕", "")),
+        ([" ", "\t\r\n ", ""], ("d", "\n ", "")),
         (
             ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-            ["$", "$", "a", "<", "(", "#"],
+            ("$", "$", "a", "<", "(", "#"),
         ),
         (
             ["line to be wrapped", "another line to be wrapped"],
-            ["another", "wrapped"],
+            ("another", "wrapped"),
         ),
         (
             ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            ["hsdjfk", None, "ll", "+", "-", "w", "-", "én"],
+            ("hsdjfk", "", "ll", "+", "-", "w", "-", "én"),
         ),
         (
             ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
-            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+            ("1. Ant.  ", "2. Bee!\n", "3. Cat?\t", ""),
         ),
     ],
 )
@@ -3539,3 +3539,39 @@ def test_string_reduction_error():
         lfunc_args_and_kwargs=([], {"skipna": False}),
         rfunc_args_and_kwargs=([], {"skipna": False}),
     )
+
+
+def test_getitem_out_of_bounds():
+    data = ["123", "12", "1"]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    expected = pd_ser.str[2]
+    result = cudf_ser.str[2]
+    assert_eq(result, expected)
+
+    expected = pd_ser.str[-2]
+    result = cudf_ser.str[-2]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["startswith", "endswith"])
+@pytest.mark.parametrize("pat", [None, (1, 2), pd.Series([1])])
+def test_startsendwith_invalid_pat(method, pat):
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        getattr(ser.str, method)(pat)
+
+
+@pytest.mark.parametrize("method", ["rindex", "index"])
+def test_index_int64_pandas_compat(method):
+    data = ["ABCDEFG", "BCDEFEF", "DEFGHIJEF", "EFGHEF"]
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(cudf.Series(data).str, method)("E", 4, 8)
+    expected = getattr(pd.Series(data).str, method)("E", 4, 8)
+    assert_eq(result, expected)
+
+
+def test_replace_invalid_scalar_repl():
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        ser.str.replace("1", 2)

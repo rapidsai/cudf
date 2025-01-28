@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -396,7 +396,16 @@ abstract class Aggregation {
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createHostUDFAgg(wrapper.udfNativeHandle);
+            long udf = 0;
+            try {
+                udf = wrapper.createUDFInstance();
+                return Aggregation.createHostUDFAgg(udf);
+            } finally {
+                // a new UDF is cloned in `createHostUDFAgg`, here should close the UDF instance.
+                if (udf != 0) {
+                    HostUDFWrapper.closeUDFInstance(udf);
+                }
+            }
         }
 
         @Override

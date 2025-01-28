@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -35,6 +34,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/limits>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -44,8 +44,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
-namespace nvcomp = cudf::io::detail::nvcomp;
 
 using cudf::detail::device_2dspan;
 using cudf::io::detail::compression_result;
@@ -416,8 +414,8 @@ static __device__ uint32_t IntegerRLE(
     // Find minimum and maximum values
     if (literal_run > 0) {
       // Find min & max
-      T vmin = (t < literal_run) ? v0 : std::numeric_limits<T>::max();
-      T vmax = (t < literal_run) ? v0 : std::numeric_limits<T>::min();
+      T vmin = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::max();
+      T vmax = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
@@ -451,7 +449,7 @@ static __device__ uint32_t IntegerRLE(
         } else {
           uint32_t range, w;
           // Mode 2 base value cannot be bigger than max int64_t, i.e. the first bit has to be 0
-          if (vmin <= std::numeric_limits<int64_t>::max() and mode1_w > mode2_w and
+          if (vmin <= cuda::std::numeric_limits<int64_t>::max() and mode1_w > mode2_w and
               (literal_run - 1) * (mode1_w - mode2_w) > 4) {
             s->u.intrle.literal_mode = 2;
             w                        = mode2_w;
@@ -744,8 +742,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   } temp_storage;
 
   orcenc_state_s* const s = &state_g;
-  uint32_t col_id         = blockIdx.x;
-  uint32_t group_id       = blockIdx.y;
+  uint32_t col_id         = blockIdx.x / chunks.size().second;
+  uint32_t group_id       = blockIdx.x % chunks.size().second;
   int t                   = threadIdx.x;
   if (t == 0) {
     s->chunk                = chunks[col_id][group_id];
@@ -1108,8 +1106,8 @@ CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
                        device_span<uint8_t*> dsts,
                        device_span<size_t> sizes)
 {
-  auto const stripe_id = cudf::detail::grid_1d::global_thread_id();
-  auto const stream_id = blockIdx.y;
+  auto const stripe_id = (blockIdx.x / strm_desc.size().second) * blockDim.x + threadIdx.x;
+  auto const stream_id = blockIdx.x % strm_desc.size().second;
   if (stripe_id >= strm_desc.size().first) { return; }
 
   auto const out_id = stream_id * strm_desc.size().first + stripe_id;
@@ -1150,7 +1148,7 @@ CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
 // blockDim {256,1,1}
 CUDF_KERNEL void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
-                           device_2dspan<encoder_chunk_streams> streams,  // const?
+                           device_2dspan<encoder_chunk_streams const> streams,
                            device_span<device_span<uint8_t const>> inputs,
                            device_span<device_span<uint8_t>> outputs,
                            device_span<compression_result> results,
@@ -1165,8 +1163,8 @@ CUDF_KERNEL void __launch_bounds__(256)
   auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
   auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
 
-  auto const stripe_id = blockIdx.x;
-  auto const stream_id = blockIdx.y;
+  auto const stripe_id = blockIdx.x / strm_desc.size().second;
+  auto const stream_id = blockIdx.x % strm_desc.size().second;
   uint32_t t           = threadIdx.x;
   uint32_t num_blocks;
   uint8_t *src, *dst;
@@ -1216,8 +1214,8 @@ CUDF_KERNEL void __launch_bounds__(1024)
   __shared__ uint8_t const* comp_src_g;
   __shared__ uint32_t comp_len_g;
 
-  auto const stripe_id = blockIdx.x;
-  auto const stream_id = blockIdx.y;
+  auto const stripe_id = blockIdx.x / strm_desc.size().second;
+  auto const stream_id = blockIdx.x % strm_desc.size().second;
   uint32_t t           = threadIdx.x;
   uint32_t num_blocks, b, blk_size;
   uint8_t const* src;
@@ -1293,8 +1291,10 @@ CUDF_KERNEL void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows con
   __shared__ typename block_scan::TempStorage scan_storage;
   int const t = threadIdx.x;
 
-  auto const& col_elem_sizes = sizes[blockIdx.x];
-  auto const& row_group      = rg_bounds[blockIdx.y][col_elem_sizes.col_idx];
+  auto const col_id          = blockIdx.x / rg_bounds.size().first;
+  auto const rg_id           = blockIdx.x % rg_bounds.size().first;
+  auto const& col_elem_sizes = sizes[col_id];
+  auto const& row_group      = rg_bounds[rg_id][col_elem_sizes.col_idx];
   auto const elem_sizes      = col_elem_sizes.sizes.data() + row_group.begin;
 
   uint32_t initial_value = 0;
@@ -1313,10 +1313,9 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(encode_block_size, 1);  // `encode_block_size` threads per chunk
-  dim3 dim_grid(chunks.size().first, chunks.size().second);
+  auto const num_blocks = chunks.size().first * chunks.size().second;
   gpuEncodeOrcColumnData<encode_block_size>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, streams);
+    <<<num_blocks, encode_block_size, 0, stream.value()>>>(chunks, streams);
 }
 
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
@@ -1327,10 +1326,10 @@ void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(512, 1);  // 512 threads per dictionary
+  constexpr int block_size = 512;  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
-  gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
+  gpuEncodeStringDictionaries<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(stripes, columns, chunks, enc_streams);
 }
 
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
@@ -1348,10 +1347,10 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
   auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
     num_chunks, stream, rmm::mr::get_current_device_resource());
 
-  dim3 dim_block(compact_streams_block_size, 1);
-  dim3 dim_grid(cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size),
-                strm_desc.size().second);
-  gpuInitBatchedMemcpy<<<dim_grid, dim_block, 0, stream.value()>>>(
+  auto const num_blocks =
+    cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size) *
+    strm_desc.size().second;
+  gpuInitBatchedMemcpy<<<num_blocks, compact_streams_block_size, 0, stream.value()>>>(
     strm_desc, enc_streams, srcs, dsts, lengths);
 
   // Copy streams in a batched manner.
@@ -1362,7 +1361,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
-  CompressionKind compression,
+  compression_type compression,
   uint32_t comp_blk_size,
   uint32_t max_comp_blk_size,
   uint32_t comp_block_align,
@@ -1375,62 +1374,20 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
 
-  dim3 dim_block_init(256, 1);
-  dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(strm_desc,
-                                                                            enc_streams,
-                                                                            comp_in,
-                                                                            comp_out,
-                                                                            comp_res,
-                                                                            compressed_data,
-                                                                            comp_blk_size,
-                                                                            max_comp_blk_size,
-                                                                            comp_block_align);
+  size_t const num_blocks = strm_desc.size().first * strm_desc.size().second;
+  gpuInitCompressionBlocks<<<num_blocks, 256, 0, stream.value()>>>(strm_desc,
+                                                                   enc_streams,
+                                                                   comp_in,
+                                                                   comp_out,
+                                                                   comp_res,
+                                                                   compressed_data,
+                                                                   comp_blk_size,
+                                                                   max_comp_blk_size,
+                                                                   comp_block_align);
 
-  if (compression == SNAPPY) {
-    try {
-      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
-        cudf::io::detail::gpu_snap(comp_in, comp_out, comp_res, stream);
-      } else {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      }
-    } catch (...) {
-      // There was an error in compressing so set an error status for each block
-      thrust::for_each(
-        rmm::exec_policy(stream),
-        comp_res.begin(),
-        comp_res.end(),
-        [] __device__(compression_result & stat) { stat.status = compression_status::FAILURE; });
-      // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
-      // writing without compression
-      CUDF_LOG_WARN("ORC writer: compression failed, writing uncompressed data");
-    }
-  } else if (compression == ZLIB) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(
-      nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_res, stream);
-  } else if (compression == ZSTD) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-  } else if (compression == LZ4) {
-    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
-        reason) {
-      CUDF_FAIL("Compression error: " + reason.value());
-    }
-    nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
-  } else if (compression != NONE) {
-    CUDF_FAIL("Unsupported compression type");
-  }
+  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
 
-  dim3 dim_block_compact(1024, 1);
-  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
+  gpuCompactCompressedBlocks<<<num_blocks, 1024, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 
   if (collect_statistics) {
@@ -1458,10 +1415,10 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
     h_sizes, stream, cudf::get_current_device_resource_ref());
 
   constexpr int block_size = 256;
-  dim3 const grid_size{static_cast<unsigned int>(elem_sizes.size()),        // num decimal columns
-                       static_cast<unsigned int>(rg_bounds.size().first)};  // num rowgroups
+  // number of rowgroups * number of decimal columns
+  auto const num_blocks = elem_sizes.size() * rg_bounds.size().first;
   decimal_sizes_to_offsets_kernel<block_size>
-    <<<grid_size, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
+    <<<num_blocks, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
 }
 
 }  // namespace gpu

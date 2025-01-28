@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
+from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -92,7 +93,11 @@ from cudf.utils.dtypes import (
     min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+from cudf.utils.utils import (
+    GetAttrGetItemMixin,
+    _external_only_api,
+    _is_null_host_scalar,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnLike, Dtype, NotImplementedType
@@ -784,6 +789,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     label_dtype=label_dtype,
                     verify=False,
                 )
+            else:
+                self._data.rangeindex = True
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.DataFrame._from_data for constructing a DataFrame from "
@@ -1115,6 +1122,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        elif columns is None:
+            self._data.rangeindex = True
+
         self._data._level_names = (
             tuple(columns.names)
             if isinstance(columns, pd.Index)
@@ -1890,7 +1900,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             dtype = {cc: dtype for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
-    def _clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output: Self) -> str:
         """
         This method takes in partial/preprocessed dataframe
         and returns correct representation of it with correct
@@ -1925,41 +1935,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return "\n".join(lines)
 
-    def _clean_nulls_from_dataframe(self, df):
-        """
-        This function converts all ``null`` values to ``<NA>`` for
-        representation as a string in `__repr__`.
-
-        Since we utilize Pandas `__repr__` at all places in our code
-        for formatting purposes, we convert columns to `str` dtype for
-        filling with `<NA>` values.
-        """
-        for col in df._data:
-            if isinstance(
-                df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
-            ):
-                # TODO we need to handle this
-                pass
-            elif df._data[col].has_nulls():
-                fill_value = (
-                    str(cudf.NaT)
-                    if isinstance(
-                        df._data[col],
-                        (
-                            cudf.core.column.DatetimeColumn,
-                            cudf.core.column.TimeDeltaColumn,
-                        ),
-                    )
-                    else str(cudf.NA)
-                )
-
-                df[col] = df._data[col].astype("str").fillna(fill_value)
-            else:
-                df[col] = df._data[col]
-
-        return df
-
-    def _get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self) -> Self:
         """
         Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
@@ -1967,9 +1943,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         for printing with the dataframe.
         """
         max_rows = pd.options.display.max_rows
-        nrows = np.max([len(self) if max_rows is None else max_rows, 1])
-        if pd.options.display.max_rows == 0:
-            nrows = len(self)
+        if max_rows in {0, None}:
+            max_rows = len(self)
+        nrows = max(max_rows, 1)
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
@@ -1977,7 +1953,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
-            output = self.copy(deep=False)
+            output = self
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
             # In case of Empty DataFrame with index, Pandas prints
@@ -2037,10 +2013,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 lower = cudf.concat([lower_left, lower_right], axis=1)
                 output = cudf.concat([upper, lower])
 
-        output = self._clean_nulls_from_dataframe(output)
-        output.index = output.index._clean_nulls_from_index()
-
-        return output
+        return output._pandas_repr_compatible()
 
     @_performance_tracking
     def __repr__(self):
@@ -3371,7 +3344,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 value = value.item()
-            if libcudf.scalar._is_null_host_scalar(value):
+            if _is_null_host_scalar(value):
                 dtype = "str"
             value = as_column(
                 value,
@@ -3831,8 +3804,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif isinstance(aggs, str):
             if not hasattr(self, aggs):
                 raise AttributeError(
-                    f"{aggs} is not a valid function for "
-                    f"'DataFrame' object"
+                    f"{aggs} is not a valid function for 'DataFrame' object"
                 )
             result = DataFrame()
             result[aggs] = getattr(self, aggs)()
@@ -5595,6 +5567,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif hasattr(dataframe, "__dataframe__"):
             # TODO: Probably should be handled in the constructor as
             # this isn't pandas specific
+            assert version.parse(cudf.__version__) < version.parse("25.04.00")
+            warnings.warn(
+                "Support for loading dataframes via the `__dataframe__` interchange "
+                "protocol is deprecated",
+                FutureWarning,
+            )
             return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
@@ -6262,10 +6240,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
-        fill_value = cudf.Scalar(False)
-
         def make_false_column_like_self():
-            return column.as_column(fill_value, length=len(self), dtype="bool")
+            return column.as_column(False, length=len(self), dtype="bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -6437,7 +6413,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise NotImplementedError("Only axis=0 is currently supported.")
         length = len(self)
         return Series._from_column(
-            as_column([length - col.null_count for col in self._columns]),
+            as_column(
+                [
+                    length
+                    - (
+                        col.null_count
+                        + (
+                            col.nan_count
+                            if cudf.get_option("mode.pandas_compatible")
+                            else 0
+                        )
+                    )
+                    for col in self._columns
+                ]
+            ),
             index=cudf.Index(self._column_names),
         )
 
@@ -6660,9 +6649,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             return DataFrame()
 
         with warnings.catch_warnings():
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.simplefilter("ignore", FutureWarning)
             df = cudf.concat(mode_results, axis=1)
 
@@ -7717,9 +7706,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "
@@ -7744,6 +7733,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def __dataframe__(
         self, nan_as_null: bool = False, allow_copy: bool = True
     ):
+        assert version.parse(cudf.__version__) < version.parse("25.04.00")
+        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
         return df_protocol.__dataframe__(
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
@@ -8113,6 +8104,83 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result.index = MultiIndex._from_data(result.index._data)
         result.name = "proportion" if normalize else "count"
         return result
+
+    @_performance_tracking
+    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+        """
+        Convert this DataFrame to a pylibcudf.Table.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Table
+            A pylibcudf.Table referencing the same data.
+        dict
+            Dict of metadata (includes column names and dataframe indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"index": self.index, "columns": self._data.to_pandas_index}
+        return plc.Table(
+            [col.to_pylibcudf(mode="write") for col in self._columns]
+        ), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(cls, table: plc.Table, metadata: dict) -> Self:
+        """
+        Create a DataFrame from a pylibcudf.Table.
+
+        Parameters
+        ----------
+        table : pylibcudf.Table
+            The input Table.
+        metadata : dict
+            Metadata necessary to reconstruct the dataframe
+
+        Returns
+        -------
+        table : cudf.DataFrame
+            A cudf.DataFrame referencing the columns in the pylibcudf.Table.
+        metadata : list[str]
+            Dict of metadata (includes column names and dataframe indices)
+
+        Notes
+        -----
+        This function will generate a DataFrame which contains a tuple of columns
+        pointing to the same columns the input table points to.  It will directly access
+        the data and mask buffers of the pylibcudf columns, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Table.
+        """
+        if not (
+            isinstance(metadata, dict)
+            and 1 <= len(metadata) <= 2
+            and "columns" in metadata
+            and (len(metadata) != 2 or {"columns", "index"} == set(metadata))
+        ):
+            raise ValueError(
+                "Must at least pass metadata dict with column names and optionally indices only"
+            )
+        columns = table.columns()
+        df = cls._from_data(
+            {
+                name: cudf.core.column.ColumnBase.from_pylibcudf(
+                    col, data_ptr_exposed=True
+                )
+                for name, col in zip(metadata["columns"], columns)
+            },
+            index=metadata.get("index"),
+        )
+        return df
 
 
 def from_dataframe(df, allow_copy: bool = False) -> DataFrame:

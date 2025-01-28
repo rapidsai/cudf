@@ -1,10 +1,11 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION
+# Copyright (c) 2020-2025, NVIDIA CORPORATION
 from __future__ import annotations
 
 import warnings
 from typing import TYPE_CHECKING
 
 import numba
+import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
 
@@ -13,7 +14,7 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
-from cudf.core._internals.aggregation import make_aggregation
+from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
@@ -22,6 +23,7 @@ from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
+    from cudf.core.indexed_frame import IndexedFrame
 
 
 class _RollingBase:
@@ -204,7 +206,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     def __init__(
         self,
-        obj,
+        obj: IndexedFrame,
         window,
         min_periods=None,
         center: bool = False,
@@ -215,7 +217,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         step: int | None = None,
         method: str = "single",
     ):
-        self.obj = obj
+        if cudf.get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
+        self.obj = obj  # type: ignore[assignment]
         self.window = window
         self.min_periods = min_periods
         self.center = center
@@ -273,12 +277,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             end = as_column(end, dtype="int32")
 
             idx = as_column(range(len(start)))
-            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
-            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
+            preceding_window = (idx - start + np.int32(1)).astype("int32")
+            following_window = (end - idx - np.int32(1)).astype("int32")
             window = None
         else:
             preceding_window = as_column(self.window)
@@ -310,7 +310,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     pre,
                     fwd,
                     min_periods,
-                    make_aggregation(
+                    aggregation.make_aggregation(
                         agg_name,
                         {"dtype": source_column.dtype}
                         if callable(agg_name)
