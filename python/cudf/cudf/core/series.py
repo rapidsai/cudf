@@ -625,7 +625,6 @@ class Series(SingleColumnFrame, IndexedFrame):
     ):
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
-
         index_from_data = None
         name_from_data = None
         if data is None:

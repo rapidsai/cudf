@@ -57,10 +57,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import (
-    _warn_no_dask_cudf,
-    search_range,
-)
+from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -1070,7 +1067,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @_performance_tracking
     def __init__(self, data, **kwargs):
         name = _getdefault_name(data, name=kwargs.get("name"))
-
         super().__init__({name: data})
 
     @_performance_tracking
