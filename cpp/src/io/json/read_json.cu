@@ -187,9 +187,7 @@ std::size_t get_batch_size(std::size_t chunk_size)
   auto const batch_size_upper_bound   = static_cast<std::size_t>(
     (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit);
   if (batch_size_str != nullptr) return batch_size_upper_bound;
-  return batch_size_upper_bound <= (max_subchunks_prealloced * size_per_subchunk)
-           ? batch_size_upper_bound
-           : batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
+  return batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
 }
 
 /**
@@ -510,8 +508,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   auto partial_table =
     read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
   if (partial_table.tbl->num_columns() != 0 && partial_table.tbl->num_rows() != 0) {
-    partial_tables.emplace_back(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+    partial_tables.emplace_back(std::move(partial_table));
   }
 
   auto expects_schema_equality =

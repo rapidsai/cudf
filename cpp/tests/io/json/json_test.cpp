@@ -3461,7 +3461,20 @@ TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
 }
 
-TEST_F(JsonReaderTest, EmptyLastBatch)
+/**
+ * @brief Base test fixture for JSON batched reader tests
+ */
+struct JsonBatchedReaderTest : public cudf::test::BaseFixture {
+ public:
+  void set_batch_size(size_t batch_size_upper_bound)
+  {
+    setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1);
+  }
+
+  ~JsonBatchedReaderTest() { unsetenv("LIBCUDF_JSON_BATCH_SIZE"); }
+};
+
+TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
 {
   std::string data = R"(
   {"a": "b"}
@@ -3469,13 +3482,12 @@ TEST_F(JsonReaderTest, EmptyLastBatch)
   {"a": "b"}
   {"a": "b"}
   )";
-  setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(data.size() - 5).c_str(), 1);
+  this->set_batch_size(data.size() - 5);
   auto opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .lines(true)
       .build();
   auto res = cudf::io::read_json(opts);
-  unsetenv("LIBCUDF_JSON_BATCH_SIZE");
 }
 
 CUDF_TEST_PROGRAM_MAIN()
