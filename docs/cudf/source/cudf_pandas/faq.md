@@ -150,7 +150,7 @@ To determine if an object is a `cudf.pandas` proxy object, you can use the `isin
 from cudf.pandas import isinstance_cudf_pandas
 
 obj = ...  # Your object here
-if isinstance_cudf_pandas(obj, "Series"):
+if isinstance_cudf_pandas(obj, pd.Series):
     print("The object is a cudf.pandas proxy Series object.")
 else:
     print("The object is not a cudf.pandas proxy Series object.")
@@ -158,10 +158,10 @@ else:
 
 To detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately, you can pass the type names as the second parameter:
 
-* `isinstance_cudf_pandas(obj, "Series")`: Detects if the object is a `cudf.pandas` proxy `Series`.
-* `isinstance_cudf_pandas(obj, "DataFrame")`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
-* `isinstance_cudf_pandas(obj, "Index")`: Detects if the object is a `cudf.pandas` proxy `Index`.
-* `isinstance_cudf_pandas(obj, "ndarray")`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
+* `isinstance_cudf_pandas(obj, pd.Series)`: Detects if the object is a `cudf.pandas` proxy `Series`.
+* `isinstance_cudf_pandas(obj, pd.DataFrame)`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
+* `isinstance_cudf_pandas(obj, pd.Index)`: Detects if the object is a `cudf.pandas` proxy `Index`.
+* `isinstance_cudf_pandas(obj, np.ndarray)`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
 
 ## How can I access the underlying GPU or CPU objects?
 

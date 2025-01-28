@@ -1902,20 +1902,20 @@ def test_is_cudf_pandas():
     df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     index = xpd.Index([1, 2, 3])
 
-    assert isinstance_cudf_pandas(s, "Series")
-    assert isinstance_cudf_pandas(df, "DataFrame")
-    assert isinstance_cudf_pandas(index, "Index")
-    assert isinstance_cudf_pandas(index.values, "ndarray")
+    assert isinstance_cudf_pandas(s, pd.Series)
+    assert isinstance_cudf_pandas(df, pd.DataFrame)
+    assert isinstance_cudf_pandas(index, pd.Index)
+    assert isinstance_cudf_pandas(index.values, np.ndarray)
 
     for obj in [s, df, index, index.values]:
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "Series")
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "Series")
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Series)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Series)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "DataFrame")
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "DataFrame")
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.DataFrame)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.DataFrame)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "Index")
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "Index")
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Index)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Index)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, "ndarray")
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, "ndarray")
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, np.ndarray)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, np.ndarray)
