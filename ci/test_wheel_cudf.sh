@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 set -eou pipefail
 
@@ -42,7 +42,8 @@ pushd python/cudf/cudf/tests
 python -m pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
-  --numprocesses=8 \
+  --numprocesses=1 \
+  -v \
   --dist=worksteal \
   .
 popd
