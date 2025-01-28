@@ -181,13 +181,11 @@ std::size_t estimate_size_per_subchunk(std::size_t chunk_size)
 std::size_t get_batch_size(std::size_t chunk_size)
 {
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
-  auto const batch_size_str           = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
-  int64_t const batch_size            = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
-  auto const batch_limit              = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-  auto const batch_size_upper_bound   = static_cast<std::size_t>(
-    (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit);
-  if (batch_size_str != nullptr) return batch_size_upper_bound;
-  return batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
+  auto const batch_limit = static_cast<std::size_t>(std::numeric_limits<int32_t>::max());
+  auto const extra_space = max_subchunks_prealloced * size_per_subchunk;
+  return std::min<std::size_t>(
+    batch_limit - extra_space,
+    getenv_or<std::size_t>("LIBCUDF_JSON_BATCH_SIZE", batch_limit - extra_space));
 }
 
 /**
