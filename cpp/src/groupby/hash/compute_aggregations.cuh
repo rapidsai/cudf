@@ -71,10 +71,9 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
   auto const is_shared_memory_compatible = std::all_of(
     requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-      if (cudf::is_dictionary(request.values.type())) {
-        return false;
-      }
-      // Ensure there is enough buffer space to store local aggregations up to the max cardinality for shared memory aggregations
+      if (cudf::is_dictionary(request.values.type())) { return false; }
+      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+      // for shared memory aggregations
       auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
                                                                            size_of_functor{});
       return static_cast<size_type>(data_buffer_size) >= (size * GROUPBY_CARDINALITY_THRESHOLD);
