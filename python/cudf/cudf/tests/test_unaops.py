@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -124,8 +124,7 @@ def test_scalar_no_negative_bools():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Boolean scalars in cuDF do not "
-            "support negation, use logical not"
+            "Boolean scalars in cuDF do not support negation, use logical not"
         ),
     ):
         -x

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,24 +63,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   } else {
     auto defaults_col =
       cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
-    // Clamp preceding/following to column boundaries.
-    // E.g. If preceding_window == [2, 2, 2, 2, 2] for a column of 5 elements, the new
-    // preceding_window will be: [1, 2, 2, 2, 1]
-    auto const preceding_window_begin = cudf::detail::make_counting_transform_iterator(
-      0,
-      cuda::proclaim_return_type<size_type>(
-        [preceding = preceding_window.begin<size_type>()] __device__(size_type i) {
-          return thrust::min(i + 1, preceding[i]);
-        }));
-    auto const following_window_begin = cudf::detail::make_counting_transform_iterator(
-      0,
-      cuda::proclaim_return_type<size_type>(
-        [col_size = input.size(), following = following_window.begin<size_type>()] __device__(
-          size_type i) { return thrust::min(col_size - i - 1, following[i]); }));
     return cudf::detail::rolling_window(input,
                                         empty_like(defaults_col)->view(),
-                                        preceding_window_begin,
-                                        following_window_begin,
+                                        preceding_window.begin<size_type>(),
+                                        following_window.begin<size_type>(),
                                         min_periods,
                                         agg,
                                         stream,

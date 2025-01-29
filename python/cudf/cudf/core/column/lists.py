@@ -111,6 +111,13 @@ class ListColumn(ColumnBase):
             )
         return n
 
+    def element_indexing(self, index: int) -> list:
+        result = super().element_indexing(index)
+        if isinstance(result, list):
+            return self.dtype._recursively_replace_fields(result)
+        else:
+            return result
+
     def __setitem__(self, key, value):
         if isinstance(value, list):
             value = cudf.Scalar(value)
@@ -707,7 +714,7 @@ class ListMethods(ColumnMethods):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
             raise ValueError(
-                "lists_indices and list column is of different " "size."
+                "lists_indices and list column is of different size."
             )
         if (
             not _is_non_decimal_numeric_dtype(

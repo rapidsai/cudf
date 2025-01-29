@@ -649,7 +649,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
-constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 {
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;

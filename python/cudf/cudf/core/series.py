@@ -230,8 +230,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
             ):
                 raise MixedTypeError(
-                    f"Cannot assign {value=} to "
-                    f"bool dtype={self._frame.dtype}"
+                    f"Cannot assign {value=} to bool dtype={self._frame.dtype}"
                 )
         elif not (
             isinstance(value, (list, dict))
@@ -254,9 +253,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = value.astype(to_dtype)
             if to_dtype != self._frame.dtype:
                 # Do not remove until pandas-3.0 support is added.
-                assert (
-                    PANDAS_LT_300
-                ), "Need to drop after pandas-3.0 support is added."
+                assert PANDAS_LT_300, (
+                    "Need to drop after pandas-3.0 support is added."
+                )
                 warnings.warn(
                     f"Setting an item of incompatible dtype is deprecated "
                     "and will raise in a future error of pandas. "
@@ -365,16 +364,16 @@ class _SeriesLocIndexer(_FrameIndexer):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
                     # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
+                    assert PANDAS_LT_300, (
+                        "Need to drop after pandas-3.0 support is added."
+                    )
                     warnings.warn(warn_msg, FutureWarning)
                     return arg.value
                 elif is_integer(arg):
                     # Do not remove until pandas 3.0 support is added.
-                    assert (
-                        PANDAS_LT_300
-                    ), "Need to drop after pandas-3.0 support is added."
+                    assert PANDAS_LT_300, (
+                        "Need to drop after pandas-3.0 support is added."
+                    )
                     warnings.warn(warn_msg, FutureWarning)
                     return arg
             try:
@@ -1156,8 +1155,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     ):
         if not drop and inplace:
             raise TypeError(
-                "Cannot reset_index inplace on a Series "
-                "to create a DataFrame"
+                "Cannot reset_index inplace on a Series to create a DataFrame"
             )
         data, index = self._reset_index(
             level=level, drop=drop, allow_duplicates=allow_duplicates
@@ -1361,8 +1359,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         elif isinstance(arg, cudf.Series):
             if not arg.index.is_unique:
                 raise ValueError(
-                    "Reindexing only valid with"
-                    " uniquely valued Index objects"
+                    "Reindexing only valid with uniquely valued Index objects"
                 )
             lhs = cudf.DataFrame(
                 {"x": self, "orig_order": as_column(range(len(self)))}
@@ -2712,7 +2709,10 @@ class Series(SingleColumnFrame, IndexedFrame):
 
             Parameters currently not supported is `level`.
         """
-        return self.valid_count
+        valid_count = self.valid_count
+        if cudf.get_option("mode.pandas_compatible"):
+            return valid_count - self._column.nan_count
+        return valid_count
 
     @_performance_tracking
     def mode(self, dropna=True):
@@ -3359,7 +3359,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
                 raise ValueError(
-                    "All percentiles must be between 0 and 1, " "inclusive."
+                    "All percentiles must be between 0 and 1, inclusive."
                 )
 
             # describe always includes 50th percentile
@@ -3770,9 +3770,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             )
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "
