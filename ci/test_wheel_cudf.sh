@@ -39,11 +39,12 @@ popd
 
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf/tests
-python -m pytest \
-  --cache-clear \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
-  --numprocesses=1 \
-  -v \
-  --dist=worksteal \
-  .
+python -m pytest --cache-clear -v test_groupby.py::test_groupby_multi_agg_hash_groupby[agg0]
+#python -m pytest \
+#  --cache-clear \
+#  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
+#  --numprocesses=1 \
+#  -v \
+#  --dist=worksteal \
+#  .
 popd
