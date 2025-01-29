@@ -583,8 +583,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // For large strings, update the initial string buffer offset to be used during large string
   // column construction. Otherwise, convert string sizes to final offsets.
   if (s->col.is_large_string_col) {
-    compute_initial_large_strings_offset(
-      s, initial_str_offsets[pages[page_idx].chunk_idx], has_repetition);
+    // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
+    auto const chunks_per_rowgroup = initial_str_offsets.size();
+    auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
+    compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
   } else {
     convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
   }
@@ -742,8 +744,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // For large strings, update the initial string buffer offset to be used during large string
   // column construction. Otherwise, convert string sizes to final offsets.
   if (s->col.is_large_string_col) {
-    compute_initial_large_strings_offset(
-      s, initial_str_offsets[pages[page_idx].chunk_idx], has_repetition);
+    // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
+    auto const chunks_per_rowgroup = initial_str_offsets.size();
+    auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
+    compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
   } else {
     convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
   }
