@@ -142,6 +142,53 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
+## How do I know if an object is a `cudf.pandas` proxy object?
+
+To determine if an object is a `cudf.pandas` proxy object, you can use the `isinstance_cudf_pandas` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
+
+```python
+from cudf.pandas import isinstance_cudf_pandas
+
+obj = ...  # Your object here
+if isinstance_cudf_pandas(obj, pd.Series):
+    print("The object is a cudf.pandas proxy Series object.")
+else:
+    print("The object is not a cudf.pandas proxy Series object.")
+```
+
+To detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately, you can pass the type names as the second parameter:
+
+* `isinstance_cudf_pandas(obj, pd.Series)`: Detects if the object is a `cudf.pandas` proxy `Series`.
+* `isinstance_cudf_pandas(obj, pd.DataFrame)`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
+* `isinstance_cudf_pandas(obj, pd.Index)`: Detects if the object is a `cudf.pandas` proxy `Index`.
+* `isinstance_cudf_pandas(obj, np.ndarray)`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
+
+## How can I access the underlying GPU or CPU objects?
+
+When working with `cudf.pandas` proxy objects, it is sometimes necessary to get true `cudf` or `pandas` objects that reside on GPU or CPU.
+For example, this can be used to ensure that GPU-aware libraries that support both `cudf` and `pandas` can use the `cudf`-optimized code paths that keep data on GPU when processing `cudf.pandas` objects.
+Otherwise, the library might use less-optimized CPU code because it thinks that the `cudf.pandas` object is a plain `pandas` dataframe.
+
+The following methods can be used to retrieve the actual `cudf` or `pandas` objects:
+
+- `as_gpu_object()`: This method returns the `cudf` object from the proxy.
+- `as_cpu_object()`: This method returns the `pandas` object from the proxy.
+
+If `as_gpu_object()` is called on a proxy array, it will return a `cupy` array and `as_cpu_object` will return a `numpy` array.
+
+Here is an example of how to use these methods:
+
+```python
+# Assuming `proxy_obj` is a cudf.pandas proxy object
+cudf_obj = proxy_obj.as_gpu_object()
+pandas_obj = proxy_obj.as_cpu_object()
+
+# Now you can use `cudf_obj` and `pandas_obj` with libraries that are cudf or pandas aware
+```
+
+Be aware that if `cudf.pandas` objects are converted to their underlying `cudf` or `pandas` types, the `cudf.pandas` proxy no longer controls them.
+This means that automatic conversion between GPU and CPU types and automatic fallback from GPU to CPU functionality will not occur.
+
 (are-there-any-known-limitations)=
 ## Are there any known limitations?
 
