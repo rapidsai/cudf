@@ -560,7 +560,7 @@ cdef class JsonReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean value to indicate whether leading zeros are allowed in numeric values 
+            Boolean value to indicate whether leading zeros are allowed in numeric values
 
         Returns
         -------
