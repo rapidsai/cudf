@@ -789,6 +789,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     label_dtype=label_dtype,
                     verify=False,
                 )
+            else:
+                self._data.rangeindex = True
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.DataFrame._from_data for constructing a DataFrame from "
@@ -1120,6 +1122,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     data[col_name],
                     nan_as_null=nan_as_null,
                 )
+        elif columns is None:
+            self._data.rangeindex = True
+
         self._data._level_names = (
             tuple(columns.names)
             if isinstance(columns, pd.Index)
@@ -3799,8 +3804,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif isinstance(aggs, str):
             if not hasattr(self, aggs):
                 raise AttributeError(
-                    f"{aggs} is not a valid function for "
-                    f"'DataFrame' object"
+                    f"{aggs} is not a valid function for 'DataFrame' object"
                 )
             result = DataFrame()
             result[aggs] = getattr(self, aggs)()
@@ -6645,9 +6649,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             return DataFrame()
 
         with warnings.catch_warnings():
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.simplefilter("ignore", FutureWarning)
             df = cudf.concat(mode_results, axis=1)
 
@@ -7702,9 +7706,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "

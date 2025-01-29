@@ -261,9 +261,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ):
-        assert (len(self) <= 1) or (
-            ascending == (self.step > 0)
-        ), "Invalid ascending flag"
+        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
+            "Invalid ascending flag"
+        )
         return search_range(value, self._range, side=side)
 
     def factorize(
@@ -1217,9 +1217,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -3385,8 +3385,8 @@ def interval_range(
         bin_edges = libcudf.column.Column.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=start.device_value,
+                step=freq.device_value,
             )
         )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)

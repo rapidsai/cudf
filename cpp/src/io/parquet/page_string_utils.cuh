@@ -20,6 +20,8 @@
 
 #include <cudf/strings/detail/gather.cuh>
 
+#include <cuda/atomic>
+
 namespace cudf::io::parquet::detail {
 
 // stole this from cudf/strings/detail/gather.cuh. modified to run on a single string on one warp.
@@ -98,56 +100,87 @@ __device__ inline void block_excl_sum(size_type* arr, size_type length, size_typ
   }
 }
 
-template <int block_size, bool has_lists>
-__device__ inline void convert_small_string_lengths_to_offsets(page_state_s* s)
+/**
+ * @brief Converts string sizes to offsets if this is not a large string column. Otherwise,
+ * atomically update the initial string offset to be used during large string column construction
+ */
+template <int block_size>
+__device__ void convert_small_string_lengths_to_offsets(page_state_s const* const state,
+                                                        bool has_lists)
 {
   // If this is a large string column. In the
   // latter case, offsets will be computed during string column creation.
-  auto& ni        = s->nesting_info[s->col.max_nesting_depth - 1];
+  auto& ni        = state->nesting_info[state->col.max_nesting_depth - 1];
   int value_count = ni.value_count;
 
   // if no repetition we haven't calculated start/end bounds and instead just skipped
   // values until we reach first_row. account for that here.
-  if constexpr (!has_lists) { value_count -= s->first_row; }
+  if (not has_lists) { value_count -= state->first_row; }
 
-  auto const offptr        = reinterpret_cast<size_type*>(ni.data_out);
-  auto const initial_value = s->page.str_offset;
-  block_excl_sum<block_size>(offptr, value_count, initial_value);
+  // Convert the array of lengths into offsets
+  if (value_count > 0) {
+    auto const offptr        = reinterpret_cast<size_type*>(ni.data_out);
+    auto const initial_value = state->page.str_offset;
+    block_excl_sum<block_size>(offptr, value_count, initial_value);
+  }
+}
+
+/**
+ * @brief Atomically update the initial string offset to be used during large string column
+ * construction
+ */
+inline __device__ void compute_initial_large_strings_offset(page_state_s const* const state,
+                                                            size_t& initial_str_offset,
+                                                            bool has_lists)
+{
+  // Values decoded by this page.
+  int value_count = state->nesting_info[state->col.max_nesting_depth - 1].value_count;
+
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (not has_lists) { value_count -= state->first_row; }
+
+  // Atomically update the initial string offset if this is a large string column. This initial
+  // offset will be used to compute (64-bit) offsets during large string column construction.
+  if (value_count > 0 and threadIdx.x == 0) {
+    auto const initial_value = state->page.str_offset;
+    cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
+      initial_str_offset};
+    initial_str_offsets_ref.fetch_min(initial_value, cuda::std::memory_order_relaxed);
+  }
+}
+
+template <int value>
+inline constexpr int log2_int()
+{
+  static_assert((value >= 1) && ((value & (value - 1)) == 0), "Only works for powers of 2!");
+  if constexpr (value == 1)
+    return 0;
+  else
+    return 1 + log2_int<value / 2>();
 }
 
 template <int block_size>
-__device__ inline int calc_threads_per_string_log2(int avg)
+__device__ inline int calc_threads_per_string_log2(int avg_string_length)  // returns log2(M)
 {
   // From testing, performance is best when copying an average of B = 4 bytes at once.
   // So #-threads-per-string M = avg_string_length / 4
   // Help the compiler make the code fast by keeping everything a power of 2
   // For avg length < 4/8/16/..., length power-of-2 = 2/3/4/.../. Divide by 4: 0/1/...
+
+  // avg - 1: Don't want extra thread at powers of 2 (e.g. 32 (0b100000 -> 0b11111 -> 5)
+  int const avg_log2     = 32 - __clz(avg_string_length - 1);
+  int const threads_log2 = avg_log2 - 2;  // Target 4 bytes / thread at once (log2(4) = 2)
+
   // This is the target (log2) for M, but we need to clamp its range
+  // First clamp #-strings-at-once (N) btw 1 (all threads (T)) & 32 (cache miss if larger)
+  // So, clamp #-threads-per-string M = T / N between: T (all) & T/32 (cache miss)
+  // So, clamp log2(#-threads-per-string) between log2(T) & log2(T) - 5 (min 1)
+  static constexpr int block_size_log2  = log2_int<block_size>();  // 7 for block_size = 128
+  static constexpr int min_threads_log2 = cuda::std::max(block_size_log2 - 5, 1);
 
-  // Clamp M (#-threads-per-string):
-  // For T threads: clamp #-strings-at-once N btw T/32 (1/warp) & 32 (cache miss if larger)
-  // So, clamp #-threads-per-string M = T / N between 32 (all in warp) & T/32 (cache miss)
-  // Writing an equation M(T) is slower than just handling each T case separately
-  auto caster = [](int value) { return static_cast<int>(value != 0); };  // branchless
-
-  if constexpr (block_size > 512) {
-    return 5;  // max of 32 strings at a time, no matter what
-  } else if constexpr (block_size > 256) {
-    return (avg < 64) ? 4 : 5;
-  } else if constexpr (block_size > 128) {
-    //(avg < 32) ? 3 : ((avg < 64) ? 4 : 5);
-    return 3 + caster(avg >> 5) + caster(avg >> 6);
-  } else if constexpr (block_size > 64) {
-    //(avg < 16) ? 2 : ((avg < 32) ? 3 : ((avg < 64) ? 4 : 5));
-    return 2 + caster(avg >> 4) + caster(avg >> 5) + caster(avg >> 6);
-  } else if constexpr (block_size > 32) {
-    //(avg < 8) ? 1 : ((avg < 16) ? 2 : ((avg < 32) ? 3 : ((avg < 64) ? 4 : 5)));
-    return 1 + caster(avg >> 3) + caster(avg >> 4) + caster(avg >> 5) + caster(avg >> 6);
-  } else {  // One warp
-    //(avg<4) ? 0 : ((avg<8) ? 1 : ((avg<16) ? 2 : ((avg<32) ? 3 : ((avg<64) ? 4 : 5))));
-    return caster(avg >> 2) + caster(avg >> 3) + caster(avg >> 4) + caster(avg >> 5) +
-           caster(avg >> 6);
-  }
+  // Clamp log2(M) (between 2 and 7 for block_size = 128)
+  return cuda::std::max(min_threads_log2, cuda::std::min(block_size_log2, threads_log2));
 }
 
 /**
@@ -287,10 +320,27 @@ __device__ size_t gpuDecodeString(
         auto output_string = outputs[str_idx];
         int const length   = lengths[str_idx];
 
-        // One-shot N chars per thread
-        int const chars_at_once    = (length + threads_per_string - 1) >> threads_per_string_log2;
-        int const start_index      = string_lane * chars_at_once;
-        int const substring_length = min(chars_at_once, length - start_index);
+        // Max 8 chars at once per thread, else perf degrades dramatically
+        // Loop, copying 8 chars at a time, until <= 8 chars per thread left
+        static constexpr int max_chars_at_once = 8;
+        int chars_remaining_per_thread =
+          (length + threads_per_string - 1) >> threads_per_string_log2;
+        int group_offset = 0;
+        if (chars_remaining_per_thread > max_chars_at_once) {
+          int const max_chars_copied_string = max_chars_at_once * threads_per_string;
+          int start_index                   = string_lane * max_chars_at_once;
+          do {
+            memcpy(&(output_string[start_index]), &(input_string[start_index]), max_chars_at_once);
+
+            chars_remaining_per_thread -= max_chars_at_once;
+            start_index += max_chars_copied_string;
+            group_offset += max_chars_copied_string;
+          } while (chars_remaining_per_thread > max_chars_at_once);
+        }
+
+        // Final copy of remaining chars
+        int const start_index      = group_offset + string_lane * chars_remaining_per_thread;
+        int const substring_length = min(chars_remaining_per_thread, length - start_index);
         if (substring_length > 0) {
           memcpy(&(output_string[start_index]), &(input_string[start_index]), substring_length);
         }
