@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -187,8 +187,7 @@ class SubwordTokenizer:
 
         if padding != "max_length":
             error_msg = (
-                "Only padding to the provided max_length"
-                "is currently supported"
+                "Only padding to the provided max_lengthis currently supported"
             )
             raise NotImplementedError(error_msg)
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import os
@@ -173,9 +173,7 @@ def _integer_validator(val):
         int(val)
         return True
     except ValueError:
-        raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer."
-        )
+        raise ValueError(f"{val} is not a valid option. Must be an integer.")
 
 
 def _integer_and_none_validator(val):
@@ -184,7 +182,7 @@ def _integer_and_none_validator(val):
             return
     except ValueError:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer or None."
+            f"{val} is not a valid option. Must be an integer or None."
         )
 
 
