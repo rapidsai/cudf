@@ -672,7 +672,7 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                       }));
 
   auto const max_size = cudf::detail::sizes_to_offsets(
-    max_word_offsets.begin(), max_word_offsets.end(), max_word_offsets.begin(), stream);
+    max_word_offsets.begin(), max_word_offsets.end(), max_word_offsets.begin(), 0, stream);
   nvtxRangePop();
 
   auto start_words = rmm::device_uvector<int64_t>(max_size, stream);
