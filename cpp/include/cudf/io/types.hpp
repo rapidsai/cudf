@@ -288,9 +288,13 @@ struct table_metadata {
   // The following variables are currently only computed for Parquet reader
   size_type num_input_row_groups{0};  //!< Total number of input row groups across all data sources
   std::optional<size_type>
-    num_row_groups_after_stats_filter;  //!< Number of remaining row groups after stats filter
+    num_row_groups_after_stats_filter;  //!< Number of remaining row groups after stats filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
   std::optional<size_type>
-    num_row_groups_after_bloom_filter;  //!< Number of remaining row groups after bloom filter
+    num_row_groups_after_bloom_filter;  //!< Number of remaining row groups after bloom filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
 };
 
 /**
