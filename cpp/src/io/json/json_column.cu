@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -601,11 +601,20 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   // check if row root is list. (mixed types are taken care by prune_columns)
   if (options.is_enabled_experimental() and
-      data_root.child_columns.begin()->second.type == json_col_t::ListColumn) {
+      (  // data_root.child_columns.begin()->second.child_columns.empty() or
+        data_root.child_columns.begin()->second.type == json_col_t::ListColumn)) {
+    std::cout << "root list column\n";
+    std::cout << "root list column size: " << data_root.child_columns.size() << std::endl;
+    std::cout << "root list column num_rows: " << data_root.num_rows << std::endl;
+    std::cout << "root list column child num_rows: "
+              << data_root.child_columns.begin()->second.num_rows << std::endl;
     // insert only root list column as single column in table.
     if (data_root.type == json_col_t::ListColumn) {
       std::cout << "root list column\n";
       std::cout << "root list column size: " << data_root.child_columns.size() << std::endl;
+      if (data_root.child_columns.begin()->second.type != json_col_t::ListColumn) {
+        std::cout << "root list column Not List\n";
+      }
       auto [cudf_col, col_name_info] =
         device_json_column_to_cudf_column(data_root.child_columns.begin()->second,
                                           d_input,

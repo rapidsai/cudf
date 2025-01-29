@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -681,8 +681,10 @@ std::
       auto top_level_list_id       = adj[parent_node_sentinel][0];
       is_pruned[top_level_list_id] = false;
     }
+    CUDF_EXPECTS(root_struct_col_id != -1, "Root struct column not found");
     is_pruned[root_struct_col_id] = false;
-    schema_element u_schema       = unified_schema(options);
+    std::cout << "root_struct_col_id: " << root_struct_col_id << std::endl;
+    schema_element u_schema = unified_schema(options);
     std::visit(
       cudf::detail::visitor_overload{
         [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
@@ -705,6 +707,10 @@ std::
         [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](schema_element const& user_dtypes)
           -> void { mark_is_pruned(root_struct_col_id, u_schema); }},
       options.get_dtypes());
+    // // if this is the only child, then don't prune to maintain the size.
+    // if (is_enabled_lines and adj[parent_node_sentinel].size() <= 1 or
+    // adj[adj[parent_node_sentinel][0]].size() == 1)
+    //   is_pruned[root_struct_col_id] = false;
   }
   print_vec2(is_pruned, "is_pruned", to_int2);
   // Useful for array of arrays
@@ -896,6 +902,22 @@ std::
   parent_ref = std::ref(parent_ref.get().child_columns.at(list_child_name));
   columns.try_emplace(adj[parent_node_sentinel][0], parent_ref);
   construct_tree(adj[parent_node_sentinel][0], parent_ref);
+  if (is_enabled_lines) {
+    // if all are pruned, create a struct or list column with all nulls.
+    // adj[parent_node_sentinel][0] is the only child of root. not expected type!
+    parent_ref.get().num_rows = max_row_offsets[adj[parent_node_sentinel][0]] + 1;
+    // if root is pruned, create a struct or list column with all nulls.
+    if (is_pruned[adj[parent_node_sentinel][0]]) {
+      std::visit(
+        cudf::detail::visitor_overload{
+          [&initialize_json_columns, &parent_ref, &adj](schema_element const& user_dtypes) -> void {
+            if (user_dtypes.type == data_type{type_id::LIST})
+              initialize_json_columns(adj[parent_node_sentinel][0], parent_ref, NC_LIST);
+          },
+          [](auto) {}},
+        options.get_dtypes());
+    }
+  }
 
   // Forced string type due to input schema and mixed type as string.
   for (size_t i = 0; i < expected_types.size(); i++) {
