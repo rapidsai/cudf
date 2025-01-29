@@ -1,22 +1,18 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 
 set -euo pipefail
 
-write_output() {
-  local key="$1"
-  local value="$2"
-  echo "$key=$value" | tee --append "${GITHUB_OUTPUT:-/dev/null}"
-}
 
 extract_lib_from_dependencies_yaml() {
     local file=$1
     # Parse all keys in dependencies.yaml under the "files" section,
     # extract all the keys that start with "test_", and extract the rest
-    local extracted_libs="$(yq -o json $file | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
-    echo $extracted_libs
+    extracted_libs="$(yq -o json "$file" | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
+    local extracted_libs
+    echo "$extracted_libs"
 }
 
 main() {
@@ -40,7 +36,7 @@ main() {
         rapids-dependency-file-generator \
           --config "$dependencies_yaml" \
           --output conda \
-          --file-key test_${lib} \
+          --file-key "test_${lib}" \
           --matrix "cuda=${CUDA_MAJOR};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
@@ -74,7 +70,7 @@ main() {
         trap "EXITCODE=1" ERR
         set +e
 
-        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh ${lib}
+        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
 
         set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"
