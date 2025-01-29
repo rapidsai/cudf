@@ -65,22 +65,16 @@ namespace {
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
 
-void check_nvcomp_status(nvcompStatus_t status, std::string const& func_name)
-{
-  CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
-               "nvCOMP error in " + func_name + ": " + nvcomp_status_to_string(status));
-}
+#define CHECK_NVCOMP_STATUS(status)                                   \
+  do {                                                                \
+    CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,             \
+                 "nvCOMP error: " + nvcomp_status_to_string(status)); \
+  } while (0)
 
-#define CHECK_NVCOMP_STATUS(status) check_nvcomp_status(status, __func__);
-
-[[noreturn]] void unsupported_compression(compression_type compression,
-                                          std::string const& func_name)
-{
-  CUDF_FAIL("Unsupported compression type in " + func_name + ": " +
-            compression_type_name(compression));
-}
-
-#define UNSUPPORTED_COMPRESSION(compression) unsupported_compression(compression, __func__);
+#define UNSUPPORTED_COMPRESSION(compression)                                          \
+  do {                                                                                \
+    CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression)); \
+  } while (0)
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
 template <typename... Args>
