@@ -1926,4 +1926,4 @@ def test_series_dtype_property():
     xs = xpd.Series([1, 2, 3])
     expected = np.dtype(s)
     actual = np.dtype(xs)
-    assert expected.dtype == actual.dtype
+    assert expected == actual
