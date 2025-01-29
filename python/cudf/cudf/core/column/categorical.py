@@ -1025,7 +1025,7 @@ class CategoricalColumn(column.ColumnBase):
             categories = self.categories.isnan()
             if categories.any():
                 code = self._encode(np.nan)
-                result = result | (self.codes == cudf.Scalar(code))
+                result = result | (self.codes == code)
 
         return result
 
@@ -1041,7 +1041,7 @@ class CategoricalColumn(column.ColumnBase):
             categories = self.categories.isnan()
             if categories.any():
                 code = self._encode(np.nan)
-                result = result & (self.codes != cudf.Scalar(code))
+                result = result & (self.codes != code)
 
         return result
 
