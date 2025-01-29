@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 
@@ -15,7 +15,7 @@ ENV_YAML_DIR="$(mktemp -d)"
 FILE_KEY=$1
 rapids-dependency-file-generator \
   --output conda \
-  --file-key ${FILE_KEY} \
+  --file-key "${FILE_KEY}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
     | tee "${ENV_YAML_DIR}/env.yaml"
 
