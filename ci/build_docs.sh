@@ -3,8 +3,10 @@
 
 set -euo pipefail
 
-export RAPIDS_VERSION="$(rapids-version)"
-export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+RAPIDS_VERSION="$(rapids-version)"
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+export RAPIDS_VERSION
+export RAPIDS_VERSION_MAJOR_MINOR
 
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
@@ -33,7 +35,8 @@ rapids-mamba-retry install \
   "cudf=${RAPIDS_VERSION}" \
   "dask-cudf=${RAPIDS_VERSION}"
 
-export RAPIDS_DOCS_DIR="$(mktemp -d)"
+RAPIDS_DOCS_DIR="$(mktemp -d)"
+export RAPIDS_DOCS_DIR
 
 EXITCODE=0
 trap "EXITCODE=1" ERR
@@ -41,7 +44,7 @@ set +e
 
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
-aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_MAJOR_MINOR}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
+aws s3 cp s3://rapidsai-docs/librmm/html/"${RAPIDS_VERSION_MAJOR_MINOR}"/rmm.tag . || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 mkdir -p "${RAPIDS_DOCS_DIR}/libcudf/html"
 mv html/* "${RAPIDS_DOCS_DIR}/libcudf/html"
