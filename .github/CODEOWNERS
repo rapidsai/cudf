@@ -18,11 +18,11 @@ java/              @rapidsai/cudf-java-codeowners
 #CI code owners
 /.github/                @rapidsai/ci-codeowners
 /ci/                     @rapidsai/ci-codeowners
-/.pre-commit-config.yaml @rapidsai/ci-codeowners
 
 #packaging code owners
-/.devcontainer/    @rapidsai/packaging-codeowners
-/conda/            @rapidsai/packaging-codeowners
-/dependencies.yaml @rapidsai/packaging-codeowners
-/build.sh          @rapidsai/packaging-codeowners
-pyproject.toml     @rapidsai/packaging-codeowners
+/.pre-commit-config.yaml @rapidsai/packaging-codeowners
+/.devcontainer/          @rapidsai/packaging-codeowners
+/conda/                  @rapidsai/packaging-codeowners
+dependencies.yaml        @rapidsai/packaging-codeowners
+/build.sh                @rapidsai/packaging-codeowners
+pyproject.toml           @rapidsai/packaging-codeowners

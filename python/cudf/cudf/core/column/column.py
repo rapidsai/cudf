@@ -1251,7 +1251,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_values().astype(self.dtype)
+        cats = self.unique().sort_values()
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
@@ -2051,7 +2051,7 @@ def as_column(
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = cudf.dtype(
-                f'i{cudf.get_option("default_integer_bitwidth")//8}'
+                f"i{cudf.get_option('default_integer_bitwidth') // 8}"
             )
         if dtype is not None:
             return column.astype(dtype)
@@ -2600,7 +2600,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     newsize = sum(map(len, objs))
     if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
         raise MemoryError(
-            f"Result of concat cannot have " f"size > {SIZE_TYPE_DTYPE}_MAX"
+            f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
         )
     elif newsize == 0:
         return column_empty(0, head.dtype)

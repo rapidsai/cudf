@@ -1193,8 +1193,7 @@ class CategoricalColumn(column.ColumnBase):
         newsize = sum(map(len, codes))
         if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
             raise MemoryError(
-                f"Result of concat cannot have "
-                f"size > {SIZE_TYPE_DTYPE}_MAX"
+                f"Result of concat cannot have size > {SIZE_TYPE_DTYPE}_MAX"
             )
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)
@@ -1443,8 +1442,7 @@ class CategoricalColumn(column.ColumnBase):
         # current set of categories.
         if not self._categories_equal(new_categories, ordered=False):
             raise ValueError(
-                "items in new_categories are not the same as in "
-                "old categories"
+                "items in new_categories are not the same as in old categories"
             )
         return self._set_categories(new_categories, ordered=ordered)
 

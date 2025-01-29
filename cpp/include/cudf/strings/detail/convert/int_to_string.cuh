@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
  * @return size_type number of digits in input value
  */
 template <typename IntegerType>
-constexpr size_type count_digits(IntegerType value)
+__device__ constexpr size_type count_digits(IntegerType value)
 {
   if (value == 0) return 1;
   bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
