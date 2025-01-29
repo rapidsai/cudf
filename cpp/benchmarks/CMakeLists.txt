@@ -428,7 +428,10 @@ ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
 # ##################################################################################################
 # * rolling benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(ROLLING_NVBENCH rolling/grouped_rolling_sum.cpp rolling/rolling_sum.cpp)
+ConfigureNVBench(
+  ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
+  rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+)
 
 add_custom_target(
   run_benchmarks

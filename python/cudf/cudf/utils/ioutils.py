@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import datetime
@@ -1912,9 +1912,9 @@ def get_reader_filepath_or_buffer(
             filepaths_or_buffers = input_sources
             if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
-                assert (
-                    PANDAS_LT_300
-                ), "Need to drop after pandas-3.0 support is added."
+                assert PANDAS_LT_300, (
+                    "Need to drop after pandas-3.0 support is added."
+                )
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -10,10 +10,8 @@
 
 import datetime
 
-from packaging.version import Version
-
 import dask_cudf
-
+from packaging.version import Version
 
 DASK_CUDF_VERSION = Version(dask_cudf.__version__)
 
