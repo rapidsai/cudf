@@ -65,6 +65,10 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
+from cudf.pandas import (
+    isinstance_cudf_pandas,
+)
+
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
 cudf = xpd._fsproxy_fast
@@ -1885,3 +1889,41 @@ def test_dataframe_setitem():
     new_df = df + 1
     df[df.columns] = new_df
     tm.assert_equal(df, new_df)
+
+
+def test_dataframe_get_fast_slow_methods():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    assert isinstance(df.as_gpu_object(), cudf.DataFrame)
+    assert isinstance(df.as_cpu_object(), pd.DataFrame)
+
+
+def test_is_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    index = xpd.Index([1, 2, 3])
+
+    assert isinstance_cudf_pandas(s, pd.Series)
+    assert isinstance_cudf_pandas(df, pd.DataFrame)
+    assert isinstance_cudf_pandas(index, pd.Index)
+    assert isinstance_cudf_pandas(index.values, np.ndarray)
+
+    for obj in [s, df, index, index.values]:
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Series)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Series)
+
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.DataFrame)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.DataFrame)
+
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Index)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Index)
+
+        assert not isinstance_cudf_pandas(obj._fsproxy_slow, np.ndarray)
+        assert not isinstance_cudf_pandas(obj._fsproxy_fast, np.ndarray)
+
+
+def test_series_dtype_property():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = np.dtype(s)
+    actual = np.dtype(xs)
+    assert expected == actual

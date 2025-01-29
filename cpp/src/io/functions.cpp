@@ -189,7 +189,9 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options, rmm::device_async_resource_ref mr)
+table_with_metadata read_avro(avro_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -199,7 +201,7 @@ table_with_metadata read_avro(avro_reader_options const& options, rmm::device_as
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
+  return avro::read_avro(std::move(datasources[0]), options, stream, mr);
 }
 
 table_with_metadata read_json(json_reader_options options,

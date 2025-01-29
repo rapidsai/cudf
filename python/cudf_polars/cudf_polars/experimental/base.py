@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition base classes."""
 
@@ -12,20 +12,26 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.nodebase import Node
 
 
 class PartitionInfo:
-    """
-    Partitioning information.
+    """Partitioning information."""
 
-    This class only tracks the partition count (for now).
-    """
+    __slots__ = ("count", "partitioned_on")
+    count: int
+    """Partition count."""
+    partitioned_on: tuple[NamedExpr, ...]
+    """Columns the data is hash-partitioned on."""
 
-    __slots__ = ("count",)
-
-    def __init__(self, count: int):
+    def __init__(
+        self,
+        count: int,
+        partitioned_on: tuple[NamedExpr, ...] = (),
+    ):
         self.count = count
+        self.partitioned_on = partitioned_on
 
     def keys(self, node: Node) -> Iterator[tuple[str, int]]:
         """Return the partitioned keys for a given node."""
