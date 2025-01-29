@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -41,7 +41,7 @@ class StringFunction(Expr):
         ConcatHorizontal = auto()
         ConcatVertical = auto()
         Contains = auto()
-        ContainsMany = auto()
+        ContainsAny = auto()
         CountMatches = auto()
         EndsWith = auto()
         EscapeRegex = auto()
@@ -57,6 +57,7 @@ class StringFunction(Expr):
         LenBytes = auto()
         LenChars = auto()
         Lowercase = auto()
+        Normalize = auto()
         PadEnd = auto()
         PadStart = auto()
         Replace = auto()
@@ -111,6 +112,7 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
+            StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
             StringFunction.Name.Lowercase,
@@ -124,7 +126,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
         ):
-            raise NotImplementedError(f"String function {self.name}")
+            raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
@@ -204,7 +206,20 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name is StringFunction.Name.Contains:
+        if self.name is StringFunction.Name.ConcatVertical:
+            (child,) = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+            delimiter, ignore_nulls = self.options
+            if column.obj.null_count() > 0 and not ignore_nulls:
+                return Column(plc.Column.all_null_like(column.obj, 1))
+            return Column(
+                plc.strings.combine.join_strings(
+                    column.obj,
+                    plc.interop.from_arrow(pa.scalar(delimiter, type=pa.string())),
+                    plc.interop.from_arrow(pa.scalar(None, type=pa.string())),
+                )
+            )
+        elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
 
