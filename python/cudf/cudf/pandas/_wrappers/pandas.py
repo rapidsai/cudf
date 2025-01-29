@@ -293,7 +293,7 @@ Series = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
-        "dtype": _Series_dtype,
+        "dtype": property(_Series_dtype),
     },
 )
 
