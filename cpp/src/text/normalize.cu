@@ -200,12 +200,15 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
+  nvtxRangePushA("o_load_normalize_tables");
   auto result = [&] {
     auto const cp_metadata = get_codepoint_metadata(stream);
     auto const aux_table   = get_aux_codepoint_data(stream);
     auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
     return normalizer.normalize(strings, stream);
   }();
+  stream.synchronize();
+  nvtxRangePop();
 
   CUDF_EXPECTS(
     result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -221,8 +224,11 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
+  nvtxRangePushA("o_codepoint_to_utf8");
   auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
+  stream.synchronize();
+  nvtxRangePop();
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(offsets_column),
@@ -419,16 +425,22 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
 
   if (idx < total_bytes) {
     chars_per_thread[idx] = num_new_bytes;
-    d_output += idx * MAX_NEW_CHARS;
-#pragma unroll
-    for (int k = 0; k < MAX_NEW_CHARS; ++k) {
-      *d_output++ = replacement[k];
-    }
+    // d_output += idx * MAX_NEW_CHARS;
+    // // #pragma unroll
+    // for (int k = 0; k < MAX_NEW_CHARS; ++k) {
+    //   *d_output++ = replacement[k];
+    // }
   }
+
+  // BLOCK_STORE_WARP_TRANSPOSE
+  using block_store = cub::BlockStore<uint32_t, 256, MAX_NEW_CHARS, cub::BLOCK_STORE_STRIPED>;
+  __shared__ typename block_store::TempStorage bs_stg;
+  auto block_base = d_output + blockIdx.x * blockDim.x * MAX_NEW_CHARS;
+  block_store(bs_stg).Store(block_base, replacement);
 }
 
 template <typename OffsetType>
-rmm::device_uvector<cudf::size_type> compute_sizes(int8_t const* sizes,
+rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t const> sizes,
                                                    OffsetType offsets,
                                                    int64_t offset,
                                                    cudf::size_type size,
@@ -436,10 +448,10 @@ rmm::device_uvector<cudf::size_type> compute_sizes(int8_t const* sizes,
 {
   auto output_sizes = rmm::device_uvector<cudf::size_type>(size, stream);
 
-  auto d_in        = sizes;
+  auto d_in        = sizes.data();
   auto d_out       = output_sizes.begin();
   std::size_t temp = 0;
-  nvtxRangePushA("segmented_reduce");
+  nvtxRangePushA("compute_sizes_segred");
   if (offset == 0) {
     cub::DeviceSegmentedReduce::Sum(
       nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
@@ -457,7 +469,7 @@ rmm::device_uvector<cudf::size_type> compute_sizes(int8_t const* sizes,
     cub::DeviceSegmentedReduce::Sum(
       d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
   }
-  stream.synchronize();
+  // stream.synchronize();
   nvtxRangePop();
 
   return output_sizes;
@@ -483,6 +495,22 @@ OutputIterator remove_copy_safe(InputIterator first,
   return result;
 }
 
+template <typename Iterator, typename T>
+Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
+{
+  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                             static_cast<std::size_t>(std::numeric_limits<int>::max()));
+
+  auto result = first;
+  auto itr    = first;
+  while (itr != last) {
+    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
+    result   = thrust::remove(rmm::exec_policy(stream), itr, end, value);
+    itr      = end;
+  }
+  return result;
+}
+
 }  // namespace
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    character_normalizer const& normalizer,
@@ -503,14 +531,14 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   if (chars_size == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
 
-  constexpr int64_t block_size = 64;
+  constexpr int64_t block_size = 256;
   cudf::detail::grid_1d grid{chars_size, block_size};
-  auto const max_new_char_total = MAX_NEW_CHARS * chars_size;
+  auto const max_new_char_total = cudf::util::round_up_safe(chars_size, block_size) * MAX_NEW_CHARS;
 
   auto const parameters = normalizer._impl;
 
-  auto d_code_points = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   auto d_sizes       = rmm::device_uvector<int8_t>(chars_size, stream);
+  auto d_code_points = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   nvtxRangePushA("normalizer_kernel");
   normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
@@ -520,7 +548,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     parameters->do_lower_case,
     d_code_points.data(),
     d_sizes.data());
-  stream.synchronize();
+  // stream.synchronize();
   nvtxRangePop();
 
   // This removes space adding around any special tokens in the form of [ttt].
@@ -539,8 +567,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
   // use segmented-reduce with input_offsets over d_sizes to get the size of the output rows
-  auto output_sizes =
-    compute_sizes(d_sizes.data(), input_offsets, first_offset, input.size(), stream);
+  auto output_sizes = compute_sizes(d_sizes, input_offsets, first_offset, input.size(), stream);
 
   // convert the sizes to offsets
   auto [offsets, total_size] = cudf::strings::detail::make_offsets_child_column(
@@ -549,11 +576,12 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   // create output chars and use remove-copy(0) on d_code_points
   rmm::device_uvector<char> chars(total_size, stream, mr);
   auto begin = reinterpret_cast<char const*>(d_code_points.begin());
-  auto end   = reinterpret_cast<char const*>(d_code_points.end());
+  // auto end   = reinterpret_cast<char const*>(d_code_points.end());
   nvtxRangePushA("remove_copy");
-  // thrust::remove_copy(rmm::exec_policy_nosync(stream), begin, end, chars.data(), 0);
+  auto end = reinterpret_cast<char const*>(
+    remove_safe(d_code_points.begin(), d_code_points.end(), 0, stream));
   remove_copy_safe(begin, end, chars.data(), 0, stream);
-  stream.synchronize();
+  // stream.synchronize();
   nvtxRangePop();
 
   return cudf::make_strings_column(input.size(),

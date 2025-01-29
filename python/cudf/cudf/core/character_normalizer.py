@@ -13,7 +13,7 @@ class CharacterNormalizer:
 
     Parameters
     ----------
-    do_lower_case : bool
+    do_lower : bool
         Set to True if the normalizer should also lower-case
         while normalizing.
     special_tokens : cudf string series
@@ -22,11 +22,11 @@ class CharacterNormalizer:
 
     def __init__(
         self,
-        d_lower_case: bool,
+        do_lower: bool,
         special_tokens: cudf.Series = cudf.Series([], dtype="object"),
     ) -> None:
         self.normalizer = plc.nvtext.normalize.CharacterNormalizer(
-            d_lower_case, special_tokens._column.to_pylibcudf(mode="read")
+            do_lower, special_tokens._column.to_pylibcudf(mode="read")
         )
 
     def normalize(self, text: cudf.Series) -> cudf.Series:
