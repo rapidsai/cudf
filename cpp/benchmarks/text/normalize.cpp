@@ -17,7 +17,6 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -49,8 +48,7 @@ static void bench_normalize(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = nvtext::normalize_spaces(input); });
   } else {
     bool const to_lower = (normalize_type == "to_lower");
-    auto spt = cudf::strings_column_view(cudf::make_empty_column(cudf::type_id::STRING)->view());
-    auto normalizer = nvtext::create_character_normalizer(to_lower, spt);
+    auto normalizer     = nvtext::create_character_normalizer(to_lower);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       // auto result = nvtext::normalize_characters(input, to_lower);
       auto result = nvtext::normalize_characters(input, *normalizer);

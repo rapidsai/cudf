@@ -4708,7 +4708,7 @@ class StringMethods(ColumnMethods):
         dtype: object
         """
         return self._return_or_inplace(
-            self._column.normalize_characters(do_lower)
+            self._column.characters_normalize(do_lower)
         )
 
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
@@ -6237,11 +6237,22 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
-    def normalize_characters(self, do_lower: bool = True) -> Self:
+    def characters_normalize(self, do_lower: bool = True) -> Self:
+        return Column.from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.normalize.characters_normalize(
+                self.to_pylibcudf(mode="read"),
+                do_lower,
+            )
+        )
+
+    @acquire_spill_lock()
+    def normalize_characters(
+        self, normalizer: plc.nvtext.normalize.CharacterNormalizer
+    ) -> Self:
         return Column.from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_characters(
                 self.to_pylibcudf(mode="read"),
-                do_lower,
+                normalizer,
             )
         )
 

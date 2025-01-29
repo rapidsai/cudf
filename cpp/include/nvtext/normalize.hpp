@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -176,9 +177,10 @@ struct character_normalizer {
  */
 std::unique_ptr<character_normalizer> create_character_normalizer(
   bool do_lower_case,
-  cudf::strings_column_view const& special_tokens,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::strings_column_view const& special_tokens = cudf::strings_column_view(cudf::column_view{
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0}),
+  rmm::cuda_stream_view stream                    = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr               = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Normalizes strings characters for tokenizing
