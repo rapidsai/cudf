@@ -1251,7 +1251,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         # Categories must be unique and sorted in ascending order.
-        cats = self.unique().sort_values().astype(self.dtype)
+        cats = self.unique().sort_values()
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
