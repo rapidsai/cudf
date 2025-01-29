@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,6 @@ using TypesToNegate = cudf::test::Types<int8_t,
                                         float,
                                         double,
                                         cudf::duration_D,
-                                        cudf::duration_h,
-                                        cudf::duration_m,
                                         cudf::duration_s,
                                         cudf::duration_ms,
                                         cudf::duration_us,
@@ -59,9 +57,7 @@ using TypesNotToNegate = cudf::test::Types<uint8_t,
                                            uint32_t,
                                            uint64_t,
                                            cudf::timestamp_D,
-                                           cudf::timestamp_h,
-                                           // cudf::timestamp_m,
-                                           // cudf::timestamp_s,
+                                           cudf::timestamp_s,
                                            cudf::timestamp_ms,
                                            cudf::timestamp_us,
                                            cudf::timestamp_ns>;

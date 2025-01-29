@@ -226,17 +226,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> cudf.core.column.NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def unary_operator(self, unaryop: str) -> ColumnBase:
-        # TODO: Support Callable unary operations
-        unaryop = unaryop.upper()
-        try:
-            unaryop = plc.unary.UnaryOperator[unaryop]
-            return unary.unary_operation(self, unaryop)
-        except Exception:
-            raise TypeError(
-                f"Operation {unaryop} not supported for dtype {self.dtype}."
-            )
-
 
 class Decimal32Column(DecimalBaseColumn):
     def __init__(

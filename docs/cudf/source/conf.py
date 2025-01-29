@@ -29,7 +29,6 @@ import xml.etree.ElementTree as ET
 from enum import IntEnum
 from typing import Any
 
-import cudf
 from docutils.nodes import Text
 from packaging.version import Version
 from pygments.lexer import RegexLexer
@@ -38,6 +37,8 @@ from sphinx.addnodes import pending_xref
 from sphinx.ext import intersphinx
 from sphinx.ext.autodoc import ClassDocumenter
 from sphinx.highlighting import lexers
+
+import cudf
 
 
 class PseudoLexer(RegexLexer):
