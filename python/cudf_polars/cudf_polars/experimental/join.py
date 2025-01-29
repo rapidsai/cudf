@@ -21,6 +21,32 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
+def _maybe_shuffle_frame(
+    frame: IR,
+    on: tuple[NamedExpr, ...],
+    partition_info: MutableMapping[IR, PartitionInfo],
+    shuffle_options: dict[str, Any],
+    output_count: int,
+) -> IR:
+    # Shuffle `frame` if it isn't already shuffled.
+    if not (
+        partition_info[frame].partitioned_on == on
+        and partition_info[frame].count == output_count
+    ):
+        # Insert Shuffle node
+        frame = Shuffle(
+            frame.schema,
+            on,
+            shuffle_options,
+            frame,
+        )
+        partition_info[frame] = PartitionInfo(
+            count=output_count,
+            partitioned_on=on,
+        )
+    return frame
+
+
 def _make_hash_join(
     ir: Join,
     output_count: int,
@@ -28,40 +54,25 @@ def _make_hash_join(
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    shuffle_options: dict[str, Any] = {}
-
-    if not (
-        partition_info[left].partitioned_on == ir.left_on
-        and partition_info[left].count == output_count
-    ):
-        left = Shuffle(
-            left.schema,
-            ir.left_on,
-            shuffle_options,
-            left,
-        )
-        partition_info[left] = PartitionInfo(
-            count=output_count,
-            partitioned_on=ir.left_on,
-        )
-
-    if not (
-        partition_info[right].partitioned_on == ir.right_on
-        and partition_info[right].count == output_count
-    ):
-        right = Shuffle(
-            right.schema,
-            ir.right_on,
-            shuffle_options,
-            right,
-        )
-        partition_info[right] = PartitionInfo(
-            count=output_count,
-            partitioned_on=ir.right_on,
-        )
-
+    # Shuffle left and right dataframes (if necessary)
+    shuffle_options: dict[str, Any] = {}  # Unused for now
+    left = _maybe_shuffle_frame(
+        left,
+        ir.left_on,
+        partition_info,
+        shuffle_options,
+        output_count,
+    )
+    right = _maybe_shuffle_frame(
+        right,
+        ir.right_on,
+        partition_info,
+        shuffle_options,
+        output_count,
+    )
     new_node = ir.reconstruct([left, right])
 
+    # Record new partitioning info
     partitioned_on: tuple[NamedExpr, ...] = ()
     if ir.left_on == ir.right_on or (ir.options[0] in ("left", "semi", "anti")):
         partitioned_on = ir.left_on
@@ -75,67 +86,15 @@ def _make_hash_join(
     return new_node, partition_info
 
 
-def _make_bcast_join(
+def _should_bcast_join(
     ir: Join,
-    output_count: int,
-    partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    how = ir.options[0]
-    if how != "inner":
-        shuffle_options: dict[str, Any] = {}
-        left_count = partition_info[left].count
-        right_count = partition_info[right].count
-        if left_count >= right_count:
-            right = Shuffle(
-                right.schema,
-                ir.right_on,
-                shuffle_options,
-                right,
-            )
-            partition_info[right] = PartitionInfo(
-                count=right_count,
-                partitioned_on=ir.right_on,
-            )
-        else:
-            left = Shuffle(
-                left.schema,
-                ir.left_on,
-                shuffle_options,
-                left,
-            )
-            partition_info[left] = PartitionInfo(
-                count=left_count,
-                partitioned_on=ir.left_on,
-            )
+    partition_info: MutableMapping[IR, PartitionInfo],
+    output_count: int,
+) -> bool:
+    # Decide if a broadcast join is appropriate.
 
-    new_node = ir.reconstruct([left, right])
-    partition_info[new_node] = PartitionInfo(count=output_count)
-    return new_node, partition_info
-
-
-@lower_ir_node.register(Join)
-def _(
-    ir: Join, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    how = ir.options[0]
-    left, right = children
-    output_count = max(partition_info[left].count, partition_info[right].count)
-    if output_count == 1:
-        new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
-    elif how == "cross":
-        raise NotImplementedError(
-            "cross join not support for multiple partitions."
-        )  # pragma: no cover
-
-    # Use a broadcast join if appropriate
     if partition_info[left].count >= partition_info[right].count:
         bcast_count = partition_info[right].count
         other = left
@@ -151,21 +110,84 @@ def _(
         and partition_info[other].count == output_count
     )
 
-    if (
+    # Broadcast-Join Criteria:
+    # 1. "Large" dataframe isn't already shuffled
+    # 2. Small dataframe has 8 partitions (or fewer).
+    #    TODO: Make this value/heuristic configurable).
+    #    We may want to account for the number of workers.
+    # 3. The "kind" of join is compatible with a broadcast join
+    return (
         not other_shuffled
         and bcast_count <= 8  # TODO: Make this configurable
         and (
-            how == "inner"
-            or (how in ("left", "semi", "anti") and other == left)
-            or (how == "right" and other == right)
+            ir.options[0] == "inner"
+            or (ir.options[0] in ("left", "semi", "anti") and other == left)
+            or (ir.options[0] == "right" and other == right)
         )
-    ):
+    )
+
+
+def _make_bcast_join(
+    ir: Join,
+    output_count: int,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    left: IR,
+    right: IR,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    how = ir.options[0]
+    if how != "inner":
+        shuffle_options: dict[str, Any] = {}
+        left_count = partition_info[left].count
+        right_count = partition_info[right].count
+        if left_count >= right_count:
+            right = _maybe_shuffle_frame(
+                right,
+                ir.right_on,
+                partition_info,
+                shuffle_options,
+                right_count,
+            )
+        else:
+            left = _maybe_shuffle_frame(
+                left,
+                ir.left_on,
+                partition_info,
+                shuffle_options,
+                left_count,
+            )
+
+    new_node = ir.reconstruct([left, right])
+    partition_info[new_node] = PartitionInfo(count=output_count)
+    return new_node, partition_info
+
+
+@lower_ir_node.register(Join)
+def _(
+    ir: Join, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    left, right = children
+    output_count = max(partition_info[left].count, partition_info[right].count)
+    if output_count == 1:
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+    elif ir.options[0] == "cross":
+        raise NotImplementedError(
+            "cross join not support for multiple partitions."
+        )  # pragma: no cover
+
+    if _should_bcast_join(ir, left, right, partition_info, output_count):
         # Create a broadcast join
         return _make_bcast_join(
             ir,
             output_count,
             partition_info,
-            *children,
+            left,
+            right,
         )
     else:
         # Create a hash join
@@ -229,8 +251,8 @@ def _(
 
         out_name = get_key_name(ir)
         out_size = partition_info[ir].count
-        split_name = "split-" + out_name
-        inter_name = "inter-" + out_name
+        split_name = f"split-{out_name}"
+        inter_name = f"inter-{out_name}"
 
         for part_out in range(out_size):
             if how != "inner":
