@@ -1919,3 +1919,11 @@ def test_is_cudf_pandas():
 
         assert not isinstance_cudf_pandas(obj._fsproxy_slow, np.ndarray)
         assert not isinstance_cudf_pandas(obj._fsproxy_fast, np.ndarray)
+
+
+def test_series_dtype_property():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = np.dtype(s)
+    actual = np.dtype(xs)
+    assert expected.dtype == actual.dtype
