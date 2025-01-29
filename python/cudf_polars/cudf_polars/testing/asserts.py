@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Device-aware assertions."""
@@ -135,9 +135,9 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
-            assert any(
-                isinstance(err, err_type) for err_type in exceptions
-            ), f"Translation DID NOT RAISE {exceptions}"
+            assert any(isinstance(err, err_type) for err_type in exceptions), (
+                f"Translation DID NOT RAISE {exceptions}"
+            )
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
