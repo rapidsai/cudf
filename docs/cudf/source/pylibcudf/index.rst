@@ -1,9 +1,11 @@
 pylibcudf documentation
 =======================
 
-pylibcuDF provides low-level python bindings for the libcuDF C++ library. As of 25.02, it covers most of the libcuDF API.
+pylibcuDF is a lightweight Cython interface to libcuDF that provides near-zero overhead for GPU-accelerated data processing in Python.
+It aims to match native C++ performance of libcuDF while integrating seamlessly with community protocols like ``__cuda_array_interface__``, and common libraries such as CuPy and Numba.
+Both our zero-code pandas accelerator (``cudf.pandas``) and our polars GPU execution engine (``cudf.polars``) are built on top of pylibcuDF.
 
-Ex: Reading from a parquet file
+Ex: Reading data from a parquet file
 
 pylibcuDF:
 
