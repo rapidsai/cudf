@@ -69,13 +69,13 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
   auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
-  auto const has_sufficient_shmem =
-    (data_buffer_size > 0) and (data_buffer_size < (GROUPBY_CARDINALITY_THRESHOLD * 8));
-  auto const has_dictionary_request = std::any_of(
-    requests.begin(), requests.end(), [](cudf::groupby::aggregation_request const& request) {
-      return cudf::is_dictionary(request.values.type());
+  auto const is_shared_memory_compatible = std::all_of(
+    requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+      auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
+                                                                           size_of_functor{});
+      return !cudf::is_dictionary(request.values.type()) and
+             static_cast<size_type>(data_buffer_size) >= (size * GROUPBY_CARDINALITY_THRESHOLD);
     });
-  auto const is_shared_memory_compatible = !has_dictionary_request and has_sufficient_shmem;
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns or when there is insufficient dynamic
