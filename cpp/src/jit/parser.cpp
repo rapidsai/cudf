@@ -375,9 +375,14 @@ std::string ptx_parser::parse()
 
   // Don't use std::accumulate until C++20 when rvalue references are supported
   auto final_output = fn_header_output + "\n asm volatile (\"{\");";
-  for (auto const& line : fn_body_output)
-    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
-                                                           : "  " + line + "\n";
+  for (auto const& line : fn_body_output) {
+    std::string output{line};
+    std::string_view const ret_instruction = "ret;";
+    if (auto start = output.find(ret_instruction); start != std::string::npos) {
+      output.replace(start, ret_instruction.size(), "bra RETTGT;");
+    }
+    final_output += "  " + output + "\n";
+  }
   return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
