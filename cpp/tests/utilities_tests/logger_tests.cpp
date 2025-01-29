@@ -22,12 +22,12 @@
 
 class LoggerTest : public cudf::test::BaseFixture {
   std::ostringstream oss;
-  cudf::level_enum prev_level;
+  rapids_logger::level_enum prev_level;
 
  public:
   LoggerTest() : prev_level{cudf::default_logger().level()}
   {
-    cudf::default_logger().sinks().push_back(std::make_shared<cudf::ostream_sink_mt>(oss));
+    cudf::default_logger().sinks().push_back(std::make_shared<rapids_logger::ostream_sink_mt>(oss));
     cudf::default_logger().set_pattern("%v");
   }
   ~LoggerTest() override
@@ -60,14 +60,14 @@ TEST_F(LoggerTest, DefaultLevel)
 
 TEST_F(LoggerTest, CustomLevel)
 {
-  cudf::default_logger().set_level(cudf::level_enum::warn);
+  cudf::default_logger().set_level(rapids_logger::level_enum::warn);
   cudf::default_logger().info("info");
   cudf::default_logger().warn("warn");
   ASSERT_EQ(this->sink_content(), "warn\n");
 
   this->clear_sink();
 
-  cudf::default_logger().set_level(cudf::level_enum::debug);
+  cudf::default_logger().set_level(rapids_logger::level_enum::debug);
   cudf::default_logger().trace("trace");
   cudf::default_logger().debug("debug");
   ASSERT_EQ(this->sink_content(), "debug\n");
