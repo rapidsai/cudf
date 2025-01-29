@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,8 +110,6 @@ size_type string_scalar::size() const { return _data.size(); }
 
 char const* string_scalar::data() const { return static_cast<char const*>(_data.data()); }
 
-string_scalar::operator std::string() const { return this->to_string(cudf::get_default_stream()); }
-
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result(size(), '\0');
@@ -181,12 +179,6 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
 {
   return value_type{
     numeric::scaled_integer<rep_type>{_data.value(stream), numeric::scale_type{type().scale()}}};
-}
-
-template <typename T>
-fixed_point_scalar<T>::operator value_type() const
-{
-  return this->fixed_point_value(cudf::get_default_stream());
 }
 
 template <typename T>
@@ -264,12 +256,6 @@ template <typename T>
 T const* fixed_width_scalar<T>::data() const
 {
   return _data.data();
-}
-
-template <typename T>
-fixed_width_scalar<T>::operator value_type() const
-{
-  return this->value(cudf::get_default_stream());
 }
 
 /**
