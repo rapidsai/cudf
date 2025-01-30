@@ -5,8 +5,7 @@ cuDF provides an in-memory, GPU-accelerated execution engine for Python users of
 The engine supports most of the core expressions and data types as well as a growing set of more advanced dataframe manipulations
 and data file formats. When using the GPU engine, Polars will convert expressions into an optimized query plan and determine
 whether the plan is supported on the GPU. If it is not, the execution will transparently fall back to the standard Polars engine
-and run on the CPU. This functionality is available in Open Beta and is undergoing rapid development and currently is a single
-GPU implementation.
+and run on the CPU. This functionality is available in Open Beta, is undergoing rapid development, and is currently a single GPU implementation.
 
 Benchmark
 ---------
