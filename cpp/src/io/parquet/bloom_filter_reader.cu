@@ -645,7 +645,7 @@ aggregate_reader_metadata::apply_bloom_filters(
   auto bloom_filter_data = read_bloom_filters(
     sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream, aligned_mr);
 
-  // No bloom filter buffers, return the original row group indices
+  // No bloom filter buffers, return early
   if (bloom_filter_data.empty()) { return {std::nullopt, false}; }
 
   // Get parquet types for the predicate columns
