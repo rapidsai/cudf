@@ -43,9 +43,9 @@ Launch on Google Colab
 
 .. figure:: ../_static/colab.png
    :width: 200px
-   :target: https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb
+   :target: https://nvda.ws/4eKlWZW
 
-   Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb>`__.
+   Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://nvda.ws/4eKlWZW>`__.
 
 .. toctree::
    :maxdepth: 1
