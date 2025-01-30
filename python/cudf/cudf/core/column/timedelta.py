@@ -41,6 +41,16 @@ _unit_to_nanoseconds_conversion = {
 }
 
 
+@functools.cache
+def get_np_td_unit_conversion(
+    reso: str, dtype: None | np.dtype
+) -> np.timedelta64:
+    td = np.timedelta64(_unit_to_nanoseconds_conversion[reso], "ns")
+    if dtype is not None:
+        return td.astype(dtype)
+    return td
+
+
 class TimeDeltaColumn(ColumnBase):
     """
     Parameters
@@ -483,13 +493,6 @@ class TimeDeltaColumn(ColumnBase):
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """
-
-        @functools.cache
-        def get_unit_conversion(reso: str) -> np.timedelta64:
-            return np.timedelta64(
-                _unit_to_nanoseconds_conversion[reso], "ns"
-            ).astype(self.dtype)
-
         date_meta = {
             "hours": ["D", "h"],
             "minutes": ["h", "m"],
@@ -498,18 +501,13 @@ class TimeDeltaColumn(ColumnBase):
             "microseconds": ["ms", "us"],
             "nanoseconds": ["us", "ns"],
         }
-        data = {
-            "days": self
-            // np.timedelta64(
-                _unit_to_nanoseconds_conversion["D"], "ns"
-            ).astype(self.dtype)
-        }
+        data = {"days": self // get_np_td_unit_conversion("D", self.dtype)}
         reached_self_unit = False
         for result_key, (mod_unit, div_unit) in date_meta.items():
             if not reached_self_unit:
                 res_col = (
-                    self % get_unit_conversion(mod_unit)
-                ) // get_unit_conversion(div_unit)
+                    self % get_np_td_unit_conversion(mod_unit, self.dtype)
+                ) // get_np_td_unit_conversion(div_unit, self.dtype)
                 reached_self_unit = self.time_unit == div_unit
             else:
                 res_col = column.as_column(
@@ -529,9 +527,7 @@ class TimeDeltaColumn(ColumnBase):
         -------
         NumericalColumn
         """
-        return self // np.timedelta64(
-            _unit_to_nanoseconds_conversion["D"], "ns"
-        ).astype(self.dtype)
+        return self // get_np_td_unit_conversion("D", self.dtype)
 
     @property
     def seconds(self) -> cudf.core.column.NumericalColumn:
@@ -548,11 +544,8 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of seconds.
 
         return (
-            self
-            % np.timedelta64(
-                _unit_to_nanoseconds_conversion["D"], "ns"
-            ).astype(self.dtype)
-        ) // np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
+            self % get_np_td_unit_conversion("D", self.dtype)
+        ) // get_np_td_unit_conversion("s", None)
 
     @property
     def microseconds(self) -> cudf.core.column.NumericalColumn:
@@ -569,11 +562,8 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of microseconds.
 
         return (
-            self
-            % np.timedelta64(
-                _unit_to_nanoseconds_conversion["s"], "ns"
-            ).astype(self.dtype)
-        ) // np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
+            self % get_np_td_unit_conversion("s", self.dtype)
+        ) // get_np_td_unit_conversion("us", None)
 
     @property
     def nanoseconds(self) -> cudf.core.column.NumericalColumn:
@@ -596,8 +586,8 @@ class TimeDeltaColumn(ColumnBase):
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)
         return (
-            self % np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
-        ) // np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
+            self % get_np_td_unit_conversion("us", None)
+        ) // get_np_td_unit_conversion("ns", None)
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
