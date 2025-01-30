@@ -238,7 +238,6 @@ uvector_pair data_normalizer::normalize(cudf::strings_column_view const& input,
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
   auto const d_strings = input.chars_begin(stream) + cudf::strings::detail::get_offset_value(
                                                        input.offsets(), input.offset(), stream);
-  nvtxRangePushA("o_kernel_data_normalizer");
   kernel_data_normalizer<<<num_blocks, threads_per_block, 0, stream.value()>>>(
     reinterpret_cast<unsigned char const*>(d_strings),
     bytes_count,
@@ -247,37 +246,26 @@ uvector_pair data_normalizer::normalize(cudf::strings_column_view const& input,
     do_lower_case,
     d_code_points->data(),
     d_chars_per_thread.data());
-  stream.synchronize();
-  nvtxRangePop();
 
   // Remove the 'empty' code points from the vector
-  nvtxRangePushA("o_remove");
   thrust::remove(rmm::exec_policy(stream),
                  d_code_points->begin(),
                  d_code_points->end(),
                  uint32_t{1 << FILTER_BIT});
-  stream.synchronize();
-  nvtxRangePop();
 
   // We also need to prefix sum the number of characters up to an including
   // the current character in order to get the new strings lengths.
-  nvtxRangePushA("o_inclusive_scan");
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          d_chars_per_thread.begin(),
                          d_chars_per_thread.end(),
                          d_chars_per_thread.begin());
-  stream.synchronize();
-  nvtxRangePop();
 
   // This will reset the offsets to the new generated code point values
-  nvtxRangePushA("o_update_strings_lengths");
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<uint32_t>(1),
     input.size(),
     update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});
-  stream.synchronize();
-  nvtxRangePop();
 
   auto const num_chars = d_strings_offsets->element(input.size(), stream);
   d_code_points->resize(num_chars, stream);  // should be smaller than original allocated size

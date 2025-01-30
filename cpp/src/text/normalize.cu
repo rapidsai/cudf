@@ -201,12 +201,9 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   // create the normalizer and call it
   auto result = [&] {
-    nvtxRangePushA("o_load_normalize_tables");
     auto const cp_metadata = get_codepoint_metadata(stream);
     auto const aux_table   = get_aux_codepoint_data(stream);
     auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
-    stream.synchronize();
-    nvtxRangePop();
     return normalizer.normalize(strings, stream);
   }();
 
@@ -224,11 +221,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
-  nvtxRangePushA("o_codepoint_to_utf8");
   auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
-  stream.synchronize();
-  nvtxRangePop();
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(offsets_column),
@@ -337,8 +331,7 @@ namespace {
 
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_utf8chars,
                                        int64_t total_count,
-                                       cudf::device_span<cudf::string_view const> special_tokens,
-                                       int8_t* chars_per_thread)
+                                       cudf::device_span<cudf::string_view const> special_tokens)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= total_count) { return; }
@@ -364,11 +357,6 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_utf8chars,
   // fix up chars to remove the extra spaces
   *(begin + 1) = 0;
   *(match - 1) = 0;
-
-  auto const match_idx = idx + (thrust::distance(begin, match) / MAX_NEW_CHARS);
-
-  chars_per_thread[idx]       = 2;  // leading space plus '['
-  chars_per_thread[match_idx] = 2;  // ']' plus trailing space
 }
 
 CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
@@ -376,8 +364,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
                                         codepoint_metadata_type const* cp_metadata,
                                         aux_codepoint_data_type const* aux_table,
                                         bool do_lower_case,
-                                        uint32_t* d_output,
-                                        int8_t* chars_per_thread)
+                                        uint32_t* d_output)
 {
   uint32_t replacement[MAX_NEW_CHARS] = {0};
 
@@ -423,16 +410,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
     }
   }
 
-  if (idx < total_bytes) {
-    chars_per_thread[idx] = num_new_bytes;
-    // d_output += idx * MAX_NEW_CHARS;
-    // #pragma unroll
-    // for (int k = 0; k < MAX_NEW_CHARS; ++k) {
-    //   *d_output++ = replacement[k];
-    // }
-  }
-
-  // BLOCK_STORE_TRANSPOSE
+  // alternate algorithm BLOCK_STORE_TRANSPOSE
   using block_store =
     cub::BlockStore<uint32_t, 256, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename block_store::TempStorage bs_stg;
@@ -441,7 +419,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
 }
 
 template <typename OffsetType>
-rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t const> sizes,
+rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t const> d_codepoints,
                                                    OffsetType offsets,
                                                    int64_t offset,
                                                    cudf::size_type size,
@@ -449,10 +427,23 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t cons
 {
   auto output_sizes = rmm::device_uvector<cudf::size_type>(size, stream);
 
-  auto d_in        = sizes.data();
-  auto d_out       = output_sizes.begin();
-  std::size_t temp = 0;
-  nvtxRangePushA("n_compute_sizes_segred");
+  auto d_cps = d_codepoints.data();
+
+  // counts the non-zero bytes in the d_cps arrays
+  auto d_in = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<cudf::size_type>([d_cps] __device__(auto idx) {
+      idx       = idx * MAX_NEW_CHARS;
+      auto size = cudf::size_type{0};
+      for (int k = 0; k < MAX_NEW_CHARS; ++k) {
+        auto const v = d_cps[idx + k];
+        size +=
+          ((v & 0xFF) > 0) + ((v & 0xFF00) > 0) + ((v & 0xFF0000) > 0) + ((v & 0xFF000000) > 0);
+      }
+      return size;
+    }));
+
+  auto d_out = output_sizes.begin();
+  auto temp  = std::size_t{0};
   if (offset == 0) {
     cub::DeviceSegmentedReduce::Sum(
       nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
@@ -470,12 +461,11 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t cons
     cub::DeviceSegmentedReduce::Sum(
       d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
   }
-  stream.synchronize();
-  nvtxRangePop();
 
   return output_sizes;
 }
 
+// handles ranges above int32 max
 template <typename InputIterator, typename OutputIterator, typename T>
 OutputIterator remove_copy_safe(InputIterator first,
                                 InputIterator last,
@@ -496,6 +486,7 @@ OutputIterator remove_copy_safe(InputIterator first,
   return result;
 }
 
+// handles ranges above int32 max
 template <typename Iterator, typename T>
 Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
 {
@@ -538,52 +529,42 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto const parameters = normalizer._impl;
 
-  auto d_sizes       = rmm::device_uvector<int8_t>(chars_size, stream);
-  auto d_code_points = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
-  nvtxRangePushA("n_normalizer_kernel");
+  auto d_codepoints = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
     chars_size,
     parameters->cp_metadata.data(),
     parameters->aux_table.data(),
     parameters->do_lower_case,
-    d_code_points.data(),
-    d_sizes.data());
-  stream.synchronize();
-  nvtxRangePop();
+    d_codepoints.data());
 
-  // This removes space adding around any special tokens in the form of [ttt].
+  // This removes space added around any special tokens in the form of [ttt].
   // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
   // before returning the output strings column.
   auto const special_tokens = parameters->get_special_tokens();
   if (!special_tokens.empty()) {
-    nvtxRangePushA("n_special_tokens_kernel");
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      d_code_points.data(), chars_size, special_tokens, d_sizes.data());
-    stream.synchronize();
-    nvtxRangePop();
+      d_codepoints.data(), chars_size, special_tokens);
   }
 
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
-  // use segmented-reduce with input_offsets over d_sizes to get the size of the output rows
-  auto output_sizes = compute_sizes(d_sizes, input_offsets, first_offset, input.size(), stream);
+  // Use segmented-reduce over the non-zero codepoints to get the size of the output rows
+  auto output_sizes =
+    compute_sizes(d_codepoints, input_offsets, first_offset, input.size(), stream);
 
   // convert the sizes to offsets
   auto [offsets, total_size] = cudf::strings::detail::make_offsets_child_column(
     output_sizes.begin(), output_sizes.end(), stream, mr);
 
-  // create output chars and use remove-copy(0) on d_code_points
+  // create output chars by calling remove_copy(0) on the bytes in d_codepoints
   rmm::device_uvector<char> chars(total_size, stream, mr);
-  auto begin = reinterpret_cast<char const*>(d_code_points.begin());
-  auto end   = reinterpret_cast<char const*>(d_code_points.end());
-  nvtxRangePushA("n_remove_copy");
-  // auto end = reinterpret_cast<char const*>(
-  //   remove_safe(d_code_points.begin(), d_code_points.end(), 0, stream));
+  auto begin = reinterpret_cast<char const*>(d_codepoints.begin());
+  // the first remove() here speeds up the remove_copy() by roughly 10%
+  auto end =
+    reinterpret_cast<char const*>(remove_safe(d_codepoints.begin(), d_codepoints.end(), 0, stream));
   remove_copy_safe(begin, end, chars.data(), 0, stream);
-  stream.synchronize();
-  nvtxRangePop();
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),

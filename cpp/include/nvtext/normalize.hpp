@@ -122,18 +122,22 @@ std::unique_ptr<cudf::column> normalize_characters(
  * - changing whitespace (e.g. `"\t", "\n", "\r"`) to just space `" "`
  * - removing control characters (unicode categories "Cc" and "Cf")
  *
- * The padding process here adds a single space before and after the character.
+ * The padding process adds a single space before and after the character.
  * Details on _unicode category_ can be found here:
  * https://unicodebook.readthedocs.io/unicode.html#categories
  *
- * If `do_lower_case = true`, lower-casing also removes the accents. The
+ * If `do_lower_case = true`, lower-casing also removes any accents. The
  * accents cannot be removed from upper-case characters without lower-casing
  * and lower-casing cannot be performed without also removing accents.
  * However, if the accented character is already lower-case, then only the
  * accent is removed.
  *
- * If `special_tokens` are included the padding around the `[]` is not
- * enforced if the character between them match one of the given tokens.
+ * If `special_tokens` are included the padding after `[` and before `]` is not
+ * inserted if the character between them match one of the given tokens.
+ * If `do_lower_case = true` the `special_tokens` are expected to contain
+ * lower-case characters.
+ * Also, the `special_tokens` are expected to include the `[]` characters
+ * at the beginning of and end of each string respectively.
  */
 struct character_normalizer {
   /**
@@ -170,10 +174,11 @@ struct character_normalizer {
  * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
- * @param special_tokens Individual sequences including `[]` brackets
+ * @param special_tokens Individual sequences including `[]` brackets.
+ *        Default is no special tokens.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Object to be used with nvtext::tokenize_with_vocabulary
+ * @return Object to be used with nvtext::normalize_characters
  */
 std::unique_ptr<character_normalizer> create_character_normalizer(
   bool do_lower_case,
@@ -183,15 +188,18 @@ std::unique_ptr<character_normalizer> create_character_normalizer(
   rmm::device_async_resource_ref mr               = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Normalizes strings characters for tokenizing
+ * @brief Normalizes the text in input strings column
  *
  * @see nvtext::character_normalizer for details on the normalizer behavior
  *
  * @code{.pseudo}
+ * cn = create_character_normalizer(true)
  * s = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]
- * s1 = normalize_characters(s,true)
+ * s1 = normalize_characters(s,cn)
  * s1 is now ["eaio eaio", "acenu", "acenu", " $ 24 . 08", " [ a , bb ] "]
- * s2 = normalize_characters(s,false)
+ *
+ * cn = create_character_normalizer(false)
+ * s2 = normalize_characters(s,cn)
  * s2 is now ["éâîô eaio", "ĂĆĖÑÜ", "ACENU", " $ 24 . 08", " [ a , bb ] "]
  * @endcode
  *

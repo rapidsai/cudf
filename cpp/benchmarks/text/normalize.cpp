@@ -48,9 +48,10 @@ static void bench_normalize(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = nvtext::normalize_spaces(input); });
   } else {
     bool const to_lower = (normalize_type == "to_lower");
-    auto normalizer     = nvtext::create_character_normalizer(to_lower);
+    // we expect the normalizer to be created once and re-used
+    // so creating it is not measured
+    auto normalizer = nvtext::create_character_normalizer(to_lower);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      // auto result = nvtext::normalize_characters(input, to_lower);
       auto result = nvtext::normalize_characters(input, *normalizer);
     });
   }
