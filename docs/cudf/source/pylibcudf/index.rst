@@ -1,13 +1,13 @@
 pylibcudf documentation
 =======================
 
-pylibcuDF is a lightweight Cython interface to libcuDF that provides near-zero overhead for GPU-accelerated data processing in Python.
-It aims to match native C++ performance of libcuDF while integrating seamlessly with community protocols like ``__cuda_array_interface__``, and common libraries such as CuPy and Numba.
-Both our zero-code pandas accelerator (``cudf.pandas``) and our polars GPU execution engine (``cudf.polars``) are built on top of pylibcuDF.
+pylibcudf is a lightweight Cython interface to libcudf that provides near-zero overhead for GPU-accelerated data processing in Python.
+It aims to provide minimal overhead interfaces to the C++ libcudf library, while integrating seamlessly with community protocols like ``__cuda_array_interface__``, and common libraries such as CuPy and Numba.
+Both our zero-code pandas accelerator (``cudf.pandas``) and our polars GPU execution engine (``cudf.polars``) are built on top of pylibcudf.
 
 Ex: Reading data from a parquet file
 
-pylibcuDF:
+pylibcudf:
 
 .. code-block:: python
 
@@ -17,15 +17,18 @@ pylibcuDF:
    options = plc.io.parquet.ParquetReaderOptions.builder(source)
    table = plc.io.parquet.read_parquet(options)
 
-libcuDF:
+libcudf:
 
 .. code-block:: cpp
 
-   #include <cudf>
+   #include <cudf/io/parquet.hpp>
 
-   auto source  = cudf::io::source_info("dataset.parquet");
-   auto options = cudf::io::csv_reader_options::builder(source);
-   auto table  = cudf::io::read_csv(options);
+   int main()
+   {
+      auto source  = cudf::io::source_info("dataset.parquet");
+      auto options = cudf::io::parquet_reader_options::builder(source);
+      auto table  = cudf::io::read_parquet(options);
+   }
 
 .. toctree::
    :maxdepth: 1
