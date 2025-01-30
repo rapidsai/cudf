@@ -30,8 +30,6 @@ from .fast_slow_proxy import (
     get_registered_functions,
 )
 
-# from ._wrappers.patching_utils import undo_inits_patching
-
 
 def rename_root_module(module: str, root: str, new_root: str) -> str:
     """
