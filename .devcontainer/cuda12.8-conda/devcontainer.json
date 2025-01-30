@@ -3,7 +3,7 @@
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "args": {
-      "CUDA": "12.5",
+      "CUDA": "12.8",
       "PYTHON_PACKAGE_MANAGER": "conda",
       "BASE": "rapidsai/devcontainers:25.02-cpp-mambaforge-ubuntu22.04"
     }
@@ -11,12 +11,12 @@
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda12.5-conda"
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda12.8-conda"
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
     "ghcr.io/rapidsai/devcontainers/features/cuda:25.2": {
-        "version": "12.5",
+        "version": "12.8",
         "installCompilers": false,
         "installProfilers": true,
         "installDevPackages": false,
@@ -42,7 +42,7 @@
     "ghcr.io/rapidsai/devcontainers/features/cuda",
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
-  "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.5-envs}"],
+  "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.8-envs}"],
   "postAttachCommand": ["/bin/bash", "-c", "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"],
   "workspaceFolder": "/home/coder",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/cudf,type=bind,consistency=consistent",
@@ -51,7 +51,7 @@
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda12.5-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda12.8-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {
