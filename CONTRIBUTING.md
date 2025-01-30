@@ -105,7 +105,7 @@ Instructions for a minimal build environment without conda are included below.
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-125_arch-x86_64.yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-128_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
