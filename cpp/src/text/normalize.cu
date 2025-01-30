@@ -200,15 +200,15 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
-  nvtxRangePushA("o_load_normalize_tables");
   auto result = [&] {
+    nvtxRangePushA("o_load_normalize_tables");
     auto const cp_metadata = get_codepoint_metadata(stream);
     auto const aux_table   = get_aux_codepoint_data(stream);
     auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
+    stream.synchronize();
+    nvtxRangePop();
     return normalizer.normalize(strings, stream);
   }();
-  stream.synchronize();
-  nvtxRangePop();
 
   CUDF_EXPECTS(
     result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -371,13 +371,13 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_utf8chars,
   chars_per_thread[match_idx] = 2;  // ']' plus trailing space
 }
 
-CUDF_KERNEL void normalizer_kernel(char const* d_chars,
-                                   int64_t total_bytes,
-                                   codepoint_metadata_type const* cp_metadata,
-                                   aux_codepoint_data_type const* aux_table,
-                                   bool do_lower_case,
-                                   uint32_t* d_output,
-                                   int8_t* chars_per_thread)
+CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
+                                        int64_t total_bytes,
+                                        codepoint_metadata_type const* cp_metadata,
+                                        aux_codepoint_data_type const* aux_table,
+                                        bool do_lower_case,
+                                        uint32_t* d_output,
+                                        int8_t* chars_per_thread)
 {
   uint32_t replacement[MAX_NEW_CHARS] = {0};
 
@@ -452,7 +452,7 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t cons
   auto d_in        = sizes.data();
   auto d_out       = output_sizes.begin();
   std::size_t temp = 0;
-  nvtxRangePushA("compute_sizes_segred");
+  nvtxRangePushA("n_compute_sizes_segred");
   if (offset == 0) {
     cub::DeviceSegmentedReduce::Sum(
       nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
@@ -540,8 +540,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto d_sizes       = rmm::device_uvector<int8_t>(chars_size, stream);
   auto d_code_points = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
-  nvtxRangePushA("normalizer_kernel");
-  normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  nvtxRangePushA("n_normalizer_kernel");
+  data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
     chars_size,
     parameters->cp_metadata.data(),
@@ -557,7 +557,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   // before returning the output strings column.
   auto const special_tokens = parameters->get_special_tokens();
   if (!special_tokens.empty()) {
-    nvtxRangePushA("special_tokens_kernel");
+    nvtxRangePushA("n_special_tokens_kernel");
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       d_code_points.data(), chars_size, special_tokens, d_sizes.data());
     stream.synchronize();
@@ -578,7 +578,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   rmm::device_uvector<char> chars(total_size, stream, mr);
   auto begin = reinterpret_cast<char const*>(d_code_points.begin());
   auto end   = reinterpret_cast<char const*>(d_code_points.end());
-  nvtxRangePushA("remove_copy");
+  nvtxRangePushA("n_remove_copy");
   // auto end = reinterpret_cast<char const*>(
   //   remove_safe(d_code_points.begin(), d_code_points.end(), 0, stream));
   remove_copy_safe(begin, end, chars.data(), 0, stream);
