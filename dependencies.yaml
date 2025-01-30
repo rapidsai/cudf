@@ -424,7 +424,6 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
   depends_on_nvcomp:
