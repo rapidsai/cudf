@@ -29,6 +29,7 @@ from .fast_slow_proxy import (
     get_intermediate_type_map,
     get_registered_functions,
 )
+# from ._wrappers.patching_utils import undo_inits_patching
 
 
 def rename_root_module(module: str, root: str, new_root: str) -> str:
@@ -616,7 +617,9 @@ def disable_module_accelerator() -> contextlib.ExitStack:
     """
     Temporarily disable any module acceleration.
     """
+    from ._wrappers.pandas import undo_inits_patching
     with ImportLock(), contextlib.ExitStack() as stack:
+        undo_inits_patching()
         for finder in sys.meta_path:
             if isinstance(finder, ModuleAcceleratorBase):
                 stack.enter_context(finder.disabled())
