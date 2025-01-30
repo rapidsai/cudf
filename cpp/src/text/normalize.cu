@@ -386,8 +386,8 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
 
   if ((idx < total_bytes) && cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) {
     auto const cp = [utf8 = d_chars + idx] {
-      cudf::char_utf8 ch_utf8;
-      cudf::strings::detail::to_char_utf8(utf8, ch_utf8);
+      cudf::char_utf8 ch_utf8 = *utf8;
+      if (ch_utf8 > 0x7F) { cudf::strings::detail::to_char_utf8(utf8, ch_utf8); }
       return cudf::strings::detail::utf8_to_codepoint(ch_utf8);
     }();
     auto const metadata = cp_metadata[cp];
@@ -426,14 +426,15 @@ CUDF_KERNEL void normalizer_kernel(char const* d_chars,
   if (idx < total_bytes) {
     chars_per_thread[idx] = num_new_bytes;
     // d_output += idx * MAX_NEW_CHARS;
-    // // #pragma unroll
+    // #pragma unroll
     // for (int k = 0; k < MAX_NEW_CHARS; ++k) {
     //   *d_output++ = replacement[k];
     // }
   }
 
-  // BLOCK_STORE_WARP_TRANSPOSE
-  using block_store = cub::BlockStore<uint32_t, 256, MAX_NEW_CHARS, cub::BLOCK_STORE_STRIPED>;
+  // BLOCK_STORE_TRANSPOSE
+  using block_store =
+    cub::BlockStore<uint32_t, 256, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename block_store::TempStorage bs_stg;
   auto block_base = d_output + blockIdx.x * blockDim.x * MAX_NEW_CHARS;
   block_store(bs_stg).Store(block_base, replacement);
@@ -469,7 +470,7 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<int8_t cons
     cub::DeviceSegmentedReduce::Sum(
       d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
   }
-  // stream.synchronize();
+  stream.synchronize();
   nvtxRangePop();
 
   return output_sizes;
@@ -548,7 +549,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     parameters->do_lower_case,
     d_code_points.data(),
     d_sizes.data());
-  // stream.synchronize();
+  stream.synchronize();
   nvtxRangePop();
 
   // This removes space adding around any special tokens in the form of [ttt].
@@ -576,12 +577,12 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   // create output chars and use remove-copy(0) on d_code_points
   rmm::device_uvector<char> chars(total_size, stream, mr);
   auto begin = reinterpret_cast<char const*>(d_code_points.begin());
-  // auto end   = reinterpret_cast<char const*>(d_code_points.end());
+  auto end   = reinterpret_cast<char const*>(d_code_points.end());
   nvtxRangePushA("remove_copy");
-  auto end = reinterpret_cast<char const*>(
-    remove_safe(d_code_points.begin(), d_code_points.end(), 0, stream));
+  // auto end = reinterpret_cast<char const*>(
+  //   remove_safe(d_code_points.begin(), d_code_points.end(), 0, stream));
   remove_copy_safe(begin, end, chars.data(), 0, stream);
-  // stream.synchronize();
+  stream.synchronize();
   nvtxRangePop();
 
   return cudf::make_strings_column(input.size(),
