@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import copyreg
+import functools
 import importlib
 import os
-import functools
 import pickle
 import sys
 
@@ -70,8 +70,6 @@ try:
     ipython_shell = get_ipython()
 except ImportError:
     ipython_shell = None
-
-cudf.set_option("mode.pandas_compatible", True)
 
 
 def _pandas_util_dir():
@@ -1747,42 +1745,66 @@ _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
 
+
 def wrap_init(original_init):
     @functools.wraps(original_init)
     def wrapped_init(self, data=None, *args, **kwargs):
-        print("wrapped_init")
         if is_proxy_object(data):
-            print("data is a proxy object")
             data = data.as_gpu_object()
+            if (
+                isinstance(data, type(self))
+                and len(args) == 0
+                and len(kwargs) == 0
+            ):
+                self.__dict__.update(data.__dict__)
+                return
         original_init(self, data, *args, **kwargs)
+
     return wrapped_init
 
 
 @functools.wraps(_original_DataFrame_init)
 def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
+    data_extracted, index_extracted, columns_extracted = False, False, False
     if is_proxy_object(data):
         data = data.as_gpu_object()
+        data_extracted = True
     if is_proxy_object(index):
         index = index.as_gpu_object()
+        index_extracted = True
     if is_proxy_object(columns):
         columns = columns.as_cpu_object()
+        columns_extracted = True
+    if (
+        (
+            (data is None or data_extracted)
+            and (index is None or index_extracted)
+            and (columns is None or columns_extracted)
+        )
+        and len(args) == 0
+        and len(kwargs) == 0
+    ):
+        self.__dict__.update(data.__dict__)
+        return
     _original_DataFrame_init(self, data, index, columns, *args, **kwargs)
-
 
 
 def init_patching():
     # Replace the __init__ methods with the wrapped versions
+    global \
+        _original_Series_init, \
+        _original_DataFrame_init, \
+        _original_Index_init
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
 
 
-def undo_inits_patching():
-    cudf.Series.__init__ = _original_Series_init
-    cudf.DataFrame.__init__ = _original_DataFrame_init
-    cudf.Index.__init__ = _original_Index_init
+def initial_setup():
+    init_patching()
+    cudf.set_option("mode.pandas_compatible", True)
 
-init_patching()
+
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj

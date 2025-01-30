@@ -1927,3 +1927,24 @@ def test_series_dtype_property():
     expected = np.dtype(s)
     actual = np.dtype(xs)
     assert expected == actual
+
+
+def test_cudf_series_from_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+    gs = cudf.Series(s)
+
+    tm.assert_equal(s.as_gpu_object(), gs)
+
+
+def test_cudf_dataframe_from_cudf_pandas():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    gdf = cudf.DataFrame(df)
+
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+
+def test_cudf_index_from_cudf_pandas():
+    idx = xpd.Index([1, 2, 3])
+    gidx = cudf.Index(idx)
+
+    tm.assert_equal(idx.as_gpu_object(), gidx)

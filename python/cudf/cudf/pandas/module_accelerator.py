@@ -29,6 +29,7 @@ from .fast_slow_proxy import (
     get_intermediate_type_map,
     get_registered_functions,
 )
+
 # from ._wrappers.patching_utils import undo_inits_patching
 
 
@@ -596,9 +597,10 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 )
             mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
-                importlib.import_module(
+                lib_wrappers = importlib.import_module(
                     f".._wrappers.{mode.slow_lib}", __name__
                 )
+                lib_wrappers.initial_setup()
             try:
                 (self,) = (
                     p
@@ -617,9 +619,7 @@ def disable_module_accelerator() -> contextlib.ExitStack:
     """
     Temporarily disable any module acceleration.
     """
-    from ._wrappers.pandas import undo_inits_patching
     with ImportLock(), contextlib.ExitStack() as stack:
-        undo_inits_patching()
         for finder in sys.meta_path:
             if isinstance(finder, ModuleAcceleratorBase):
                 stack.enter_context(finder.disabled())
