@@ -135,6 +135,7 @@ jobs:
       # Only test amd64 nodes on NVKS, there is no ARM capacity yet
       matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
+      node_type: "cpu16"
   cpp-linters:
     secrets: inherit
     needs: checks
@@ -238,6 +239,7 @@ jobs:
       # Only test amd64 nodes on NVKS, there is no ARM capacity yet
       matrix_filter: map(select(.ARCH == "amd64")) | group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
+      node_type: "cpu16"
       script: "ci/build_wheel_libcudf.sh"
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
@@ -319,8 +321,9 @@ jobs:
     needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@test-nvks-runners
     with:
+      node_type: "cpu32"
       arch: '["amd64"]'
-      cuda: '["12.5"]'
+      cuda: '["12.8"]'
       build_command: |
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
@@ -353,7 +356,7 @@ jobs:
     needs: pandas-tests
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@test-nvks-runners
     with:
-        node_type: cpu4
+        node_type: "cpu4"
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
 

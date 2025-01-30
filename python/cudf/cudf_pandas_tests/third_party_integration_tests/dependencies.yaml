@@ -156,9 +156,9 @@ dependencies:
             packages:
               - cuda-version=12.5
           - matrix:
-              cuda: "12"
+              cuda: "12.8"
             packages:
-              - cuda-version=12.5
+              - cuda-version=12.8
   py_version:
     specific:
       - output_types: conda
