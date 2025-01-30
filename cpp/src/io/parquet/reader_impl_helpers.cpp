@@ -1040,7 +1040,7 @@ std::tuple<int64_t,
            std::vector<row_group_info>,
            std::vector<size_t>,
            size_type,
-           num_surviving_row_groups>
+           surviving_row_group_metrics>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
@@ -1071,7 +1071,7 @@ aggregate_reader_metadata::select_row_groups(
 
   // Pair to store the number of row groups after stats and bloom filtering respectively. Initialize
   // to total_row_groups.
-  num_surviving_row_groups num_row_groups_after_filters{};
+  surviving_row_group_metrics num_row_groups_after_filters{};
 
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
   // if filter is not empty, then gather row groups to read after predicate pushdown

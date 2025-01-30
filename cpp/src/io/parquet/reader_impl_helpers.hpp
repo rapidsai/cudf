@@ -128,7 +128,7 @@ struct arrow_schema_data_types {
 /**
  * @brief Struct to store the number of row groups surviving each predicate pushdown filter.
  */
-struct num_surviving_row_groups {
+struct surviving_row_group_metrics {
   std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
@@ -376,7 +376,7 @@ class aggregate_reader_metadata {
    *         containing the number of row groups surviving each predicate pushdown filter
    */
   [[nodiscard]] std::pair<std::optional<std::vector<std::vector<size_type>>>,
-                          num_surviving_row_groups>
+                          surviving_row_group_metrics>
   filter_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> input_row_group_indices,
                     size_type total_row_groups,
@@ -431,7 +431,7 @@ class aggregate_reader_metadata {
                            std::vector<row_group_info>,
                            std::vector<size_t>,
                            size_type,
-                           num_surviving_row_groups>
+                           surviving_row_group_metrics>
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,

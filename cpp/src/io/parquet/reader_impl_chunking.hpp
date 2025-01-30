@@ -50,7 +50,7 @@ struct file_intermediate_data {
   size_type num_input_row_groups{0};  // total number of input row groups across all data sources
 
   // struct containing the number of remaining row groups after each predicate pushdown filter
-  num_surviving_row_groups remaining_row_groups;
+  surviving_row_group_metrics surviving_row_groups;
 
   size_t _current_input_pass{0};  // current input pass index
   size_t _output_chunk_count{0};  // how many output chunks we have produced

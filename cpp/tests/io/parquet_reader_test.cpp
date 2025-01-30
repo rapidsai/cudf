@@ -2709,17 +2709,17 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
                                            cudf::size_type expected_total_row_groups,
                                            cudf::size_type expected_stats_filtered_row_groups) {
     // Expected result
-    auto predicate = cudf::compute_column(written_table, ref_filter);
+    auto const predicate = cudf::compute_column(written_table, ref_filter);
     EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
       << "Predicate filter should return a boolean";
-    auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+    auto const expected = cudf::apply_boolean_mask(written_table, *predicate);
 
     // Reading with Predicate Pushdown
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
         .filter(filter_expression);
-    auto result       = cudf::io::read_parquet(read_opts);
-    auto result_table = result.tbl->view();
+    auto const result       = cudf::io::read_parquet(read_opts);
+    auto const result_table = result.tbl->view();
 
     // Tests
     EXPECT_EQ(static_cast<int>(written_table.column(0).type().id()),
@@ -2763,10 +2763,10 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
       }
     }();
 
-    auto literal = cudf::ast::literal(literal_value);
-    auto filter_expression =
+    auto const literal = cudf::ast::literal(literal_value);
+    auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_name_0, literal);
-    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    auto const ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
     test_predicate_pushdown(
       filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
@@ -2789,10 +2789,11 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
       }
     }();
 
-    auto literal = cudf::ast::literal(literal_value);
-    auto filter_expression =
+    auto const literal = cudf::ast::literal(literal_value);
+    auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_name_0, literal);
-    auto ref_filter = cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, literal);
+    auto const ref_filter =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, literal);
     test_predicate_pushdown(
       filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }

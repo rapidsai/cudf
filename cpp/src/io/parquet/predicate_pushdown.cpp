@@ -388,7 +388,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::pair<std::optional<std::vector<std::vector<size_type>>>, num_surviving_row_groups>
+std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
 aggregate_reader_metadata::filter_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> input_row_group_indices,

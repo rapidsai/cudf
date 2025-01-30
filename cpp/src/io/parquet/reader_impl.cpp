@@ -616,9 +616,9 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   // Copy the number surviving row groups from each predicate pushdown only if the filter has value.
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
-      _file_itm_data.remaining_row_groups.after_stats_filter;
+      _file_itm_data.surviving_row_groups.after_stats_filter;
     out_metadata.num_row_groups_after_bloom_filter =
-      _file_itm_data.remaining_row_groups.after_bloom_filter;
+      _file_itm_data.surviving_row_groups.after_bloom_filter;
   }
 
   // no work to do (this can happen on the first pass if we have no rows to read)
