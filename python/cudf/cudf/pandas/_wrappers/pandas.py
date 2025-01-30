@@ -69,8 +69,6 @@ try:
 except ImportError:
     ipython_shell = None
 
-cudf.set_option("mode.pandas_compatible", True)
-
 
 def _pandas_util_dir():
     # In pandas 2.0, pandas.util contains public APIs under

@@ -8,15 +8,15 @@ import warnings
 import pylibcudf
 import rmm.mr
 
-from .fast_slow_proxy import is_proxy_object, isinstance_cudf_pandas
+from .fast_slow_proxy import is_proxy_instance, is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
 __all__ = [
     "Profiler",
     "install",
+    "is_proxy_instance",
     "is_proxy_object",
-    "isinstance_cudf_pandas",
     "load_ipython_extension",
 ]
 

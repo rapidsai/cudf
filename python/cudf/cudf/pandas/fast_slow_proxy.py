@@ -1335,7 +1335,7 @@ def _get_proxy_base_class(cls):
     return object
 
 
-def isinstance_cudf_pandas(obj, type):
+def is_proxy_instance(obj, type):
     return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
