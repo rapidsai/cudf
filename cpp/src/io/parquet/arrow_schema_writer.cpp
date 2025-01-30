@@ -250,13 +250,34 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
     field_type_id = flatbuf::Type_Decimal;
-    field_offset  = flatbuf::CreateDecimal(fbb,
-                                          (col_meta.is_decimal_precision_set())
-                                             ? col_meta.get_decimal_precision()
-                                             : MAX_DECIMAL128_PRECISION,
-                                          col->type().scale(),
-                                          128)
-                     .Union();
+
+    if (std::is_same_v<T, numeric::decimal32>) {
+      field_offset = flatbuf::CreateDecimal(fbb,
+                                            (col_meta.is_decimal_precision_set())
+                                              ? col_meta.get_decimal_precision()
+                                              : MAX_DECIMAL32_PRECISION,
+                                            col->type().scale(),
+                                            32)
+                       .Union();
+    } else if (std::is_same_v<T, numeric::decimal64>) {
+      field_offset = flatbuf::CreateDecimal(fbb,
+                                            (col_meta.is_decimal_precision_set())
+                                              ? col_meta.get_decimal_precision()
+                                              : MAX_DECIMAL64_PRECISION,
+                                            col->type().scale(),
+                                            64)
+                       .Union();
+    } else if (std::is_same_v<T, numeric::decimal128>) {
+      field_offset = flatbuf::CreateDecimal(fbb,
+                                            (col_meta.is_decimal_precision_set())
+                                              ? col_meta.get_decimal_precision()
+                                              : MAX_DECIMAL128_PRECISION,
+                                            col->type().scale(),
+                                            128)
+                       .Union();
+    } else {
+      CUDF_FAIL("Unsupported fixed point type for arrow schema writer");
+    }
   }
 
   template <typename T>
