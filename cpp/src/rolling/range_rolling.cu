@@ -34,6 +34,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
+#include <cuda/functional>
 #include <thrust/functional.h>
 #include <thrust/reduce.h>
 
@@ -59,9 +60,11 @@ namespace detail {
   auto const num_groups = offsets.size() - 1;
   std::size_t bytes{0};
   auto is_null_it = cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0}, [orderby = *d_orderby] __device__(size_type i) -> size_type {
-      return static_cast<size_type>(orderby.is_null_nocheck(i));
-    });
+    cudf::size_type{0},
+    cuda::proclaim_return_type<size_type>(
+      [orderby = *d_orderby] __device__(size_type i) -> size_type {
+        return static_cast<size_type>(orderby.is_null_nocheck(i));
+      }));
   rmm::device_uvector<cudf::size_type> null_counts{num_groups, stream};
   cub::DeviceSegmentedReduce::Sum(nullptr,
                                   bytes,
@@ -108,12 +111,13 @@ namespace detail {
     // be nulls at starts of groups (BEFORE),otherwise must be nulls at end (AFTER)
     auto it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
-      [d_orderby       = *d_orderby,
-       d_offsets       = offsets.data(),
-       nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
-        return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
-               d_orderby.is_null_nocheck(d_offsets[i]);
-      });
+      cuda::proclaim_return_type<bool>(
+        [d_orderby       = *d_orderby,
+         d_offsets       = offsets.data(),
+         nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
+          return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
+                 d_orderby.is_null_nocheck(d_offsets[i]);
+        }));
     auto is_before = thrust::reduce(
       rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
@@ -125,12 +129,13 @@ namespace detail {
     // Otherwise must be nulls at start (AFTER)
     auto it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
-      [d_orderby       = *d_orderby,
-       d_offsets       = offsets.data(),
-       nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
-        return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
-               d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
-      });
+      cuda::proclaim_return_type<bool>(
+        [d_orderby       = *d_orderby,
+         d_offsets       = offsets.data(),
+         nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
+          return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
+                 d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
+        }));
     auto is_before = thrust::reduce(
       rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
     return is_before ? null_order::BEFORE : null_order::AFTER;
