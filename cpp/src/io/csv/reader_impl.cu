@@ -105,7 +105,13 @@ class selected_rows_offsets {
 };
 
 /**
- * @brief Removes the first and Last quote in the string
+ * @brief Discards any other characters found before the first quotechar and after the last
+ * quotechar in the string (if any quotechar exists). i.e:
+ *
+ * "column" => column
+ * \t"column"\t => column
+ *     "column"     => column
+ *
  */
 std::string_view remove_quotes(std::string_view str, char quotechar)
 {
