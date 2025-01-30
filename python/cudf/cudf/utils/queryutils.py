@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import ast
@@ -220,8 +220,7 @@ def query_execute(df, expr, callenv):
     # wait to check the types until we know which cols are used
     if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in colarrays):
         raise TypeError(
-            "query only supports numeric, datetime, timedelta, "
-            "or bool dtypes."
+            "query only supports numeric, datetime, timedelta, or bool dtypes."
         )
 
     colarrays = [col.data_array_view(mode="read") for col in colarrays]

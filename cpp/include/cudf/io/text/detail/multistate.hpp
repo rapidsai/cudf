@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/utilities/export.hpp>
+
+#include <cuda/functional>
 
 #include <cstdint>
 
@@ -45,7 +47,7 @@ struct multistate {
    *
    * @note: The behavior of this function is undefined if size() => max_segment_count
    */
-  constexpr void enqueue(uint8_t head, uint8_t tail)
+  CUDF_HOST_DEVICE constexpr void enqueue(uint8_t head, uint8_t tail)
   {
     _heads |= (head & 0xFu) << (_size * 4);
     _tails |= (tail & 0xFu) << (_size * 4);
@@ -55,17 +57,17 @@ struct multistate {
   /**
    * @brief get's the number of segments this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t size() const { return _size; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint8_t size() const { return _size; }
 
   /**
    * @brief get's the highest (____, tail] value this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t max_tail() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint8_t max_tail() const
   {
     uint8_t maximum = 0;
 
     for (uint8_t i = 0; i < _size; i++) {
-      maximum = std::max(maximum, get_tail(i));
+      maximum = cuda::std::max(maximum, get_tail(i));
     }
 
     return maximum;
@@ -74,7 +76,7 @@ struct multistate {
   /**
    * @brief get's the Nth (head, ____] value state this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t get_head(uint8_t idx) const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint8_t get_head(uint8_t idx) const
   {
     return (_heads >> (idx * 4)) & 0xFu;
   }
@@ -82,7 +84,7 @@ struct multistate {
   /**
    * @brief get's the Nth (____, tail] value state this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t get_tail(uint8_t idx) const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint8_t get_tail(uint8_t idx) const
   {
     return (_tails >> (idx * 4)) & 0xFu;
   }

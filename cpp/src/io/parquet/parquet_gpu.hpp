@@ -34,6 +34,7 @@
 #include <cuda/atomic>
 #include <cuda_runtime.h>
 
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -52,7 +53,7 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
 template <int rolling_size>
-constexpr int rolling_index(int index)
+CUDF_HOST_DEVICE constexpr int rolling_index(int index)
 {
   // Cannot divide by 0. But `rolling_size` will be 0 for unused arrays, so this case will never
   // actual be executed.
@@ -78,7 +79,7 @@ constexpr uint8_t REP_LVL_HIST_CUTOFF = 0;
 constexpr uint8_t DEF_LVL_HIST_CUTOFF = 0;
 
 // see setupLocalPageInfo() in page_decode.cuh for supported page encodings
-constexpr bool is_supported_encoding(Encoding enc)
+CUDF_HOST_DEVICE constexpr bool is_supported_encoding(Encoding enc)
 {
   switch (enc) {
     case Encoding::PLAIN:
@@ -96,7 +97,8 @@ constexpr bool is_supported_encoding(Encoding enc)
 /**
  * @brief Atomically OR `error` into `error_code`.
  */
-constexpr void set_error(kernel_error::value_type error, kernel_error::pointer error_code)
+__device__ constexpr void set_error(kernel_error::value_type error,
+                                    kernel_error::pointer error_code)
 {
   if (error != 0) {
     cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_device> ref{*error_code};
@@ -162,14 +164,14 @@ using std::is_scoped_enum;
 // helpers to do bit operations on scoped enums
 template <typename... Ts,
           CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
-constexpr std::uint32_t BitAnd(Ts... bits)
+CUDF_HOST_DEVICE constexpr std::uint32_t BitAnd(Ts... bits)
 {
   return (... & static_cast<std::uint32_t>(bits));
 }
 
 template <typename... Ts,
           CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
-constexpr std::uint32_t BitOr(Ts... bits)
+CUDF_HOST_DEVICE constexpr std::uint32_t BitOr(Ts... bits)
 {
   return (... | static_cast<std::uint32_t>(bits));
 }
@@ -401,7 +403,7 @@ inline auto make_page_key_iterator(device_span<PageInfo const> pages)
  * @brief Struct describing a particular chunk of column data
  */
 struct ColumnChunkDesc {
-  constexpr ColumnChunkDesc() noexcept {};
+  CUDF_HOST_DEVICE constexpr ColumnChunkDesc() noexcept {};
   explicit ColumnChunkDesc(size_t compressed_size_,
                            uint8_t* compressed_data_,
                            size_t num_values_,
@@ -498,8 +500,8 @@ struct parquet_column_device_view : stats_column_desc {
   int32_t type_length;           //!< length of fixed_length_byte_array data
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  [[nodiscard]] constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
-  [[nodiscard]] constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
+  [[nodiscard]] __device__ constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
+  [[nodiscard]] __device__ constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
   uint8_t max_def_level;  //!< needed for SizeStatistics calculation
   uint8_t max_rep_level;
 
@@ -540,7 +542,7 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 struct EncPage;
 
 // convert Encoding to a mask value
-constexpr uint32_t encoding_to_mask(Encoding encoding)
+CUDF_HOST_DEVICE constexpr uint32_t encoding_to_mask(Encoding encoding)
 {
   return 1 << static_cast<uint32_t>(encoding);
 }
@@ -601,9 +603,15 @@ struct EncColumnChunk {
   uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 
-  [[nodiscard]] constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_dict_pages() const
+  {
+    return use_dictionary ? 1 : 0;
+  }
 
-  [[nodiscard]] constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_data_pages() const
+  {
+    return num_pages - num_dict_pages();
+  }
 };
 
 /**
@@ -642,15 +650,21 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
 
-  [[nodiscard]] constexpr bool is_v2() const { return page_type == PageType::DATA_PAGE_V2; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
+  {
+    return page_type == PageType::DATA_PAGE_V2;
+  }
 
-  [[nodiscard]] constexpr auto level_bytes() const { return def_lvl_bytes + rep_lvl_bytes; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto level_bytes() const
+  {
+    return def_lvl_bytes + rep_lvl_bytes;
+  }
 };
 
 /**
  * @brief Test if the given column chunk is in a string column
  */
-constexpr bool is_string_col(ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
   // return true for non-hashed byte_array and fixed_len_byte_array that isn't representing
   // a decimal.
@@ -862,6 +876,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -870,6 +885,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -884,6 +900,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -892,6 +909,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
+                                cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream);
 
@@ -907,6 +925,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
+ * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -916,6 +935,7 @@ void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                     size_t min_row,
                     int level_type_size,
                     decode_kernel_mask kernel_mask,
+                    cudf::device_span<size_t> initial_str_offsets,
                     kernel_error::pointer error_code,
                     rmm::cuda_stream_view stream);
 

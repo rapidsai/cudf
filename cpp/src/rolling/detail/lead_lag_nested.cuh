@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,11 +147,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [following, input_size, null_index, row_offset] __device__(size_type i) {
-                          // Note: grouped_*rolling_window() trims preceding/following to
-                          // the beginning/end of the group. `rolling_window()` does not.
-                          // Must trim _following[i] so as not to go past the column end.
-                          auto _following = min(following[i], input_size - i - 1);
-                          return (row_offset > _following) ? null_index : (i + row_offset);
+                          return (row_offset > following[i]) ? null_index : (i + row_offset);
                         }));
   } else {
     thrust::transform(rmm::exec_policy(stream),
@@ -160,11 +156,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [preceding, input_size, null_index, row_offset] __device__(size_type i) {
-                          // Note: grouped_*rolling_window() trims preceding/following to
-                          // the beginning/end of the group. `rolling_window()` does not.
-                          // Must trim _preceding[i] so as not to go past the column start.
-                          auto _preceding = min(preceding[i], i + 1);
-                          return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
+                          return (row_offset > (preceding[i] - 1)) ? null_index : (i - row_offset);
                         }));
   }
 

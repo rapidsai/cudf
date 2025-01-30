@@ -116,12 +116,17 @@ class selected_rows_offsets {
 std::string_view remove_quotes(std::string_view str, char quotechar)
 {
   // Exclude first and last quotation char
-  size_t const first_quote = str.find(quotechar);
-  if (first_quote != string::npos) { str = str.substr(first_quote + 1); }
-  size_t const last_quote = str.rfind(quotechar);
-  if (last_quote != string::npos) { str.substr(0, last_quote); }
+  auto const first_quote = str.find(quotechar);
 
-  return str;
+  if (first_quote == string::npos) { return str; }
+
+  str = str.substr(first_quote + 1);
+
+  auto const last_quote = str.rfind(quotechar);
+
+  if (last_quote == string::npos) { return str; }
+
+  return str.substr(0, last_quote);
 }
 
 /**
