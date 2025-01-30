@@ -260,9 +260,6 @@ def _(
         schema,
         node.df,
         node.projection,
-        translate_named_expr(translator, n=node.selection)
-        if node.selection is not None
-        else None,
         translator.config.config.copy(),
     )
 
