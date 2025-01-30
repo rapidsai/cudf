@@ -449,6 +449,13 @@ struct range_window_clamper {
    */
   template <typename Grouping, typename OrderbyT, typename DeltaT>
   struct distance_kernel {
+    distance_kernel(Grouping groups,
+                    DeltaT const* row_delta,
+                    column_device_view::const_iterator<OrderbyT> begin,
+                    column_device_view::const_iterator<OrderbyT> end)
+      : groups{groups}, row_delta{row_delta}, begin{begin}, end{end}
+    {
+    }
     Grouping groups;  ///< Group information to determine bounds on current row's window
     static_assert(cuda::std::is_same_v<Grouping, ungrouped> ||
                     cuda::std::is_same_v<Grouping, grouped> ||
@@ -609,14 +616,6 @@ struct range_window_clamper {
       }
     }
   };
-
-  // Deduction guide
-  template <typename Grouping, typename OrderbyT, typename DeltaT>
-  distance_kernel(Grouping,
-                  DeltaT const*,
-                  column_device_view::const_iterator<OrderbyT>,
-                  column_device_view::const_iterator<OrderbyT>)
-    -> distance_kernel<Grouping, OrderbyT, DeltaT>;
 
   /**
    * @brief Compute the window bounds (possibly grouped) for an orderby column.
