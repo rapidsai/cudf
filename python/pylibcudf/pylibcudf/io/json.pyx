@@ -417,8 +417,8 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder experimental(self, bool val):
         """
         Set whether to enable experimental features.
-        When set to true, experimental features, such as the new column tree construction,
-        utf-8 matching of field names will be enabled.
+        When set to true, experimental features, such as the new column tree
+        construction, utf-8 matching of field names will be enabled.
 
         Parameters
         ----------
@@ -511,7 +511,8 @@ cdef class JsonReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean value to indicate whether leading zeros are allowed in numeric values
+            Boolean value to indicate whether leading zeros are allowed in numeric
+            values
 
         Returns
         -------
@@ -527,7 +528,8 @@ cdef class JsonReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean value to enable/disable the option to normalize single quotes around strings
+            Boolean value to enable/disable the option to normalize single quotes
+            around strings
 
         Returns
         -------
@@ -543,7 +545,8 @@ cdef class JsonReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean value to enable/disable the option to normalize unquoted whitespace characters
+            Boolean value to enable/disable the option to normalize unquoted
+            whitespace characters
 
         Returns
         -------
@@ -560,7 +563,8 @@ cdef class JsonReaderOptionsBuilder:
         Parameters
         ----------
         val : bool
-            Boolean value to indicate whether leading zeros are allowed in numeric values
+            Boolean value to indicate whether leading zeros are allowed in numeric
+            values
 
         Returns
         -------
@@ -627,8 +631,8 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val):
         """
         Set whether in a quoted string should characters greater than or equal to 0
-        and less than 32 be allowed without some form of escaping. Strict validation must
-        be enabled for this to work.
+        and less than 32 be allowed without some form of escaping. Strict validation
+        must be enabled for this to work.
 
         Parameters
         ----------
