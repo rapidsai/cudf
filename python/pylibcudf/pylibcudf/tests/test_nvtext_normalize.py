@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -29,7 +29,7 @@ def test_normalize_spaces(norm_spaces_input_data):
 
 @pytest.mark.parametrize("do_lower", [True, False])
 def test_normalize_characters(norm_chars_input_data, do_lower):
-    result = plc.nvtext.normalize.normalize_characters(
+    result = plc.nvtext.normalize.characters_normalize(
         plc.interop.from_arrow(norm_chars_input_data),
         do_lower,
     )
