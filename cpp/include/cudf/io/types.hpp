@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -277,13 +277,24 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
-  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source
                                             //!< Currently only computed for Parquet readers if no
-                                            //!< AST filters being used. Empty vector otherwise.
+                                            //!< AST filters being used. Empty vector otherwise
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>
     per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
+
+  // The following variables are currently only computed for Parquet reader
+  size_type num_input_row_groups{0};  //!< Total number of input row groups across all data sources
+  std::optional<size_type>
+    num_row_groups_after_stats_filter;  //!< Number of remaining row groups after stats filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
+  std::optional<size_type>
+    num_row_groups_after_bloom_filter;  //!< Number of remaining row groups after bloom filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
 };
 
 /**
