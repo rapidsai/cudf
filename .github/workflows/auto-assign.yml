@@ -10,7 +10,7 @@ on:
 jobs:
   add_assignees:
     runs-on: ubuntu-latest
-    if: ${{ ! github.event.pull_request.merged }}
+    if: ${{ ! github.event.pull_request.assignees.name }}
     steps:
       - uses: actions-ecosystem/action-add-assignees@v1
         with:
