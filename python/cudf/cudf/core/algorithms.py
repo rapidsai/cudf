@@ -104,9 +104,7 @@ def factorize(
         na_sentinel = pa.scalar(-1)
         cats = values.dropna()
     else:
-        na_sentinel = pa.scalar(
-            None, dtype=cudf_dtype_to_pa_type(values.dtype)
-        )
+        na_sentinel = pa.scalar(None, type=cudf_dtype_to_pa_type(values.dtype))
         cats = values
 
     cats = cats.unique().astype(values.dtype)

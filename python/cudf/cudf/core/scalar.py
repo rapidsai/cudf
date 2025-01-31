@@ -25,6 +25,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    cudf_dtype_from_pa_type,
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
@@ -75,6 +76,13 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
             raise ValueError(f"Can not coerce {value} to StructDType")
         else:
             return NA, dtype
+
+    if isinstance(value, pa.Scalar):
+        # TODO: Avoid converting to a Python scalar since we
+        # end up converting pyarrow.Scalars to pylibcudf.Scalars
+        if dtype is None:
+            dtype = cudf_dtype_from_pa_type(value.type)
+        return value.as_py(), dtype
 
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
         value = pa.scalar(
