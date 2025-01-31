@@ -29,11 +29,14 @@ def _maybe_shuffle_frame(
     output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
-    if not (
+    if (
         partition_info[frame].partitioned_on == on
         and partition_info[frame].count == output_count
     ):
-        # Insert Shuffle node
+        # Already shuffled
+        return frame
+    else:
+        # Insert new Shuffle node
         frame = Shuffle(
             frame.schema,
             on,
@@ -44,7 +47,7 @@ def _maybe_shuffle_frame(
             count=output_count,
             partitioned_on=on,
         )
-    return frame
+        return frame
 
 
 def _make_hash_join(
@@ -56,35 +59,39 @@ def _make_hash_join(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     shuffle_options: dict[str, Any] = {}  # Unused for now
-    left = _maybe_shuffle_frame(
+    new_left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
         shuffle_options,
         output_count,
     )
-    right = _maybe_shuffle_frame(
+    new_right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
         shuffle_options,
         output_count,
     )
-    new_node = ir.reconstruct([left, right])
+    if left != new_left or right != new_right:
+        ir = ir.reconstruct([new_left, new_right])
+    else:
+        ir = ir
+    left = new_left
+    right = new_right
 
     # Record new partitioning info
     partitioned_on: tuple[NamedExpr, ...] = ()
-    how = ir.options[0].lower()
-    if ir.left_on == ir.right_on or (how in ("left", "semi", "anti")):
+    if ir.left_on == ir.right_on or (ir.options[0] in ("Left", "Semi", "Anti")):
         partitioned_on = ir.left_on
-    elif how == "right":  # pragma: no cover
+    elif ir.options[0] == "Right":  # pragma: no cover
         partitioned_on = ir.right_on
-    partition_info[new_node] = PartitionInfo(
+    partition_info[ir] = PartitionInfo(
         count=output_count,
         partitioned_on=partitioned_on,
     )
 
-    return new_node, partition_info
+    return ir, partition_info
 
 
 def _should_bcast_join(
@@ -96,34 +103,33 @@ def _should_bcast_join(
 ) -> bool:
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
-        bcast_count = partition_info[right].count
-        other = left
-        other_on = ir.left_on
+        small_count = partition_info[right].count
+        large = left
+        large_on = ir.left_on
     else:
-        bcast_count = partition_info[left].count
-        other = right
-        other_on = ir.right_on
+        small_count = partition_info[left].count
+        large = right
+        large_on = ir.right_on
 
     # Avoid the broadcast if the "large" table is already shuffled
-    other_shuffled = (
-        partition_info[other].partitioned_on == other_on
-        and partition_info[other].count == output_count
+    large_shuffled = (
+        partition_info[large].partitioned_on == large_on
+        and partition_info[large].count == output_count
     )
 
     # Broadcast-Join Criteria:
-    # 1. "Large" dataframe isn't already shuffled
+    # 1. Large dataframe isn't already shuffled
     # 2. Small dataframe has 8 partitions (or fewer).
     #    TODO: Make this value/heuristic configurable).
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
-    how = ir.options[0].lower()
     return (
-        not other_shuffled
-        and bcast_count <= 8  # TODO: Make this configurable
+        not large_shuffled
+        and small_count <= 8  # TODO: Make this configurable
         and (
-            how == "inner"
-            or (how in ("left", "semi", "anti") and other == left)
-            or (how == "right" and other == right)
+            ir.options[0] == "Inner"
+            or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
+            or (ir.options[0] == "Right" and large == right)
         )
     )
 
@@ -135,11 +141,25 @@ def _make_bcast_join(
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    how = ir.options[0].lower()
-    if how != "inner":
+    if ir.options[0] != "Inner":
         shuffle_options: dict[str, Any] = {}
         left_count = partition_info[left].count
         right_count = partition_info[right].count
+
+        # Shuffle the smaller table (if necessary).
+        # Notes:
+        # - We need to shuffle the smaller table if
+        #   (1) we are not doing an "inner" join,
+        #   and (2) the small table contains multiple
+        #   partitions.
+        # - We cannot simply join a large-table partition
+        #   to each small-table partition, and then
+        #   concatenate the partial-join results, because
+        #   a non-"inner" join does NOT commute with
+        #   concatenation.
+        # - In some cases, we can perform the partial joins
+        #   sequentially. However, we are starting with a
+        #   catch-all algorithm that works for all cases.
         if left_count >= right_count:
             right = _maybe_shuffle_frame(
                 right,
@@ -176,9 +196,9 @@ def _(
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
-    elif ir.options[0].lower() == "cross":
+    elif ir.options[0] == "Cross":
         raise NotImplementedError(
-            "cross join not support for multiple partitions."
+            "Cross join not support for multiple partitions."
         )  # pragma: no cover
 
     if _should_bcast_join(ir, left, right, partition_info, output_count):
@@ -232,21 +252,20 @@ def _(
         }
     else:
         # Broadcast join
-        how = ir.options[0].lower()
         left_parts = partition_info[left]
         right_parts = partition_info[right]
         if left_parts.count >= right_parts.count:
-            bcast_side = "right"
-            bcast_name = get_key_name(right)
-            bcast_size = partition_info[right].count
-            other_name = get_key_name(left)
-            other_on = ir.left_on
+            small_side = "Right"
+            small_name = get_key_name(right)
+            small_size = partition_info[right].count
+            large_name = get_key_name(left)
+            large_on = ir.left_on
         else:
-            bcast_side = "left"
-            bcast_name = get_key_name(left)
-            bcast_size = partition_info[left].count
-            other_name = get_key_name(right)
-            other_on = ir.right_on
+            small_side = "Left"
+            small_name = get_key_name(left)
+            small_size = partition_info[left].count
+            large_name = get_key_name(right)
+            large_on = ir.right_on
 
         graph: MutableMapping[Any, Any] = {}
 
@@ -256,30 +275,30 @@ def _(
         inter_name = f"inter-{out_name}"
 
         for part_out in range(out_size):
-            if how != "inner":
+            if ir.options[0] != "Inner":
                 graph[(split_name, part_out)] = (
                     _partition_dataframe,
-                    (other_name, part_out),
-                    other_on,
-                    bcast_size,
+                    (large_name, part_out),
+                    large_on,
+                    small_size,
                 )
 
             _concat_list = []
-            for j in range(bcast_size):
-                _merge_args = [
+            for j in range(small_size):
+                join_children = [
                     (
                         (
                             operator.getitem,
                             (split_name, part_out),
                             j,
                         )
-                        if how != "inner"
-                        else (other_name, part_out)
+                        if ir.options[0] != "Inner"
+                        else (large_name, part_out)
                     ),
-                    (bcast_name, j),
+                    (small_name, j),
                 ]
-                if bcast_side == "left":
-                    _merge_args.reverse()
+                if small_side == "Left":
+                    join_children.reverse()
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
@@ -287,7 +306,7 @@ def _(
                     ir.left_on,
                     ir.right_on,
                     ir.options,
-                    *_merge_args,
+                    *join_children,
                 )
                 _concat_list.append(inter_key)
             if len(_concat_list) == 1:
