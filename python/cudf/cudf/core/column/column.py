@@ -2269,11 +2269,21 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
             arbitrary = None
-        arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-        if length == 0:
-            return column_empty(length, dtype=arbitrary.dtype)
+        if isinstance(arbitrary, pa.Scalar):
+            col = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    pa_scalar_to_plc_scalar(arbitrary), length
+                )
+            )
+            if dtype is not None:
+                col = col.astype(dtype)
+            return col
         else:
-            return ColumnBase.from_scalar(arbitrary, length)
+            arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
+            if length == 0:
+                return column_empty(length, dtype=arbitrary.dtype)
+            else:
+                return ColumnBase.from_scalar(arbitrary, length)
 
     elif hasattr(arbitrary, "__array_interface__"):
         desc = arbitrary.__array_interface__
