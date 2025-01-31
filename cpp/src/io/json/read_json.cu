@@ -491,7 +491,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
   // batch to adjust byte range offset and byte range size.
-  std::size_t batch_offset_pos = 0;
+  std::size_t batch_offset_pos = 1;
   for (; batch_offset_pos < batch_offsets.size() - 2; batch_offset_pos++) {
     batched_reader_opts.set_byte_range_offset(batch_offsets[batch_offset_pos]);
     batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
