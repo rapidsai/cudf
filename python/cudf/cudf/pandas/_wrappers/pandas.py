@@ -1752,6 +1752,12 @@ def wrap_init(original_init):
                 and len(args) == 0
                 and len(kwargs) == 0
             ):
+                # This short-circuits the constructor to avoid
+                # unnecessary work when the data is already a
+                # proxy object of the same type.
+                # It is a common case in `cuml` and `xgboost`.
+                # For perf impact see:
+                # https://github.com/rapidsai/cudf/pull/17878/files#r1936469215
                 self.__dict__.update(data.__dict__)
                 return
         original_init(self, data, *args, **kwargs)
@@ -1798,9 +1804,9 @@ def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
 
 def init_patching():
     # Replace the __init__ methods with the wrapped versions
-    global:
-        _original_Series_init
-        _original_DataFrame_init
+    global \
+        _original_Series_init, \
+        _original_DataFrame_init, \
         _original_Index_init
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
