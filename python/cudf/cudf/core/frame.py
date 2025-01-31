@@ -22,8 +22,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import copying, search, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -779,9 +778,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if method:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
@@ -1350,7 +1349,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search_sorted(
+        outcol = search.search_sorted(
             sources,
             values,
             side,

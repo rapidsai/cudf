@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Defines pytest fixtures for all benchmarks.
 
@@ -83,9 +83,9 @@ fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
 
     def make_dataframe(nr, nc, column_generator=column_generator):
-        assert nc <= len(
-            string.ascii_lowercase
-        ), "make_dataframe only supports a maximum of 26 columns"
+        assert nc <= len(string.ascii_lowercase), (
+            "make_dataframe only supports a maximum of 26 columns"
+        )
         return cudf.DataFrame(
             {
                 f"{string.ascii_lowercase[i]}": column_generator(nr)

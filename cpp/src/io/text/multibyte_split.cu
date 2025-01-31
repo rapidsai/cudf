@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 int32_t constexpr TILES_PER_CHUNK  = 4096;
 int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
-constexpr multistate transition_init(char c, cudf::device_span<char const> delim)
+__device__ constexpr multistate transition_init(char c, cudf::device_span<char const> delim)
 {
   auto result = multistate();
 
@@ -79,7 +79,9 @@ constexpr multistate transition_init(char c, cudf::device_span<char const> delim
   return result;
 }
 
-constexpr multistate transition(char c, multistate state, cudf::device_span<char const> delim)
+__device__ constexpr multistate transition(char c,
+                                           multistate state,
+                                           cudf::device_span<char const> delim)
 {
   auto result = multistate();
 
@@ -182,7 +184,7 @@ CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   auto const thread_input_offset =
     tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
   auto const thread_input_size =
-    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
+    cuda::std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -257,7 +259,7 @@ CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   auto const thread_input_offset =
     tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
   auto const thread_input_size =
-    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
+    cuda::std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -555,7 +557,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           if (row == last_row && insert_end) {
             return thrust::make_pair(chars + begin, len);
           } else {
-            return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+            return thrust::make_pair(chars + begin, cuda::std::max<size_type>(0, len - delim_size));
           };
         }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);

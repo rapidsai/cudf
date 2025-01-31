@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/array>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
@@ -243,9 +244,9 @@ enum row_entry_state_e {
  */
 static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
 {
-  constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
+  constexpr cuda::std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
 
-  std::array<uint32_t, full_order.size()> partial_order;
+  cuda::std::array<uint32_t, full_order.size()> partial_order;
   thrust::copy_if(thrust::seq,
                   full_order.cbegin(),
                   full_order.cend(),

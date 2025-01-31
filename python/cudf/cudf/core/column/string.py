@@ -1068,6 +1068,10 @@ class StringMethods(ColumnMethods):
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
+        pa_repl = pa.scalar(repl)
+        if not pa.types.is_string(pa_repl.type):
+            raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
+
         # Pandas forces non-regex replace when pat is a single-character
         with acquire_spill_lock():
             if regex is True and len(pat) > 1:
@@ -1076,14 +1080,14 @@ class StringMethods(ColumnMethods):
                     plc.strings.regex_program.RegexProgram.create(
                         pat, plc.strings.regex_flags.RegexFlags.DEFAULT
                     ),
-                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa_repl),
                     n,
                 )
             else:
                 plc_result = plc.strings.replace.replace(
                     self._column.to_pylibcudf(mode="read"),
                     pa_scalar_to_plc_scalar(pa.scalar(pat)),
-                    pa_scalar_to_plc_scalar(pa.scalar(repl)),
+                    pa_scalar_to_plc_scalar(pa_repl),
                     n,
                 )
             result = Column.from_pylibcudf(plc_result)
@@ -2416,13 +2420,19 @@ class StringMethods(ColumnMethods):
         2    f
         dtype: object
         """
+        str_lens = self.len()
         if i < 0:
             next_index = i - 1
             step = -1
+            to_mask = str_lens < abs(i)  # type: ignore[operator]
         else:
             next_index = i + 1
             step = 1
-        return self.slice(i, next_index, step)
+            to_mask = str_lens <= i  # type: ignore[operator]
+        result = self.slice(i, next_index, step)
+        if to_mask.any():  # type: ignore[union-attr]
+            result[to_mask] = cudf.NA  # type: ignore[index]
+        return result
 
     def get_json_object(
         self,
@@ -2637,8 +2647,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2818,8 +2827,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -3933,18 +3941,17 @@ class StringMethods(ColumnMethods):
     def _starts_ends_with(
         self,
         method: Callable[[plc.Column, plc.Column | plc.Scalar], plc.Column],
-        pat: str | Sequence,
+        pat: str | tuple[str, ...],
     ) -> SeriesOrIndex:
-        if pat is None:
-            raise TypeError(
-                f"expected a string or a sequence-like object, not "
-                f"{type(pat).__name__}"
-            )
-        elif is_scalar(pat):
+        if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
-        else:
+        elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
             plc_pat = column.as_column(pat, dtype="str").to_pylibcudf(
                 mode="read"
+            )
+        else:
+            raise TypeError(
+                f"expected a string or tuple, not {type(pat).__name__}"
             )
         with acquire_spill_lock():
             plc_result = method(
@@ -3953,7 +3960,7 @@ class StringMethods(ColumnMethods):
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
 
-    def endswith(self, pat: str | Sequence) -> SeriesOrIndex:
+    def endswith(self, pat: str | tuple[str, ...]) -> SeriesOrIndex:
         """
         Test if the end of each string element matches a pattern.
 
@@ -3997,7 +4004,7 @@ class StringMethods(ColumnMethods):
         """
         return self._starts_ends_with(plc.strings.find.ends_with, pat)
 
-    def startswith(self, pat: str | Sequence) -> SeriesOrIndex:
+    def startswith(self, pat: str | tuple[str, ...]) -> SeriesOrIndex:
         """
         Test if the start of each string element matches a pattern.
 
@@ -4299,6 +4306,8 @@ class StringMethods(ColumnMethods):
 
         if (result == -1).any():
             raise ValueError("substring not found")
+        elif cudf.get_option("mode.pandas_compatible"):
+            return result.astype(np.dtype(np.int64))
         else:
             return result
 
@@ -4359,6 +4368,8 @@ class StringMethods(ColumnMethods):
 
         if (result == -1).any():
             raise ValueError("substring not found")
+        elif cudf.get_option("mode.pandas_compatible"):
+            return result.astype(np.dtype(np.int64))
         else:
             return result
 
@@ -5918,7 +5929,7 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise TypeError("String Arrays is not yet implemented in cudf")
+        raise TypeError("String arrays are not supported by cupy")
 
     def to_pandas(
         self,
