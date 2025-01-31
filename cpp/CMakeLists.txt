@@ -941,7 +941,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
           kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
 )
