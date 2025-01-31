@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -39,7 +39,7 @@ void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool
     data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
-    cudf::transform(in, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
+    cudf::transform({in}, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
