@@ -1767,10 +1767,10 @@ def wrap_init(original_init):
 
 @functools.wraps(_original_DataFrame_init)
 def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
-    data_extracted = False
-    if is_proxy_object(data):
+    data_is_proxy = is_proxy_object(data)
+
+    if data_is_proxy:
         data = data.as_gpu_object()
-        data_extracted = True
     elif isinstance(data, list) and len(data) > 0 and is_proxy_object(data[0]):
         data = [d.as_gpu_object() for d in data]
     elif (
@@ -1790,7 +1790,7 @@ def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
         columns = columns.as_cpu_object()
     if (
         (
-            (data is None or (data_extracted and isinstance(data, type(self))))
+            (data_is_proxy and isinstance(data, type(self)))
             and (index is None)
             and (columns is None)
         )
@@ -1802,7 +1802,7 @@ def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
     _original_DataFrame_init(self, data, index, columns, *args, **kwargs)
 
 
-def init_patching():
+def initial_setup():
     # Replace the __init__ methods with the wrapped versions
     global \
         _original_Series_init, \
@@ -1812,9 +1812,7 @@ def init_patching():
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
 
-
-def initial_setup():
-    init_patching()
+    # Enable pandas compatibility mode
     cudf.set_option("mode.pandas_compatible", True)
 
 
