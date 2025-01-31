@@ -75,8 +75,6 @@ def _make_hash_join(
     )
     if left != new_left or right != new_right:
         ir = ir.reconstruct([new_left, new_right])
-    else:
-        ir = ir
     left = new_left
     right = new_right
 
@@ -146,8 +144,7 @@ def _make_bcast_join(
         left_count = partition_info[left].count
         right_count = partition_info[right].count
 
-        # Shuffle the smaller table (if necessary).
-        # Notes:
+        # Shuffle the smaller table (if necessary) - Notes:
         # - We need to shuffle the smaller table if
         #   (1) we are not doing an "inner" join,
         #   and (2) the small table contains multiple
