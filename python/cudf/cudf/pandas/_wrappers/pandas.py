@@ -1712,10 +1712,6 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
     )
 
 
-def isinstance_cudf_pandas(obj, type):
-    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
-
-
 # timestamps and timedeltas are not proxied, but non-proxied
 # pandas types are currently not picklable. Thus, we define
 # custom reducer/unpicker functions for these types:
@@ -1765,21 +1761,32 @@ def wrap_init(original_init):
 
 @functools.wraps(_original_DataFrame_init)
 def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
-    data_extracted, index_extracted, columns_extracted = False, False, False
+    data_extracted = False
     if is_proxy_object(data):
         data = data.as_gpu_object()
         data_extracted = True
+    elif isinstance(data, list) and len(data) > 0 and is_proxy_object(data[0]):
+        data = [d.as_gpu_object() for d in data]
+    elif (
+        isinstance(data, tuple) and len(data) > 0 and is_proxy_object(data[0])
+    ):
+        data = tuple(d.as_gpu_object() for d in data)
+    elif (
+        isinstance(data, dict)
+        and len(data) > 0
+        and is_proxy_object(next(iter(data.values())))
+    ):
+        data = {k: v.as_gpu_object() for k, v in data.items()}
+
     if is_proxy_object(index):
         index = index.as_gpu_object()
-        index_extracted = True
     if is_proxy_object(columns):
         columns = columns.as_cpu_object()
-        columns_extracted = True
     if (
         (
-            (data is None or data_extracted)
-            and (index is None or index_extracted)
-            and (columns is None or columns_extracted)
+            (data is None or (data_extracted and isinstance(data, type(self))))
+            and (index is None)
+            and (columns is None)
         )
         and len(args) == 0
         and len(kwargs) == 0
