@@ -30,7 +30,8 @@ from cudf.core._internals.timezones import (
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import _get_base_dtype, cudf_dtype_to_pa_type
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -949,7 +950,9 @@ class DatetimeColumn(column.ColumnBase):
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
-            cudf.Scalar(cudf.NaT, dtype=self.dtype),
+            pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
 
         transition_times, offsets = get_tz_data(tzname)
