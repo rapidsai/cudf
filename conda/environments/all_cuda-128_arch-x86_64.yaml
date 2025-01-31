@@ -23,7 +23,7 @@ dependencies:
 - cuda-nvtx-dev
 - cuda-python>=12.6.2,<13.0a0
 - cuda-sanitizer-api
-- cuda-version=12.5
+- cuda-version=12.8
 - cupy>=12.0.0
 - cxx-compiler
 - cython>=3.0.3
@@ -65,9 +65,9 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.11,<1.18
+- polars>=1.20,<1.22
 - pre-commit
-- pyarrow>=14.0.0,<19.0.0a0
+- pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
 - pynvjitlink>=0.0.0a0
 - pynvml>=12.0.0,<13.0.0a0
@@ -99,4 +99,4 @@ dependencies:
 - transformers==4.39.3
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
-name: all_cuda-125_arch-x86_64
+name: all_cuda-128_arch-x86_64

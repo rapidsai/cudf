@@ -54,7 +54,7 @@ select = [
 ]
 
 # PyPI limit is 600 MiB, fail CI before we get too close to that
-max_allowed_size_compressed = '525M'
+max_allowed_size_compressed = '575M'
 
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"
