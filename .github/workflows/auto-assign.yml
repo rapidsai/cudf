@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ ! github.event.pull_request.assignees.name }}
     steps:
+      - run: echo "${{ github.event.pull_request.assignees.name }}"
       - uses: actions-ecosystem/action-add-assignees@v1
         with:
           github_token: "${{ secrets.GITHUB_TOKEN }}"
