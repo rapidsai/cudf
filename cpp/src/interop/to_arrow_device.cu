@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,13 +92,15 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
 }
 
 struct dispatch_to_arrow_device {
-  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(cudf::column&&, rmm::cuda_stream_view, rmm::device_async_resource_ref, ArrowArray*)
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  // cover rep layout compatible and decimal types
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(cudf::column&& column,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr,
@@ -131,64 +133,6 @@ struct dispatch_to_arrow_device {
     return NANOARROW_OK;
   }
 };
-
-template <typename DeviceType>
-int construct_decimals(cudf::column_view input,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr,
-                       ArrowArray* out)
-{
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
-
-  auto buf = detail::convert_decimals_to_decimal128<DeviceType>(input, stream, mr);
-  // Synchronize stream here to ensure the decimal128 buffer is ready.
-  stream.synchronize();
-  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
-
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column&& column,
-                                                             rmm::cuda_stream_view stream,
-                                                             rmm::device_async_resource_ref mr,
-                                                             ArrowArray* out)
-{
-  using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column&& column,
-                                                             rmm::cuda_stream_view stream,
-                                                             rmm::device_async_resource_ref mr,
-                                                             ArrowArray* out)
-{
-  using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column&& column,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr,
-                                                              ArrowArray* out)
-{
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_contents(contents, tmp.get()));
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
-}
 
 template <>
 int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
@@ -350,13 +294,14 @@ struct dispatch_to_arrow_device_view {
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(ArrowArray*) const
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(ArrowArray* out) const
   {
     nanoarrow::UniqueArray tmp;
@@ -403,37 +348,6 @@ struct dispatch_to_arrow_device_view {
                            out);
   }
 };
-
-template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal32>(ArrowArray* out) const
-{
-  using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal64>(ArrowArray* out) const
-{
-  using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal128>(ArrowArray* out) const
-{
-  nanoarrow::UniqueArray tmp;
-
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
-  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(column, tmp.get()));
-
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
-}
 
 template <>
 int dispatch_to_arrow_device_view::operator()<bool>(ArrowArray* out) const
