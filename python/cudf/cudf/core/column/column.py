@@ -462,12 +462,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        if not isinstance(fill_value, cudf.Scalar):
-            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        if not is_scalar(fill_value):
+            raise ValueError("fill_value must be a scalar value")
+        elif not isinstance(fill_value, plc.Scalar):
+            fill_value = pa_scalar_to_plc_scalar(
+                pa.scalar(fill_value, type=cudf_dtype_to_pa_type(self.dtype))
+            )
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
-            fill_value.device_value,
+            fill_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
@@ -1250,7 +1254,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         cats = self.unique().sort_values()
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
+            cats=cats, dtype=label_dtype, na_sentinel=pa.scalar(1)
         )
         # columns include null index in factorization; remove:
         if self.has_nulls():
@@ -1561,7 +1565,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: cudf.Scalar | None = None,
+        na_sentinel: pa.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1592,14 +1596,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or na_sentinel.value is cudf.NA:
-            na_sentinel = cudf.Scalar(-1)
+        if na_sentinel is None or not na_sentinel.is_valid:
+            na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.as_py()), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
@@ -1631,7 +1635,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         (codes,) = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )
-        return codes.fillna(na_sentinel.value)
+        return codes.fillna(na_sentinel)
 
     @acquire_spill_lock()
     def copy_if_else(
