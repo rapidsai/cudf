@@ -10,8 +10,6 @@ from cudf.core.buffer import acquire_spill_lock
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cudf import Scalar
-
     # ruff does not identify that there's a relative import in use
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
@@ -35,7 +33,7 @@ def gather(
 
 @acquire_spill_lock()
 def scatter(
-    sources: list[ColumnBase | Scalar],
+    sources: list[ColumnBase | plc.Scalar],
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
@@ -68,7 +66,7 @@ def scatter(
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
         if isinstance(sources[0], column.ColumnBase)
-        else [slr.device_value for slr in sources],  # type: ignore[union-attr]
+        else sources,  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )

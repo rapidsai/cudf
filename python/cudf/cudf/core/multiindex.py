@@ -20,7 +20,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
-from cudf.core._internals import copying, sorting
+from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
@@ -1964,10 +1964,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
             scatter_map = ColumnBase.from_pylibcudf(left_plc)
             indices = ColumnBase.from_pylibcudf(right_plc)
-        result = ColumnBase.from_pylibcudf(
-            copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(
+            result._scatter_by_column(scatter_map, indices)
         )
-        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(

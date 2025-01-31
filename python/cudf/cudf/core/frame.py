@@ -1649,7 +1649,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 (
                     col.unary_operator("not")
                     if col.dtype.kind == "b"
-                    else -1 * col
+                    else col.unary_operator("negate")
                     for col in self._columns
                 )
             )

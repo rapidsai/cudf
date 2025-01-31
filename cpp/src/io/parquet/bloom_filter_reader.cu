@@ -599,9 +599,11 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
   return parquet_types;
 }
 
-std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
+std::pair<std::optional<std::vector<std::vector<size_type>>>, bool>
+aggregate_reader_metadata::apply_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
@@ -609,17 +611,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 {
   // Number of input table columns
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
-
-  // Total number of row groups after StatsAST filtration
-  auto const total_row_groups = std::accumulate(
-    input_row_group_indices.begin(),
-    input_row_group_indices.end(),
-    size_t{0},
-    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
-
-  // Check if we have less than 2B total row groups.
-  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-               "Total number of row groups exceed the size_type's limit");
 
   // Collect equality literals for each input table column
   auto const equality_literals =
@@ -635,7 +626,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   [](auto& eq_literals) { return not eq_literals.empty(); });
 
   // Return early if no column with equality predicate(s)
-  if (equality_col_schemas.empty()) { return std::nullopt; }
+  if (equality_col_schemas.empty()) { return {std::nullopt, false}; }
 
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
@@ -654,8 +645,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto bloom_filter_data = read_bloom_filters(
     sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream, aligned_mr);
 
-  // No bloom filter buffers, return the original row group indices
-  if (bloom_filter_data.empty()) { return std::nullopt; }
+  // No bloom filter buffers, return early
+  if (bloom_filter_data.empty()) { return {std::nullopt, false}; }
 
   // Get parquet types for the predicate columns
   auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
@@ -676,8 +667,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     h_bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
 
   // Create a bloom filter query table caster
-  bloom_filter_caster const bloom_filter_col{
-    bloom_filter_spans, parquet_types, total_row_groups, equality_col_schemas.size()};
+  bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
+                                             parquet_types,
+                                             static_cast<size_t>(total_row_groups),
+                                             equality_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
@@ -714,10 +707,11 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
-  return collect_filtered_row_group_indices(bloom_filter_membership_table,
-                                            bloom_filter_expr.get_bloom_filter_expr(),
-                                            input_row_group_indices,
-                                            stream);
+  return {collect_filtered_row_group_indices(bloom_filter_membership_table,
+                                             bloom_filter_expr.get_bloom_filter_expr(),
+                                             input_row_group_indices,
+                                             stream),
+          true};
 }
 
 }  // namespace cudf::io::parquet::detail

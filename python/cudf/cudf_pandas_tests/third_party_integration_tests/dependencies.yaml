@@ -156,9 +156,9 @@ dependencies:
             packages:
               - cuda-version=12.5
           - matrix:
-              cuda: "12"
+              cuda: "12.8"
             packages:
-              - cuda-version=12.5
+              - cuda-version=12.8
   py_version:
     specific:
       - output_types: conda
@@ -182,7 +182,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf==25.2.*,>=0.0.0a0
+          - cudf==25.4.*,>=0.0.0a0
           - pandas
           - pytest
           - pytest-xdist
@@ -248,13 +248,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cuml==25.2.*,>=0.0.0a0
+          - cuml==25.4.*,>=0.0.0a0
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-          - cugraph==25.2.*,>=0.0.0a0
+          - cugraph==25.4.*,>=0.0.0a0
           - networkx
   test_ibis:
     common:

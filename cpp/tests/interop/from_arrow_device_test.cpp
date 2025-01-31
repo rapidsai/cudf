@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,12 @@ struct FromArrowDeviceTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct FromArrowDeviceTestDurationsTest : public cudf::test::BaseFixture {};
 
+template <typename T>
+struct FromArrowDeviceTestDecimalsTest : public cudf::test::BaseFixture {};
+
 TYPED_TEST_SUITE(FromArrowDeviceTestDurationsTest, cudf::test::DurationTypes);
+using FixedPointTypes = cudf::test::Types<int32_t, int64_t, __int128_t>;
+TYPED_TEST_SUITE(FromArrowDeviceTestDecimalsTest, FixedPointTypes);
 
 TEST_F(FromArrowDeviceTest, FailConditions)
 {
@@ -568,23 +573,24 @@ INSTANTIATE_TEST_CASE_P(FromArrowDeviceTest,
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
-TEST_F(FromArrowDeviceTest, FixedPoint128Table)
+TYPED_TEST(FromArrowDeviceTestDecimalsTest, FixedPointTable)
 {
+  using T = TypeParam;
   using namespace numeric;
 
+  auto const precision = get_decimal_precision<T>();
+
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6};
-    auto const col      = fp_wrapper<__int128_t>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
@@ -592,7 +598,7 @@ TEST_F(FromArrowDeviceTest, FixedPoint128Table)
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
-    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    populate_from_col<T>(input_array->children[0], expected.column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
@@ -613,25 +619,26 @@ TEST_F(FromArrowDeviceTest, FixedPoint128Table)
   }
 }
 
-TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
+TYPED_TEST(FromArrowDeviceTestDecimalsTest, FixedPointTableLarge)
 {
+  using T = TypeParam;
   using namespace numeric;
+
+  auto const precision        = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto iota           = thrust::make_counting_iterator(1);
-    auto const data     = std::vector<__int128_t>(iota, iota + NUM_ELEMENTS);
-    auto const col      = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
@@ -639,7 +646,7 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
-    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    populate_from_col<T>(input_array->children[0], expected.column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
@@ -660,25 +667,26 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
   }
 }
 
-TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
+TYPED_TEST(FromArrowDeviceTestDecimalsTest, FixedPointTableNulls)
 {
+  using T = TypeParam;
   using namespace numeric;
+
+  auto const precision = get_decimal_precision<T>();
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col =
-      fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+      fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
@@ -686,7 +694,7 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
-    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    populate_from_col<T>(input_array->children[0], expected.column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
@@ -707,27 +715,28 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
   }
 }
 
-TEST_F(FromArrowDeviceTest, FixedPoint128TableNullsLarge)
+TYPED_TEST(FromArrowDeviceTestDecimalsTest, FixedPointTableNullsLarge)
 {
+  using T = TypeParam;
   using namespace numeric;
+
+  auto const precision        = get_decimal_precision<T>();
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
-    auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
-    auto iota        = thrust::make_counting_iterator(1);
-    auto const data  = std::vector<__int128_t>(iota, iota + NUM_ELEMENTS);
-    auto const col = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
+    auto every_other    = [](auto i) { return i % 2 ? 0 : 1; };
+    auto validity       = cudf::detail::make_counting_transform_iterator(0, every_other);
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
@@ -735,7 +744,7 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNullsLarge)
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
-    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    populate_from_col<T>(input_array->children[0], expected.column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
