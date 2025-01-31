@@ -38,6 +38,7 @@ from ..fast_slow_proxy import (
     _FunctionProxy,
     _maybe_wrap_result,
     _Unusable,
+    is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
