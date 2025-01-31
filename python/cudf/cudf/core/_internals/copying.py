@@ -36,7 +36,7 @@ def gather(
 
 @acquire_spill_lock()
 def scatter(
-    sources: list[ColumnBase | cudf.Scalar],
+    sources: list[ColumnBase | plc.Scalar],
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
@@ -67,7 +67,7 @@ def scatter(
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
         if isinstance(sources[0], cudf._lib.column.Column)
-        else [slr.device_value for slr in sources],  # type: ignore[union-attr]
+        else sources,  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )

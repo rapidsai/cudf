@@ -1335,6 +1335,10 @@ def _get_proxy_base_class(cls):
     return object
 
 
+def is_proxy_instance(obj, type):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
+
+
 PROXY_BASE_CLASSES: set[type] = {
     ProxyNDarrayBase,
 }
