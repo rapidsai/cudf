@@ -462,16 +462,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        if not is_scalar(fill_value):
-            raise ValueError("fill_value must be a scalar value")
-        elif not isinstance(fill_value, plc.Scalar):
-            fill_value = pa_scalar_to_plc_scalar(
-                pa.scalar(fill_value, type=cudf_dtype_to_pa_type(self.dtype))
-            )
+        if not isinstance(fill_value, cudf.Scalar):
+            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
-            fill_value,
+            fill_value.device_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
