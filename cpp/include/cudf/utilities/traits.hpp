@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,8 @@ constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts.
 /// Checks if a type is a timestamp type.
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
+                                              std::is_same<cudf::timestamp_h, T>,
+                                              std::is_same<cudf::timestamp_m, T>,
                                               std::is_same<cudf::timestamp_s, T>,
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
@@ -102,6 +104,8 @@ using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>
 /// Checks if a type is a duration type.
 template <typename T>
 using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
+                                             std::is_same<cudf::duration_h, T>,
+                                             std::is_same<cudf::duration_m, T>,
                                              std::is_same<cudf::duration_s, T>,
                                              std::is_same<cudf::duration_ms, T>,
                                              std::is_same<cudf::duration_us, T>,

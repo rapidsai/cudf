@@ -12,7 +12,7 @@ jobs:
   trigger-notifier:
     if: contains(github.event.pull_request.labels.*.name, 'breaking')
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@nvks-runners
     with:
       sender_login: ${{ github.event.sender.login }}
       sender_avatar: ${{ github.event.sender.avatar_url }}
