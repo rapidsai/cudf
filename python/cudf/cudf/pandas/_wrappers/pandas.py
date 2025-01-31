@@ -1771,19 +1771,6 @@ def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
 
     if data_is_proxy:
         data = data.as_gpu_object()
-    elif isinstance(data, list) and len(data) > 0 and is_proxy_object(data[0]):
-        data = [d.as_gpu_object() for d in data]
-    elif (
-        isinstance(data, tuple) and len(data) > 0 and is_proxy_object(data[0])
-    ):
-        data = tuple(d.as_gpu_object() for d in data)
-    elif (
-        isinstance(data, dict)
-        and len(data) > 0
-        and is_proxy_object(next(iter(data.values())))
-    ):
-        data = {k: v.as_gpu_object() for k, v in data.items()}
-
     if is_proxy_object(index):
         index = index.as_gpu_object()
     if is_proxy_object(columns):
@@ -1803,16 +1790,16 @@ def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
 
 
 def initial_setup():
-    # Replace the __init__ methods with the wrapped versions
-    global \
-        _original_Series_init, \
-        _original_DataFrame_init, \
-        _original_Index_init
+    """
+    This is a one-time setup function that can contain
+    any initialization code that needs to be run once
+    when the module is imported. Currently, it is used
+    to wrap the __init__ methods and enable pandas compatibility mode.
+    """
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
 
-    # Enable pandas compatibility mode
     cudf.set_option("mode.pandas_compatible", True)
 
 
