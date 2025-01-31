@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -9462,6 +9463,9 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled("arrow-java does not yet support Decimal32/Decimal64, so now that" +
+    "we don't automatically upcast to decimal128 on conversion to arrow, we have" +
+    "to wait until it supports those types, then upgrade")
   void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".arrow");
     String[] columnNames = WriteUtils.getNonNestedColumns(false);
@@ -9495,6 +9499,8 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled("arrow-java does not yet support Decimal32/Decimal64, " +
+    "this can be re-enabled once it does and we upgrade")
   void testArrowIPCWriteToBufferChunked() {
     String[] nonNestedCols = WriteUtils.getNonNestedColumns(false);
     List<String> columns = Lists.newArrayList(nonNestedCols);
