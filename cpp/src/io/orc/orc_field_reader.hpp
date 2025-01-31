@@ -17,7 +17,7 @@
 
 #include "orc.hpp"
 
-#include <string>
+#include <cstdint>
 
 /**
  * @file orc_field_reader.hpp
@@ -25,9 +25,7 @@
  * ProtobufReader::read(...) functions
  */
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
 /**
  * @brief Functor to run an operator for a specified field.
@@ -90,6 +88,4 @@ inline void ProtobufReader::function_builder(T& s, size_t maxlen, std::tuple<Ope
   CUDF_EXPECTS(m_cur <= end, "Current pointer to metadata stream is out of bounds");
 }
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
