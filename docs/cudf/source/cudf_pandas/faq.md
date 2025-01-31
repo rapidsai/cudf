@@ -144,13 +144,13 @@ provides a similar configuration-based plugin for Spark.
 
 ## How do I know if an object is a `cudf.pandas` proxy object?
 
-To determine if an object is a `cudf.pandas` proxy object, you can use the `isinstance_cudf_pandas` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
+To determine if an object is a `cudf.pandas` proxy object, you can use the `is_proxy_instance` API. This function checks if the given object is a proxy object that wraps either a `cudf` or `pandas` object. Here is an example of how to use this API:
 
 ```python
-from cudf.pandas import isinstance_cudf_pandas
+from cudf.pandas import is_proxy_instance
 
 obj = ...  # Your object here
-if isinstance_cudf_pandas(obj, pd.Series):
+if is_proxy_instance(obj, pd.Series):
     print("The object is a cudf.pandas proxy Series object.")
 else:
     print("The object is not a cudf.pandas proxy Series object.")
@@ -158,10 +158,10 @@ else:
 
 To detect `Series`, `DataFrame`, `Index`, and `ndarray` objects separately, you can pass the type names as the second parameter:
 
-* `isinstance_cudf_pandas(obj, pd.Series)`: Detects if the object is a `cudf.pandas` proxy `Series`.
-* `isinstance_cudf_pandas(obj, pd.DataFrame)`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
-* `isinstance_cudf_pandas(obj, pd.Index)`: Detects if the object is a `cudf.pandas` proxy `Index`.
-* `isinstance_cudf_pandas(obj, np.ndarray)`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
+* `is_proxy_instance(obj, pd.Series)`: Detects if the object is a `cudf.pandas` proxy `Series`.
+* `is_proxy_instance(obj, pd.DataFrame)`: Detects if the object is a `cudf.pandas` proxy `DataFrame`.
+* `is_proxy_instance(obj, pd.Index)`: Detects if the object is a `cudf.pandas` proxy `Index`.
+* `is_proxy_instance(obj, np.ndarray)`: Detects if the object is a `cudf.pandas` proxy `ndarray`.
 
 ## How can I access the underlying GPU or CPU objects?
 
