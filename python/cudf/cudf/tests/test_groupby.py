@@ -4111,7 +4111,7 @@ def test_scan_int_null_pandas_compatible(op):
     data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
     df_pd = pd.DataFrame(data)
     df_cudf = cudf.DataFrame(data)
-    result = getattr(df_pd.groupby("b")["a"], op)()
+    expected = getattr(df_pd.groupby("b")["a"], op)()
     with cudf.option_context("mode.pandas_compatible", True):
-        expected = getattr(df_cudf.groupby("b")["a"], op)()
+        result = getattr(df_cudf.groupby("b")["a"], op)()
     assert_eq(result, expected)
