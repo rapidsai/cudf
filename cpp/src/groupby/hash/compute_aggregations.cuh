@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,13 +67,17 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
-  auto const has_sufficient_shmem =
-    available_shmem_size > (compute_shmem_offsets_size(flattened_values.num_columns()) * 2);
-  auto const has_dictionary_request = std::any_of(
-    requests.begin(), requests.end(), [](cudf::groupby::aggregation_request const& request) {
-      return cudf::is_dictionary(request.values.type());
+  auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
+  auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
+  auto const is_shared_memory_compatible = std::all_of(
+    requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+      if (cudf::is_dictionary(request.values.type())) { return false; }
+      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+      // for shared memory aggregations
+      auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
+                                                                           size_of_functor{});
+      return static_cast<size_type>(data_buffer_size) >= (size * GROUPBY_CARDINALITY_THRESHOLD);
     });
-  auto const is_shared_memory_compatible = !has_dictionary_request and has_sufficient_shmem;
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns or when there is insufficient dynamic
