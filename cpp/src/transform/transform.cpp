@@ -69,9 +69,9 @@ void transform_operation(mutable_column_view output,
                         .instantiate(cudf::type_to_name(output.type()), 1));
 
   for (auto& input : inputs) {
-    bool const is_scalar = input.size() != base_column_size;
+    bool const should_advance = input.size() == base_column_size;
     typenames.push_back(jitify2::reflection::Template("cudf::transformation::jit::strided")
-                          .instantiate(cudf::type_to_name(input.type()), is_scalar ? 0 : 1));
+                          .instantiate(cudf::type_to_name(input.type()), should_advance ? 1 : 0));
   }
 
   std::string const kernel_name =
@@ -132,8 +132,9 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
 
   std::for_each(inputs.begin(), inputs.end(), [&](column_view const& col) {
-    CUDF_EXPECTS((col.size() == 1) || (col.size() == base_column->size()), "");
-    CUDF_EXPECTS((col.null_count() == 0) || (col.null_count() == base_column->null_count()), "");
+    CUDF_EXPECTS((col.size() == 1) || (col.size() == base_column->size()),
+                 "All columns must have the same size or have size 1 (scalar)");
+    CUDF_EXPECTS(col.null_count() == 0, "All columns must have non-null values");
   });
 
   std::unique_ptr<column> output = make_fixed_width_column(output_type,
