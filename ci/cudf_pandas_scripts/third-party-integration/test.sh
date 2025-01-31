@@ -37,7 +37,7 @@ main() {
           --config "$dependencies_yaml" \
           --output conda \
           --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_MAJOR}.8;arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+          --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
