@@ -24,6 +24,7 @@ files:
       - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_nvcomp
+      - depends_on_rapids-logger
       - depends_on_rmm
       - develop
       - docs
@@ -1140,6 +1141,17 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_rapids-logger:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-logger==0.1.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rapids-logger
+          - --extra-index-url=https://pypi.nvidia.com
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
   test_python_pandas_cudf:
     common:
       - output_types: [requirements, pyproject]
