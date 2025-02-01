@@ -82,7 +82,7 @@ def _make_hash_join(
     partitioned_on: tuple[NamedExpr, ...] = ()
     if ir.left_on == ir.right_on or (ir.options[0] in ("Left", "Semi", "Anti")):
         partitioned_on = ir.left_on
-    elif ir.options[0] == "Right":  # pragma: no cover
+    elif ir.options[0] == "Right":
         partitioned_on = ir.right_on
     partition_info[ir] = PartitionInfo(
         count=output_count,
