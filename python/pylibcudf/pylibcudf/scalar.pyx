@@ -1,10 +1,26 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
+from cpython cimport bool as py_bool
+from cpython.datetime cimport datetime
 from cython cimport no_gc_clear
+from libc.stdint cimport int64_t
+from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.scalar.scalar_factories cimport make_empty_scalar_like
+from pylibcudf.libcudf.scalar.scalar cimport (
+    scalar,
+    numeric_scalar,
+    timestamp_scalar,
+)
+from pylibcudf.libcudf.scalar.scalar_factories cimport (
+    make_empty_scalar_like,
+    make_numeric_scalar,
+    make_string_scalar,
+    make_timestamp_scalar,
+)
+from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
+from pylibcudf.libcudf.types cimport type_id
+
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
@@ -78,4 +94,41 @@ cdef class Scalar:
         cdef Scalar s = Scalar.__new__(Scalar)
         s.c_obj.swap(libcudf_scalar)
         s._data_type = DataType.from_libcudf(s.get().type())
+        return s
+
+    @classmethod
+    def from_py(cls, py_val):
+        """Convert a Python standard library object to a Scalar.
+        """
+        cdef DataType dtype
+        if isinstance(py_val, py_bool):
+            dtype = DataType(type_id.BOOL8)
+            c_val = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[cbool]*>c_val.get()).set_value(py_val)
+        elif isinstance(py_val, int):
+            dtype = DataType(type_id.INT64)
+            c_val = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[int64_t]*>c_val.get()).set_value(py_val)
+        elif isinstance(py_val, float):
+            dtype = DataType(type_id.FLOAT64)
+            c_val = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[double]*>c_val.get()).set_value(py_val)
+        elif isinstance(py_val, str):
+            dtype = DataType(type_id.STRING)
+            c_val = make_string_scalar(py_val.encode())
+        #elif isinstance(py_val, datetime.datetime):
+        #    if py_val.microsecond != 0:
+        #        raise NotImplementedError("Non-zero microseconds is not supported.")
+        #    if py_val.tzinfo is not None:
+        #        raise NotImplementedError(f"{py_val.tzinfo=} is not supported.")
+        #    dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+        #    c_val = timestamp_scalar(<int64_t>int(py_val.timestamp()))
+            #c_val = make_timestamp_scalar(dtype.c_obj)
+            #(<timestamp_scalar[timestamp_us]*>c_val.get()).set_value(py_val)
+        else:
+            raise NotImplementedError(f"{type(py_val).__name__} is not supported.")
+
+        cdef Scalar s = Scalar.__new__(Scalar)
+        s.c_obj.swap(c_val)
+        s._data_type = dtype
         return s
