@@ -1,7 +1,6 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cpython cimport bool as py_bool
-from cpython.datetime cimport datetime
 from cython cimport no_gc_clear
 from libc.stdint cimport int64_t
 from libcpp cimport bool as cbool
@@ -10,15 +9,12 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     numeric_scalar,
-    timestamp_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
     make_numeric_scalar,
     make_string_scalar,
-    make_timestamp_scalar,
 )
-from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
 from pylibcudf.libcudf.types cimport type_id
 
 
@@ -116,15 +112,6 @@ cdef class Scalar:
         elif isinstance(py_val, str):
             dtype = DataType(type_id.STRING)
             c_val = make_string_scalar(py_val.encode())
-        #elif isinstance(py_val, datetime.datetime):
-        #    if py_val.microsecond != 0:
-        #        raise NotImplementedError("Non-zero microseconds is not supported.")
-        #    if py_val.tzinfo is not None:
-        #        raise NotImplementedError(f"{py_val.tzinfo=} is not supported.")
-        #    dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-        #    c_val = timestamp_scalar(<int64_t>int(py_val.timestamp()))
-            #c_val = make_timestamp_scalar(dtype.c_obj)
-            #(<timestamp_scalar[timestamp_us]*>c_val.get()).set_value(py_val)
         else:
             raise NotImplementedError(f"{type(py_val).__name__} is not supported.")
 
