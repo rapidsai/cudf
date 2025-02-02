@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,8 +47,11 @@ def _load_wheel_installation(soname: str):
 def load_library():
     """Dynamically load libcudf.so and its dependencies"""
     try:
-        # libkvikio must be loaded before libcudf because libcudf references its symbols
+        # librmm and libkvikio must be loaded before libcudf because libcudf references
+        # them. librmm does not yet have a load_library() function, so we just import
+        # it.
         import libkvikio
+        import librmm  # noqa: F401
 
         libkvikio.load_library()
     except ModuleNotFoundError:
