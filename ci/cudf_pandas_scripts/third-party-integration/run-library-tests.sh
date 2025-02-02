@@ -35,9 +35,10 @@ main() {
 
     # generation phase
     runtest "${lib}" "gold"
-    find "$(pwd)" -type f -name "*.pickle"
+    echo "finding"
+    find "'/__w/" -type f -name "*.pickle"
     runtest "${lib}" "cudf"
-    find "$(pwd)" -type f -name "*.pickle"
+    find "'/__w/" -type f -name "*.pickle"
 
     # assertion phase
     pytest \
