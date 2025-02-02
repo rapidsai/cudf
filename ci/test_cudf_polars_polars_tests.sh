@@ -19,8 +19,8 @@ python -m pip install \
     -v \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo ./local-libcudf-dep/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo ./local-pylibcudf-dep/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
-    "$(echo ${LIBRMM_WHEEL_DIR}/librmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+    "$(echo ./local-pylibcudf-dep/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo ${LIBRMM_WHEEL_DIR}/librmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 

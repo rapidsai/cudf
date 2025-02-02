@@ -16,12 +16,16 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+LIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" _rapids-get-pr-artifact rmm 1808 cpp wheel)
+PYLIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" _rapids-get-pr-artifact rmm 1808 python wheel)
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
   "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,pandas-tests]" \
   "$(echo ./dist/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-  "$(echo ./dist/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+  "$(echo ./dist/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+  "$(echo ${LIBRMM_WHEEL_DIR}/librmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+  "$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
