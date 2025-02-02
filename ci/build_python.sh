@@ -18,8 +18,8 @@ rapids-generate-version > ./VERSION
 rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-LIBRMM_CHANNEL=$(_rapids-get-pr-artifact rmm cpp conda)
-PYLIBRMM_CHANNEL=$(_rapids-get-pr-artifact rmm python conda)
+LIBRMM_CHANNEL=$(_rapids-get-pr-artifact 1808 rmm cpp conda)
+PYLIBRMM_CHANNEL=$(_rapids-get-pr-artifact 1808 rmm python conda)
 
 sccache --zero-stats
 
