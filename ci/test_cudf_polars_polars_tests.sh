@@ -11,6 +11,8 @@ RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE
 # Download libcudf and pylibcudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./local-libcudf-dep
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./local-pylibcudf-dep
+LIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" _rapids-get-pr-artifact rmm 1808 cpp wheel)
+PYLIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" _rapids-get-pr-artifact rmm 1808 python wheel)
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 python -m pip install \
@@ -18,6 +20,8 @@ python -m pip install \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo ./local-libcudf-dep/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo ./local-pylibcudf-dep/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+    "$(echo ${LIBRMM_WHEEL_DIR}/librmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+    "$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 
 TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
