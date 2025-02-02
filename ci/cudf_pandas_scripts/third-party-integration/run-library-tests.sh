@@ -35,7 +35,9 @@ main() {
 
     # generation phase
     runtest "${lib}" "gold"
+    find "$(pwd)" -type f -name "*.pickle"
     runtest "${lib}" "cudf"
+    find "$(pwd)" -type f -name "*.pickle"
 
     # assertion phase
     pytest \
