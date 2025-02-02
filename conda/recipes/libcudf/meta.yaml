@@ -99,7 +99,7 @@ outputs:
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
-      - rapids-logger =0.1
+        - rapids-logger =0.1
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
