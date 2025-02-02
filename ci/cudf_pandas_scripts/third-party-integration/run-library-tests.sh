@@ -18,14 +18,16 @@ runtest() {
         plugin="-p cudf.pandas"
     fi
 
+    echo "Running tests for $lib in $mode mode"
     pytest \
     "$plugin" \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
-    --numprocesses="${NUM_PROCESSES}" \
-    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
+    # --numprocesses="${NUM_PROCESSES}" \
+    # --dist=worksteal \
+
 }
 
 main() {
@@ -42,9 +44,10 @@ main() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
-    --numprocesses="${NUM_PROCESSES}" \
-    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
+    # --numprocesses="${NUM_PROCESSES}" \
+    # --dist=worksteal \
+
 }
 
 main "$@"
