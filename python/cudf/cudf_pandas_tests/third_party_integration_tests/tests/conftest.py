@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -139,6 +139,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         result = testfunction(**testargs)
         # Tuple-based key-value pairs, key is the node-id
         try:
+            print("writing in", pyfuncitem.config.stash[file_handle_key])
             pickle.dump(
                 (pyfuncitem.nodeid, result),
                 pyfuncitem.config.stash[file_handle_key],
