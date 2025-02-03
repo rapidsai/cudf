@@ -149,7 +149,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value: cudf.Scalar | ColumnBase = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -160,12 +160,17 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
+        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
-            device_value = device_value.astype(self.dtype)
+            value_normalized = value_normalized.astype(self.dtype)
 
         out: ColumnBase | None  # If None, no need to perform mimic inplace.
+        device_value = (
+            value_normalized.device_value
+            if isinstance(value_normalized, cudf.Scalar)
+            else value_normalized
+        )
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:

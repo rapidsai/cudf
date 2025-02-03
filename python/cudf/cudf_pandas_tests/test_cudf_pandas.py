@@ -66,7 +66,7 @@ from pandas.tseries.holiday import (
 )
 
 from cudf.pandas import (
-    isinstance_cudf_pandas,
+    is_proxy_instance,
 )
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
@@ -1902,20 +1902,28 @@ def test_is_cudf_pandas():
     df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     index = xpd.Index([1, 2, 3])
 
-    assert isinstance_cudf_pandas(s, pd.Series)
-    assert isinstance_cudf_pandas(df, pd.DataFrame)
-    assert isinstance_cudf_pandas(index, pd.Index)
-    assert isinstance_cudf_pandas(index.values, np.ndarray)
+    assert is_proxy_instance(s, pd.Series)
+    assert is_proxy_instance(df, pd.DataFrame)
+    assert is_proxy_instance(index, pd.Index)
+    assert is_proxy_instance(index.values, np.ndarray)
 
     for obj in [s, df, index, index.values]:
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Series)
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Series)
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Series)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Series)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.DataFrame)
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.DataFrame)
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.DataFrame)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.DataFrame)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, pd.Index)
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, pd.Index)
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Index)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Index)
 
-        assert not isinstance_cudf_pandas(obj._fsproxy_slow, np.ndarray)
-        assert not isinstance_cudf_pandas(obj._fsproxy_fast, np.ndarray)
+        assert not is_proxy_instance(obj._fsproxy_slow, np.ndarray)
+        assert not is_proxy_instance(obj._fsproxy_fast, np.ndarray)
+
+
+def test_series_dtype_property():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = np.dtype(s)
+    actual = np.dtype(xs)
+    assert expected == actual
