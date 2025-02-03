@@ -376,7 +376,7 @@ class Merge:
                     if r_label in data:
                         raise NotImplementedError(
                             f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
-                            f"duplicate column label, '{name}{self.rsuffix}', which is "
+                            f"duplicate column label, '{r_label}', which is "
                             "not supported."
                         )
                     data[r_label] = col
