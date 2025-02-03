@@ -28,7 +28,7 @@ concurrency:
 jobs:
   cpp-build:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -37,7 +37,7 @@ jobs:
   python-build:
     needs: [cpp-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -46,7 +46,7 @@ jobs:
   upload-conda:
     needs: [cpp-build, python-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -57,19 +57,19 @@ jobs:
     if: github.ref_type == 'branch'
     needs: python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
       build_type: ${{ inputs.build_type || 'branch' }}
       container_image: "rapidsai/ci-conda:latest"
       date: ${{ inputs.date }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1"
       run_script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@nvks-runners
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
@@ -81,7 +81,7 @@ jobs:
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -92,7 +92,7 @@ jobs:
   wheel-build-pylibcudf:
     needs: [wheel-build-libcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -102,7 +102,7 @@ jobs:
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -113,7 +113,7 @@ jobs:
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -123,7 +123,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -134,7 +134,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@nvks-runners
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -146,7 +146,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -157,7 +157,7 @@ jobs:
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@nvks-runners
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -169,7 +169,7 @@ jobs:
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@cuda-12.8.0
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@nvks-runners
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}

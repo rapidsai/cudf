@@ -136,7 +136,7 @@ struct file_segmentation {
  */
 struct encoded_data {
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
-  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
+  hostdevice_2dvector<encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
 /**
@@ -309,7 +309,7 @@ class writer::impl {
                               orc_table_view const& orc_table,
                               device_span<uint8_t const> compressed_data,
                               host_span<compression_result const> comp_results,
-                              host_2dspan<gpu::StripeStream const> strm_descs,
+                              host_2dspan<StripeStream const> strm_descs,
                               host_span<ColStatsBlob const> rg_stats,
                               orc_streams& streams,
                               host_span<StripeInformation> stripes,

@@ -13,6 +13,7 @@ runtest() {
     local lib=$1
     local mode=$2
 
+    echo "Running tests for $lib in $mode mode"
     local plugin=""
     if [ "$mode" = "cudf" ]; then
         plugin="-p cudf.pandas"
