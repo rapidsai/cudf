@@ -12,6 +12,9 @@ on:
       sha:
         required: true
         type: string
+      build_type:
+        type: string
+        default: nightly
 
 jobs:
   conda-cpp-checks:
