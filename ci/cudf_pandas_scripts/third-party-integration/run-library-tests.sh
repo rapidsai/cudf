@@ -22,10 +22,10 @@ runtest() {
     pytest \
     "$plugin" \
     -v \
-    --numprocesses="${NUM_PROCESSES}" \
-    --dist=worksteal \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses="${NUM_PROCESSES}" \
+    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
     
 
@@ -46,10 +46,10 @@ main() {
     --compare \
     -p cudf.pandas \
     -v \
-    --numprocesses="${NUM_PROCESSES}" \
-    --dist=worksteal \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses="${NUM_PROCESSES}" \
+    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
     
 
