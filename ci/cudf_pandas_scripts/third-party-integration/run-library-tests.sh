@@ -51,8 +51,6 @@ main() {
     --numprocesses="${NUM_PROCESSES}" \
     --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
-    
-
 }
 
 main "$@"
