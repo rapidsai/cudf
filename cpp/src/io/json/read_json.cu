@@ -169,7 +169,8 @@ std::size_t estimate_size_per_subchunk(std::size_t chunk_size)
  *
  * The datasources passed to the JSON reader are read iteratively in batches demarcated by byte
  * range offsets. The tokenizer requires the JSON buffer read in each batch to be of size at most
- * INT_MAX bytes. Since the byte range corresponding to a given batch can cause the last JSON line
+ * INT_MAX bytes.
+ * Since the byte range corresponding to a given batch can cause the last JSON line
  * in the batch to be incomplete, the batch size returned by this function allows for an additional
  * `max_subchunks_prealloced` subchunks to be allocated beyond the byte range offsets. Since the
  * size of the subchunk depends on the size of the byte range, the batch size is variable and cannot
@@ -298,7 +299,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       }
     }
 
-    auto const batch_limit = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+    auto const batch_limit = static_cast<size_t>(std::numeric_limits<int32_t>::max());
     CUDF_EXPECTS(static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
                    batch_limit,
                  "The size of the JSON buffer returned by every batch cannot exceed INT_MAX bytes");
