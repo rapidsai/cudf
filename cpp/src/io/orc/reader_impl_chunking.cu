@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/comp/gpuinflate.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
@@ -40,16 +39,16 @@ namespace cudf::io::orc::detail {
 std::size_t gather_stream_info_and_column_desc(
   std::size_t stripe_id,
   std::size_t level,
-  orc::StripeInformation const* stripeinfo,
-  orc::StripeFooter const* stripefooter,
+  StripeInformation const* stripeinfo,
+  StripeFooter const* stripefooter,
   host_span<int const> orc2gdf,
-  host_span<orc::SchemaType const> types,
+  host_span<SchemaType const> types,
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
   std::vector<orc_stream_info>* stream_info,
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>* chunks)
+  cudf::detail::hostdevice_2dvector<ColumnDesc>* chunks)
 {
   CUDF_EXPECTS((stream_info == nullptr) ^ (chunks == nullptr),
                "Either stream_info or chunks must be provided, but not both.");
@@ -57,17 +56,17 @@ std::size_t gather_stream_info_and_column_desc(
   std::size_t src_offset = 0;
   std::size_t dst_offset = 0;
 
-  auto const get_stream_index_type = [](orc::StreamKind kind) {
+  auto const get_stream_index_type = [](StreamKind kind) {
     switch (kind) {
-      case orc::DATA: return gpu::CI_DATA;
-      case orc::LENGTH:
-      case orc::SECONDARY: return gpu::CI_DATA2;
-      case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
-      case orc::PRESENT: return gpu::CI_PRESENT;
-      case orc::ROW_INDEX: return gpu::CI_INDEX;
+      case DATA: return CI_DATA;
+      case LENGTH:
+      case SECONDARY: return CI_DATA2;
+      case DICTIONARY_DATA: return CI_DICTIONARY;
+      case PRESENT: return CI_PRESENT;
+      case ROW_INDEX: return CI_INDEX;
       default:
         // Skip this stream as it's not strictly required
-        return gpu::CI_NUM_STREAMS;
+        return CI_NUM_STREAMS;
     }
   };
 
@@ -87,16 +86,15 @@ std::size_t gather_stream_info_and_column_desc(
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
       auto const schema_type = types[column_id];
-      if (!schema_type.subtypes.empty() && schema_type.kind == orc::STRUCT &&
-          stream.kind == orc::PRESENT) {
+      if (!schema_type.subtypes.empty() && schema_type.kind == STRUCT && stream.kind == PRESENT) {
         for (auto const& idx : schema_type.subtypes) {
           auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
           if (child_idx >= 0) {
             col = child_idx;
             if (chunks) {
-              auto& chunk                     = (*chunks)[stripe_id][col];
-              chunk.strm_id[gpu::CI_PRESENT]  = *local_stream_order;
-              chunk.strm_len[gpu::CI_PRESENT] = stream.length;
+              auto& chunk                = (*chunks)[stripe_id][col];
+              chunk.strm_id[CI_PRESENT]  = *local_stream_order;
+              chunk.strm_len[CI_PRESENT] = stream.length;
             }
           }
         }
@@ -105,14 +103,14 @@ std::size_t gather_stream_info_and_column_desc(
       if (chunks) {
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
-          if (index_type < gpu::CI_NUM_STREAMS) {
+          if (index_type < CI_NUM_STREAMS) {
             auto& chunk                = (*chunks)[stripe_id][col];
             chunk.strm_id[index_type]  = *local_stream_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
             chunk.skip_count |= 1 << index_type;
 
-            if (index_type == gpu::CI_DICTIONARY) {
+            if (index_type == CI_DICTIONARY) {
               chunk.dictionary_start = *num_dictionary_entries;
               chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
               *num_dictionary_entries +=
@@ -643,7 +641,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   // memory once.
   auto hd_compinfo = [&] {
     std::size_t max_num_streams{0};
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+    if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       // Find the maximum number of streams in all levels of the loaded stripes.
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
@@ -651,7 +649,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
-    return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>(max_num_streams, _stream);
+    return cudf::detail::hostdevice_vector<CompressedStreamInfo>(max_num_streams, _stream);
   }();
 
   for (std::size_t level = 0; level < num_levels; ++level) {
@@ -665,26 +663,26 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     auto const stream_range =
       merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
 
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+    if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>{hd_compinfo}.subspan(
+      auto compinfo = cudf::detail::hostdevice_span<CompressedStreamInfo>{hd_compinfo}.subspan(
         0, stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
         compinfo[stream_idx - stream_range.begin] =
-          gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length);
+          CompressedStreamInfo(dst_base + info.dst_pos, info.length);
       }
 
       // Estimate the uncompressed data.
       compinfo.host_to_device_async(_stream);
-      gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                     compinfo.size(),
-                                     decompressor.GetBlockSize(),
-                                     decompressor.GetLog2MaxCompressionRatio(),
-                                     _stream);
+      ParseCompressedStripeData(compinfo.device_ptr(),
+                                compinfo.size(),
+                                decompressor.GetBlockSize(),
+                                decompressor.GetLog2MaxCompressionRatio(),
+                                _stream);
       compinfo.device_to_host_sync(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {

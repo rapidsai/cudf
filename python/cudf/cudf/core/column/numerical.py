@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.np import numpy_support
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -24,7 +23,6 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
-from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     find_common_type,
     min_column_type,
@@ -33,7 +31,7 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -44,13 +42,6 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
-
-_unaryop_map = {
-    "ASIN": "ARCSIN",
-    "ACOS": "ARCCOS",
-    "ATAN": "ARCTAN",
-    "INVERT": "BIT_INVERT",
-}
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -149,7 +140,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value: cudf.Scalar | ColumnBase = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -160,12 +151,17 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
+        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
-            device_value = device_value.astype(self.dtype)
+            value_normalized = value_normalized.astype(self.dtype)
 
         out: ColumnBase | None  # If None, no need to perform mimic inplace.
+        device_value = (
+            value_normalized.device_value
+            if isinstance(value_normalized, cudf.Scalar)
+            else value_normalized
+        )
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
@@ -191,24 +187,6 @@ class NumericalColumn(NumericalBaseColumn):
             True,
         )
         return type(self).from_pylibcudf(plc_column)
-
-    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
-        if callable(unaryop):
-            nb_type = numpy_support.from_dtype(self.dtype)
-            nb_signature = (nb_type,)
-            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
-            np_dtype = np.dtype(compiled_op[1])
-            return self.transform(compiled_op, np_dtype)
-
-        unaryop = unaryop.upper()
-        unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = plc.unary.UnaryOperator[unaryop]
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.unary.unary_operation(
-                    self.to_pylibcudf(mode="read"), unaryop
-                )
-            )
 
     def __invert__(self):
         if self.dtype.kind in "ui":

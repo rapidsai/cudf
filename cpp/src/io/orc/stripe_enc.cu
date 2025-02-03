@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/comp/gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -40,10 +39,7 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
 using cudf::io::detail::compression_result;
@@ -1421,7 +1417,4 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
     <<<num_blocks, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

@@ -37,7 +37,6 @@ from ..fast_slow_proxy import (
     _FunctionProxy,
     _maybe_wrap_result,
     _Unusable,
-    is_proxy_object,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
@@ -69,8 +68,6 @@ try:
     ipython_shell = get_ipython()
 except ImportError:
     ipython_shell = None
-
-cudf.set_option("mode.pandas_compatible", True)
 
 
 def _pandas_util_dir():
@@ -1711,10 +1708,6 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
-
-
-def isinstance_cudf_pandas(obj, type):
-    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
 # timestamps and timedeltas are not proxied, but non-proxied
