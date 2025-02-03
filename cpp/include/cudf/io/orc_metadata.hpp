@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,12 +171,12 @@ using statistics_type = std::variant<no_statistics,
                                      timestamp_statistics>;
 
 //! Orc I/O interfaces
-namespace orc {
+namespace orc::detail {
 // forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
 // returned from `read_parsed_orc_statistics`, are constructed from
-// `cudf::io::orc::column_statistics` objects that `ProtobufReader` initializes.
+// `cudf::io::orc::detail::column_statistics` objects that `ProtobufReader` initializes.
 struct column_statistics;
-}  // namespace orc
+}  // namespace orc::detail
 
 /**
  * @brief Contains per-column ORC statistics.
@@ -194,7 +194,7 @@ struct column_statistics {
    *
    * @param detail_statistics The statistics to initialize the object with
    */
-  column_statistics(orc::column_statistics&& detail_statistics);
+  column_statistics(orc::detail::column_statistics&& detail_statistics);
 };
 
 /**

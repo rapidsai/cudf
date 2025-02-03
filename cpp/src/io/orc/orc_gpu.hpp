@@ -18,7 +18,6 @@
 
 #include "io/comp/comp.hpp"
 #include "io/statistics/statistics.cuh"
-#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
@@ -33,10 +32,7 @@
 
 #include <cuco/static_map.cuh>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
@@ -65,9 +61,7 @@ auto constexpr VALUE_SENTINEL = size_type{-1};
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(uint8_t const* compressed_data_, size_t compressed_size_)
-    : compressed_data(compressed_data_),
-      uncompressed_data(nullptr),
-      compressed_data_size(compressed_size_)
+    : compressed_data(compressed_data_), compressed_data_size(compressed_size_)
   {
   }
   uint8_t const* compressed_data{};  // [in] base ptr to compressed stream data
@@ -500,7 +494,4 @@ void reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns
                            device_2dspan<cudf::size_type> set_counts,
                            rmm::cuda_stream_view stream);
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
