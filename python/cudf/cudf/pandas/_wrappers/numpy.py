@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -149,6 +149,7 @@ ndarray = make_final_proxy_type(
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
         "base": _FastSlowAttribute("base", private=True),
+        "data": _FastSlowAttribute("data", private=True),
     },
 )
 
