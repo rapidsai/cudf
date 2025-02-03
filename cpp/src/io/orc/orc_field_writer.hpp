@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,7 @@
  * `ProtobufWriter::write(...)` functions
  */
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
 struct ProtobufWriter::ProtobufFieldWriter {
   int struct_size{0};
@@ -129,6 +127,4 @@ struct ProtobufWriter::ProtobufFieldWriter {
   size_t value() { return struct_size; }
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

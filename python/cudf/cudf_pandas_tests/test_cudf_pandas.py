@@ -1962,3 +1962,12 @@ def test_cudf_index_from_cudf_pandas():
     gidx = cudf.Index(idx)
 
     tm.assert_equal(idx.as_gpu_object(), gidx)
+
+
+def test_numpy_data_access():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = s.values.data
+    actual = xs.values.data
+
+    assert type(expected) is type(actual)
