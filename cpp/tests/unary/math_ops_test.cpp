@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,69 @@
 #include <cudf/unary.hpp>
 
 #include <vector>
+
+using TypesToNegate = cudf::test::Types<int8_t,
+                                        int16_t,
+                                        int32_t,
+                                        int64_t,
+                                        float,
+                                        double,
+                                        cudf::duration_D,
+                                        cudf::duration_s,
+                                        cudf::duration_ms,
+                                        cudf::duration_us,
+                                        cudf::duration_ns>;
+
+template <typename T>
+struct UnaryNegateTests : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(UnaryNegateTests, TypesToNegate);
+
+TYPED_TEST(UnaryNegateTests, SimpleNEGATE)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input{{0, 1, 2, 3}};
+  auto const v = cudf::test::make_type_param_vector<T>({0, -1, -2, -3});
+  cudf::test::fixed_width_column_wrapper<T> expected(v.begin(), v.end());
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
+using TypesNotToNegate = cudf::test::Types<uint8_t,
+                                           uint16_t,
+                                           uint32_t,
+                                           uint64_t,
+                                           cudf::timestamp_D,
+                                           cudf::timestamp_s,
+                                           cudf::timestamp_ms,
+                                           cudf::timestamp_us,
+                                           cudf::timestamp_ns>;
+
+template <typename T>
+struct UnaryNegateErrorTests : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(UnaryNegateErrorTests, TypesNotToNegate);
+
+TYPED_TEST(UnaryNegateErrorTests, UnsupportedTypesFail)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4});
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::NEGATE), cudf::logic_error);
+}
+
+struct UnaryNegateComplexTypesErrorTests : public cudf::test::BaseFixture {};
+
+TEST_F(UnaryNegateComplexTypesErrorTests, NegateStringColumnFail)
+{
+  cudf::test::strings_column_wrapper input({"foo", "bar"});
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::NEGATE), cudf::logic_error);
+}
+
+TEST_F(UnaryNegateComplexTypesErrorTests, NegateListsColumnFail)
+{
+  cudf::test::lists_column_wrapper<int32_t> input{{1, 2}, {3, 4}};
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::NEGATE), cudf::logic_error);
+}
 
 template <typename T>
 struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {};
@@ -274,7 +337,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleTANH)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
-TYPED_TEST(UnaryMathFloatOpsTest, SimpleiASINH)
+TYPED_TEST(UnaryMathFloatOpsTest, SimpleASINH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};

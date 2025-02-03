@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,13 +77,13 @@ rmm::device_buffer decompress_stripe_data(
   range const& loaded_stripe_range,
   range const& stream_range,
   std::size_t num_decode_stripes,
-  cudf::detail::hostdevice_span<gpu::CompressedStreamInfo> compinfo,
+  cudf::detail::hostdevice_span<CompressedStreamInfo> compinfo,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
   host_span<orc_stream_info const> stream_info,
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-  cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
+  cudf::detail::hostdevice_2dvector<ColumnDesc>& chunks,
+  cudf::detail::hostdevice_2dvector<RowGroup>& row_groups,
   size_type row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
@@ -100,7 +100,7 @@ rmm::device_buffer decompress_stripe_data(
     auto const& info = stream_info[stream_idx];
 
     auto& stream_comp_info = compinfo[stream_idx - stream_range.begin];
-    stream_comp_info       = gpu::CompressedStreamInfo(
+    stream_comp_info       = CompressedStreamInfo(
       static_cast<uint8_t const*>(
         stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
@@ -120,11 +120,11 @@ rmm::device_buffer decompress_stripe_data(
 
   if (!compinfo_ready) {
     compinfo.host_to_device_async(stream);
-    gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                   compinfo.size(),
-                                   decompressor.GetBlockSize(),
-                                   decompressor.GetLog2MaxCompressionRatio(),
-                                   stream);
+    ParseCompressedStripeData(compinfo.device_ptr(),
+                              compinfo.size(),
+                              decompressor.GetBlockSize(),
+                              decompressor.GetLog2MaxCompressionRatio(),
+                              stream);
     compinfo.device_to_host_sync(stream);
 
     for (std::size_t i = 0; i < compinfo.size(); ++i) {
@@ -178,11 +178,11 @@ rmm::device_buffer decompress_stripe_data(
   }
 
   compinfo.host_to_device_async(stream);
-  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                 compinfo.size(),
-                                 decompressor.GetBlockSize(),
-                                 decompressor.GetLog2MaxCompressionRatio(),
-                                 stream);
+  ParseCompressedStripeData(compinfo.device_ptr(),
+                            compinfo.size(),
+                            decompressor.GetBlockSize(),
+                            decompressor.GetLog2MaxCompressionRatio(),
+                            stream);
 
   // Value for checking whether we decompress successfully.
   // It doesn't need to be atomic as there is no race condition: we only write `true` if needed.
@@ -275,7 +275,7 @@ rmm::device_buffer decompress_stripe_data(
   // Copy without stream sync, thus need to wait for stream sync below to access.
   any_block_failure.device_to_host_async(stream);
 
-  gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
+  PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
   compinfo.device_to_host_sync(stream);  // This also sync stream for `any_block_failure`.
 
   // We can check on host after stream synchronize
@@ -291,7 +291,7 @@ rmm::device_buffer decompress_stripe_data(
   for (std::size_t i = 0; i < num_decode_stripes; ++i) {
     for (std::size_t j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
-      for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
+      for (int k = 0; k < CI_NUM_STREAMS; ++k) {
         if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
           chunk.streams[k]  = compinfo[chunk.strm_id[k]].uncompressed_data;
           chunk.strm_len[k] = compinfo[chunk.strm_id[k]].max_uncompressed_size;
@@ -303,14 +303,14 @@ rmm::device_buffer decompress_stripe_data(
   if (row_groups.size().first) {
     chunks.host_to_device_async(stream);
     row_groups.host_to_device_async(stream);
-    gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
-                            compinfo.device_ptr(),
-                            chunks.base_device_ptr(),
-                            num_columns,
-                            num_decode_stripes,
-                            row_index_stride,
-                            use_base_stride,
-                            stream);
+    ParseRowGroupIndex(row_groups.base_device_ptr(),
+                       compinfo.device_ptr(),
+                       chunks.base_device_ptr(),
+                       num_columns,
+                       num_decode_stripes,
+                       row_index_stride,
+                       use_base_stride,
+                       stream);
   }
 
   return decomp_data;
@@ -329,7 +329,7 @@ rmm::device_buffer decompress_stripe_data(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource to use for device memory allocation
  */
-void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+void update_null_mask(cudf::detail::hostdevice_2dvector<ColumnDesc>& chunks,
                       host_span<column_buffer> out_buffers,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr)
@@ -419,8 +419,8 @@ void decode_stream_data(int64_t num_dicts,
                         size_type row_index_stride,
                         std::size_t level,
                         table_device_view const& d_tz_table,
-                        cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                        cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
+                        cudf::detail::hostdevice_2dvector<ColumnDesc>& chunks,
+                        cudf::detail::device_2dspan<RowGroup> row_groups,
                         std::vector<column_buffer>& out_buffers,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
@@ -441,10 +441,10 @@ void decode_stream_data(int64_t num_dicts,
   });
 
   // Allocate global dictionary for deserializing
-  rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
+  rmm::device_uvector<DictionaryEntry> global_dict(num_dicts, stream);
 
   chunks.host_to_device_async(stream);
-  gpu::DecodeNullsAndStringDictionaries(
+  DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
   if (level > 0) {
@@ -453,18 +453,18 @@ void decode_stream_data(int64_t num_dicts,
   }
 
   cudf::detail::device_scalar<size_type> error_count(0, stream);
-  gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
-                           global_dict.data(),
-                           row_groups,
-                           num_columns,
-                           num_stripes,
-                           skip_rows,
-                           d_tz_table,
-                           row_groups.size().first,
-                           row_index_stride,
-                           level,
-                           error_count.data(),
-                           stream);
+  DecodeOrcColumnData(chunks.base_device_ptr(),
+                      global_dict.data(),
+                      row_groups,
+                      num_columns,
+                      num_stripes,
+                      skip_rows,
+                      d_tz_table,
+                      row_groups.size().first,
+                      row_index_stride,
+                      level,
+                      error_count.data(),
+                      stream);
   chunks.device_to_host_async(stream);
   // `value` synchronizes
   auto const num_errors = error_count.value(stream);
@@ -485,7 +485,7 @@ void decode_stream_data(int64_t num_dicts,
  * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
  * layer.
  */
-void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+void scan_null_counts(cudf::detail::hostdevice_2dvector<ColumnDesc> const& chunks,
                       uint32_t* d_prefix_sums,
                       rmm::cuda_stream_view stream)
 {
@@ -531,9 +531,9 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
  * @brief Aggregate child metadata from parent column chunks.
  */
 void aggregate_child_meta(std::size_t level,
-                          cudf::io::orc::detail::column_hierarchy const& selected_columns,
-                          cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
-                          cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
+                          column_hierarchy const& selected_columns,
+                          cudf::detail::host_2dspan<ColumnDesc> chunks,
+                          cudf::detail::host_2dspan<RowGroup> row_groups,
                           host_span<orc_column_meta const> nested_cols,
                           host_span<column_buffer> out_buffers,
                           reader_column_meta& col_meta)
@@ -766,7 +766,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
   // Unfortunately we cannot create one hostdevice_vector to use for all levels because
   // currently we do not have a hostdevice_2dspan class.
-  std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks(num_levels);
+  std::vector<cudf::detail::hostdevice_2dvector<ColumnDesc>> lvl_chunks(num_levels);
 
   // For computing null count.
   auto null_count_prefix_sums = [&] {
@@ -787,7 +787,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   // thus only need to allocate memory once.
   auto hd_compinfo = [&] {
     std::size_t max_num_streams{0};
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+    if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       // Find the maximum number of streams in all levels of the decoding stripes.
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
@@ -795,7 +795,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
         max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
-    return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>{max_num_streams, _stream};
+    return cudf::detail::hostdevice_vector<CompressedStreamInfo>{max_num_streams, _stream};
   }();
 
   auto& col_meta = *_col_meta;
@@ -812,8 +812,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     auto& chunks      = lvl_chunks[level];
 
     auto const num_lvl_columns = columns_level.size();
-    chunks =
-      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_lvl_columns, _stream);
+    chunks = cudf::detail::hostdevice_2dvector<ColumnDesc>(stripe_count, num_lvl_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     bool const use_index =
@@ -897,7 +896,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
         // num_child_rows for a struct column will be same, for other nested types it will be
         // calculated.
-        chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
+        chunk.num_child_rows = (chunk.type_kind != STRUCT) ? 0 : chunk.num_rows;
         chunk.dtype_id       = column_types[col_idx].id();
         chunk.decimal_scale  = _metadata.per_file_metadata[stripe.source_idx]
                                 .ff.types[columns_level[col_idx].id]
@@ -912,11 +911,11 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
                                 : cudf::size_of(column_types[col_idx]);
         chunk.num_rowgroups = stripe_num_rowgroups;
 
-        if (chunk.type_kind == orc::TIMESTAMP) {
+        if (chunk.type_kind == TIMESTAMP) {
           chunk.timestamp_type_id = _options.timestamp_type.id();
         }
         if (not is_stripe_data_empty) {
-          for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+          for (int k = 0; k < CI_NUM_STREAMS; k++) {
             chunk.streams[k] =
               dst_base + stream_info[chunk.strm_id[k] + stream_range.begin].dst_pos;
           }
@@ -931,10 +930,10 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
     // Process dataset chunks into output columns.
     auto row_groups =
-      cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_lvl_columns, _stream);
+      cudf::detail::hostdevice_2dvector<RowGroup>(num_rowgroups, num_lvl_columns, _stream);
     if (level > 0 and row_groups.size().first) {
-      cudf::host_span<gpu::RowGroup> row_groups_span(row_groups.base_host_ptr(),
-                                                     num_rowgroups * num_lvl_columns);
+      cudf::host_span<RowGroup> row_groups_span(row_groups.base_host_ptr(),
+                                                num_rowgroups * num_lvl_columns);
       auto& rw_grp_meta = col_meta.rwgrp_meta;
 
       // Update start row and num rows per row group
@@ -950,9 +949,9 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     }
 
     // Setup row group descriptors if using indexes.
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+    if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       auto const compinfo =
-        cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>{hd_compinfo}.subspan(
+        cudf::detail::hostdevice_span<CompressedStreamInfo>{hd_compinfo}.subspan(
           0, stream_range.size());
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
@@ -979,14 +978,14 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
         chunks.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
-        gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
-                                nullptr,
-                                chunks.base_device_ptr(),
-                                num_lvl_columns,
-                                stripe_count,
-                                _metadata.get_row_index_stride(),
-                                level == 0,
-                                _stream);
+        ParseRowGroupIndex(row_groups.base_device_ptr(),
+                           nullptr,
+                           chunks.base_device_ptr(),
+                           num_lvl_columns,
+                           stripe_count,
+                           _metadata.get_row_index_stride(),
+                           level == 0,
+                           _stream);
       }
     }
 
@@ -995,7 +994,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < stripe_count; ++j) {
-        if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
+        if (chunks[j][i].strm_len[CI_PRESENT] != 0) {
           is_nullable = true;
           break;
         }

@@ -1,4 +1,4 @@
-# pylibcudf
+# Developer Documentation
 
 pylibcudf is a lightweight Cython wrapper around libcudf.
 It aims to provide a near-zero overhead interface to accessing libcudf in Python.
