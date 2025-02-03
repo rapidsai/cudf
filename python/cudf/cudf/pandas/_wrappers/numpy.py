@@ -149,7 +149,7 @@ ndarray = make_final_proxy_type(
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
         "base": _FastSlowAttribute("base", private=True),
-        "data": _FastSlowAttribute("data", private=True),
+        # "data": _FastSlowAttribute("data", private=True),
     },
 )
 
