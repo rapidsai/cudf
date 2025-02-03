@@ -292,7 +292,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata const metadata(source.get(), stream);
+  orc::detail::metadata const metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;
@@ -318,7 +318,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
   return result;
 }
 
-column_statistics::column_statistics(orc::column_statistics&& cs)
+column_statistics::column_statistics(orc::detail::column_statistics&& cs)
 {
   number_of_values = cs.number_of_values;
   has_null         = cs.has_null;
@@ -350,9 +350,9 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
   result.column_names = raw_stats.column_names;
 
   auto parse_column_statistics = [](auto const& raw_col_stats) {
-    orc::column_statistics stats_internal;
-    orc::ProtobufReader(reinterpret_cast<uint8_t const*>(raw_col_stats.c_str()),
-                        raw_col_stats.size())
+    orc::detail::column_statistics stats_internal;
+    orc::detail::ProtobufReader(reinterpret_cast<uint8_t const*>(raw_col_stats.c_str()),
+                                raw_col_stats.size())
       .read(stats_internal);
     return column_statistics(std::move(stats_internal));
   };
@@ -373,7 +373,7 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
   return result;
 }
 namespace {
-orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_schema,
+orc_column_schema make_orc_column_schema(host_span<orc::detail::SchemaType const> orc_schema,
                                          uint32_t column_id,
                                          std::string column_name)
 {
@@ -400,7 +400,7 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
   auto sources = make_datasources(src_info);
 
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  auto const footer = orc::metadata(sources.front().get(), stream).ff;
+  auto const footer = orc::detail::metadata(sources.front().get(), stream).ff;
 
   return {{make_orc_column_schema(footer.types, 0, "")},
           footer.numberOfRows,

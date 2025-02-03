@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "io/comp/io_uncomp.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -34,9 +32,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
 static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
@@ -710,6 +706,4 @@ struct rowgroup_rows {
   [[nodiscard]] CUDF_HOST_DEVICE constexpr auto size() const noexcept { return end - begin; }
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail
