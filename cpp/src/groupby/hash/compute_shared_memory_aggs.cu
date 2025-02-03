@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,15 +35,6 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
-/// Functor used by type dispatcher returning the size of the underlying C++ type
-struct size_of_functor {
-  template <typename T>
-  __device__ constexpr cudf::size_type operator()()
-  {
-    return sizeof(T);
-  }
-};
-
 /// Shared memory data alignment
 CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
 

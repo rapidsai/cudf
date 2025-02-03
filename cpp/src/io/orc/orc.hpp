@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
  */
 
 #pragma once
-
-#include "io/comp/io_uncomp.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
@@ -34,9 +32,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
 static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
@@ -707,9 +703,7 @@ struct orc_column_device_view : public column_device_view {
 struct rowgroup_rows {
   size_type begin;
   size_type end;
-  [[nodiscard]] constexpr auto size() const noexcept { return end - begin; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto size() const noexcept { return end - begin; }
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

@@ -18,6 +18,7 @@ import cudf
 from cudf._lib.column import Column
 from cudf.api.types import is_hashable, is_scalar
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -262,8 +263,8 @@ def read_csv(
             strict=True,
         )
     }
-
-    df = cudf.DataFrame._from_data(data)
+    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
+    df = cudf.DataFrame._from_data(ca)
 
     if isinstance(dtype, abc.Mapping):
         for k, v in dtype.items():

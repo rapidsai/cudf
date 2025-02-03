@@ -22,13 +22,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/array>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::detail {
 
 struct comp_in_out {
   uint8_t const* in_ptr{};
@@ -243,9 +241,9 @@ enum row_entry_state_e {
  */
 static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
 {
-  constexpr std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
+  constexpr cuda::std::array full_order = {CI_PRESENT, CI_DATA, CI_DATA2};
 
-  std::array<uint32_t, full_order.size()> partial_order;
+  cuda::std::array<uint32_t, full_order.size()> partial_order;
   thrust::copy_if(thrust::seq,
                   full_order.cbegin(),
                   full_order.cend(),
@@ -604,7 +602,4 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
     <<<num_blocks, block_size, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

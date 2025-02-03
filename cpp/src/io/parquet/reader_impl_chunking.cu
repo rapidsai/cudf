@@ -1087,7 +1087,7 @@ struct decomp_sum {
   {
     return {a.codec,
             a.num_pages + b.num_pages,
-            std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
+            cuda::std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
             a.total_decompressed_size + b.total_decompressed_size};
   }
 };

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import io
@@ -951,7 +951,7 @@ def _normalize_filters(filters: list | None) -> list[list[tuple]] | None:
     def _validate_predicate(item):
         if not isinstance(item, tuple) or len(item) != 3:
             raise TypeError(
-                f"Predicate must be Tuple[str, str, Any], " f"got {predicate}."
+                f"Predicate must be Tuple[str, str, Any], got {predicate}."
             )
 
     filters = filters if isinstance(filters[0], list) else [filters]

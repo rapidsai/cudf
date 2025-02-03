@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/comp/gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -34,15 +33,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/limits>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
 using cudf::io::detail::compression_result;
@@ -413,8 +410,8 @@ static __device__ uint32_t IntegerRLE(
     // Find minimum and maximum values
     if (literal_run > 0) {
       // Find min & max
-      T vmin = (t < literal_run) ? v0 : std::numeric_limits<T>::max();
-      T vmax = (t < literal_run) ? v0 : std::numeric_limits<T>::min();
+      T vmin = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::max();
+      T vmax = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
       vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
       __syncthreads();
@@ -448,7 +445,7 @@ static __device__ uint32_t IntegerRLE(
         } else {
           uint32_t range, w;
           // Mode 2 base value cannot be bigger than max int64_t, i.e. the first bit has to be 0
-          if (vmin <= std::numeric_limits<int64_t>::max() and mode1_w > mode2_w and
+          if (vmin <= cuda::std::numeric_limits<int64_t>::max() and mode1_w > mode2_w and
               (literal_run - 1) * (mode1_w - mode2_w) > 4) {
             s->u.intrle.literal_mode = 2;
             w                        = mode2_w;
@@ -1420,7 +1417,4 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
     <<<num_blocks, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

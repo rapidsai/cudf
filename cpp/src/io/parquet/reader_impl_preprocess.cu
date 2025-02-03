@@ -655,7 +655,7 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
-constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 {
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
@@ -1291,7 +1291,9 @@ void reader::impl::preprocess_file(read_mode mode)
   std::tie(_file_itm_data.global_skip_rows,
            _file_itm_data.global_num_rows,
            _file_itm_data.row_groups,
-           _file_itm_data.num_rows_per_source) =
+           _file_itm_data.num_rows_per_source,
+           _file_itm_data.num_input_row_groups,
+           _file_itm_data.surviving_row_groups) =
     _metadata->select_row_groups(_sources,
                                  _options.row_group_indices,
                                  _options.skip_rows,
