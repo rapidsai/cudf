@@ -1927,3 +1927,12 @@ def test_series_dtype_property():
     expected = np.dtype(s)
     actual = np.dtype(xs)
     assert expected == actual
+
+
+def test_numpy_data_access():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = s.values.data
+    actual = xs.values.data
+
+    assert type(expected) is type(actual)
