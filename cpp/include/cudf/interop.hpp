@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "nanoarrow/nanoarrow_device.h"
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table.hpp>
@@ -24,6 +25,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <utility>
 
@@ -117,6 +120,47 @@ struct column_metadata {
   column_metadata(std::string _name) : name(std::move(_name)) {}
   column_metadata() = default;
 };
+
+struct arrow_column_container;
+
+class arrow_column {
+ public:
+  arrow_column(ArrowSchema const* schema,
+               ArrowDeviceArray* input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  arrow_column(ArrowSchema const* schema,
+               ArrowArray* input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  arrow_column(cudf::column&& input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  void to_arrow(ArrowDeviceArray* output,
+          ArrowDeviceType device_type = ARROW_DEVICE_CUDA,
+          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+ private:
+  // Using a shared_ptr allows re-export via to_arrow
+  std::shared_ptr<arrow_column_container> container;
+};
+
+// class arrow_table {
+//  public:
+//   arrow_table(ArrowSchema const* schema,ArrowDeviceArray* input,
+//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+//   arrow_table(ArrowSchema const* schema,ArrowArray* input,
+//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+//   arrow_table(ArrowSchema const* schema,cudf::table&& input,
+//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+//  private:
+//   // Using a shared_ptr allows re-export via to_arrow
+//   std::shared_ptr<arrow_array_container> container;
+// };
 
 /**
  * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
