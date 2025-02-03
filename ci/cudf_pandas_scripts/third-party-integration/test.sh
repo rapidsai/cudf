@@ -11,7 +11,6 @@ extract_lib_from_dependencies_yaml() {
     # Parse all keys in dependencies.yaml under the "files" section,
     # extract all the keys that start with "test_", and extract the rest
     extracted_libs="$(yq -o json "$file" | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
-    local extracted_libs
     echo "$extracted_libs"
 }
 

@@ -41,6 +41,16 @@ _unit_to_nanoseconds_conversion = {
 }
 
 
+@functools.cache
+def get_np_td_unit_conversion(
+    reso: str, dtype: None | np.dtype
+) -> np.timedelta64:
+    td = np.timedelta64(_unit_to_nanoseconds_conversion[reso], "ns")
+    if dtype is not None:
+        return td.astype(dtype)
+    return td
+
+
 class TimeDeltaColumn(ColumnBase):
     """
     Parameters
@@ -483,74 +493,33 @@ class TimeDeltaColumn(ColumnBase):
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """
-
         date_meta = {
+            "hours": ["D", "h"],
+            "minutes": ["h", "m"],
             "seconds": ["m", "s"],
             "milliseconds": ["s", "ms"],
             "microseconds": ["ms", "us"],
             "nanoseconds": ["us", "ns"],
         }
-        data = {
-            "days": self
-            // cudf.Scalar(
-                np.timedelta64(
-                    _unit_to_nanoseconds_conversion["D"], "ns"
-                ).astype(self.dtype)
-            ),
-            "hours": (
-                self
-                % cudf.Scalar(
-                    np.timedelta64(
-                        _unit_to_nanoseconds_conversion["D"], "ns"
-                    ).astype(self.dtype)
+        data = {"days": self // get_np_td_unit_conversion("D", self.dtype)}
+        reached_self_unit = False
+        for result_key, (mod_unit, div_unit) in date_meta.items():
+            if not reached_self_unit:
+                res_col = (
+                    self % get_np_td_unit_conversion(mod_unit, self.dtype)
+                ) // get_np_td_unit_conversion(div_unit, self.dtype)
+                reached_self_unit = self.time_unit == div_unit
+            else:
+                res_col = column.as_column(
+                    0, length=len(self), dtype=np.dtype(np.int64)
                 )
-            )
-            // cudf.Scalar(
-                np.timedelta64(
-                    _unit_to_nanoseconds_conversion["h"], "ns"
-                ).astype(self.dtype)
-            ),
-            "minutes": (
-                self
-                % cudf.Scalar(
-                    np.timedelta64(
-                        _unit_to_nanoseconds_conversion["h"], "ns"
-                    ).astype(self.dtype)
-                )
-            )
-            // cudf.Scalar(
-                np.timedelta64(
-                    _unit_to_nanoseconds_conversion["m"], "ns"
-                ).astype(self.dtype)
-            ),
-        }
-        keys_list = iter(date_meta.keys())
-        for name in keys_list:
-            value = date_meta[name]
-            data[name] = (
-                self
-                % cudf.Scalar(
-                    np.timedelta64(
-                        _unit_to_nanoseconds_conversion[value[0]], "ns"
-                    ).astype(self.dtype)
-                )
-            ) // cudf.Scalar(
-                np.timedelta64(
-                    _unit_to_nanoseconds_conversion[value[1]], "ns"
-                ).astype(self.dtype)
-            )
-            if self.time_unit == value[1]:
-                break
-
-        for name in keys_list:
-            res_col = column.as_column(0, length=len(self), dtype="int64")
-            if self.nullable:
-                res_col = res_col.set_mask(self.mask)
-            data[name] = res_col
+                if self.nullable:
+                    res_col = res_col.set_mask(self.mask)
+            data[result_key] = res_col
         return data
 
     @property
-    def days(self) -> "cudf.core.column.NumericalColumn":
+    def days(self) -> cudf.core.column.NumericalColumn:
         """
         Number of days for each element.
 
@@ -558,14 +527,10 @@ class TimeDeltaColumn(ColumnBase):
         -------
         NumericalColumn
         """
-        return self // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns").astype(
-                self.dtype
-            )
-        )
+        return self // get_np_td_unit_conversion("D", self.dtype)
 
     @property
-    def seconds(self) -> "cudf.core.column.NumericalColumn":
+    def seconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of seconds (>= 0 and less than 1 day).
 
@@ -579,18 +544,11 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of seconds.
 
         return (
-            self
-            % cudf.Scalar(
-                np.timedelta64(
-                    _unit_to_nanoseconds_conversion["D"], "ns"
-                ).astype(self.dtype)
-            )
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
-        )
+            self % get_np_td_unit_conversion("D", self.dtype)
+        ) // get_np_td_unit_conversion("s", None)
 
     @property
-    def microseconds(self) -> "cudf.core.column.NumericalColumn":
+    def microseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of microseconds (>= 0 and less than 1 second).
 
@@ -604,16 +562,11 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of microseconds.
 
         return (
-            self
-            % np.timedelta64(
-                _unit_to_nanoseconds_conversion["s"], "ns"
-            ).astype(self.dtype)
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
-        )
+            self % get_np_td_unit_conversion("s", self.dtype)
+        ) // get_np_td_unit_conversion("us", None)
 
     @property
-    def nanoseconds(self) -> "cudf.core.column.NumericalColumn":
+    def nanoseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
 
@@ -633,13 +586,8 @@ class TimeDeltaColumn(ColumnBase):
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)
         return (
-            self
-            % cudf.Scalar(
-                np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
-            )
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
-        )
+            self % get_np_td_unit_conversion("us", None)
+        ) // get_np_td_unit_conversion("ns", None)
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:

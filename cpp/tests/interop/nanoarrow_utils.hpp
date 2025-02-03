@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -218,6 +219,24 @@ DEFINE_NANOARROW_STORAGE(__int128_t, DECIMAL128);
 #undef DEFINE_NANOARROW_STORAGE
 
 template <typename T>
+struct nanoarrow_decimal_type {};
+
+template <>
+struct nanoarrow_decimal_type<int32_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL32;
+};
+
+template <>
+struct nanoarrow_decimal_type<int64_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL64;
+};
+
+template <>
+struct nanoarrow_decimal_type<__int128_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL128;
+};
+
+template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, nanoarrow::UniqueArray>
 get_nanoarrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {
@@ -384,3 +403,16 @@ std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::Uni
 get_nanoarrow_host_tables(cudf::size_type length);
 
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end);
+
+template <typename T>
+std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
+                                    std::is_same<T, int64_t>,
+                                    std::is_same<T, __int128_t>>,
+                 std::size_t>
+get_decimal_precision()
+{
+  if constexpr (std::is_same_v<T, int64_t>)
+    return 18;
+  else
+    return cudf::detail::max_precision<T>();
+}
