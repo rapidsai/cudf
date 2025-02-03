@@ -27,7 +27,7 @@ main() {
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
 
-        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
+        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
 

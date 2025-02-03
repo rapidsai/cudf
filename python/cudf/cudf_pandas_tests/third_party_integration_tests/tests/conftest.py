@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -75,6 +75,16 @@ def pytest_collection_modifyitems(
             swap_xfail(item, "xfail_compare")
 
 
+def get_full_nodeid(pyfuncitem):
+    # Get the full path to the test file
+    filepath = pyfuncitem.path
+    # Get the test name and any parameters
+    test_name = "::".join(pyfuncitem.nodeid.split("::")[1:])
+    # Combine the full file path with the test name
+    full_nodeid = f"{filepath}::{test_name}"
+    return full_nodeid
+
+
 def pytest_configure(config: _pytest.config.Config):
     gold_basename = "results-gold"
     cudf_basename = "results-cudf-pandas"
@@ -91,7 +101,9 @@ def pytest_configure(config: _pytest.config.Config):
             cudf_results = dict(read_results(f))
         config.stash[results] = (gold_results, cudf_results)
     else:
-        if "cudf.pandas" in config.option.plugins:
+        # Strip whitespace from each plugin name before checking
+        plugins = [plugin.strip() for plugin in config.option.plugins]
+        if "cudf.pandas" in plugins:
             basename = cudf_basename
         else:
             basename = gold_basename
@@ -112,7 +124,7 @@ def pytest_configure(config: _pytest.config.Config):
 def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
     if pyfuncitem.config.getoption("--compare"):
         gold_results, cudf_results = pyfuncitem.config.stash[results]
-        key = pyfuncitem.nodeid
+        key = get_full_nodeid(pyfuncitem)
         try:
             gold = gold_results[key]
         except KeyError:
@@ -140,7 +152,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         # Tuple-based key-value pairs, key is the node-id
         try:
             pickle.dump(
-                (pyfuncitem.nodeid, result),
+                (get_full_nodeid(pyfuncitem), result),
                 pyfuncitem.config.stash[file_handle_key],
             )
         except pickle.PicklingError:
