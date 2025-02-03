@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import os
 import pickle
 from typing import TYPE_CHECKING, BinaryIO
@@ -85,25 +86,30 @@ def get_full_nodeid(pyfuncitem):
     return full_nodeid
 
 
+def read_all_results(pattern):
+    results = {}
+    for filepath in glob.glob(pattern):
+        with open(filepath, "rb") as f:
+            results.update(dict(read_results(f)))
+    return results
+
+
 def pytest_configure(config: _pytest.config.Config):
     gold_basename = "results-gold"
     cudf_basename = "results-cudf-pandas"
     test_folder = os.path.join(os.path.dirname(__file__))
 
     if config.getoption("--compare"):
-        # Everyone reads everything
-        gold_path = os.path.join(test_folder, f"{gold_basename}.pickle")
-        cudf_path = os.path.join(test_folder, f"{cudf_basename}.pickle")
+        gold_path = os.path.join(test_folder, f"{gold_basename}*.pickle")
+        cudf_path = os.path.join(test_folder, f"{cudf_basename}*.pickle")
         with disable_module_accelerator():
-            with open(gold_path, "rb") as f:
-                gold_results = dict(read_results(f))
-        with open(cudf_path, "rb") as f:
-            cudf_results = dict(read_results(f))
+            gold_results = read_all_results(gold_path)
+        cudf_results = read_all_results(cudf_path)
         config.stash[results] = (gold_results, cudf_results)
     else:
-        # Strip whitespace from each plugin name before checking
-        plugins = [plugin.strip() for plugin in config.option.plugins]
-        if "cudf.pandas" in plugins:
+        if any(
+            plugin.strip() == "cudf.pandas" for plugin in config.option.plugins
+        ):
             basename = cudf_basename
         else:
             basename = gold_basename

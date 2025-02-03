@@ -27,7 +27,7 @@ main() {
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
 
-        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
+        CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
 
@@ -36,7 +36,7 @@ main() {
           --config "$dependencies_yaml" \
           --output conda \
           --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_MAJOR};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+          --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
