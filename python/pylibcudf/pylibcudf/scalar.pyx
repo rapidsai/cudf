@@ -1,21 +1,27 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cpython cimport bool as py_bool
+from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
 from libc.stdint cimport int64_t
+from libc.time cimport tm, mktime, time_t
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     numeric_scalar,
+    timestamp_scalar,
+    time_point,
+    system_clock,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
     make_numeric_scalar,
     make_string_scalar,
+    make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
+from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
 
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
@@ -24,6 +30,22 @@ from .column cimport Column
 from .types cimport DataType
 
 __all__ = ["Scalar"]
+
+
+cdef time_point _datetime_to_time_point(datetime.datetime dt):
+    if dt.tzinfo is not None:
+        raise NotImplementedError("datetimes with timezones are not supported.")
+    if dt.microsecond != 0:
+        raise NotImplementedError("Non-zero mircoseconds are not supported.")
+    cdef tm time_struct
+    time_struct.tm_year = dt.year - 1900
+    time_struct.tm_mon = dt.month - 1
+    time_struct.tm_mday = dt.day
+    time_struct.tm_hour = dt.hour
+    time_struct.tm_min = dt.minute
+    time_struct.tm_sec = dt.second
+    cdef time_t time = mktime(&time_struct)
+    return system_clock.from_time_t(time)
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -97,6 +119,7 @@ cdef class Scalar:
         """Convert a Python standard library object to a Scalar.
         """
         cdef DataType dtype
+        cdef time_point tp
         if isinstance(py_val, py_bool):
             dtype = DataType(type_id.BOOL8)
             c_val = make_numeric_scalar(dtype.c_obj)
@@ -112,6 +135,11 @@ cdef class Scalar:
         elif isinstance(py_val, str):
             dtype = DataType(type_id.STRING)
             c_val = make_string_scalar(py_val.encode())
+        elif isinstance(py_val, datetime.datetime):
+            dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+            c_val = make_timestamp_scalar(dtype.c_obj)
+            tp = _datetime_to_time_point(py_val)
+            (<timestamp_scalar[timestamp_us]*>c_val.get()).set_value(tp)
         else:
             raise NotImplementedError(f"{type(py_val).__name__} is not supported.")
 

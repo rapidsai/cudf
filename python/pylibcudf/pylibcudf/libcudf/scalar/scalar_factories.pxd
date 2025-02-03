@@ -17,6 +17,9 @@ cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[scalar] make_numeric_scalar(
         data_type type_
     ) except +libcudf_exception_handler
+    cdef unique_ptr[scalar] make_timestamp_scalar(
+        data_type type_
+    ) except +libcudf_exception_handler
     cdef unique_ptr[scalar] make_empty_scalar_like(
         const column_view &
     ) except +libcudf_exception_handler
