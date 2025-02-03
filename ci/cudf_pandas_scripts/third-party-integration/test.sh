@@ -11,7 +11,6 @@ extract_lib_from_dependencies_yaml() {
     # Parse all keys in dependencies.yaml under the "files" section,
     # extract all the keys that start with "test_", and extract the rest
     extracted_libs="$(yq -o json "$file" | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
-    local extracted_libs
     echo "$extracted_libs"
 }
 
@@ -28,7 +27,7 @@ main() {
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
 
-        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
+        CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
 
@@ -37,7 +36,7 @@ main() {
           --config "$dependencies_yaml" \
           --output conda \
           --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_MAJOR};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+          --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 

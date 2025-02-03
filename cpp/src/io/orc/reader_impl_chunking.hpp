@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,15 +307,15 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
 std::size_t gather_stream_info_and_column_desc(
   std::size_t stripe_id,
   std::size_t level,
-  orc::StripeInformation const* stripeinfo,
-  orc::StripeFooter const* stripefooter,
+  StripeInformation const* stripeinfo,
+  StripeFooter const* stripefooter,
   host_span<int const> orc2gdf,
-  host_span<orc::SchemaType const> types,
+  host_span<SchemaType const> types,
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
   std::vector<orc_stream_info>* stream_info,
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>* chunks);
+  cudf::detail::hostdevice_2dvector<ColumnDesc>* chunks);
 
 }  // namespace cudf::io::orc::detail

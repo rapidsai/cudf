@@ -15,6 +15,7 @@
  */
 
 #include "io/utilities/block_utils.cuh"
+#include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
 
 #include <cudf/io/orc_types.hpp>
@@ -23,10 +24,7 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::detail {
 
 using cudf::io::detail::string_index_pair;
 
@@ -2096,7 +2094,4 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

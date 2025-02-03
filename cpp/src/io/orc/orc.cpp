@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include "orc.hpp"
 
+#include "io/comp/io_uncomp.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
@@ -25,7 +26,7 @@
 
 #include <string>
 
-namespace cudf::io::orc {
+namespace cudf::io::orc::detail {
 
 namespace {
 [[nodiscard]] constexpr uint32_t varint_size(uint64_t val)
@@ -496,7 +497,7 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
   auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
-  orc::ProtobufReader(md_data.data(), md_data.size()).read(md);
+  ProtobufReader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();
   init_column_names();
@@ -546,4 +547,4 @@ void metadata::init_parent_descriptors()
   }
 }
 
-}  // namespace cudf::io::orc
+}  // namespace cudf::io::orc::detail
