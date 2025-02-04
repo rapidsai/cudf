@@ -356,6 +356,15 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  test_python_narwhals:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - run_cudf_polars
+      - test_python_common
+      - test_python_cudf_common
+      - test_python_cudf
 channels:
   - rapidsai
   - rapidsai-nightly
