@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition Dask execution."""
 
@@ -10,7 +10,8 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.io
-import cudf_polars.experimental.select  # noqa: F401
+import cudf_polars.experimental.select
+import cudf_polars.experimental.shuffle  # noqa: F401
 from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name

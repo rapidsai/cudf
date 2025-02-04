@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.np import numpy_support
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -24,8 +23,8 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
-from cudf.utils import cudautils
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     find_common_type,
     min_column_type,
     min_signed_type,
@@ -33,7 +32,7 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -44,13 +43,6 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
-
-_unaryop_map = {
-    "ASIN": "ARCSIN",
-    "ACOS": "ARCCOS",
-    "ATAN": "ARCTAN",
-    "INVERT": "BIT_INVERT",
-}
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -149,7 +141,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value: cudf.Scalar | ColumnBase = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -160,12 +152,17 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
+        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
-            device_value = device_value.astype(self.dtype)
+            value_normalized = value_normalized.astype(self.dtype)
 
         out: ColumnBase | None  # If None, no need to perform mimic inplace.
+        device_value = (
+            value_normalized.device_value
+            if isinstance(value_normalized, cudf.Scalar)
+            else value_normalized
+        )
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
@@ -191,24 +188,6 @@ class NumericalColumn(NumericalBaseColumn):
             True,
         )
         return type(self).from_pylibcudf(plc_column)
-
-    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
-        if callable(unaryop):
-            nb_type = numpy_support.from_dtype(self.dtype)
-            nb_signature = (nb_type,)
-            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
-            np_dtype = np.dtype(compiled_op[1])
-            return self.transform(compiled_op, np_dtype)
-
-        unaryop = unaryop.upper()
-        unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = plc.unary.UnaryOperator[unaryop]
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.unary.unary_operation(
-                    self.to_pylibcudf(mode="read"), unaryop
-                )
-            )
 
     def __invert__(self):
         if self.dtype.kind in "ui":
@@ -287,13 +266,13 @@ class NumericalColumn(NumericalBaseColumn):
                     and tmp.dtype.kind != "b"
                 ):
                     if isinstance(tmp, NumericalColumn) and 0 in tmp:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
                     elif isinstance(tmp, cudf.Scalar):
                         if tmp.is_valid() and tmp == 0:
                             # tmp == 0 can return NA
-                            out_dtype = cudf.dtype("float64")
+                            out_dtype = np.dtype(np.float64)
                     elif is_scalar(tmp) and tmp == 0:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other.dtype.kind == "f":
@@ -384,7 +363,7 @@ class NumericalColumn(NumericalBaseColumn):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
@@ -408,7 +387,7 @@ class NumericalColumn(NumericalBaseColumn):
         self, dtype: Dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
-            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -419,7 +398,7 @@ class NumericalColumn(NumericalBaseColumn):
         self, dtype: Dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
-            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -430,7 +409,6 @@ class NumericalColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]

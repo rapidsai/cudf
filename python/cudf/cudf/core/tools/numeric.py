@@ -125,7 +125,7 @@ def to_numeric(
     dtype = col.dtype
 
     if dtype.kind in "mM":
-        col = col.astype(cudf.dtype("int64"))
+        col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
@@ -158,15 +158,15 @@ def to_numeric(
         raise ValueError("Unrecognized datatype")
 
     # str->float conversion may require lower precision
-    if col.dtype == cudf.dtype("float32"):
-        col = col.astype("float64")
+    if col.dtype == np.dtype(np.float32):
+        col = col.astype(np.dtype(np.float64))
 
     if downcast:
         if downcast == "float":
             # we support only float32 & float64
             type_set = [
-                cudf.dtype(np.float32).char,
-                cudf.dtype(np.float64).char,
+                np.dtype(np.float32).char,
+                np.dtype(np.float64).char,
             ]
         elif downcast in ("integer", "signed"):
             type_set = list(np.typecodes["Integer"])
@@ -222,7 +222,7 @@ def _convert_str_col(
         raise TypeError("col must be string dtype.")
 
     if col.is_integer().all():
-        return col.astype(dtype=cudf.dtype("i8"))  # type: ignore[return-value]
+        return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
@@ -244,9 +244,9 @@ def _convert_str_col(
                     "limited by float32 precision."
                 )
             )
-            return converted_col.astype(dtype=cudf.dtype("float32"))  # type: ignore[return-value]
+            return converted_col.astype(dtype=np.dtype(np.float32))  # type: ignore[return-value]
         else:
-            return converted_col.astype(dtype=cudf.dtype("float64"))  # type: ignore[return-value]
+            return converted_col.astype(dtype=np.dtype(np.float64))  # type: ignore[return-value]
     else:
         if errors == "coerce":
             non_numerics = is_float.unary_operator("not")
