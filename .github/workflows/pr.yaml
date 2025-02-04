@@ -120,16 +120,6 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
-        test_spark:
-          - '**'
-          - '!.devcontainer/**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!ci/cudf_pandas_scripts/**'
-          - '!docs/**'
-          - '!img/**'
-          - '!notebooks/**'
-          - '!python/**'
   checks:
     secrets: inherit
     needs: telemetry-setup
@@ -355,7 +345,7 @@ jobs:
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_spark
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
