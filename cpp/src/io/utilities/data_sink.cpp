@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "file_io_utilities.hpp"
-
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/logger.hpp>
@@ -35,9 +33,9 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
-    detail::force_init_cuda_context();
     kvikio_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "w");
+    CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
                   _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
   }
@@ -60,7 +58,7 @@ class file_sink : public data_sink {
 
   size_t bytes_written() override { return _bytes_written; }
 
-  [[nodiscard]] bool supports_device_write() const override { return !_kvikio_file.closed(); }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {

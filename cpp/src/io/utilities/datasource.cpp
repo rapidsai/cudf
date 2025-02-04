@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "file_io_utilities.hpp"
 #include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -51,9 +50,9 @@ class file_source : public datasource {
  public:
   explicit file_source(char const* filepath)
   {
-    detail::force_init_cuda_context();
     kvikio_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "r");
+    CUDF_EXPECTS(_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
                   _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
   }
@@ -61,7 +60,7 @@ class file_source : public datasource {
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, _kvikio_file.nbytes() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
     std::vector<uint8_t> v(read_size);
     CUDF_EXPECTS(_kvikio_file.pread(v.data(), read_size, offset).get() == read_size, "read failed");
     return buffer::create(std::move(v));
@@ -70,14 +69,14 @@ class file_source : public datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, _kvikio_file.nbytes() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
     CUDF_EXPECTS(_kvikio_file.pread(dst, read_size, offset).get() == read_size, "read failed");
     return read_size;
   }
 
   ~file_source() override = default;
 
-  [[nodiscard]] bool supports_device_read() const override { return !_kvikio_file.closed(); }
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
@@ -91,7 +90,7 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    auto const read_size = std::min(size, _kvikio_file.nbytes() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
     return _kvikio_file.pread(dst, read_size, offset);
   }
 
@@ -131,7 +130,7 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : file_source(filepath)
   {
-    if (_kvikio_file.nbytes() != 0) {
+    if (size() != 0) {
       // Memory mapping is not exclusive, so we can include the whole region we expect to read
       map(_kvikio_file.fd(), offset, max_size_estimate);
     }
@@ -145,7 +144,7 @@ class memory_mapped_source : public file_source {
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_kvikio_file.nbytes() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -169,7 +168,7 @@ class memory_mapped_source : public file_source {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_kvikio_file.nbytes() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -184,14 +183,12 @@ class memory_mapped_source : public file_source {
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    CUDF_EXPECTS(offset < _kvikio_file.nbytes(), "Offset is past end of file", std::overflow_error);
+    CUDF_EXPECTS(offset < this->size(), "Offset is past end of file", std::overflow_error);
 
     // Offset for `mmap()` must be page aligned
     _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
-    if (size == 0 || (offset + size) > _kvikio_file.nbytes()) {
-      size = _kvikio_file.nbytes() - offset;
-    }
+    if (size == 0 || (offset + size) > this->size()) { size = this->size() - offset; }
 
     // Size for `mmap()` needs to include the page padding
     _map_size = size + (offset - _map_offset);

@@ -88,9 +88,7 @@ I/O features, such as parallel I/O operations and Nvidia Magnum IO GPUDirect Sto
 Many IO APIs can use Magnum IO GPUDirect Storage (GDS) library to optimize
 IO operations.  GDS enables a direct data path for direct memory access
 (DMA) transfers between GPU memory and storage, which avoids a bounce
-buffer through the CPU.  GDS also has a compatibility mode that allows
-the library to fall back to copying through a CPU bounce buffer. The
-SDK is available for download
+buffer through the CPU. The SDK is available for download
 [here](https://developer.nvidia.com/gpudirect-storage). GDS is also
 included in CUDA Toolkit 11.4 and higher.
 
@@ -102,7 +100,7 @@ Use of GDS in cuDF is controlled by KvikIO's environment variable `KVIKIO_COMPAT
 - `OFF` (aliases: `FALSE`, `NO`, `0`): Force-enable KvikIO cuFile (the underlying API for GDS) I/O path.
   GDS will be activated if the system requirements for cuFile are met and cuFile is properly
   configured. However, if the system is not suited for cuFile, I/O operations under the `OFF`
-  option may error out, crash or hang.
+  option may error out.
 - `AUTO`: Try KvikIO cuFile I/O path first, and fall back to KvikIO POSIX I/O if the system requirements
   for cuFile are not met.
 
