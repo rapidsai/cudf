@@ -1740,6 +1740,7 @@ def _unpickle_obj(pickled_args):
 _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
+_original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
 
 
 def wrap_init(original_init):
@@ -1763,6 +1764,16 @@ def wrap_init(original_init):
         original_init(self, data, *args, **kwargs)
 
     return wrapped_init
+
+
+def wrap_call(original_call):
+    @functools.wraps(original_call)
+    def wrapped_call(cls, data, *args, **kwargs):
+        if is_proxy_object(data):
+            data = data.as_gpu_object()
+        return original_call(cls, data, *args, **kwargs)
+
+    return wrapped_call
 
 
 @functools.wraps(_original_DataFrame_init)
@@ -1799,6 +1810,7 @@ def initial_setup():
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
+    cudf.core.index.IndexMeta.__call__ = wrap_call(_original_IndexMeta_call)
 
     cudf.set_option("mode.pandas_compatible", True)
 
