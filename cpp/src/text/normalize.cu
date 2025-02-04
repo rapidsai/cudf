@@ -390,8 +390,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
 {
   uint32_t replacement[MAX_NEW_CHARS] = {0};
 
-  auto const idx       = cudf::detail::grid_1d::global_thread_id();
-  int8_t num_new_bytes = 0;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
 
   if ((idx < total_bytes) && cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) {
     auto const cp = [utf8 = d_chars + idx] {
@@ -424,9 +423,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
       // convert codepoints back to UTF-8 in-place
       for (int k = 0; k < num_new_chars; ++k) {
         auto const new_cp = replacement[k];
-        if (new_cp) {
-          num_new_bytes += cp_to_utf8(new_cp, reinterpret_cast<char*>(replacement + k));
-        }
+        if (new_cp) { cp_to_utf8(new_cp, reinterpret_cast<char*>(replacement + k)); }
       }
     }
   }
@@ -450,6 +447,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
  * @param offset Only non-zero if the input column has been sliced
  * @param size The number of output rows (sames as the number of input rows)
  * @param stream Stream used for allocating device memory and launching kernels
+ * @return The sizes of each output row
  */
 template <typename OffsetType>
 rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t const> d_normalized,
