@@ -148,10 +148,23 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
 
 TEST_F(TextNormalizeTest, WithNormalizer)
 {
-  // These include punctuation, accents, whitespace, and CJK characters
-  auto input = cudf::test::strings_column_wrapper(
-    {"abc£def", "", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟", ""},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto long_row =
+    "this entry is intended to pad out past 256 bytes which is currently the block size";
+  // the following include punctuation, accents, whitespace, and CJK characters
+  auto input = cudf::test::strings_column_wrapper({"abc£def",
+                                                   "",
+                                                   "éè â îô\taeio",
+                                                   "\tĂĆĖÑ  Ü",
+                                                   "ACEN U",
+                                                   "P^NP",
+                                                   "$41.07",
+                                                   "[a,b]",
+                                                   "丏丟",
+                                                   "",
+                                                   long_row,
+                                                   long_row,
+                                                   long_row},
+                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto const sv = cudf::strings_column_view(input);
 
@@ -166,8 +179,11 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                         " $ 41 . 07",
                                                         " [ a , b ] ",
                                                         " 丏  丟 ",
-                                                        ""},
-                                                       {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+                                                        "",
+                                                        long_row,
+                                                        long_row,
+                                                        long_row},
+                                                       {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false);
@@ -181,17 +197,25 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                    " $ 41 . 07",
                                                    " [ a , b ] ",
                                                    " 丏  丟 ",
-                                                   ""},
-                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+                                                   "",
+                                                   long_row,
+                                                   long_row,
+                                                   long_row},
+                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNormalizeTest, SpecialTokens)
 {
+  auto long_row =
+    "this entry is intended to pad out past 256 bytes which is currently the block size";
   auto input =
     cudf::test::strings_column_wrapper({"[BOS]Some strings with [PAD] special[SEP]tokens[EOS]",
                                         "[bos]these should[sep]work too[eos]",
-                                        "some[non]tokens[eol]too"});
+                                        "some[non]tokens[eol]too",
+                                        long_row,
+                                        long_row,
+                                        long_row});
 
   auto sv             = cudf::strings_column_view(input);
   auto special_tokens = cudf::test::strings_column_wrapper({"[BOS]", "[EOS]", "[SEP]", "[PAD]"});
@@ -202,7 +226,10 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   auto expected   = cudf::test::strings_column_wrapper(
     {" [bos] some strings with  [pad]  special [sep] tokens [eos] ",
        " [bos] these should [sep] work too [eos] ",
-       "some [ non ] tokens [ eol ] too"});
+       "some [ non ] tokens [ eol ] too",
+       long_row,
+       long_row,
+       long_row});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false, stv);
@@ -210,7 +237,10 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   expected   = cudf::test::strings_column_wrapper(
     {" [BOS] Some strings with  [PAD]  special [SEP] tokens [EOS] ",
        " [ bos ] these should [ sep ] work too [ eos ] ",
-       "some [ non ] tokens [ eol ] too"});
+       "some [ non ] tokens [ eol ] too",
+       long_row,
+       long_row,
+       long_row});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

@@ -23,8 +23,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -43,6 +41,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -281,12 +280,6 @@ struct character_normalizer::character_normalizer_impl {
   }
 };
 
-// lambdas not allowed in constructors
-struct size_bytes_fn {
-  cudf::string_view const* d_tokens;
-  __device__ cudf::size_type operator()(cudf::size_type idx) { return d_tokens[idx].size_bytes(); }
-};
-
 character_normalizer::character_normalizer(bool do_lower_case,
                                            cudf::strings_column_view const& special_tokens,
                                            rmm::cuda_stream_view stream,
@@ -300,7 +293,7 @@ character_normalizer::character_normalizer(bool do_lower_case,
   auto sorted = std::move(
     cudf::sort(cudf::table_view({special_tokens.parent()}), {}, {}, stream)->release().front());
   if (do_lower_case) {
-    // lower case the tokens so they will match the normalized input
+    // lower-case the tokens so they will match the normalized input
     sorted = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
   }
 
@@ -329,36 +322,65 @@ std::unique_ptr<character_normalizer> create_character_normalizer(
 namespace detail {
 namespace {
 
-CUDF_KERNEL void special_tokens_kernel(uint32_t* d_utf8chars,
+/**
+ * @brief Kernel handles fixing up the normalized data to account for any special tokens
+ *
+ * This undoes the padding added around the `[]` for patterns matching the strings in the
+ * special_tokens array.
+ *
+ * Launched as a thread per input byte (total_count).
+ *
+ * @param d_normalized The normalized set of UTF-8 characters; 3 uints per input byte
+ * @param total_count Number of bytes represented by d_normalized; len(d_normalized)/3
+ * @param special_tokens Tokens to check against
+ */
+CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,
                                        cudf::device_span<cudf::string_view const> special_tokens)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= total_count) { return; }
-  auto const begin = d_utf8chars + (idx * MAX_NEW_CHARS) + 1;
+  auto const begin = d_normalized + (idx * MAX_NEW_CHARS) + 1;
   if (*begin != '[') { return; }
   auto const end   = begin + std::min(6L, total_count - idx) * MAX_NEW_CHARS;
   auto const match = thrust::find(thrust::seq, begin, end, static_cast<uint32_t>(']'));
   if (match == end) { return; }
   char candidate[8];
-  auto itr  = thrust::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
-  auto eitr = itr + thrust::distance(begin, match + 1);
-  auto last =
-    thrust::copy_if(thrust::seq, itr, eitr, candidate, [](auto c) { return c != 0 && c != ' '; });
+  auto const ch_begin =
+    thrust::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
+  auto const ch_end = ch_begin + thrust::distance(begin, match + 1);
+  auto last         = thrust::copy_if(
+    thrust::seq, ch_begin, ch_end, candidate, [](auto c) { return c != 0 && c != ' '; });
   *last = 0;  // only needed for debug
 
   auto const size  = static_cast<cudf::size_type>(thrust::distance(candidate, last));
   auto const token = cudf::string_view(candidate, size);
-  if (thrust::find(thrust::seq, special_tokens.begin(), special_tokens.end(), token) ==
-      special_tokens.end()) {
+  // the binary_search expects the special_tokens to be sorted
+  if (!thrust::binary_search(thrust::seq, special_tokens.begin(), special_tokens.end(), token)) {
     return;
   }
 
   // fix up chars to remove the extra spaces
-  *(begin + 1) = 0;
-  *(match - 1) = 0;
+  *(begin + 1) = 0;  // removes space after '['
+  *(match - 1) = 0;  // removes space before ']'
 }
 
+/**
+ * @brief The normalizer kernel
+ *
+ * Launched as a thread per input byte (total_bytes).
+ *
+ * Converts the input d_chars into codepoints to lookup in the provided tables.
+ * Once processed, the d_output contains 3 uints per input byte each encoded
+ * as output UTF-8. Any zero values are to removed by a subsequent kernel call.
+ *
+ * @param d_chars The characters for the input strings column to normalize
+ * @param total_bytes The number of bytes in the d_chars
+ * @param cp_metadata First lookup table for codepoint metadata
+ * @param aux_table Second lookup table containing possible replacement characters
+ * @param do_lower_case True if the normalization includes lower-casing characters
+ * @param d_output The output of the normalization (UTF-8 encoded)
+ */
 CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
                                         int64_t total_bytes,
                                         codepoint_metadata_type const* cp_metadata,
@@ -381,7 +403,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
 
     if (!should_remove_cp(metadata, do_lower_case)) {
       int8_t num_new_chars = 1;
-      // Apply lower cases and accent stripping if necessary
+      // retrieve the normalized value for cp
       auto const new_cp = do_lower_case || always_replace(metadata) ? get_first_cp(metadata) : cp;
       replacement[0]    = new_cp == 0 ? cp : new_cp;
 
@@ -393,14 +415,13 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
       }
 
       if (should_add_spaces(metadata, do_lower_case) && (num_new_chars == 1)) {
-        // write the required spaces at each end
         replacement[1] = replacement[0];
-        replacement[0] = SPACE_CODE_POINT;
+        replacement[0] = SPACE_CODE_POINT;  // add spaces around the new codepoint
         replacement[2] = SPACE_CODE_POINT;
         num_new_chars  = 3;
       }
 
-      // convert back to UTF-8
+      // convert codepoints back to UTF-8 in-place
       for (int k = 0; k < num_new_chars; ++k) {
         auto const new_cp = replacement[k];
         if (new_cp) {
@@ -410,7 +431,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
     }
   }
 
-  // alternate algorithm BLOCK_STORE_TRANSPOSE
+  // employ an optimized coalesced writer to output replacement as a block of transposed data
   using block_store =
     cub::BlockStore<uint32_t, 256, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename block_store::TempStorage bs_stg;
@@ -418,8 +439,20 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
   block_store(bs_stg).Store(block_base, replacement);
 }
 
+/**
+ * @brief Computes the output sizes for each row
+ *
+ * The input offsets are used with segmented-reduce to count the number of
+ * non-zero values for each output row.
+ *
+ * @param d_normalized The UTF-8 encoded normalized values
+ * @param offsets These identify the row boundaries
+ * @param offset Only non-zero if the input column has been sliced
+ * @param size The number of output rows (sames as the number of input rows)
+ * @param stream Stream used for allocating device memory and launching kernels
+ */
 template <typename OffsetType>
-rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t const> d_codepoints,
+rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t const> d_normalized,
                                                    OffsetType offsets,
                                                    int64_t offset,
                                                    cudf::size_type size,
@@ -427,21 +460,23 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t co
 {
   auto output_sizes = rmm::device_uvector<cudf::size_type>(size, stream);
 
-  auto d_cps = d_codepoints.data();
+  auto d_data = d_normalized.data();
 
-  // counts the non-zero bytes in the d_cps arrays
+  // counts the non-zero bytes in the d_data array
   auto d_in = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<cudf::size_type>([d_cps] __device__(auto idx) {
-      idx       = idx * MAX_NEW_CHARS;
-      auto size = cudf::size_type{0};
-      for (int k = 0; k < MAX_NEW_CHARS; ++k) {
-        auto const v = d_cps[idx + k];
-        size +=
-          ((v & 0xFF) > 0) + ((v & 0xFF00) > 0) + ((v & 0xFF0000) > 0) + ((v & 0xFF000000) > 0);
-      }
-      return size;
+    0, cuda::proclaim_return_type<cudf::size_type>([d_data] __device__(auto idx) {
+      idx = idx * MAX_NEW_CHARS;
+      // transform function counts number of non-zero bytes in uint32_t value
+      auto tfn = [](uint32_t v) -> cudf::size_type {
+        return ((v & 0xFF) > 0) + ((v & 0xFF00) > 0) + ((v & 0xFF0000) > 0) +
+               ((v & 0xFF000000) > 0);
+      };
+      auto const begin = d_data + idx;
+      auto const end   = begin + MAX_NEW_CHARS;
+      return thrust::transform_reduce(thrust::seq, begin, end, tfn, 0, thrust::plus{});
     }));
 
+  // DeviceSegmentedReduce is used to compute the size of each output row
   auto d_out = output_sizes.begin();
   auto temp  = std::size_t{0};
   if (offset == 0) {
@@ -502,8 +537,8 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
   }
   return result;
 }
-
 }  // namespace
+
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    character_normalizer const& normalizer,
                                                    rmm::cuda_stream_view stream,
@@ -529,14 +564,14 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto const parameters = normalizer._impl;
 
-  auto d_codepoints = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
+  auto d_normalized = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     d_input_chars,
     chars_size,
     parameters->cp_metadata.data(),
     parameters->aux_table.data(),
     parameters->do_lower_case,
-    d_codepoints.data());
+    d_normalized.data());
 
   // This removes space added around any special tokens in the form of [ttt].
   // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
@@ -544,26 +579,25 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto const special_tokens = parameters->get_special_tokens();
   if (!special_tokens.empty()) {
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      d_codepoints.data(), chars_size, special_tokens);
+      d_normalized.data(), chars_size, special_tokens);
   }
 
+  // Use segmented-reduce over the non-zero codepoints to get the size of the output rows
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-
-  // Use segmented-reduce over the non-zero codepoints to get the size of the output rows
   auto output_sizes =
-    compute_sizes(d_codepoints, input_offsets, first_offset, input.size(), stream);
+    compute_sizes(d_normalized, input_offsets, first_offset, input.size(), stream);
 
   // convert the sizes to offsets
   auto [offsets, total_size] = cudf::strings::detail::make_offsets_child_column(
     output_sizes.begin(), output_sizes.end(), stream, mr);
 
-  // create output chars by calling remove_copy(0) on the bytes in d_codepoints
-  rmm::device_uvector<char> chars(total_size, stream, mr);
-  auto begin = reinterpret_cast<char const*>(d_codepoints.begin());
-  // the first remove() here speeds up the remove_copy() by roughly 10%
-  auto end =
-    reinterpret_cast<char const*>(remove_safe(d_codepoints.begin(), d_codepoints.end(), 0, stream));
+  // create output chars by calling remove_copy(0) on the bytes in d_normalized
+  auto chars       = rmm::device_uvector<char>(total_size, stream, mr);
+  auto const begin = reinterpret_cast<char const*>(d_normalized.begin());
+  // the remove() above speeds up the remove_copy() by roughly 10%
+  auto const end =
+    reinterpret_cast<char const*>(remove_safe(d_normalized.begin(), d_normalized.end(), 0, stream));
   remove_copy_safe(begin, end, chars.data(), 0, stream);
 
   return cudf::make_strings_column(input.size(),
