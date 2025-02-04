@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,6 @@
 #pragma once
 
 #include "text/subword/detail/cp_data.h"
-
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <cuda/std/functional>
 
 namespace nvtext {
 namespace detail {
