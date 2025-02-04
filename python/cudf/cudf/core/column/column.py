@@ -1250,7 +1250,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         cats = self.unique().sort_values()
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
+            cats=cats, dtype=label_dtype, na_sentinel=pa.scalar(1)
         )
         # columns include null index in factorization; remove:
         if self.has_nulls():
@@ -1561,7 +1561,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: cudf.Scalar | None = None,
+        na_sentinel: pa.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1592,14 +1592,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or na_sentinel.value is cudf.NA:
-            na_sentinel = cudf.Scalar(-1)
+        if na_sentinel is None or not na_sentinel.is_valid:
+            na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.as_py()), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
@@ -1631,7 +1631,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         (codes,) = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )
-        return codes.fillna(na_sentinel.value)
+        return codes.fillna(na_sentinel)
 
     @acquire_spill_lock()
     def copy_if_else(
@@ -2265,11 +2265,21 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
             arbitrary = None
-        arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-        if length == 0:
-            return column_empty(length, dtype=arbitrary.dtype)
+        if isinstance(arbitrary, pa.Scalar):
+            col = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    pa_scalar_to_plc_scalar(arbitrary), length
+                )
+            )
+            if dtype is not None:
+                col = col.astype(dtype)
+            return col
         else:
-            return ColumnBase.from_scalar(arbitrary, length)
+            arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
+            if length == 0:
+                return column_empty(length, dtype=arbitrary.dtype)
+            else:
+                return ColumnBase.from_scalar(arbitrary, length)
 
     elif hasattr(arbitrary, "__array_interface__"):
         desc = arbitrary.__array_interface__
