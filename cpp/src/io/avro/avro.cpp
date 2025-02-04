@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,7 +297,7 @@ enum attrtype_e {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, std::string_view json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
@@ -306,7 +306,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
-  std::unordered_map<std::string, type_kind_e> const typenames = {
+  std::unordered_map<std::string_view, type_kind_e> const typenames = {
     {"null", type_null},
     {"boolean", type_boolean},
     {"int", type_int},
@@ -329,7 +329,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
     {"local-timestamp-millis", type_local_timestamp_millis},
     {"local-timestamp-micros", type_local_timestamp_micros},
     {"duration", type_duration}};
-  std::unordered_map<std::string, attrtype_e> const attrnames = {
+  std::unordered_map<std::string_view, attrtype_e> const attrnames = {
     {"type", attrtype_type},
     {"name", attrtype_name},
     {"fields", attrtype_fields},
@@ -337,9 +337,9 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
     {"items", attrtype_items},
     {"logicalType", attrtype_logicaltype}};
   attrtype_e cur_attr = attrtype_none;
-  m_base              = json_str.c_str();
+  m_base              = json_str.begin();
   m_cur               = m_base;
-  m_end               = m_base + json_str.length();
+  m_end               = json_str.end();
   while (more_data()) {
     int const c = *m_cur++;
     switch (c) {
@@ -487,7 +487,8 @@ std::string schema_parser::get_str()
     ;
   auto len = static_cast<int32_t>(cur - start - 1);
   m_cur    = cur;
-  return s.assign(start, std::max(len, 0));
+  s.assign(start, std::max(len, 0));
+  return s;
 }
 
 }  // namespace avro
