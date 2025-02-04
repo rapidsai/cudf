@@ -23,16 +23,16 @@
 /**
  * @file orc_field_writer.hpp
  * @brief Struct to encapsulate common functionality required to implement
- * `ProtobufWriter::write(...)` functions
+ * `protobuf_writer::write(...)` functions
  */
 
 namespace cudf::io::orc::detail {
 
-struct ProtobufWriter::ProtobufFieldWriter {
+struct protobuf_writer::protobuf_field_writer {
   int struct_size{0};
-  ProtobufWriter* p;
+  protobuf_writer* p;
 
-  ProtobufFieldWriter(ProtobufWriter* pbw) : p(pbw) {}
+  protobuf_field_writer(protobuf_writer* pbw) : p(pbw) {}
 
   /**
    * @brief Function to write a unsigned integer to the internal buffer

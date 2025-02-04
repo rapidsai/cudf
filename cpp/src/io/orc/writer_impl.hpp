@@ -168,7 +168,7 @@ struct intermediate_statistics {
 
   intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
 
-  intermediate_statistics(std::vector<ColStatsBlob> rb,
+  intermediate_statistics(std::vector<col_stats_blob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
                           cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
@@ -182,7 +182,7 @@ struct intermediate_statistics {
   }
 
   // blobs for the rowgroups. Not persisted
-  std::vector<ColStatsBlob> rowgroup_blobs;
+  std::vector<col_stats_blob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
   cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
@@ -223,8 +223,8 @@ struct persisted_statistics {
  *
  */
 struct encoded_footer_statistics {
-  std::vector<ColStatsBlob> stripe_level;
-  std::vector<ColStatsBlob> file_level;
+  std::vector<col_stats_blob> stripe_level;
+  std::vector<col_stats_blob> file_level;
 };
 
 enum class writer_state {
@@ -309,8 +309,8 @@ class writer::impl {
                               orc_table_view const& orc_table,
                               device_span<uint8_t const> compressed_data,
                               host_span<compression_result const> comp_results,
-                              host_2dspan<StripeStream const> strm_descs,
-                              host_span<ColStatsBlob const> rg_stats,
+                              host_2dspan<stripe_stream const> strm_descs,
+                              host_span<col_stats_blob const> rg_stats,
                               orc_streams& streams,
                               host_span<StripeInformation> stripes,
                               host_span<uint8_t> bounce_buffer);
