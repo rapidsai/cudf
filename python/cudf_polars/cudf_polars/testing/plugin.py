@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite setting GPU engine as default."""
@@ -44,7 +44,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-EXPECTED_FAILURES: Mapping[str, str] = {
+EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -122,7 +122,15 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_filter_and_limit[single-parquet-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_csv-write_csv]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_parquet-write_parquet]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_csv-write_csv]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_ndjson-write_ndjson]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_ndjson-write_ndjson]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_write.py::test_write_async[read_parquet-write_parquet]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-write_csv]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]": "Need to add include_file_path to IR",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype1-123.55-1-123.6]": "Rounding midpoints is handled incorrectly",
@@ -140,6 +148,22 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func1-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func2-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func3-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/test_abs.py::test_abs_duration": "Need to raise for unsupported uops on timelike values",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input7-expected7-Float32-Float32]": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input10-expected10-Date-output_dtype10]": "Unsupported groupby-agg for a particular dtype",
@@ -155,6 +179,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input15-expected15-input_dtype15-output_dtype15]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input16-expected16-input_dtype16-output_dtype16]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_binary_agg_with_literal": "Incorrect broadcasting of literals in groupby-agg",
+    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_aggregated_scalar_elementwise_15602": "Unsupported boolean function/dtype combination in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_schemas[data1-expr1-expected_select1-expected_gb1]": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/operations/test_join.py::test_cross_join_slice_pushdown": "Need to implement slice pushdown for cross joins",
@@ -174,6 +199,24 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 
+TESTS_TO_SKIP: Mapping[str, str] = {
+    # On Ubuntu 20.04, the tzdata package contains a bunch of symlinks
+    # for obsolete timezone names. However, the chrono_tz package that
+    # polars uses doesn't read /usr/share/zoneinfo, instead packaging
+    # the current zoneinfo database from IANA. Consequently, when this
+    # hypothesis-generated test runs and generates timezones from the
+    # available zoneinfo-reported timezones, we can get an error from
+    # polars that the requested timezone is unknown.
+    # Since this is random, just skip it, rather than xfailing.
+    "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+    # The test may segfault with the legacy streaming engine. We should
+    # remove this skip when all polars tests use the new streaming engine.
+    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
+    # Fails in CI, but passes locally
+    "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
+}
+
+
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
@@ -182,5 +225,18 @@ def pytest_collection_modifyitems(
         # Don't xfail tests if running without fallback
         return
     for item in items:
-        if item.nodeid in EXPECTED_FAILURES:
-            item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))
+        if item.nodeid in TESTS_TO_SKIP:
+            item.add_marker(pytest.mark.skip(reason=TESTS_TO_SKIP[item.nodeid]))
+        elif item.nodeid in EXPECTED_FAILURES:
+            if isinstance(EXPECTED_FAILURES[item.nodeid], tuple):
+                # the second entry in the tuple is the condition to xfail on
+                item.add_marker(
+                    pytest.mark.xfail(
+                        condition=EXPECTED_FAILURES[item.nodeid][1],
+                        reason=EXPECTED_FAILURES[item.nodeid][0],
+                    ),
+                )
+            else:
+                item.add_marker(
+                    pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid])
+                )

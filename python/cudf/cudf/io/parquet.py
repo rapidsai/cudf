@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import io
@@ -23,10 +23,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.utils import (
-    _data_from_columns,
-    data_from_pylibcudf_io,
-)
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import as_column, column_empty
@@ -955,7 +951,7 @@ def _normalize_filters(filters: list | None) -> list[list[tuple]] | None:
     def _validate_predicate(item):
         if not isinstance(item, tuple) or len(item) != 3:
             raise TypeError(
-                f"Predicate must be Tuple[str, str, Any], " f"got {predicate}."
+                f"Predicate must be Tuple[str, str, Any], got {predicate}."
             )
 
     filters = filters if isinstance(filters[0], list) else [filters]
@@ -1238,16 +1234,11 @@ def _read_parquet(
                     # Drop residual columns to save memory
                     tbl._columns[i] = None
 
-            df = cudf.DataFrame._from_data(
-                *_data_from_columns(
-                    columns=[
-                        Column.from_pylibcudf(plc)
-                        for plc in concatenated_columns
-                    ],
-                    column_names=column_names,
-                    index_names=None,
-                )
-            )
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(column_names, concatenated_columns)
+            }
+            df = cudf.DataFrame._from_data(data)
             df = _process_metadata(
                 df,
                 column_names,
@@ -1287,8 +1278,16 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(
+                    tbl_w_meta.column_names(include_children=False),
+                    tbl_w_meta.columns,
+                    strict=True,
+                )
+            }
 
-            df = cudf.DataFrame._from_data(*data_from_pylibcudf_io(tbl_w_meta))
+            df = cudf.DataFrame._from_data(data)
 
             df = _process_metadata(
                 df,

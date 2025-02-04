@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import os
@@ -14,11 +14,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
-from cudf._lib.utils import _data_from_columns, data_from_pylibcudf_io
 from cudf.core.buffer import acquire_spill_lock
 from cudf.utils import ioutils
-from cudf.utils.dtypes import _maybe_convert_to_default_type
+from cudf.utils.dtypes import (
+    _maybe_convert_to_default_type,
+    dtype_to_pylibcudf_type,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -30,7 +31,7 @@ def _get_cudf_schema_element_from_dtype(
     dtype = cudf.dtype(dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
-            "CategoricalDtype as dtype is not yet " "supported in JSON reader"
+            "CategoricalDtype as dtype is not yet supported in JSON reader"
         )
 
     lib_type = dtype_to_pylibcudf_type(dtype)
@@ -178,13 +179,11 @@ def read_json(
                     )
                 )
             )
-            df = cudf.DataFrame._from_data(
-                *_data_from_columns(
-                    columns=[Column.from_pylibcudf(col) for col in res_cols],
-                    column_names=res_col_names,
-                    index_names=None,
-                )
-            )
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(res_col_names, res_cols, strict=True)
+            }
+            df = cudf.DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
@@ -207,10 +206,15 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-
-            df = cudf.DataFrame._from_data(
-                *data_from_pylibcudf_io(table_w_meta)
-            )
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(
+                    table_w_meta.column_names(include_children=False),
+                    table_w_meta.columns,
+                    strict=True,
+                )
+            }
+            df = cudf.DataFrame._from_data(data)
 
             # Post-processing to add in struct column names
             ioutils._add_df_col_struct_names(df, table_w_meta.child_names)

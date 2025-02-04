@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/gpuinflate.hpp"
+#include "io/comp/comp.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
@@ -73,14 +73,14 @@ struct CompressedStreamInfo {
   uint8_t const* compressed_data{};  // [in] base ptr to compressed stream data
   uint8_t*
     uncompressed_data{};  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size{};              // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl{};   // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl{};        // [in] output buffer to decompress into
-  device_span<compression_result> dec_res{};  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl{};  // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl{};       // [out] output buffer to copy to
-  uint32_t num_compressed_blocks{};           // [in,out] number of entries in decctl(in), number of
-                                              // compressed blocks(out)
+  size_t compressed_data_size{};             // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl{};  // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl{};       // [in] output buffer to decompress into
+  device_span<cudf::io::detail::compression_result> dec_res{};  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl{};                    // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl{};                         // [out] output buffer to copy to
+  uint32_t num_compressed_blocks{};    // [in,out] number of entries in decctl(in), number of
+                                       // compressed blocks(out)
   uint32_t num_uncompressed_blocks{};  // [in,out] number of entries in dec_in_ctl(in), number of
                                        // uncompressed blocks(out)
   uint64_t max_uncompressed_size{};    // [out] maximum uncompressed data size of stream
@@ -407,14 +407,14 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
-  CompressionKind compression,
+  compression_type compression,
   uint32_t comp_blk_size,
   uint32_t max_comp_blk_size,
   uint32_t comp_block_align,
   bool collect_statistics,
   device_2dspan<StripeStream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<compression_result> comp_res,
+  device_span<cudf::io::detail::compression_result> comp_res,
   rmm::cuda_stream_view stream);
 
 /**

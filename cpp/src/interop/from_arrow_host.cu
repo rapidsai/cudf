@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,22 +69,19 @@ struct dispatch_copy_from_arrow_host {
     return mask;
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() &&
-                           !std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() && !is_fixed_point<T>())>
   std::unique_ptr<column> operator()(ArrowSchemaView*, ArrowArray const*, data_type, bool)
   {
     CUDF_FAIL("Unsupported type in copy_from_arrow_host.");
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   std::unique_ptr<column> operator()(ArrowSchemaView* schema,
                                      ArrowArray const* input,
                                      data_type type,
                                      bool skip_mask)
   {
-    using DeviceType = std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, T>;
+    using DeviceType = device_storage_type_t<T>;
 
     size_type const num_rows   = input->length;
     size_type const offset     = input->offset;

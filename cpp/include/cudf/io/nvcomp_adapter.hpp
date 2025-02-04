@@ -22,7 +22,7 @@
 #include <string>
 
 namespace CUDF_EXPORT cudf {
-namespace io::nvcomp {
+namespace io::detail::nvcomp {
 
 enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4, GZIP };
 
@@ -88,5 +88,5 @@ inline bool operator==(feature_status_parameters const& lhs, feature_status_para
 [[nodiscard]] std::optional<std::string> is_decompression_disabled(
   compression_type compression, feature_status_parameters params = feature_status_parameters());
 
-}  // namespace io::nvcomp
+}  // namespace io::detail::nvcomp
 }  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -10,7 +10,6 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
-package_name="pandas"
 
 # Use grep to find the line containing the package name and version constraint
 pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
@@ -47,7 +46,7 @@ done
 if [ "$no_cudf" = true ]; then
     echo "Skipping cudf install"
 else
-    RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
+    RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
     # Download the cudf, libcudf, and pylibcudf built in the previous step
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
@@ -60,9 +59,9 @@ else
     python -m pip install \
         -v \
         --constraint ./constraints.txt \
-        "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]" \
-        "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
-        "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
+        "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
+        "$(echo ./dist/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+        "$(echo ./dist/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 fi
 
 python -m pip install ipykernel
@@ -77,7 +76,7 @@ python -m pytest -p cudf.pandas \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 
-output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py $pandas_version_constraint)
+output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version_constraint")
 
 # Convert the comma-separated list into an array
 IFS=',' read -r -a versions <<< "$output"

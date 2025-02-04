@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,11 +175,6 @@ class fixed_width_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    */
   void set_value(T value, rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @brief Explicit conversion operator to get the value of the scalar on the host.
-   */
-  explicit operator value_type() const;
 
   /**
    * @brief Get the value of the scalar.
@@ -403,11 +398,6 @@ class fixed_point_scalar : public scalar {
     rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
-   * @brief Explicit conversion operator to get the value of the scalar on the host.
-   */
-  explicit operator value_type() const;
-
-  /**
    * @brief Returns a raw pointer to the value in device memory.
    * @return A raw pointer to the value in device memory
    */
@@ -514,11 +504,6 @@ class string_scalar : public scalar {
                 bool is_valid                     = true,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @brief Explicit conversion operator to get the value of the scalar in a host std::string.
-   */
-  explicit operator std::string() const;
 
   /**
    * @brief Get the value of the scalar in a host std::string.

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,8 +21,7 @@ import cudf
 import cudf.core.column.column as column
 from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core._internals import binaryop, unary
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
@@ -31,7 +30,8 @@ from cudf.core._internals.timezones import (
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import _get_base_dtype, cudf_dtype_to_pa_type
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -212,6 +212,8 @@ class DatetimeColumn(column.ColumnBase):
         "__rsub__",
     }
 
+    _PANDAS_NA_REPR = str(pd.NaT)
+
     def __init__(
         self,
         data: Buffer,
@@ -351,8 +353,8 @@ class DatetimeColumn(column.ColumnBase):
         day_of_year = self.day_of_year
         leap_dates = self.is_leap_year
 
-        leap = day_of_year == cudf.Scalar(366)
-        non_leap = day_of_year == cudf.Scalar(365)
+        leap = day_of_year == 366
+        non_leap = day_of_year == 365
         return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
@@ -572,7 +574,7 @@ class DatetimeColumn(column.ColumnBase):
                 "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
                 "Use tz_localize instead."
             )
-        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
@@ -948,7 +950,9 @@ class DatetimeColumn(column.ColumnBase):
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
-            cudf.Scalar(cudf.NaT, dtype=self.dtype),
+            pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
 
         transition_times, offsets = get_tz_data(tzname)
@@ -956,7 +960,7 @@ class DatetimeColumn(column.ColumnBase):
             localized.dtype
         )
         indices = (
-            search_sorted([transition_times_local], [localized], "right") - 1
+            transition_times_local.searchsorted(localized, side="right") - 1
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
@@ -1041,8 +1045,14 @@ class DatetimeTZColumn(DatetimeColumn):
     def _local_time(self):
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
-        transition_times = transition_times.astype(_get_base_dtype(self.dtype))
-        indices = search_sorted([transition_times], [self], "right") - 1
+        base_dtype = _get_base_dtype(self.dtype)
+        transition_times = transition_times.astype(base_dtype)
+        indices = (
+            transition_times.searchsorted(
+                self.astype(base_dtype), side="right"
+            )
+            - 1
+        )
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
@@ -1080,9 +1090,7 @@ class DatetimeTZColumn(DatetimeColumn):
             pa.timestamp(self.dtype.unit, str(self.dtype.tz))
         )
         return (
-            f"{object.__repr__(self)}\n"
-            f"{arr.to_string()}\n"
-            f"dtype: {self.dtype}"
+            f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
         )
 
     def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):

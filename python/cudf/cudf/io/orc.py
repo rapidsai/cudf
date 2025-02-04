@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -10,11 +10,13 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.types import dtype_to_pylibcudf_type
-from cudf._lib.utils import data_from_pylibcudf_io
+from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
+from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 try:
     import ujson as json  # type: ignore[import-untyped]
@@ -266,7 +268,7 @@ def read_orc(
             # When `columns=[]`, index needs to be
             # established, but not the columns.
             nrows = tbl_w_meta.tbl.num_rows()
-            data = {}
+            ca = ColumnAccessor({})
             index = cudf.RangeIndex(nrows)
         else:
             names = tbl_w_meta.column_names(include_children=False)
@@ -323,11 +325,35 @@ def read_orc(
                     actual_index_names = list(index_col_names.values())
                     col_names = names[len(actual_index_names) :]
 
-            data, index = data_from_pylibcudf_io(
-                tbl_w_meta,
-                col_names if columns is None else names,
-                actual_index_names,
-            )
+            result_col_names = col_names if columns is None else names
+            if actual_index_names is None:
+                index = None
+                data = {
+                    name: Column.from_pylibcudf(col)
+                    for name, col in zip(
+                        result_col_names, tbl_w_meta.columns, strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    Column.from_pylibcudf(col) for col in tbl_w_meta.columns
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            actual_index_names,
+                            result_columns[: len(actual_index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        result_col_names,
+                        result_columns[len(actual_index_names) :],
+                        strict=True,
+                    )
+                )
 
             if is_range_index:
                 index = range_idx
@@ -342,8 +368,9 @@ def read_orc(
                     data.items(), child_name_values
                 )
             }
+            ca = ColumnAccessor(data, rangeindex=len(data) == 0)
 
-        return cudf.DataFrame._from_data(data, index=index)
+        return cudf.DataFrame._from_data(ca, index=index)
     else:
         from pyarrow import orc
 

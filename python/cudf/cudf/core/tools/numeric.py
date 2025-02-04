@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -9,7 +9,6 @@ import pandas as pd
 
 import cudf
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
-from cudf.core._internals import unary
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
@@ -178,7 +177,7 @@ def to_numeric(
             downcast_dtype = cudf.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
-                    col = unary.cast(col, downcast_dtype)
+                    col = col.cast(downcast_dtype)
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
