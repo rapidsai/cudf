@@ -133,11 +133,9 @@ std::unique_ptr<cudf::column> normalize_characters(
  * accent is removed.
  *
  * If `special_tokens` are included the padding after `[` and before `]` is not
- * inserted if the character between them match one of the given tokens.
- * If `do_lower_case = true` the `special_tokens` are expected to contain
- * lower-case characters.
+ * inserted if the characters between them match one of the given tokens.
  * Also, the `special_tokens` are expected to include the `[]` characters
- * at the beginning of and end of each string respectively.
+ * at the beginning of and end of each string appropriately.
  */
 struct character_normalizer {
   /**
@@ -148,7 +146,7 @@ struct character_normalizer {
    * @param do_lower_case If true, upper-case characters are converted to
    *        lower-case and accents are stripped from those characters.
    *        If false, accented and upper-case characters are not transformed.
-   * @param special_tokens Individual sequences including `[]` brackets.
+   * @param special_tokens Each row is a token including the `[]` brackets.
    *        For example: `[BOS]`, `[EOS]`, `[UNK]`, `[SEP]`, `[PAD]`, `[CLS]`, `[MASK]`
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
@@ -174,7 +172,7 @@ struct character_normalizer {
  * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
- * @param special_tokens Individual sequences including `[]` brackets.
+ * @param special_tokens Individual tokens including `[]` brackets.
  *        Default is no special tokens.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
