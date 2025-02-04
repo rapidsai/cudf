@@ -78,6 +78,7 @@ requirements:
     - pandas >=2.0,<2.2.4dev0
     - numpy >=1.23,<3.0a0
     - pyarrow>=14.0.0,<20.0.0a0
+    - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
