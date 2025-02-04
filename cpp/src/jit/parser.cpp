@@ -327,10 +327,10 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   auto const ptx_params = parse_param_list(std::string(f, l));
 
-  std::for_each(param_types.begin(), param_types.end(), [&](auto const& entry) {
-    CUDF_EXPECTS(entry.first < ptx_params.size(),
-                 "Argument index exceeds the number of parameters found in the PTX");
-  });
+  CUDF_EXPECTS(std::all_of(param_types.begin(),
+                           param_types.end(),
+                           [&](auto const& entry) { return entry.first < ptx_params.size(); }),
+               "Argument index exceeds the number of parameters found in the PTX");
 
   std::vector<std::string> param_decls;
 
@@ -348,14 +348,14 @@ std::string ptx_parser::parse_function_header(std::string const& src)
                    }
                  });
 
-  std::string param_list = param_decls.empty()
-                             ? ""
-                             : std::accumulate(std::next(param_decls.begin()),
-                                               param_decls.end(),
-                                               param_decls.front(),
-                                               [](std::string const& p0, std::string const& p1) {
-                                                 return p0 + ",\n " + p1;
-                                               });
+  std::string const param_list =
+    param_decls.empty() ? ""
+                        : std::accumulate(std::next(param_decls.begin()),
+                                          param_decls.end(),
+                                          param_decls.front(),
+                                          [](std::string const& p0, std::string const& p1) {
+                                            return p0 + ",\n " + p1;
+                                          });
 
   return "\n__device__ __inline__ void " + function_name + "(" + param_list + "){" + "\n";
 }
@@ -404,6 +404,15 @@ ptx_parser::ptx_parser(std::string ptx_,
     function_name(std::move(function_name_)),
     param_types(std::move(param_types_))
 {
+}
+
+std::string parse_single_function_ptx(std::string const& src,
+                                      std::string const& function_name,
+                                      std::map<unsigned int, std::string> param_types)
+{
+  ptx_parser instance(src, function_name, param_types);
+
+  return instance.parse();
 }
 
 // The interface

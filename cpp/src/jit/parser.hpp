@@ -214,14 +214,9 @@ class ptx_parser {
  * based on the PTX's parameter types.
  * @return The output CUDA device function
  */
-inline std::string parse_single_function_ptx(std::string const& src,
-                                             std::string const& function_name,
-                                             std::map<unsigned int, std::string> param_types)
-{
-  ptx_parser instance(src, function_name, param_types);
-
-  return instance.parse();
-}
+std::string parse_single_function_ptx(std::string const& src,
+                                      std::string const& function_name,
+                                      std::map<unsigned int, std::string> param_types);
 
 /**
  * @brief In a piece of CUDA code that contains the implementation
