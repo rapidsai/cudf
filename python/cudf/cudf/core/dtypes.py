@@ -19,6 +19,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 if PANDAS_GE_210:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
@@ -45,7 +46,7 @@ def dtype(arbitrary):
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
     #  first, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+    if isinstance(arbitrary, (_BaseDtype, pd.DatetimeTZDtype)):
         return arbitrary
 
     # next, try interpreting arbitrary as a NumPy dtype that we support:
@@ -55,7 +56,7 @@ def dtype(arbitrary):
         pass
     else:
         if np_dtype.kind in set("OU"):
-            return np.dtype("object")
+            return CUDF_STRING_DTYPE
         elif (
             np_dtype
             not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
@@ -78,7 +79,7 @@ def dtype(arbitrary):
                 "Nullable types not supported in pandas compatibility mode"
             )
         elif isinstance(pd_dtype, pd.StringDtype):
-            return np.dtype("object")
+            return CUDF_STRING_DTYPE
         else:
             return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
@@ -368,7 +369,7 @@ class ListDtype(_BaseDtype):
             self._typ = pa.list_(element_type._typ)
         else:
             element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
-                element_type
+                cudf.dtype(element_type)
             )
             self._typ = pa.list_(element_type)
 
@@ -579,7 +580,7 @@ class StructDtype(_BaseDtype):
 
     def __init__(self, fields):
         pa_fields = {
-            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(v)
+            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(cudf.dtype(v))
             for k, v in fields.items()
         }
         self._typ = pa.struct(pa_fields)
@@ -1036,21 +1037,13 @@ def _is_categorical_dtype(obj):
         return False
     if isinstance(obj, str) and obj == "category":
         return True
-    if isinstance(obj, cudf.core.index.BaseIndex):
-        return obj._is_categorical()
     if isinstance(
         obj,
-        (
-            cudf.Series,
-            cudf.core.column.ColumnBase,
-            pd.Index,
-            pd.Series,
-        ),
+        (cudf.core.index.BaseIndex, cudf.core.column.ColumnBase, cudf.Series),
     ):
-        try:
-            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
-        except TypeError:
-            return False
+        return isinstance(obj.dtype, cudf.CategoricalDtype)
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return isinstance(obj.dtype, pd.CategoricalDtype)
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True

@@ -502,7 +502,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return cudf.dtype("m8" + f"[{res}]")
+                    return np.dtype(f"m8[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
         return cudf.dtype(out_dtype)
@@ -545,9 +545,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return cudf.dtype("float32")
+                return np.dtype(np.float32)
             else:
-                return cudf.dtype("float64")
+                return np.dtype(np.float64)
         return self.dtype
 
     def _scalar_unaop(self, op) -> None | Self:

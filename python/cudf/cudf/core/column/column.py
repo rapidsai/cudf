@@ -612,7 +612,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
                 range(start, stop, stride),
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             )
             return self.take(gather_map)
 
@@ -692,7 +692,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             cudf.core.column.NumericalColumn,
             as_column(
                 rng,
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             ),
         )
 
@@ -1796,9 +1796,7 @@ def column_empty(
         children = (
             cudf.core.column.NumericalColumn(
                 data=as_buffer(
-                    rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype(SIZE_TYPE_DTYPE).itemsize
-                    )
+                    rmm.DeviceBuffer(size=row_count * SIZE_TYPE_DTYPE.itemsize)
                 ),
                 size=None,
                 dtype=SIZE_TYPE_DTYPE,
@@ -2046,7 +2044,7 @@ def as_column(
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
-            dtype = cudf.dtype(
+            dtype = np.dtype(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
             )
         if dtype is not None:
@@ -2263,7 +2261,7 @@ def as_column(
             and np.isnan(arbitrary)
         ):
             if dtype is None:
-                dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
+                dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
         if isinstance(arbitrary, pa.Scalar):
             col = ColumnBase.from_pylibcudf(
@@ -2480,7 +2478,7 @@ def as_column(
                 and pa.types.is_floating(arbitrary.type)
             ):
                 dtype = _maybe_convert_to_default_type(
-                    cudf.dtype(arbitrary.type.to_pandas_dtype())
+                    np.dtype(arbitrary.type.to_pandas_dtype())
                 )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
@@ -2562,7 +2560,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = cudf.dtype(None)
+        dtype = np.dtype(np.float64)
         return column_empty(0, dtype=dtype)
 
     # If all columns are `NumericalColumn` with different dtypes,
