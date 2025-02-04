@@ -35,16 +35,16 @@ struct comp_in_out {
   size_t out_size{};
 };
 struct compressed_stream_s {
-  CompressedStreamInfo info{};
+  compressed_stream_info info{};
   comp_in_out ctl{};
 };
 
 // blockDim {128,1,1}
 CUDF_KERNEL void __launch_bounds__(128, 8)
-  gpuParseCompressedStripeData(CompressedStreamInfo* strm_info,
-                               int32_t num_streams,
-                               uint64_t compression_block_size,
-                               uint32_t log2maxcr)
+  parse_compressed_stripe_data_kernel(compressed_stream_info* strm_info,
+                                      int32_t num_streams,
+                                      uint64_t compression_block_size,
+                                      uint32_t log2maxcr)
 {
   __shared__ compressed_stream_s strm_g[4];
 
@@ -142,7 +142,7 @@ CUDF_KERNEL void __launch_bounds__(128, 8)
 
 // blockDim {128,1,1}
 CUDF_KERNEL void __launch_bounds__(128, 8)
-  gpuPostDecompressionReassemble(CompressedStreamInfo* strm_info, int32_t num_streams)
+  post_decompression_reassemble_kernel(compressed_stream_info* strm_info, int32_t num_streams)
 {
   __shared__ compressed_stream_s strm_g[4];
 
@@ -208,17 +208,17 @@ CUDF_KERNEL void __launch_bounds__(128, 8)
 }
 
 /**
- * @brief Shared mem state for gpuParseRowGroupIndex
+ * @brief Shared mem state for parse_row_group_index_kernel
  */
 struct rowindex_state_s {
-  ColumnDesc chunk{};
+  column_desc chunk{};
   uint32_t rowgroup_start{};
   uint32_t rowgroup_end{};
   int is_compressed{};
   uint32_t row_index_entry[3]
                           [CI_PRESENT]{};  // NOTE: Assumes CI_PRESENT follows CI_DATA and CI_DATA2
-  CompressedStreamInfo strm_info[2]{};
-  RowGroup rowgroups[128]{};
+  compressed_stream_info strm_info[2]{};
+  row_group rowgroups[128]{};
   uint32_t compressed_offset[128][2]{};
 };
 
@@ -264,9 +264,9 @@ static auto __device__ index_order_from_index_types(uint32_t index_types_bitmap)
  * @param[in] end end of byte stream
  * @return bytes consumed
  */
-static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
-                                                      uint8_t const* const start,
-                                                      uint8_t const* const end)
+static uint32_t __device__ protobuf_parse_row_index_entry(rowindex_state_s* s,
+                                                          uint8_t const* const start,
+                                                          uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
   auto const stream_order                = index_order_from_index_types(s->chunk.skip_count);
@@ -359,7 +359,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
  * @param[in,out] s row group index state
  * @param[in] num_rowgroups Number of index entries to read
  */
-static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s* s, int num_rowgroups)
+static __device__ void read_row_group_index_entries(rowindex_state_s* s, int num_rowgroups)
 {
   uint8_t const* index_data = s->chunk.streams[CI_INDEX];
   int index_data_len        = s->chunk.strm_len[CI_INDEX];
@@ -371,7 +371,7 @@ static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s* s, int num_
     s->row_index_entry[2][0] = 0;
     s->row_index_entry[2][1] = 0;
     if (index_data_len > 0) {
-      int len = ProtobufParseRowIndexEntry(s, index_data, index_data + index_data_len);
+      int len = protobuf_parse_row_index_entry(s, index_data, index_data + index_data_len);
       index_data += len;
       index_data_len = max(index_data_len - len, 0);
       for (int j = 0; j < 2; j++) {
@@ -393,10 +393,10 @@ static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s* s, int num_
  * @param[in] num_rowgroups Number of index entries
  * @param[in] t thread id
  */
-static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
-                                                    int ci_id,
-                                                    int num_rowgroups,
-                                                    int t)
+static __device__ void map_row_index_to_uncompressed(rowindex_state_s* s,
+                                                     int ci_id,
+                                                     int num_rowgroups,
+                                                     int t)
 {
   int32_t strm_len = s->chunk.strm_len[ci_id];
   if (strm_len > 0) {
@@ -434,9 +434,9 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
 /**
  * @brief Decode index streams
  *
- * @param[out] row_groups RowGroup device array [rowgroup][column]
+ * @param[out] row_groups row_group device array [rowgroup][column]
  * @param[in] strm_info List of compressed streams (or NULL if uncompressed)
- * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
@@ -445,13 +445,14 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
  * value
  */
 // blockDim {128,1,1}
-CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
-                                                                 CompressedStreamInfo* strm_info,
-                                                                 ColumnDesc* chunks,
-                                                                 size_type num_columns,
-                                                                 size_type num_stripes,
-                                                                 size_type rowidx_stride,
-                                                                 bool use_base_stride)
+CUDF_KERNEL void __launch_bounds__(128, 8)
+  parse_row_group_index_kernel(row_group* row_groups,
+                               compressed_stream_info* strm_info,
+                               column_desc* chunks,
+                               size_type num_columns,
+                               size_type num_stripes,
+                               size_type rowidx_stride,
+                               bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s* const s = &state_g;
@@ -478,19 +479,19 @@ CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_g
     int rowgroup_size4, t4, t32;
 
     s->rowgroups[t].chunk_id = chunk_id;
-    if (t == 0) { gpuReadRowGroupIndexEntries(s, num_rowgroups); }
+    if (t == 0) { read_row_group_index_entries(s, num_rowgroups); }
     __syncthreads();
     if (s->is_compressed) {
       // Convert the block + blk_offset pair into a raw offset into the decompressed stream
       if (s->chunk.strm_len[CI_DATA] > 0) {
-        gpuMapRowIndexToUncompressed(s, CI_DATA, num_rowgroups, t);
+        map_row_index_to_uncompressed(s, CI_DATA, num_rowgroups, t);
       }
       if (s->chunk.strm_len[CI_DATA2] > 0) {
-        gpuMapRowIndexToUncompressed(s, CI_DATA2, num_rowgroups, t);
+        map_row_index_to_uncompressed(s, CI_DATA2, num_rowgroups, t);
       }
       __syncthreads();
     }
-    rowgroup_size4 = sizeof(RowGroup) / sizeof(uint32_t);
+    rowgroup_size4 = sizeof(row_group) / sizeof(uint32_t);
     t4             = t & 3;
     t32            = t >> 2;
     for (int i = t32; i < num_rowgroups; i += 32) {
@@ -517,9 +518,9 @@ CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_g
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  gpu_reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns,
-                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                            device_2dspan<size_type> set_counts)
+  reduce_pushdown_masks_kernel(device_span<orc_column_device_view const> orc_columns,
+                               device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                               device_2dspan<size_type> set_counts)
 {
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
@@ -554,40 +555,41 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (t == 0) { set_counts[rowgroup_id][column_id] = count; }
 }
 
-void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
-                                        int32_t num_streams,
-                                        uint64_t compression_block_size,
-                                        uint32_t log2maxcr,
-                                        rmm::cuda_stream_view stream)
+void __host__ parse_compressed_stripe_data(compressed_stream_info* strm_info,
+                                           int32_t num_streams,
+                                           uint64_t compression_block_size,
+                                           uint32_t log2maxcr,
+                                           rmm::cuda_stream_view stream)
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    gpuParseCompressedStripeData<<<num_blocks, 128, 0, stream.value()>>>(
+    parse_compressed_stripe_data_kernel<<<num_blocks, 128, 0, stream.value()>>>(
       strm_info, num_streams, compression_block_size, log2maxcr);
   }
 }
 
-void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
-                                          int32_t num_streams,
-                                          rmm::cuda_stream_view stream)
+void __host__ post_decompression_reassemble(compressed_stream_info* strm_info,
+                                            int32_t num_streams,
+                                            rmm::cuda_stream_view stream)
 {
   auto const num_blocks = (num_streams + 3) >> 2;  // 1 stream per warp, 4 warps per block
   if (num_blocks > 0) {
-    gpuPostDecompressionReassemble<<<num_blocks, 128, 0, stream.value()>>>(strm_info, num_streams);
+    post_decompression_reassemble_kernel<<<num_blocks, 128, 0, stream.value()>>>(strm_info,
+                                                                                 num_streams);
   }
 }
 
-void __host__ ParseRowGroupIndex(RowGroup* row_groups,
-                                 CompressedStreamInfo* strm_info,
-                                 ColumnDesc* chunks,
-                                 size_type num_columns,
-                                 size_type num_stripes,
-                                 size_type rowidx_stride,
-                                 bool use_base_stride,
-                                 rmm::cuda_stream_view stream)
+void __host__ parse_row_group_index(row_group* row_groups,
+                                    compressed_stream_info* strm_info,
+                                    column_desc* chunks,
+                                    size_type num_columns,
+                                    size_type num_stripes,
+                                    size_type rowidx_stride,
+                                    bool use_base_stride,
+                                    rmm::cuda_stream_view stream)
 {
   auto const num_blocks = num_columns * num_stripes;
-  gpuParseRowGroupIndex<<<num_blocks, 128, 0, stream.value()>>>(
+  parse_row_group_index_kernel<<<num_blocks, 128, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
 }
 
@@ -598,7 +600,7 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
 {
   auto const num_blocks    = columns.size() * rowgroups.size().first;  // 1 block per rowgroup
   constexpr int block_size = 128;
-  gpu_reduce_pushdown_masks<block_size>
+  reduce_pushdown_masks_kernel<block_size>
     <<<num_blocks, block_size, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 

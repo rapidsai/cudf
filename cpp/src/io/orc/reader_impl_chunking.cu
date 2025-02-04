@@ -48,7 +48,7 @@ std::size_t gather_stream_info_and_column_desc(
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
   std::vector<orc_stream_info>* stream_info,
-  cudf::detail::hostdevice_2dvector<ColumnDesc>* chunks)
+  cudf::detail::hostdevice_2dvector<column_desc>* chunks)
 {
   CUDF_EXPECTS((stream_info == nullptr) ^ (chunks == nullptr),
                "Either stream_info or chunks must be provided, but not both.");
@@ -649,7 +649,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
-    return cudf::detail::hostdevice_vector<CompressedStreamInfo>(max_num_streams, _stream);
+    return cudf::detail::hostdevice_vector<compressed_stream_info>(max_num_streams, _stream);
   }();
 
   for (std::size_t level = 0; level < num_levels; ++level) {
@@ -666,23 +666,23 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      auto compinfo = cudf::detail::hostdevice_span<CompressedStreamInfo>{hd_compinfo}.subspan(
+      auto compinfo = cudf::detail::hostdevice_span<compressed_stream_info>{hd_compinfo}.subspan(
         0, stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
         compinfo[stream_idx - stream_range.begin] =
-          CompressedStreamInfo(dst_base + info.dst_pos, info.length);
+          compressed_stream_info(dst_base + info.dst_pos, info.length);
       }
 
       // Estimate the uncompressed data.
       compinfo.host_to_device_async(_stream);
-      ParseCompressedStripeData(compinfo.device_ptr(),
-                                compinfo.size(),
-                                decompressor.GetBlockSize(),
-                                decompressor.GetLog2MaxCompressionRatio(),
-                                _stream);
+      parse_compressed_stripe_data(compinfo.device_ptr(),
+                                   compinfo.size(),
+                                   decompressor.GetBlockSize(),
+                                   decompressor.GetLog2MaxCompressionRatio(),
+                                   _stream);
       compinfo.device_to_host_sync(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
