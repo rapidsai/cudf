@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int32_t, uint8_t
@@ -155,6 +155,10 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_json(
+        json_reader_options &options
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata read_json(
         json_reader_options &options,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
@@ -231,6 +235,10 @@ cdef extern from "cudf/io/json.hpp" \
         ) except +libcudf_exception_handler
 
         json_writer_options build() except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata write_json(
+        json_writer_options &options
+    ) except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata write_json(
         json_writer_options &options,

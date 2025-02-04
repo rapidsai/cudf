@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -86,6 +86,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             const expression & f
         ) except +libcudf_exception_handler
         parquet_reader_options build() except +libcudf_exception_handler
+
+    cdef table_with_metadata read_parquet(
+        parquet_reader_options args
+    ) except +libcudf_exception_handler
 
     cdef table_with_metadata read_parquet(
         parquet_reader_options args,
@@ -215,6 +219,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
+        parquet_writer_options options
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options options,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
@@ -238,6 +246,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass parquet_chunked_writer:
         parquet_chunked_writer() except +libcudf_exception_handler
+        parquet_chunked_writer(
+            chunked_parquet_writer_options args
+        ) except +libcudf_exception_handler
         parquet_chunked_writer(
             chunked_parquet_writer_options args,
             cuda_stream_view stream,

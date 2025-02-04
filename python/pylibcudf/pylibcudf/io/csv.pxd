@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -18,7 +18,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 cdef class CsvReaderOptions:
     cdef csv_reader_options c_obj

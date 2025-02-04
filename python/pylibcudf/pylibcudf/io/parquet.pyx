@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -35,7 +35,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "ChunkedParquetReader",
@@ -321,10 +321,12 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     options: ParquetReaderOptions
         Settings for controlling reading behavior
     """
-    if stream is None:
-        stream = Stream()
-    with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
+    if stream is not None:
+        with nogil:
+            c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
+    else:
+        with nogil:
+            c_result = move(cpp_read_parquet(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -394,15 +396,16 @@ cdef class ParquetChunkedWriter:
         -------
         ParquetChunkedWriter
         """
-        if stream is None:
-            stream = Stream()
         cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
             ParquetChunkedWriter
         )
-        parquet_writer.c_obj.reset(
-            new cpp_parquet_chunked_writer(
-                    options.c_obj, stream.view()
-                )
+        if stream is not None:
+            parquet_writer.c_obj.reset(
+                new cpp_parquet_chunked_writer(options.c_obj, stream.view())
+            )
+        else:
+            parquet_writer.c_obj.reset(
+                new cpp_parquet_chunked_writer(options.c_obj)
             )
         return parquet_writer
 
@@ -941,12 +944,14 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
         (parquet FileMetadata thrift message) if requested in
         parquet_writer_options (empty blob otherwise).
     """
-    if stream is None:
-        stream = Stream()
     cdef unique_ptr[vector[uint8_t]] c_result
 
-    with nogil:
-        c_result = cpp_write_parquet(move(options.c_obj), stream.view())
+    if stream is not None:
+        with nogil:
+            c_result = cpp_write_parquet(move(options.c_obj), stream.view())
+    else:
+        with nogil:
+            c_result = cpp_write_parquet(move(options.c_obj))
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 

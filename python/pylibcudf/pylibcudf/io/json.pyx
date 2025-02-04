@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.string cimport string
@@ -20,7 +20,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 
 __all__ = [
@@ -445,9 +445,6 @@ cpdef tuple chunked_read_json(
     cdef size_type c_range_size = (
         chunk_size if chunk_size is not None else 0
     )
-    if stream is None:
-        stream = Stream()
-
     cdef table_with_metadata c_result
 
     final_columns = []
@@ -460,8 +457,12 @@ cpdef tuple chunked_read_json(
         options.set_byte_range_size(c_range_size)
 
         try:
-            with nogil:
-                c_result = move(cpp_read_json(options.c_obj, stream.view()))
+            if stream is not None:
+                with nogil:
+                    c_result = move(cpp_read_json(options.c_obj, stream.view()))
+            else:
+                with nogil:
+                    c_result = move(cpp_read_json(options.c_obj))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -510,13 +511,14 @@ cpdef TableWithMetadata read_json(
     TableWithMetadata
         The Table and its corresponding metadata (column names) that were read in.
     """
-    if stream is None:
-        stream = Stream()
-
     cdef table_with_metadata c_result
 
-    with nogil:
-        c_result = move(cpp_read_json(options.c_obj, stream.view()))
+    if stream is not None:
+        with nogil:
+            c_result = move(cpp_read_json(options.c_obj, stream.view()))
+    else:
+        with nogil:
+            c_result = move(cpp_read_json(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -717,7 +719,9 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     -------
     None
     """
-    if stream is None:
-        stream = Stream()
-    with nogil:
-        cpp_write_json(options.c_obj, stream.view())
+    if stream is not None:
+        with nogil:
+            cpp_write_json(options.c_obj, stream.view())
+    else:
+        with nogil:
+            cpp_write_json(options.c_obj)

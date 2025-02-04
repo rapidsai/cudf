@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -27,7 +27,7 @@ from pylibcudf.libcudf.io.parquet cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 
 cdef class ParquetReaderOptions:

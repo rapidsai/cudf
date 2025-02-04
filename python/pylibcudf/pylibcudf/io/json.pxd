@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from pylibcudf.io.types cimport (
     SinkInfo,
@@ -14,7 +14,7 @@ from pylibcudf.libcudf.io.json cimport (
     json_writer_options_builder,
 )
 from pylibcudf.libcudf.types cimport size_type
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.table cimport Table
 
 

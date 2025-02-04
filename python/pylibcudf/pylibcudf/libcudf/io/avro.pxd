@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -46,5 +46,10 @@ cdef extern from "cudf/io/avro.hpp" \
         avro_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_avro(
+        avro_reader_options &options
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata read_avro(
         avro_reader_options &options,
+        cuda_stream_view &stream,
     ) except +libcudf_exception_handler

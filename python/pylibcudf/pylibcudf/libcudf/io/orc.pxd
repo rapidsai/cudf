@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int64_t, uint8_t
@@ -77,6 +77,10 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_orc(
+        orc_reader_options opts
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata read_orc(
         orc_reader_options opts,
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
@@ -144,6 +148,10 @@ cdef extern from "cudf/io/orc.hpp" \
         ) except +libcudf_exception_handler
 
         orc_writer_options build() except +libcudf_exception_handler
+
+    cdef void write_orc(
+        orc_writer_options options
+    ) except +libcudf_exception_handler
 
     cdef void write_orc(
         orc_writer_options options,
@@ -215,6 +223,9 @@ cdef extern from "cudf/io/orc.hpp" \
 
     cdef cppclass orc_chunked_writer:
         orc_chunked_writer() except +libcudf_exception_handler
+        orc_chunked_writer(
+            chunked_orc_writer_options args
+        ) except +libcudf_exception_handler
         orc_chunked_writer(
             chunked_orc_writer_options args,
             cuda_stream_view stream,

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
 from io import StringIO
@@ -14,7 +14,7 @@ from utils import (
     write_source_str,
 )
 
-from rmm._cuda.stream import Stream
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType

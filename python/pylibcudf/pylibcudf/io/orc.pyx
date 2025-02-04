@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -39,7 +39,7 @@ from pylibcudf.libcudf.io.orc cimport (
     orc_writer_options,
     chunked_orc_writer_options,
 )
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 
 __all__ = [
@@ -421,12 +421,14 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     options: OrcReaderOptions
         Settings for controlling reading behavior
     """
-    if stream is None:
-        stream = Stream()
     cdef table_with_metadata c_result
 
-    with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, stream.view()))
+    if stream is not None:
+        with nogil:
+            c_result = move(cpp_read_orc(options.c_obj, stream.view()))
+    else:
+        with nogil:
+            c_result = move(cpp_read_orc(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -626,10 +628,12 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     -------
     None
     """
-    if stream is None:
-        stream = Stream()
-    with nogil:
-        cpp_write_orc(move(options.c_obj), stream.view())
+    if stream is not None:
+        with nogil:
+            cpp_write_orc(move(options.c_obj), stream.view())
+    else:
+        with nogil:
+            cpp_write_orc(move(options.c_obj))
 
 
 cdef class OrcChunkedWriter:
@@ -674,12 +678,13 @@ cdef class OrcChunkedWriter:
         -------
         OrcChunkedWriter
         """
-        if stream is None:
-            stream = Stream()
         cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
             OrcChunkedWriter
         )
-        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, stream.view()))
+        if stream is not None:
+            orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, stream.view()))
+        else:
+            orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj))
         return orc_writer
 
 

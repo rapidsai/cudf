@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libc.stdint cimport uint64_t, int64_t
 from libcpp cimport bool
 from libcpp.optional cimport optional
@@ -33,7 +33,7 @@ from pylibcudf.libcudf.io.types cimport (
     compression_type,
     statistics_freq,
 )
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 
 cdef class OrcReaderOptions:

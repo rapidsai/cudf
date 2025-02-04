@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -22,7 +22,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.table cimport Table
-from rmm._cuda.stream cimport Stream
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "read_csv",
@@ -646,11 +646,13 @@ cpdef TableWithMetadata read_csv(
     options: CsvReaderOptions
         Settings for controlling reading behavior
     """
-    if stream is None:
-        stream = Stream()
     cdef table_with_metadata c_result
-    with nogil:
-        c_result = move(cpp_read_csv(options.c_obj, stream.view()))
+    if stream is not None:
+        with nogil:
+            c_result = move(cpp_read_csv(options.c_obj, stream.view()))
+    else:
+        with nogil:
+            c_result = move(cpp_read_csv(options.c_obj))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
     return tbl_meta
@@ -851,7 +853,9 @@ cpdef void write_csv(
     options: CsvWriterOptions
         Settings for controlling writing behavior
     """
-    if stream is None:
-        stream = Stream()
-    with nogil:
-        cpp_write_csv(move(options.c_obj), stream.view())
+    if stream is not None:
+        with nogil:
+            cpp_write_csv(move(options.c_obj), stream.view())
+    else:
+        with nogil:
+            cpp_write_csv(move(options.c_obj))
