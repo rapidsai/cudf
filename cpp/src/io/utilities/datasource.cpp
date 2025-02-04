@@ -130,7 +130,7 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : file_source(filepath)
   {
-    if (size() != 0) {
+    if (this->size() != 0) {
       // Memory mapping is not exclusive, so we can include the whole region we expect to read
       map(_kvikio_file.fd(), offset, max_size_estimate);
     }
