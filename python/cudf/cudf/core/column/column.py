@@ -421,17 +421,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def _fill(
         self,
-        fill_value: ScalarLike,
+        fill_value: plc.Scalar,
         begin: int,
         end: int,
         inplace: bool = False,
     ) -> Self | None:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
-
-        # Constructing a cuDF scalar can cut unnecessary DtoH copy if
-        # the scalar is None when calling `is_valid`.
-        slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
         if not inplace or is_string_dtype(self.dtype):
             with acquire_spill_lock():
@@ -440,14 +436,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         self.to_pylibcudf(mode="read"),
                         begin,
                         end,
-                        slr.device_value,
+                        fill_value,
                     )
                 )
             if is_string_dtype(self.dtype):
                 return self._mimic_inplace(result, inplace=True)
             return result  # type: ignore[return-value]
 
-        if not slr.is_valid() and not self.nullable:
+        if not fill_value.is_valid() and not self.nullable:
             mask = as_buffer(
                 plc.null_mask.create_null_mask(
                     self.size, plc.null_mask.MaskState.ALL_VALID
@@ -460,7 +456,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="write"),
                 begin,
                 end,
-                slr.device_value,
+                fill_value,
             )
         return self
 
@@ -616,7 +612,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
                 range(start, stop, stride),
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             )
             return self.take(gather_map)
 
@@ -629,8 +625,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
 
         # Normalize value to scalar/column
-        value_normalized: cudf.Scalar | ColumnBase = (
-            cudf.Scalar(value, dtype=self.dtype)
+        value_normalized: plc.Scalar | ColumnBase = (
+            cudf.Scalar(value, dtype=self.dtype).device_value
             if is_scalar(value)
             else as_column(value, dtype=self.dtype)
         )
@@ -658,7 +654,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_slice(
         self,
         key: builtins.slice,
-        value: cudf.core.scalar.Scalar | ColumnBase,
+        value: plc.Scalar | ColumnBase,
     ) -> Self | None:
         """If this function returns None, it's either a no-op (slice is empty),
         or the inplace replacement is already performed (fill-in-place).
@@ -672,12 +668,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self._check_scatter_key_length(num_keys, value)
 
         if step == 1 and not isinstance(
-            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+            self.dtype, (cudf.StructDtype, cudf.ListDtype)
         ):
             # NOTE: List & Struct dtypes aren't supported by both
             # inplace & out-of-place fill. Hence we need to use scatter for
             # these two types.
-            if isinstance(value, cudf.core.scalar.Scalar):
+            if isinstance(value, plc.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
                 with acquire_spill_lock():
@@ -696,7 +692,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             cudf.core.column.NumericalColumn,
             as_column(
                 rng,
-                dtype=cudf.dtype(np.int32),
+                dtype=np.dtype(np.int32),
             ),
         )
 
@@ -705,7 +701,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_column(
         self,
         key: cudf.core.column.NumericalColumn,
-        value: cudf.core.scalar.Scalar | ColumnBase,
+        value: plc.Scalar | ColumnBase,
         bounds_check: bool = True,
     ) -> Self:
         if key.dtype.kind == "b":
@@ -738,7 +734,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 plc_table = plc.copying.boolean_mask_scatter(
                     plc.Table([value.to_pylibcudf(mode="read")])
                     if isinstance(value, Column)
-                    else [value.device_value],
+                    else [value],
                     plc.Table([self.to_pylibcudf(mode="read")]),
                     key.to_pylibcudf(mode="read"),
                 )
@@ -753,7 +749,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )[0]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
-        self, num_keys: int, value: cudf.core.scalar.Scalar | ColumnBase
+        self, num_keys: int, value: plc.Scalar | ColumnBase
     ) -> None:
         """`num_keys` is the number of keys to scatter. Should equal to the
         number of rows in ``value`` if ``value`` is a column.
@@ -1254,7 +1250,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         cats = self.unique().sort_values()
         label_dtype = min_unsigned_type(len(cats))
         labels = self._label_encoding(
-            cats=cats, dtype=label_dtype, na_sentinel=cudf.Scalar(1)
+            cats=cats, dtype=label_dtype, na_sentinel=pa.scalar(1)
         )
         # columns include null index in factorization; remove:
         if self.has_nulls():
@@ -1565,7 +1561,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self,
         cats: ColumnBase,
         dtype: Dtype | None = None,
-        na_sentinel: cudf.Scalar | None = None,
+        na_sentinel: pa.Scalar | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1596,14 +1592,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        if na_sentinel is None or na_sentinel.value is cudf.NA:
-            na_sentinel = cudf.Scalar(-1)
+        if na_sentinel is None or not na_sentinel.is_valid:
+            na_sentinel = pa.scalar(-1)
 
         def _return_sentinel_column():
             return as_column(na_sentinel, dtype=dtype, length=len(self))
 
         if dtype is None:
-            dtype = min_signed_type(max(len(cats), na_sentinel.value), 8)
+            dtype = min_signed_type(max(len(cats), na_sentinel.as_py()), 8)
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
@@ -1635,7 +1631,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         (codes,) = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )
-        return codes.fillna(na_sentinel.value)
+        return codes.fillna(na_sentinel)
 
     @acquire_spill_lock()
     def copy_if_else(
@@ -1800,9 +1796,7 @@ def column_empty(
         children = (
             cudf.core.column.NumericalColumn(
                 data=as_buffer(
-                    rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype(SIZE_TYPE_DTYPE).itemsize
-                    )
+                    rmm.DeviceBuffer(size=row_count * SIZE_TYPE_DTYPE.itemsize)
                 ),
                 size=None,
                 dtype=SIZE_TYPE_DTYPE,
@@ -2050,7 +2044,7 @@ def as_column(
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
-            dtype = cudf.dtype(
+            dtype = np.dtype(
                 f"i{cudf.get_option('default_integer_bitwidth') // 8}"
             )
         if dtype is not None:
@@ -2267,13 +2261,23 @@ def as_column(
             and np.isnan(arbitrary)
         ):
             if dtype is None:
-                dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
+                dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
-        arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-        if length == 0:
-            return column_empty(length, dtype=arbitrary.dtype)
+        if isinstance(arbitrary, pa.Scalar):
+            col = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    pa_scalar_to_plc_scalar(arbitrary), length
+                )
+            )
+            if dtype is not None:
+                col = col.astype(dtype)
+            return col
         else:
-            return ColumnBase.from_scalar(arbitrary, length)
+            arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
+            if length == 0:
+                return column_empty(length, dtype=arbitrary.dtype)
+            else:
+                return ColumnBase.from_scalar(arbitrary, length)
 
     elif hasattr(arbitrary, "__array_interface__"):
         desc = arbitrary.__array_interface__
@@ -2474,7 +2478,7 @@ def as_column(
                 and pa.types.is_floating(arbitrary.type)
             ):
                 dtype = _maybe_convert_to_default_type(
-                    cudf.dtype(arbitrary.type.to_pandas_dtype())
+                    np.dtype(arbitrary.type.to_pandas_dtype())
                 )
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
@@ -2556,7 +2560,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = cudf.dtype(None)
+        dtype = np.dtype(np.float64)
         return column_empty(0, dtype=dtype)
 
     # If all columns are `NumericalColumn` with different dtypes,
