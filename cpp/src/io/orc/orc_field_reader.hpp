@@ -22,7 +22,7 @@
 /**
  * @file orc_field_reader.hpp
  * @brief Functors to encapsulate common functionality required to implement
- * ProtobufReader::read(...) functions
+ * protobuf_reader::read(...) functions
  */
 
 namespace cudf::io::orc::detail {
@@ -35,12 +35,12 @@ namespace cudf::io::orc::detail {
  * of operators then it is run with the byte stream and field type arguments.
  *
  * If the field does not match any of the functors then skip_struct_field is
- * called by the ProtobufReader
+ * called by the protobuf_reader
  */
 template <int index>
-struct FunctionSwitchImpl {
+struct function_switch {
   template <typename... Operator>
-  static inline void run(ProtobufReader* pbr,
+  static inline void run(protobuf_reader* pbr,
                          uint8_t const* end,
                          int const& encoded_field_number,
                          std::tuple<Operator...>& ops)
@@ -48,15 +48,15 @@ struct FunctionSwitchImpl {
     if (encoded_field_number == std::get<index>(ops).encoded_field_number) {
       std::get<index>(ops)(pbr, end);
     } else {
-      FunctionSwitchImpl<index - 1>::run(pbr, end, encoded_field_number, ops);
+      function_switch<index - 1>::run(pbr, end, encoded_field_number, ops);
     }
   }
 };
 
 template <>
-struct FunctionSwitchImpl<0> {
+struct function_switch<0> {
   template <typename... Operator>
-  static inline void run(ProtobufReader* pbr,
+  static inline void run(protobuf_reader* pbr,
                          uint8_t const* end,
                          int const& encoded_field_number,
                          std::tuple<Operator...>& ops)
@@ -70,20 +70,20 @@ struct FunctionSwitchImpl<0> {
 };
 
 /**
- * @brief Function to implement ProtobufReader::read based on the tuple of functors provided.
+ * @brief Function to implement protobuf_reader::read based on the tuple of functors provided.
  *
  * Bytes are read from the internal metadata stream and field types are matched up against user
  * supplied reading functors. If they match then the corresponding values are written to references
  * pointed to by the functors.
  */
 template <typename T, typename... Operator>
-inline void ProtobufReader::function_builder(T& s, size_t maxlen, std::tuple<Operator...>& op)
+inline void protobuf_reader::function_builder(T& s, size_t maxlen, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   auto* const end     = std::min(m_cur + maxlen, m_end);
   while (m_cur < end) {
     auto const field = get<uint32_t>();
-    FunctionSwitchImpl<index>::run(this, end, field, op);
+    function_switch<index>::run(this, end, field, op);
   }
   CUDF_EXPECTS(m_cur <= end, "Current pointer to metadata stream is out of bounds");
 }

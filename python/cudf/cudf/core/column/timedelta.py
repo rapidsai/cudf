@@ -19,7 +19,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
-from cudf.utils.dtypes import np_to_pa_dtype
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, np_to_pa_dtype
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -192,7 +192,7 @@ class TimeDeltaColumn(ColumnBase):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
-                out_dtype = cudf.dtype(np.bool_)
+                out_dtype = np.dtype(np.bool_)
             elif op == "__mod__":
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
@@ -374,7 +374,7 @@ class TimeDeltaColumn(ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
+        elif to_dtype == np.dtype(np.int64) or to_dtype == CUDF_STRING_DTYPE:
             # can safely cast to representation, or string
             return True
         else:
@@ -383,7 +383,8 @@ class TimeDeltaColumn(ColumnBase):
     def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(
             cast(
-                "cudf.core.column.NumericalColumn", self.astype("int64")
+                "cudf.core.column.NumericalColumn",
+                self.astype(np.dtype(np.int64)),
             ).mean(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
