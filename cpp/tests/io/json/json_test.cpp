@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3459,6 +3459,48 @@ TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
       .build();
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
+}
+
+/**
+ * @brief Base test fixture for JSON batched reader tests
+ */
+struct JsonBatchedReaderTest : public cudf::test::BaseFixture {
+ public:
+  void set_batch_size(size_t batch_size_upper_bound)
+  {
+    setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1);
+  }
+
+  ~JsonBatchedReaderTest() { unsetenv("LIBCUDF_JSON_BATCH_SIZE"); }
+};
+
+TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
+{
+  std::string data          = R"(
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  )";
+  size_t size_of_last_batch = 5;
+  // This test constructs two batches by setting the batch size such that the last batch is an
+  // incomplete line. The JSON string corresponding to the first batch is
+  // '\n{"a": "b"}\n{"a": "b"}\n{"a": "b"}\n{"a": '
+  // The JSON string corresponding to the second batch is
+  // '"b"}\n'
+  this->set_batch_size(data.size() - size_of_last_batch);
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .build();
+  auto result = cudf::io::read_json(opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
