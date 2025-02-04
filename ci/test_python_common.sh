@@ -41,4 +41,5 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
   "cudf=${RAPIDS_VERSION}" \
+  "pylibcudf=${RAPIDS_VERSION}" \
   "libcudf=${RAPIDS_VERSION}"
