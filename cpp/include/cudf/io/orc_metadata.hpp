@@ -172,9 +172,9 @@ using statistics_type = std::variant<no_statistics,
 
 //! Orc I/O interfaces
 namespace orc::detail {
-// forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
+// forward declare the type that protobuf_reader uses. The `cudf::io::column_statistics` objects,
 // returned from `read_parsed_orc_statistics`, are constructed from
-// `cudf::io::orc::detail::column_statistics` objects that `ProtobufReader` initializes.
+// `cudf::io::orc::detail::column_statistics` objects that `protobuf_reader` initializes.
 struct column_statistics;
 }  // namespace orc::detail
 
