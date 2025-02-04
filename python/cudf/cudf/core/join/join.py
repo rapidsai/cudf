@@ -372,7 +372,14 @@ class Merge:
         for name, col in right_result._column_labels_and_values:
             if name in common_names:
                 if name not in self._key_columns_with_same_name:
-                    data[f"{name}{self.rsuffix}"] = col
+                    r_label = f"{name}{self.rsuffix}"
+                    if r_label in data:
+                        raise NotImplementedError(
+                            f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
+                            f"duplicate column label, '{r_label}', which is "
+                            "not supported."
+                        )
+                    data[r_label] = col
             else:
                 data[name] = col
 

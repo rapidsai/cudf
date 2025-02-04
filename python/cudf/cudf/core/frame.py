@@ -35,7 +35,7 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import find_common_type
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -1008,7 +1008,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
                 # float column to str column.
-                result[name] = result[name].astype(cudf.dtype("str"))
+                result[name] = result[name].astype(CUDF_STRING_DTYPE)
             elif name in data.column_names and isinstance(
                 data[name].type,
                 (
@@ -1644,7 +1644,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 (
                     col.unary_operator("not")
                     if col.dtype.kind == "b"
-                    else -1 * col
+                    else col.unary_operator("negate")
                     for col in self._columns
                 )
             )
