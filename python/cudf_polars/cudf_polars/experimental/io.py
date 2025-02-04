@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -42,7 +42,6 @@ def _(
                 ir.schema,
                 ir.df.slice(offset, length),
                 ir.projection,
-                ir.predicate,
                 ir.config_options,
             )
             for offset in range(0, nrows, length)
