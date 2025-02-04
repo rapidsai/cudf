@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -2563,3 +2563,17 @@ def test_date_range_start_end_divisible_by_freq():
     result = cudf.date_range("2011-01-01", "2011-01-02", freq="h")
     expected = pd.date_range("2011-01-01", "2011-01-02", freq="h")
     assert_eq(result, expected)
+
+
+def test_writable_numpy_array():
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]")
+    expected_flags = pd.Index(
+        [1, 2, 3], dtype="datetime64[ns]"
+    )._data._ndarray.flags
+
+    actual_flags = gi.to_pandas()._data._ndarray.flags
+    assert expected_flags.c_contiguous == actual_flags.c_contiguous
+    assert expected_flags.f_contiguous == actual_flags.f_contiguous
+    assert expected_flags.writeable == actual_flags.writeable
+    assert expected_flags.aligned == actual_flags.aligned
+    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy

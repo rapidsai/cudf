@@ -977,6 +977,28 @@ class DatetimeColumn(column.ColumnBase):
             "Cannot convert tz-naive timestamps, use tz_localize to localize"
         )
 
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+        else:
+            # Workaround for datetime types until the following issue is fixed:
+            # https://github.com/apache/arrow/issues/45341
+            return pd.Index(
+                pa_array.to_numpy(zero_copy_only=False, writable=True)
+            )
+
 
 class DatetimeTZColumn(DatetimeColumn):
     def __init__(
