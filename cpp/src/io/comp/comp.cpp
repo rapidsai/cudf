@@ -31,6 +31,8 @@
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
 
+#include <numeric>
+
 namespace cudf::io::detail {
 
 namespace {
@@ -311,6 +313,13 @@ void host_compress(compression_type compression,
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
 
+  // Generate order vector to submit largest tasks first
+  std::vector<size_t> task_order(num_chunks);
+  std::iota(task_order.begin(), task_order.end(), 0);
+  std::sort(task_order.begin(), task_order.end(), [&](size_t a, size_t b) {
+    return h_inputs[a].size() > h_inputs[b].size();
+  });
+
   std::vector<std::future<size_t>> tasks;
   auto const num_streams =
     std::min<std::size_t>({num_chunks,
@@ -318,8 +327,10 @@ void host_compress(compression_type compression,
                            h_comp_pool().get_thread_count()});
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
+    auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
+    auto task =
+      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
       auto const h_in  = cudf::detail::make_host_vector_sync(d_in, cur_stream);
       auto const h_out = compress(compression, h_in, cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
@@ -329,7 +340,7 @@ void host_compress(compression_type compression,
   }
 
   for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[i] = {tasks[i].get(), compression_status::SUCCESS};
+    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
 }
