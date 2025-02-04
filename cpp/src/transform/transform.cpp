@@ -43,9 +43,9 @@ std::vector<std::string> build_jit_typenames(mutable_column_view output,
   static constexpr auto SCALAR_STRIDE = 0;
   static constexpr auto COLUMN_STRIDE = 1;
 
-  auto const column_type_name = [](cudf::data_type data_type, bool is_scalar) {
+  auto const column_type_name = [](data_type data_type, bool is_scalar) {
     return jitify2::reflection::Template("cudf::transformation::jit::strided")
-      .instantiate(cudf::type_to_name(data_type), is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE);
+      .instantiate(type_to_name(data_type), is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE);
   };
 
   std::vector<std::string> typenames;
@@ -66,8 +66,8 @@ std::map<unsigned int, std::string> build_ptx_params(mutable_column_view output,
   std::map<unsigned int, std::string> params;
   unsigned int index = 0;
 
-  auto const add_column = [&](bool is_output, cudf::data_type type) {
-    auto const param_type = cudf::type_to_name(type);
+  auto const add_column = [&](bool is_output, data_type type) {
+    auto const param_type = type_to_name(type);
     params.emplace(index++, is_output ? (param_type + "*") : param_type);
   };
 
@@ -108,7 +108,7 @@ std::vector<void*> build_launch_args(int64_t& size, std::vector<device_data_t>& 
   return args;
 }
 
-void transform_operation(cudf::size_type base_column_size,
+void transform_operation(size_type base_column_size,
                          mutable_column_view output,
                          std::vector<column_view> const& inputs,
                          std::string const& udf,
