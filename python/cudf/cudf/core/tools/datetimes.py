@@ -224,18 +224,18 @@ def to_datetime(
                     arg_col = arg._data[value]
                     if arg_col.dtype.kind == "f":
                         col = new_series._column.strptime(
-                            cudf.dtype("datetime64[ns]"), format=format
+                            np.dtype("datetime64[ns]"), format=format
                         )
                         break
                     elif arg_col.dtype.kind == "O":
                         if not arg_col.is_integer().all():
                             col = new_series._column.strptime(
-                                cudf.dtype("datetime64[ns]"), format=format
+                                np.dtype("datetime64[ns]"), format=format
                             )
                             break
             else:
                 col = new_series._column.strptime(
-                    cudf.dtype("datetime64[s]"), format=format
+                    np.dtype("datetime64[s]"), format=format
                 )
 
             times_column = None
@@ -339,14 +339,14 @@ def _process_col(
                 col.astype("int")
                 .astype("str")
                 .strptime(
-                    dtype=cudf.dtype("datetime64[us]")
+                    dtype=np.dtype("datetime64[us]")
                     if "%f" in format
-                    else cudf.dtype("datetime64[s]"),
+                    else np.dtype("datetime64[s]"),
                     format=format,
                 )
             )
         else:
-            col = col.astype(dtype="datetime64[ns]")
+            col = col.astype(dtype=np.dtype("datetime64[ns]"))
 
     elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
@@ -358,10 +358,10 @@ def _process_col(
 
         if format is not None:
             col = col.astype("str").strptime(
-                dtype=cudf.dtype(_unit_dtype_map[unit]), format=format
+                dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            col = col.astype(dtype=cudf.dtype(_unit_dtype_map[unit]))
+            col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
@@ -389,7 +389,7 @@ def _process_col(
                     dayfirst=dayfirst,
                 )
             col = col.strptime(
-                dtype=cudf.dtype(_unit_dtype_map[unit]),
+                dtype=np.dtype(_unit_dtype_map[unit]),
                 format=format,
             )
     elif col.dtype.kind != "M":
@@ -591,10 +591,10 @@ class DateOffset:
                 # Months must be int16
                 if k == "months":
                     # TODO: throw for out-of-bounds int16 values
-                    dtype = "int16"
+                    dtype = np.dtype(np.int16)
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = cudf.dtype(f"timedelta64[{unit}]")
+                    dtype = np.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = scalars
