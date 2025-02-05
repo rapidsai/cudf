@@ -237,6 +237,20 @@ __device__ inline void transform(
 }
 )***";
 
+  // Generated from NUMBA, using:
+  //
+  // ```py
+  //
+  // @cuda.jit(device=True)
+  // def op(a, b, c):
+  //    return (a + b) * c
+  //
+  //
+  // print(cuda.compile_ptx_for_current_device(op, (float32, float32, float32), device=True))
+  //
+  //
+  // ```
+  //
   std::string const ptx =
     R"***(
 //
