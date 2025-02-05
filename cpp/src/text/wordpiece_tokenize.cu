@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -191,8 +192,8 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not input.is_empty(), "vocabulary must not be empty");
-  CUDF_EXPECTS(not input.has_nulls(), "vocabulary must not have nulls");
+  CUDF_EXPECTS(not input.is_empty(), "vocabulary must not be empty", std::invalid_argument);
+  CUDF_EXPECTS(not input.has_nulls(), "vocabulary must not have nulls", std::invalid_argument);
 
   // need to hold a copy of the input
   auto vocabulary   = std::make_unique<cudf::column>(input.parent(), stream, mr);
@@ -243,7 +244,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   auto d_map   = vocab_map->ref(cuco::op::find);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     zero_itr,
-                    zero_itr + 1,
+                    zero_itr + unk_ids.size(),
                     unk_ids.begin(),
                     resolve_unk_id<decltype(d_map)>{d_map});
   auto const id0    = unk_ids.front_element(stream);
@@ -475,7 +476,12 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                                                  rmm::device_async_resource_ref mr)
 {
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
-  if (input.size() == input.null_count()) { return cudf::make_empty_column(output_type); }
+  if (input.size() == input.null_count()) {
+    return input.has_nulls()
+             ? cudf::lists::detail::make_all_nulls_lists_column(
+                 input.size(), output_type, stream, mr)
+             : cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
+  }
 
   auto const first_offset  = (input.offset() == 0) ? 0
                                                    : cudf::strings::detail::get_offset_value(
@@ -707,7 +713,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::device_span<int64_t const> d_starts,
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= d_starts.size()) { return; }
   auto const size = d_sizes[idx];
-  if (size == 0) { return; }  // not expected
+  if (size <= 0 || size == no_token) { return; }
   auto const start = d_starts[idx];
   auto const begin = d_chars + start;
   auto d_output    = d_tokens + start;
@@ -724,8 +730,12 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                                                  rmm::device_async_resource_ref mr)
 {
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
-  if (input.size() == input.null_count()) { return cudf::make_empty_column(output_type); }
-  CUDF_EXPECTS(max_words_per_row > 0, "maximum words must be greater than 0");
+  if (input.size() == input.null_count()) {
+    return input.has_nulls()
+             ? cudf::lists::detail::make_all_nulls_lists_column(
+                 input.size(), output_type, stream, mr)
+             : cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
+  }
 
   auto const first_offset  = (input.offset() == 0) ? 0
                                                    : cudf::strings::detail::get_offset_value(
