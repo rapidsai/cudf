@@ -31,14 +31,14 @@ namespace CUDF_EXPORT cudf {
  *
  * @return sink_ptr The sink to use
  */
-rapids_logger::sink_ptr default_sink();
+rapids_logger::sink_ptr default_logger_sink();
 
 /**
  * @brief Returns the default log pattern for the global logger.
  *
  * @return std::string The default log pattern.
  */
-std::string default_pattern();
+std::string default_logger_pattern();
 
 /**
  * @brief Get the default logger.
