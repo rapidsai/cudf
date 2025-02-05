@@ -14,7 +14,7 @@ pylibcudf:
    import pylibcudf as plc
 
    source = plc.io.SourceInfo(["dataset.parquet"])
-   options = plc.io.parquet.ParquetReaderOptions.builder(source)
+   options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
    table = plc.io.parquet.read_parquet(options)
 
 libcudf:
@@ -26,7 +26,7 @@ libcudf:
    int main()
    {
       auto source  = cudf::io::source_info("dataset.parquet");
-      auto options = cudf::io::parquet_reader_options::builder(source);
+      auto options = cudf::io::parquet_reader_options::builder(source).build();
       auto table  = cudf::io::read_parquet(options);
    }
 

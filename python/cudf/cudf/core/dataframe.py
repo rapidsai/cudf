@@ -6717,7 +6717,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             prepared._data[col]
                         )
                         if common_dtype.kind != "M"
-                        else cudf.dtype("float64")
+                        else np.dtype(np.float64)
                     )
                     .fillna(np.nan)
                 )
