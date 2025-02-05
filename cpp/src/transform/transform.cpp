@@ -60,11 +60,11 @@ std::vector<std::string> build_jit_typenames(mutable_column_view output,
   return typenames;
 }
 
-std::map<unsigned int, std::string> build_ptx_params(mutable_column_view output,
-                                                     std::vector<column_view> const& inputs)
+std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
+                                                 std::vector<column_view> const& inputs)
 {
-  std::map<unsigned int, std::string> params;
-  unsigned int index = 0;
+  std::map<uint32_t, std::string> params;
+  uint32_t index = 0;
 
   auto const add_column = [&](bool is_output, data_type type) {
     auto const param_type = type_to_name(type);
@@ -96,8 +96,7 @@ std::vector<device_data_t> build_device_data(mutable_column_view output,
 
 std::vector<void*> build_launch_args(cudf::size_type& size, std::vector<device_data_t>& device_data)
 {
-  // JITIFY and NVRTC need non-const pointers even if they aren't written
-  // to
+  // JITIFY and NVRTC need non-const pointers even if they aren't written to
   std::vector<void*> args;
   args.push_back(&size);
   std::transform(
