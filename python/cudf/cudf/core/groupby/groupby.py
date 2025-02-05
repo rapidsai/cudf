@@ -473,6 +473,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
         self.obj = obj
         self._as_index = as_index
         self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
