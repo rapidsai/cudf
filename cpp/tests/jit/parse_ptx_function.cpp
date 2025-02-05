@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,11 +70,34 @@ __device__ __inline__ void GENERIC_OP(
 ){
  asm volatile ("{");
  asm volatile ("bra RETTGT;");
+ /** ret*/
  asm volatile ("RETTGT:}");}
 )";
 
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", {{0, "float *"}});
+
+  EXPECT_TRUE(ptx_equal(cuda_source, expected));
+}
+
+TEST_F(JitParseTest, PTXWithBranchLabel)
+{
+  std::string raw_ptx = R"(
+.visible .func _Z1flPaS_(){
+BB0:
+  ret;
+}
+)";
+
+  std::string expected = R"(
+__device__ __inline__ void GENERIC_OP(){
+ asm volatile ("{");
+ asm volatile ("BB0: bra RETTGT;");
+ /** BB0: ret*/
+ asm volatile ("RETTGT:}");}
+)";
+
+  std::string cuda_source = cudf::jit::parse_single_function_ptx(raw_ptx, "GENERIC_OP", {});
 
   EXPECT_TRUE(ptx_equal(cuda_source, expected));
 }
