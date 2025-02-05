@@ -99,7 +99,7 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-using ColStatsBlob = std::vector<uint8_t>;  // Column statistics blob
+using col_stats_blob = std::vector<uint8_t>;  // Column statistics blob
 
 struct Footer {
   uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
@@ -108,7 +108,7 @@ struct Footer {
   std::vector<SchemaType> types;           // the schema information
   std::vector<UserMetadataItem> metadata;  // the user metadata that was added
   uint64_t numberOfRows = 0;               // the total number of rows in the file
-  std::vector<ColStatsBlob> statistics;    // Column statistics blobs
+  std::vector<col_stats_blob> statistics;  // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
   std::optional<uint32_t> writer;          // Writer code
 };
@@ -157,7 +157,7 @@ struct column_statistics {
 };
 
 struct StripeStatistics {
-  std::vector<ColStatsBlob> colStats;  // Column statistics blobs
+  std::vector<col_stats_blob> colStats;  // Column statistics blobs
 };
 
 struct Metadata {
@@ -223,9 +223,9 @@ int constexpr encode_field_number(int field_number) noexcept
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
  */
-class ProtobufReader {
+class protobuf_reader {
  public:
-  ProtobufReader(uint8_t const* base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
+  protobuf_reader(uint8_t const* base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
 
   template <typename T>
   void read(T& s)
@@ -254,7 +254,7 @@ class ProtobufReader {
 
  private:
   template <int index>
-  friend struct FunctionSwitchImpl;
+  friend struct function_switch;
 
   void skip_bytes(size_t bytecnt)
   {
@@ -360,7 +360,7 @@ class ProtobufReader {
     {
     }
 
-    inline void operator()(ProtobufReader* pbr, uint8_t const* end)
+    inline void operator()(protobuf_reader* pbr, uint8_t const* end)
     {
       pbr->read_field(output_value, end);
     }
@@ -376,7 +376,7 @@ class ProtobufReader {
     {
     }
 
-    inline void operator()(ProtobufReader* pbr, uint8_t const* end)
+    inline void operator()(protobuf_reader* pbr, uint8_t const* end)
     {
       pbr->read_packed_field(output_value, end);
     }
@@ -392,7 +392,7 @@ class ProtobufReader {
     {
     }
 
-    inline void operator()(ProtobufReader* pbr, uint8_t const* end)
+    inline void operator()(protobuf_reader* pbr, uint8_t const* end)
     {
       pbr->read_raw_field(output_value, end);
     }
@@ -404,19 +404,19 @@ class ProtobufReader {
 };
 
 template <>
-inline uint8_t ProtobufReader::get<uint8_t>()
+inline uint8_t protobuf_reader::get<uint8_t>()
 {
   return (m_cur < m_end) ? *m_cur++ : 0;
 };
 
 template <>
-inline bool ProtobufReader::get<bool>()
+inline bool protobuf_reader::get<bool>()
 {
   return static_cast<bool>(get<uint8_t>());
 };
 
 template <>
-inline uint32_t ProtobufReader::get<uint32_t>()
+inline uint32_t protobuf_reader::get<uint32_t>()
 {
   uint32_t v = 0;
   for (uint32_t l = 0;; l += 7) {
@@ -427,7 +427,7 @@ inline uint32_t ProtobufReader::get<uint32_t>()
 }
 
 template <>
-inline uint64_t ProtobufReader::get<uint64_t>()
+inline uint64_t protobuf_reader::get<uint64_t>()
 {
   uint64_t v = 0;
   for (uint64_t l = 0;; l += 7) {
@@ -445,13 +445,13 @@ auto decode_zigzag(T u)
 }
 
 template <>
-inline int32_t ProtobufReader::get<int32_t>()
+inline int32_t protobuf_reader::get<int32_t>()
 {
   return decode_zigzag(get<uint32_t>());
 }
 
 template <>
-inline int64_t ProtobufReader::get<int64_t>()
+inline int64_t protobuf_reader::get<int64_t>()
 {
   return decode_zigzag(get<uint64_t>());
 }
@@ -459,11 +459,11 @@ inline int64_t ProtobufReader::get<int64_t>()
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers
  */
-class ProtobufWriter {
+class protobuf_writer {
  public:
-  ProtobufWriter() = default;
+  protobuf_writer() = default;
 
-  ProtobufWriter(std::size_t bytes) : m_buff(bytes) {}
+  protobuf_writer(std::size_t bytes) : m_buff(bytes) {}
 
   uint32_t put_byte(uint8_t v)
   {
@@ -505,7 +505,7 @@ class ProtobufWriter {
                            int32_t data2_blk,
                            int32_t data2_ofs,
                            TypeKind kind,
-                           ColStatsBlob const* stats);
+                           col_stats_blob const* stats);
 
   [[nodiscard]] std::size_t size() const { return m_buff.size(); }
   uint8_t const* data() { return m_buff.data(); }
@@ -527,16 +527,16 @@ class ProtobufWriter {
 
  protected:
   std::vector<uint8_t> m_buff;
-  struct ProtobufFieldWriter;
+  struct protobuf_field_writer;
 };
 
 /**
  * @brief Class for decompressing Orc data blocks using the CPU
  */
 
-class OrcDecompressor {
+class orc_decompressor {
  public:
-  OrcDecompressor(CompressionKind kind, uint64_t blockSize);
+  orc_decompressor(CompressionKind kind, uint64_t blockSize);
 
   /**
    * @brief ORC block decompression
@@ -665,7 +665,7 @@ class metadata {
   Footer ff;
   Metadata md;
   std::vector<StripeFooter> stripefooters;
-  std::unique_ptr<OrcDecompressor> decompressor;
+  std::unique_ptr<orc_decompressor> decompressor;
   datasource* const source;
 
  private:

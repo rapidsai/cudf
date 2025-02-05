@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -451,7 +450,6 @@ TEST(TextSubwordTest, WP1)
     cudf::test::strings_column_wrapper({"the quick brown fox jumped over", "the lazy brown dog"});
   auto sv      = cudf::strings_column_view(input);
   auto results = nvtext::wordpiece_tokenize(sv, *vocab, 100);
-  cudf::test::print(results->view());
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
@@ -471,7 +469,6 @@ TEST(TextSubwordTest, WP2)
     cudf::test::strings_column_wrapper({"I have a GPU ! ", "do not have a gpu", "no gpu"});
   auto sv      = cudf::strings_column_view(input);
   auto results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
-  cudf::test::print(results->view());
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off

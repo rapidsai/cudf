@@ -353,8 +353,8 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths)
-    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  explicit source_info(std::vector<std::string> file_paths)
+    : _type(io_type::FILEPATH), _filepaths(std::move(file_paths))
   {
   }
 
@@ -363,8 +363,8 @@ struct source_info {
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path)
-    : _type(io_type::FILEPATH), _filepaths({file_path})
+  explicit source_info(std::string file_path)
+    : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
   {
   }
 
@@ -534,8 +534,8 @@ struct sink_info {
    *
    * @param file_paths Output files paths
    */
-  explicit sink_info(std::vector<std::string> const& file_paths)
-    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
+  explicit sink_info(std::vector<std::string> file_paths)
+    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(std::move(file_paths))
   {
   }
 
@@ -544,8 +544,8 @@ struct sink_info {
    *
    * @param file_path Single output file path
    */
-  explicit sink_info(std::string const& file_path)
-    : _type(io_type::FILEPATH), _filepaths({file_path})
+  explicit sink_info(std::string file_path)
+    : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
   {
   }
 
@@ -554,8 +554,8 @@ struct sink_info {
    *
    * @param buffers Output host buffers
    */
-  explicit sink_info(std::vector<std::vector<char>*> const& buffers)
-    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
+  explicit sink_info(std::vector<std::vector<char>*> buffers)
+    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(std::move(buffers))
   {
   }
   /**
@@ -571,7 +571,9 @@ struct sink_info {
    * @param user_sinks Output user-implemented sinks
    */
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
-    : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
+    : _type(io_type::USER_IMPLEMENTED),
+      _num_sinks(user_sinks.size()),
+      _user_sinks(std::move(user_sinks))
   {
   }
 
@@ -821,7 +823,7 @@ class column_in_metadata {
    *
    * @return The name of this column
    */
-  [[nodiscard]] std::string get_name() const noexcept { return _name; }
+  [[nodiscard]] std::string const& get_name() const noexcept { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.

@@ -126,7 +126,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@nvks-runners
     with:
       enable_check_generated_files: false
-      ignored_pr_jobs: "telemetry-summarize"
+      ignored_pr_jobs: "telemetry-summarize spark-rapids-jni"
   conda-cpp-build:
     needs: checks
     secrets: inherit
@@ -342,6 +342,10 @@ jobs:
         node_type: "cpu4"
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+  spark-rapids-jni:
+    needs: changed-files
+    uses: ./.github/workflows/spark-rapids-jni.yaml
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
