@@ -205,7 +205,6 @@ def read_csv(
                 cudf_dtypes.append(col_dtype)
                 plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
         else:
-            breakpoint()
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
