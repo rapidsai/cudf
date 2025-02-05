@@ -465,10 +465,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not isinstance(fill_value, pa.Scalar):
             fill_value = pa.scalar(fill_value)
         fill_value = fill_value.cast(cudf_dtype_to_pa_type(self.dtype))
+        plc_fill_value = pa_scalar_to_plc_scalar(fill_value)
+        if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
+            # TODO: Generalize converting pyarrow[Decimal128] to Decimal32/64
+            col_fill_value = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(plc_fill_value, 1)
+            ).astype(self.dtype)
+            plc_fill_value = plc.copying.get_element(
+                col_fill_value.to_pylibcudf(mode="read"),
+                0,
+            )
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
-            pa_scalar_to_plc_scalar(fill_value),
+            plc_fill_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
@@ -764,11 +774,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            return cudf.Scalar(fill_value, dtype=self.dtype)
-        return as_column(fill_value)
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(fill_value).cast(cudf_dtype_to_pa_type(self.dtype))
+            )
+        return as_column(fill_value).astype(self.dtype)
 
     @acquire_spill_lock()
     def replace(
@@ -814,8 +826,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     if method == "ffill"
                     else plc.replace.ReplacePolicy.FOLLOWING
                 )
-            elif is_scalar(fill_value):
-                plc_replace = cudf.Scalar(fill_value).device_value
+            elif isinstance(fill_value, plc.Scalar):
+                plc_replace = fill_value
             else:
                 plc_replace = fill_value.to_pylibcudf(mode="read")
             plc_column = plc.replace.replace_nulls(

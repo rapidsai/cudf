@@ -170,14 +170,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if isinstance(fill_value, (int, Decimal)):
-            return cudf.Scalar(fill_value, dtype=self.dtype)
+            return super()._validate_fillna_value(fill_value)
         elif isinstance(fill_value, ColumnBase) and (
             isinstance(self.dtype, DecimalDtype) or self.dtype.kind in "iu"
         ):
-            return fill_value.astype(self.dtype)
+            return super()._validate_fillna_value(fill_value)
         raise TypeError(
             "Decimal columns only support using fillna with decimal and "
             "integer values"
