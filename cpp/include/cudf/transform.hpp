@@ -38,11 +38,13 @@ namespace CUDF_EXPORT cudf {
  * Computes:
  * `out[i] = F(inputs[i]...)`.
  *
- * Note that for every scalar in `inputs`, `input[i] == input[0]`
+ * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
- * The output null mask is the same is the input null mask so if input[i] is
+ * The output null mask is the same as the null mask of the input columns, so if input[i] is
  * null then output[i] is also null. The size of the resulting column is the size of the largest
- * column. Scalar inputs are also supported and they should have size of 1.
+ * column.
+ * All input columns must have equivalent null masks.
+ *
  *
  * @param inputs        Immutable views of the input columns to transform
  * @param transform_udf The PTX/CUDA string of the transform function to apply

@@ -94,16 +94,16 @@ std::vector<device_data_t> build_device_data(mutable_column_view output,
   return data;
 }
 
-std::vector<void*> build_launch_args(int64_t& size, std::vector<device_data_t>& device_data)
+std::vector<void*> build_launch_args(cudf::size_type& size, std::vector<device_data_t>& device_data)
 {
-  // JITIFY and NVRTC need non-const pointers even if it isn't written to.
-  // This isn't UB since they are all read-only arguments.
+  // JITIFY and NVRTC need non-const pointers even if they aren't written
+  // to
   std::vector<void*> args;
   args.push_back(&size);
-  std::transform(device_data.begin(),
-                 device_data.end(),
-                 std::back_inserter(args),
-                 [](device_data_t& data) -> void* { return &data; });
+  std::transform(
+    device_data.begin(), device_data.end(), std::back_inserter(args), [](auto& data) -> void* {
+      return &data;
+    });
 
   return args;
 }
@@ -125,11 +125,9 @@ void transform_operation(size_type base_column_size,
                udf, "GENERIC_TRANSFORM_OP", build_ptx_params(output, inputs))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  int64_t size = base_column_size;
-
   auto device_data = build_device_data(output, inputs);
 
-  auto args = build_launch_args(size, device_data);
+  auto args = build_launch_args(base_column_size, device_data);
 
   cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(
@@ -150,28 +148,36 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(is_fixed_width(output_type), "Unexpected non-fixed-width type.");
-  std::for_each(inputs.begin(), inputs.end(), [](auto& col) {
-    CUDF_EXPECTS(is_fixed_width(col.type()), "Unexpected non-fixed-width type.");
-  });
+  CUDF_EXPECTS(is_fixed_width(output_type), "Transforms only support fixed-width types");
+  CUDF_EXPECTS(
+    std::all_of(
+      inputs.begin(), inputs.end(), [](auto& input) { return is_fixed_width(input.type()); }),
+    "Transforms only support fixed-width types");
 
-  auto base_column = std::max_element(
+  auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
 
-  std::for_each(inputs.begin(), inputs.end(), [&](column_view const& col) {
-    CUDF_EXPECTS((col.size() == 1) || (col.size() == base_column->size()),
-                 "All columns must have the same size or have size 1 (scalar)");
-    CUDF_EXPECTS(
-      (col.size() == 1 && col.null_count() == 0) || col.null_count() == base_column->null_count(),
-      "All non-scalar columns must have the same null-count");
-  });
+  CUDF_EXPECTS(std::all_of(inputs.begin(),
+                           inputs.end(),
+                           [&](auto const& input) {
+                             return (input.size() == 1) || (input.size() == base_column->size());
+                           }),
+               "All transform input columns must have the same size or be scalar (have size 1)");
 
-  std::unique_ptr<column> output = make_fixed_width_column(output_type,
-                                                           base_column->size(),
-                                                           copy_bitmask(*base_column, stream, mr),
-                                                           base_column->null_count(),
-                                                           stream,
-                                                           mr);
+  CUDF_EXPECTS(std::all_of(inputs.begin(),
+                           inputs.end(),
+                           [&](auto const& input) {
+                             return (input.size() == 1 && input.null_count() == 0) ||
+                                    (input.null_count() == base_column->null_count());
+                           }),
+               "All transform input columns must have the same null-count");
+
+  auto output = make_fixed_width_column(output_type,
+                                        base_column->size(),
+                                        copy_bitmask(*base_column, stream, mr),
+                                        base_column->null_count(),
+                                        stream,
+                                        mr);
 
   if (base_column->is_empty()) { return output; }
 

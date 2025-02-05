@@ -46,7 +46,7 @@ struct strided {
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(int64_t size, Out* __restrict__ out, In const* __restrict__... ins)
+CUDF_KERNEL void kernel(cudf::size_type size, Out* __restrict__ out, In const* __restrict__... ins)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
