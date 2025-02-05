@@ -143,6 +143,8 @@ cpdef TableWithMetadata read_avro(
     ----------
     options: AvroReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
     with nogil:
         if stream is not None:

@@ -436,6 +436,8 @@ cpdef tuple chunked_read_json(
     chunk_size : int, default 100_000_000 bytes.
         The number of bytes to be read in chunks.
         The chunk_size should be set to at least row_size.
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -504,6 +506,8 @@ cpdef TableWithMetadata read_json(
     ----------
     options: JsonReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -712,6 +716,8 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     ----------
     options : JsonWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
