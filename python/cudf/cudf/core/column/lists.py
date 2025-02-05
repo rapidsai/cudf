@@ -545,7 +545,8 @@ class ListMethods(ColumnMethods):
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
                 out = out._scatter_by_column(
-                    out_of_bounds_mask, cudf.Scalar(default)
+                    out_of_bounds_mask,
+                    pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
         if out.dtype != self._column.dtype.element_type:
             # libcudf doesn't maintain struct labels so we must transfer over
@@ -714,7 +715,7 @@ class ListMethods(ColumnMethods):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
             raise ValueError(
-                "lists_indices and list column is of different " "size."
+                "lists_indices and list column is of different size."
             )
         if (
             not _is_non_decimal_numeric_dtype(

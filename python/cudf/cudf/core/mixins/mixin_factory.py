@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import inspect
 
@@ -224,9 +224,9 @@ def _create_delegating_mixin(
                 valid_operations |= getattr(base_cls, validity_attr, set())
 
             invalid_operations = valid_operations - supported_operations
-            assert (
-                len(invalid_operations) == 0
-            ), f"Invalid requested operations: {invalid_operations}"
+            assert len(invalid_operations) == 0, (
+                f"Invalid requested operations: {invalid_operations}"
+            )
 
             base_operation = getattr(cls, base_operation_name)
             for operation in valid_operations:

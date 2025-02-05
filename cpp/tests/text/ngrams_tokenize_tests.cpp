@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,8 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "mousé_ate",
                                                 "ate_the",
                                                 "the_cheese"};
-    auto results = nvtext::ngrams_tokenize(strings_view, 2, std::string(), std::string("_"));
+    auto results =
+      nvtext::ngrams_tokenize(strings_view, 2, std::string_view(), std::string_view("_"));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -80,7 +81,8 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "the:mousé:ate",
                                                 "mousé:ate:the",
                                                 "ate:the:cheese"};
-    auto results = nvtext::ngrams_tokenize(strings_view, 3, std::string{" "}, std::string{":"});
+    auto results =
+      nvtext::ngrams_tokenize(strings_view, 3, std::string_view{" "}, std::string_view{":"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -93,7 +95,8 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "cat--chased--the--mouse",
                                                 "the--mousé--ate--the",
                                                 "mousé--ate--the--cheese"};
-    auto results = nvtext::ngrams_tokenize(strings_view, 4, std::string{" "}, std::string{"--"});
+    auto results =
+      nvtext::ngrams_tokenize(strings_view, 4, std::string_view{" "}, std::string_view{"--"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

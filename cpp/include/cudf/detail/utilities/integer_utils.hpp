@@ -73,7 +73,7 @@ CUDF_HOST_DEVICE constexpr S round_up_safe(S number_to_round, S modulus)
  * `modulus` is positive and does not check for overflow.
  */
 template <typename S>
-constexpr S round_down_safe(S number_to_round, S modulus) noexcept
+CUDF_HOST_DEVICE constexpr S round_down_safe(S number_to_round, S modulus) noexcept
 {
   auto remainder    = number_to_round % modulus;
   auto rounded_down = number_to_round - remainder;
@@ -113,16 +113,16 @@ CUDF_HOST_DEVICE constexpr S round_up_unsafe(S number_to_round, S modulus) noexc
  * the result will be incorrect
  */
 template <typename S, typename T>
-constexpr S div_rounding_up_unsafe(S const& dividend, T const& divisor) noexcept
+CUDF_HOST_DEVICE constexpr S div_rounding_up_unsafe(S const& dividend, T const& divisor) noexcept
 {
   return (dividend + divisor - 1) / divisor;
 }
 
 namespace detail {
 template <typename I>
-constexpr I div_rounding_up_safe(std::integral_constant<bool, false>,
-                                 I dividend,
-                                 I divisor) noexcept
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(cuda::std::integral_constant<bool, false>,
+                                                  I dividend,
+                                                  I divisor) noexcept
 {
   // TODO: This could probably be implemented faster
   return (dividend > divisor) ? 1 + div_rounding_up_unsafe(dividend - divisor, divisor)
@@ -130,7 +130,9 @@ constexpr I div_rounding_up_safe(std::integral_constant<bool, false>,
 }
 
 template <typename I>
-constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend, I divisor) noexcept
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(cuda::std::integral_constant<bool, true>,
+                                                  I dividend,
+                                                  I divisor) noexcept
 {
   auto quotient  = dividend / divisor;
   auto remainder = dividend % divisor;
@@ -156,9 +158,9 @@ constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend,
  * the non-integral division `dividend/divisor`
  */
 template <typename I>
-constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
+CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
 {
-  using i_is_a_signed_type = std::integral_constant<bool, std::is_signed_v<I>>;
+  using i_is_a_signed_type = cuda::std::integral_constant<bool, cuda::std::is_signed_v<I>>;
   return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 

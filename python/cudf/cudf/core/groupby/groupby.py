@@ -2915,15 +2915,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
         elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError(
-                "fill_method must be one of 'ffill', or" "'bfill'."
-            )
+            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' keyword being not None and the 'limit' "
                 f"keywords in {type(self).__name__}.pct_change are "

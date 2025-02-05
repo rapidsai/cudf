@@ -2647,8 +2647,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2828,8 +2827,7 @@ class StringMethods(ColumnMethods):
 
         if expand not in (True, False):
             raise ValueError(
-                f"expand parameter accepts only : [True, False], "
-                f"got {expand}"
+                f"expand parameter accepts only : [True, False], got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -5931,7 +5929,7 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise TypeError("String Arrays is not yet implemented in cudf")
+        raise TypeError("String arrays are not supported by cupy")
 
     def to_pandas(
         self,

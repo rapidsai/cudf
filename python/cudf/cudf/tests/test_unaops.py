@@ -1,8 +1,9 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
 import operator
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -124,8 +125,7 @@ def test_scalar_no_negative_bools():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Boolean scalars in cuDF do not "
-            "support negation, use logical not"
+            "Boolean scalars in cuDF do not support negation, use logical not"
         ),
     ):
         -x
@@ -135,3 +135,9 @@ def test_series_bool_neg():
     sr = Series([True, False, True, None, False, None, True, True])
     psr = sr.to_pandas(nullable=True)
     assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)
+
+
+def test_series_decimal_neg():
+    sr = Series([Decimal("0.0"), Decimal("1.23"), Decimal("4.567")])
+    psr = sr.to_pandas()
+    assert_eq((-sr).to_pandas(), -psr, check_dtype=True)
