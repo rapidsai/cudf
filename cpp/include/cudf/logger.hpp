@@ -31,36 +31,20 @@ namespace CUDF_EXPORT cudf {
  *
  * @return sink_ptr The sink to use
  */
-inline rapids_logger::sink_ptr default_sink()
-{
-  auto* filename = std::getenv("CUDF_DEBUG_LOG_FILE");
-  return (filename == nullptr)
-           ? static_cast<rapids_logger::sink_ptr>(std::make_shared<rapids_logger::stderr_sink_mt>())
-           : static_cast<rapids_logger::sink_ptr>(
-               std::make_shared<rapids_logger::basic_file_sink_mt>(filename, true));
-}
+rapids_logger::sink_ptr default_sink();
 
 /**
  * @brief Returns the default log pattern for the global logger.
  *
  * @return std::string The default log pattern.
  */
-inline std::string default_pattern() { return "[%6t][%H:%M:%S:%f][%-6l] %v"; }
+std::string default_pattern();
 
 /**
  * @brief Get the default logger.
  *
  * @return logger& The default logger
  */
-inline rapids_logger::logger& default_logger()
-{
-  static rapids_logger::logger logger_ = [] {
-    rapids_logger::logger logger_{"CUDF", {default_sink()}};
-    logger_.set_pattern(default_pattern());
-    logger_.set_level(rapids_logger::level_enum::warn);
-    return logger_;
-  }();
-  return logger_;
-}
+rapids_logger::logger& default_logger();
 
 }  // namespace CUDF_EXPORT cudf
