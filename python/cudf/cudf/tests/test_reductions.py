@@ -176,8 +176,6 @@ def test_sum_of_squares(dtype, nelem):
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
             np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
-        else:
-            print("overflow, passing")
     else:
         np.testing.assert_approx_equal(
             expect, got, significant=accuracy_for_dtype[dtype]
