@@ -457,11 +457,10 @@ cpdef tuple chunked_read_json(
         options.set_byte_range_size(c_range_size)
 
         try:
-            if stream is not None:
-                with nogil:
+            with nogil:
+                if stream is not None:
                     c_result = move(cpp_read_json(options.c_obj, stream.view()))
-            else:
-                with nogil:
+                else:
                     c_result = move(cpp_read_json(options.c_obj))
         except (ValueError, OverflowError):
             break
@@ -513,11 +512,10 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
 
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = move(cpp_read_json(options.c_obj, stream.view()))
-    else:
-        with nogil:
+        else:
             c_result = move(cpp_read_json(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
@@ -719,9 +717,8 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     -------
     None
     """
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             cpp_write_json(options.c_obj, stream.view())
-    else:
-        with nogil:
+        else:
             cpp_write_json(options.c_obj)

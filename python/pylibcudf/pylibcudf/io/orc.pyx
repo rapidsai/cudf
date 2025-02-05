@@ -423,11 +423,10 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     """
     cdef table_with_metadata c_result
 
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = move(cpp_read_orc(options.c_obj, stream.view()))
-    else:
-        with nogil:
+        else:
             c_result = move(cpp_read_orc(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
@@ -628,11 +627,10 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     -------
     None
     """
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             cpp_write_orc(move(options.c_obj), stream.view())
-    else:
-        with nogil:
+        else:
             cpp_write_orc(move(options.c_obj))
 
 

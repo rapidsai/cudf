@@ -1,8 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
 from utils import _convert_types, assert_table_and_meta_eq, make_source
+
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 
@@ -10,9 +12,10 @@ import pylibcudf as plc
 _COMMON_ORC_SOURCE_KWARGS = {"format": "orc"}
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
 def test_read_orc_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns
+    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -47,7 +50,7 @@ def test_read_orc_basic(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    res = plc.io.orc.read_orc(options)
+    res = plc.io.orc.read_orc(options, stream)
 
     if columns is not None:
         pa_table = pa_table.select(columns)
@@ -60,6 +63,7 @@ def test_read_orc_basic(
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize(
     "compression",
     [
@@ -84,6 +88,7 @@ def test_roundtrip_pa_table(
     stripe_size_rows,
     row_index_stride,
     tmp_path,
+    stream,
 ):
     pa_table = pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
     plc_table = plc.interop.from_arrow(pa_table)
@@ -109,7 +114,7 @@ def test_roundtrip_pa_table(
     if row_index_stride is not None:
         options.set_row_index_stride(row_index_stride)
 
-    plc.io.orc.write_orc(options)
+    plc.io.orc.write_orc(options, stream)
 
     read_table = pa.orc.read_table(str(tmpfile_name))
 

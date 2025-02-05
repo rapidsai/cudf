@@ -647,11 +647,10 @@ cpdef TableWithMetadata read_csv(
         Settings for controlling reading behavior
     """
     cdef table_with_metadata c_result
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = move(cpp_read_csv(options.c_obj, stream.view()))
-    else:
-        with nogil:
+        else:
             c_result = move(cpp_read_csv(options.c_obj))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
@@ -853,9 +852,8 @@ cpdef void write_csv(
     options: CsvWriterOptions
         Settings for controlling writing behavior
     """
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             cpp_write_csv(move(options.c_obj), stream.view())
-    else:
-        with nogil:
+        else:
             cpp_write_csv(move(options.c_obj))

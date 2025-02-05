@@ -144,11 +144,10 @@ cpdef TableWithMetadata read_avro(
     options: AvroReaderOptions
         Settings for controlling reading behavior
     """
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = move(cpp_read_avro(options.c_obj, stream.view()))
-    else:
-        with nogil:
+        else:
             c_result = move(cpp_read_avro(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)

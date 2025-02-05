@@ -321,11 +321,10 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     options: ParquetReaderOptions
         Settings for controlling reading behavior
     """
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
-    else:
-        with nogil:
+        else:
             c_result = move(cpp_read_parquet(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
@@ -946,11 +945,10 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
     """
     cdef unique_ptr[vector[uint8_t]] c_result
 
-    if stream is not None:
-        with nogil:
+    with nogil:
+        if stream is not None:
             c_result = cpp_write_parquet(move(options.c_obj), stream.view())
-    else:
-        with nogil:
+        else:
             c_result = cpp_write_parquet(move(options.c_obj))
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
