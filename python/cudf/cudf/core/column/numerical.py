@@ -24,6 +24,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     find_common_type,
     min_column_type,
     min_signed_type,
@@ -265,13 +266,13 @@ class NumericalColumn(NumericalBaseColumn):
                     and tmp.dtype.kind != "b"
                 ):
                     if isinstance(tmp, NumericalColumn) and 0 in tmp:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
                     elif isinstance(tmp, cudf.Scalar):
                         if tmp.is_valid() and tmp == 0:
                             # tmp == 0 can return NA
-                            out_dtype = cudf.dtype("float64")
+                            out_dtype = np.dtype(np.float64)
                     elif is_scalar(tmp) and tmp == 0:
-                        out_dtype = cudf.dtype("float64")
+                        out_dtype = np.dtype(np.float64)
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other.dtype.kind == "f":
@@ -362,7 +363,7 @@ class NumericalColumn(NumericalBaseColumn):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
@@ -386,7 +387,7 @@ class NumericalColumn(NumericalBaseColumn):
         self, dtype: Dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
-            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -397,7 +398,7 @@ class NumericalColumn(NumericalBaseColumn):
         self, dtype: Dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
-            data=self.astype("int64").base_data,  # type: ignore[arg-type]
+            data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
@@ -408,7 +409,6 @@ class NumericalColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]

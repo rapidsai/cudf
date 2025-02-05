@@ -24,7 +24,7 @@
 
 #include <cuda/std/utility>
 
-namespace cudf::io::orc::gpu {
+namespace cudf::io::orc::detail {
 
 using strings::detail::fixed_point_string_size;
 
@@ -502,4 +502,4 @@ void orc_encode_statistics(uint8_t* blob_bfr,
     blob_bfr, groups, chunks, statistics_count);
 }
 
-}  // namespace cudf::io::orc::gpu
+}  // namespace cudf::io::orc::detail
