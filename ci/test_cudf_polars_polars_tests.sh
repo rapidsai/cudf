@@ -13,7 +13,7 @@ RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-f
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./local-pylibcudf-dep
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
-python -m pip install \
+rapids-pip-retry install \
     -v \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo ./local-libcudf-dep/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
@@ -26,7 +26,7 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 
 # Install requirements for running polars tests
 rapids-logger "Install polars test requirements"
-python -m pip install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
+rapids-pip-retry install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
 
 # shellcheck disable=SC2317
 function set_exitcode()
