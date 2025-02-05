@@ -28,7 +28,13 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        DatetimeLikeScalar,
+        Dtype,
+        ScalarLike,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -136,6 +142,21 @@ class TimeDeltaColumn(ColumnBase):
         return item.view("int64") in cast(
             "cudf.core.column.NumericalColumn", self.astype("int64")
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            isinstance(fill_value, np.timedelta64)
+            and self.time_unit != np.datetime_data(fill_value)[0]
+        ):
+            # TODO: Disallow this cast
+            fill_value = fill_value.astype(self.dtype)
+        elif isinstance(fill_value, str) and fill_value.lower() == "nat":
+            # TODO: Disallow this casting; user should be explicit
+            fill_value = np.timedelta64(fill_value, self.time_unit)
+        return super()._validate_fillna_value(fill_value)
 
     @property
     def values(self):

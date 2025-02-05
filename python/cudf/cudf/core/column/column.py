@@ -462,19 +462,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        if not isinstance(fill_value, pa.Scalar):
-            fill_value = pa.scalar(fill_value)
-        fill_value = fill_value.cast(cudf_dtype_to_pa_type(self.dtype))
-        plc_fill_value = pa_scalar_to_plc_scalar(fill_value)
-        if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
-            # TODO: Generalize converting pyarrow[Decimal128] to Decimal32/64
-            col_fill_value = ColumnBase.from_pylibcudf(
-                plc.Column.from_scalar(plc_fill_value, 1)
-            ).astype(self.dtype)
-            plc_fill_value = plc.copying.get_element(
-                col_fill_value.to_pylibcudf(mode="read"),
-                0,
-            )
+        plc_fill_value = self._scalar_to_plc_scalar(fill_value)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
@@ -772,14 +760,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 f"{num_keys}"
             )
 
+    def _scalar_to_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
+        """Return a pylibcudf.Scalar that matches the type of self.dtype"""
+        if not isinstance(scalar, pa.Scalar):
+            scalar = pa.scalar(scalar)
+        return pa_scalar_to_plc_scalar(
+            scalar.cast(cudf_dtype_to_pa_type(self.dtype))
+        )
+
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            return pa_scalar_to_plc_scalar(
-                pa.scalar(fill_value).cast(cudf_dtype_to_pa_type(self.dtype))
-            )
+            return self._scalar_to_plc_scalar(fill_value)
         return as_column(fill_value).astype(self.dtype)
 
     @acquire_spill_lock()

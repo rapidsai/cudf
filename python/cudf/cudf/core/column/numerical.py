@@ -581,7 +581,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{cudf_obj.dtype.type.__name__} to "
                     f"{self.dtype.type.__name__}"
                 )
-            return cudf_obj
+            return cudf_obj.astype(self.dtype)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """

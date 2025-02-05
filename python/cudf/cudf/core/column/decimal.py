@@ -25,6 +25,8 @@ from cudf.core.dtypes import (
     DecimalDtype,
 )
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import cudf_dtype_to_pa_type
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 if TYPE_CHECKING:
@@ -167,6 +169,25 @@ class DecimalBaseColumn(NumericalBaseColumn):
             )
 
         return result
+
+    def _scalar_to_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
+        """Return a pylibcudf.Scalar that matches the type of self.dtype"""
+        if not isinstance(scalar, pa.Scalar):
+            # e.g casting int to decimal type isn't allow, but OK in the constructor?
+            pa_scalar = pa.scalar(
+                scalar, type=cudf_dtype_to_pa_type(self.dtype)
+            )
+        else:
+            pa_scalar = scalar.cast(cudf_dtype_to_pa_type(self.dtype))
+        plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
+        if isinstance(self.dtype, (Decimal32Dtype, Decimal64Dtype)):
+            # pyarrow.Scalar only supports Decimal128 so conversion
+            # from pyarrow would only return a pylibcudf.Scalar with Decimal128
+            col = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(plc_scalar, 1)
+            ).astype(self.dtype)
+            return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
+        return plc_scalar
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
