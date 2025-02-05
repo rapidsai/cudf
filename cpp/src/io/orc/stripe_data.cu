@@ -73,7 +73,7 @@ struct orc_rlev2_state_s {
   uint16_t runs_loc[block_size];
 };
 
-struct orc_byterle_state_s {
+struct orc_byte_rle_state_s {
   uint32_t num_runs;
   uint32_t num_vals;
   uint32_t runs_loc[num_warps];
@@ -86,7 +86,7 @@ struct orc_rowdec_state_s {
 };
 
 struct orc_strdict_state_s {
-  DictionaryEntry* local_dict;
+  dictionary_entry* local_dict;
   uint32_t dict_pos;
   uint32_t dict_len;
 };
@@ -98,11 +98,11 @@ struct orc_datadec_state_s {
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
   duration_s tz_epoch;      // orc_ut_epoch - ut_offset
-  RowGroup index;
+  row_group index;
 };
 
 struct orcdec_state_s {
-  ColumnDesc chunk;
+  column_desc chunk;
   orc_bytestream_s bs;
   orc_bytestream_s bs2;
   int is_string;
@@ -115,7 +115,7 @@ struct orcdec_state_s {
   union {
     orc_rlev1_state_s rlev1;
     orc_rlev2_state_s rlev2;
-    orc_byterle_state_s rle8;
+    orc_byte_rle_state_s rle8;
     orc_rowdec_state_s rowdec;
   } u;
   union values {
@@ -698,7 +698,7 @@ inline __device__ void lengths_to_positions(T* vals, uint32_t numvals, unsigned 
  */
 template <class T>
 static __device__ uint32_t
-Integer_RLEv1(orc_bytestream_s* bs, orc_rlev1_state_s* rle, T* vals, uint32_t maxvals, int t)
+integer_rlev1(orc_bytestream_s* bs, orc_rlev1_state_s* rle, T* vals, uint32_t maxvals, int t)
 {
   uint32_t numvals, numruns;
   if (t == 0) {
@@ -806,7 +806,7 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @return number of values decoded
  */
 template <class T>
-static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
+static __device__ uint32_t integer_rlev2(orc_bytestream_s* bs,
                                          orc_rlev2_state_s* rle,
                                          T* vals,
                                          uint32_t maxvals,
@@ -1047,7 +1047,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
   if constexpr (cuda::std::is_same_v<T, int64_t>) {
     if (cache_helper_inst != nullptr) {
       // Run cache is read from during the 2nd iteration of the top-level while loop in
-      // gpuDecodeOrcColumnData().
+      // decode_column_data_kernel().
       cache_helper_inst->read_from_cache(vals, rle);
       // Run cache is written to during the 1st iteration of the loop.
       cache_helper_inst->write_to_cache(vals);
@@ -1085,7 +1085,7 @@ inline __device__ uint32_t rle8_read_bool32(uint32_t* vals, uint32_t bitpos)
  * @return number of values decoded
  */
 static __device__ uint32_t
-Byte_RLE(orc_bytestream_s* bs, orc_byterle_state_s* rle, uint8_t* vals, uint32_t maxvals, int t)
+byte_rle(orc_bytestream_s* bs, orc_byte_rle_state_s* rle, uint8_t* vals, uint32_t maxvals, int t)
 {
   uint32_t numvals, numruns;
   int r, tr;
@@ -1183,8 +1183,8 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  *
  * @return number of values decoded
  */
-static __device__ int Decode_Decimals(orc_bytestream_s* bs,
-                                      orc_byterle_state_s* scratch,
+static __device__ int decode_decimals(orc_bytestream_s* bs,
+                                      orc_byte_rle_state_s* scratch,
                                       orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
@@ -1261,7 +1261,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
 /**
  * @brief Decoding NULLs and builds string dictionary index tables
  *
- * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
@@ -1271,11 +1271,11 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
 // blockDim {block_size,1,1}
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  gpuDecodeNullsAndStringDictionaries(ColumnDesc* chunks,
-                                      DictionaryEntry* global_dictionary,
-                                      size_type num_columns,
-                                      size_type num_stripes,
-                                      int64_t first_row)
+  decode_nulls_and_string_dictionaries_kernel(column_desc* chunks,
+                                              dictionary_entry* global_dictionary,
+                                              size_type num_columns,
+                                              size_type num_stripes,
+                                              int64_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce  = cub::WarpReduce<uint32_t>;
@@ -1328,7 +1328,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
       uint32_t nrows;
       if (s->chunk.strm_len[CI_PRESENT] > 0) {
-        uint32_t nbytes = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, (nrows_max + 7) >> 3, t);
+        uint32_t nbytes = byte_rle(&s->bs, &s->u.rle8, s->vals.u8, (nrows_max + 7) >> 3, t);
         nrows           = min(nrows_max, nbytes * 8u);
         if (!nrows) {
           // Error: mark all remaining rows as null
@@ -1426,10 +1426,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         bytestream_fill(&s->bs, t);
         __syncthreads();
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1(&s->bs, &s->u.rlev1, vals, numvals, t);
+          numvals = integer_rlev1(&s->bs, &s->u.rlev1, vals, numvals, t);
         } else  // RLEv2
         {
-          numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, vals, numvals, t);
+          numvals = integer_rlev2(&s->bs, &s->u.rlev2, vals, numvals, t);
         }
         __syncthreads();
         len = (t < numvals) ? vals[t] : 0;
@@ -1542,7 +1542,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 /**
  * @brief Decodes column data
  *
- * @param[in] chunks ColumnDesc device array
+ * @param[in] chunks column_desc device array
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] tz_table Timezone translation table
  * @param[in] row_groups Optional row index data
@@ -1553,14 +1553,14 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 // blockDim {block_size,1,1}
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  gpuDecodeOrcColumnData(ColumnDesc* chunks,
-                         DictionaryEntry* global_dictionary,
-                         table_device_view tz_table,
-                         device_2dspan<RowGroup> row_groups,
-                         int64_t first_row,
-                         size_type rowidx_stride,
-                         size_t level,
-                         size_type* error_count)
+  decode_column_data_kernel(column_desc* chunks,
+                            dictionary_entry* global_dictionary,
+                            table_device_view tz_table,
+                            device_2dspan<row_group> row_groups,
+                            int64_t first_row,
+                            size_type rowidx_stride,
+                            size_t level,
+                            size_type* error_count)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1681,16 +1681,16 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (numvals > ofs) {
           if (is_rlev1(s->chunk.encoding_kind)) {
             if (s->chunk.type_kind == TIMESTAMP)
-              numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u64[ofs], numvals - ofs, t);
+              numvals = ofs + integer_rlev1(bs, &s->u.rlev1, &s->vals.u64[ofs], numvals - ofs, t);
             else
-              numvals = ofs + Integer_RLEv1(bs, &s->u.rlev1, &s->vals.u32[ofs], numvals - ofs, t);
+              numvals = ofs + integer_rlev1(bs, &s->u.rlev1, &s->vals.u32[ofs], numvals - ofs, t);
           } else {
             if (s->chunk.type_kind == TIMESTAMP)
               numvals =
-                ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t, ofs > 0);
+                ofs + integer_rlev2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t, ofs > 0);
             else
               numvals =
-                ofs + Integer_RLEv2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t, ofs > 0);
+                ofs + integer_rlev2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t, ofs > 0);
           }
           __syncthreads();
           if (numvals <= ofs && t >= ofs && t < s->top.data.max_vals) { s->vals.u32[t] = 0; }
@@ -1747,25 +1747,25 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (s->chunk.type_kind == INT || s->chunk.type_kind == DATE || s->chunk.type_kind == SHORT) {
         // Signed int32 primary data stream
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1(&s->bs, &s->u.rlev1, s->vals.i32, numvals, t);
+          numvals = integer_rlev1(&s->bs, &s->u.rlev1, s->vals.i32, numvals, t);
         } else {
-          numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
+          numvals = integer_rlev2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
+          numvals = integer_rlev1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
-          numvals = Integer_RLEv2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
+          numvals = integer_rlev2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == BYTE) {
-        numvals = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, numvals, t);
+        numvals = byte_rle(&s->bs, &s->u.rle8, s->vals.u8, numvals, t);
         __syncthreads();
       } else if (s->chunk.type_kind == BOOLEAN) {
         int n = ((numvals + 7) >> 3);
         if (n > s->top.data.buffered_count) {
-          numvals = Byte_RLE(&s->bs,
+          numvals = byte_rle(&s->bs,
                              &s->u.rle8,
                              &s->vals.u8[s->top.data.buffered_count],
                              n - s->top.data.buffered_count,
@@ -1797,9 +1797,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                  s->chunk.type_kind == DECIMAL) {
         orc_bytestream_s* bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
+          numvals = integer_rlev1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
-          numvals = Integer_RLEv2<int64_t>(bs,
+          numvals = integer_rlev2<int64_t>(bs,
                                            &s->u.rlev2,
                                            s->vals.i64,
                                            numvals,
@@ -1822,7 +1822,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(&s->bs,
+          numvals = decode_decimals(&s->bs,
                                     &s->u.rle8,
                                     s->vals,
                                     val_scale,
@@ -2041,30 +2041,31 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 /**
  * @brief Launches kernel for decoding NULLs and building string dictionary index tables
  *
- * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
-void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
-                                               DictionaryEntry* global_dictionary,
-                                               size_type num_columns,
-                                               size_type num_stripes,
-                                               int64_t first_row,
-                                               rmm::cuda_stream_view stream)
+void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
+                                                   dictionary_entry* global_dictionary,
+                                                   size_type num_columns,
+                                                   size_type num_stripes,
+                                                   int64_t first_row,
+                                                   rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns * num_stripes, 2);
 
-  gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, block_size, 0, stream.value()>>>(
-    chunks, global_dictionary, num_columns, num_stripes, first_row);
+  decode_nulls_and_string_dictionaries_kernel<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(
+      chunks, global_dictionary, num_columns, num_stripes, first_row);
 }
 
 /**
  * @brief Launches kernel for decoding column data
  *
- * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
@@ -2076,21 +2077,21 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] level nesting level being processed
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
-void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
-                                  DictionaryEntry* global_dictionary,
-                                  device_2dspan<RowGroup> row_groups,
-                                  size_type num_columns,
-                                  size_type num_stripes,
-                                  int64_t first_row,
-                                  table_device_view tz_table,
-                                  int64_t num_rowgroups,
-                                  size_type rowidx_stride,
-                                  size_t level,
-                                  size_type* error_count,
-                                  rmm::cuda_stream_view stream)
+void __host__ decode_column_data(column_desc* chunks,
+                                 dictionary_entry* global_dictionary,
+                                 device_2dspan<row_group> row_groups,
+                                 size_type num_columns,
+                                 size_type num_stripes,
+                                 int64_t first_row,
+                                 table_device_view tz_table,
+                                 int64_t num_rowgroups,
+                                 size_type rowidx_stride,
+                                 size_t level,
+                                 size_type* error_count,
+                                 rmm::cuda_stream_view stream)
 {
   auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
-  gpuDecodeOrcColumnData<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
+  decode_column_data_kernel<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 

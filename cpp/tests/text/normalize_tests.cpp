@@ -74,6 +74,10 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
   EXPECT_EQ(results->size(), 0);
   results = nvtext::normalize_characters(strings_view, false);
   EXPECT_EQ(results->size(), 0);
+
+  auto normalizer = nvtext::create_character_normalizer(true);
+  results         = nvtext::normalize_characters(strings_view, *normalizer);
+  EXPECT_EQ(results->size(), 0);
 }
 
 TEST_F(TextNormalizeTest, AllNullStrings)
@@ -84,6 +88,10 @@ TEST_F(TextNormalizeTest, AllNullStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
   results = nvtext::normalize_characters(strings_view, false);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+
+  auto normalizer = nvtext::create_character_normalizer(true);
+  results         = nvtext::normalize_characters(strings_view, *normalizer);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(TextNormalizeTest, SomeNullStrings)
@@ -92,6 +100,10 @@ TEST_F(TextNormalizeTest, SomeNullStrings)
   cudf::strings_column_view strings_view(strings);
   auto results = nvtext::normalize_characters(strings_view, false);
   cudf::test::strings_column_wrapper expected({"", " . ", "a"}, {false, true, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto normalizer = nvtext::create_character_normalizer(true);
+  results         = nvtext::normalize_characters(strings_view, *normalizer);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -136,10 +148,23 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
 
 TEST_F(TextNormalizeTest, WithNormalizer)
 {
-  // These include punctuation, accents, whitespace, and CJK characters
-  auto input = cudf::test::strings_column_wrapper(
-    {"abc£def", "", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟", ""},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto long_row =
+    "this entry is intended to pad out past 256 bytes which is currently the block size";
+  // the following include punctuation, accents, whitespace, and CJK characters
+  auto input = cudf::test::strings_column_wrapper({"abc£def",
+                                                   "",
+                                                   "éè â îô\taeio",
+                                                   "\tĂĆĖÑ  Ü",
+                                                   "ACEN U",
+                                                   "P^NP",
+                                                   "$41.07",
+                                                   "[a,b]",
+                                                   "丏丟",
+                                                   "",
+                                                   long_row,
+                                                   long_row,
+                                                   long_row},
+                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto const sv = cudf::strings_column_view(input);
 
@@ -154,8 +179,11 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                         " $ 41 . 07",
                                                         " [ a , b ] ",
                                                         " 丏  丟 ",
-                                                        ""},
-                                                       {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+                                                        "",
+                                                        long_row,
+                                                        long_row,
+                                                        long_row},
+                                                       {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false);
@@ -169,18 +197,25 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                    " $ 41 . 07",
                                                    " [ a , b ] ",
                                                    " 丏  丟 ",
-                                                   ""},
-                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+                                                   "",
+                                                   long_row,
+                                                   long_row,
+                                                   long_row},
+                                                  {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNormalizeTest, SpecialTokens)
 {
-  // These include punctuation, accents, whitespace, and CJK characters
+  auto long_row =
+    "this entry is intended to pad out past 256 bytes which is currently the block size";
   auto input =
     cudf::test::strings_column_wrapper({"[BOS]Some strings with [PAD] special[SEP]tokens[EOS]",
                                         "[bos]these should[sep]work too[eos]",
-                                        "some[non]tokens[eol]too"});
+                                        "some[non]tokens[eol]too",
+                                        long_row,
+                                        long_row,
+                                        long_row});
 
   auto sv             = cudf::strings_column_view(input);
   auto special_tokens = cudf::test::strings_column_wrapper({"[BOS]", "[EOS]", "[SEP]", "[PAD]"});
@@ -191,7 +226,10 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   auto expected   = cudf::test::strings_column_wrapper(
     {" [bos] some strings with  [pad]  special [sep] tokens [eos] ",
        " [bos] these should [sep] work too [eos] ",
-       "some [ non ] tokens [ eol ] too"});
+       "some [ non ] tokens [ eol ] too",
+       long_row,
+       long_row,
+       long_row});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false, stv);
@@ -199,7 +237,10 @@ TEST_F(TextNormalizeTest, SpecialTokens)
   expected   = cudf::test::strings_column_wrapper(
     {" [BOS] Some strings with  [PAD]  special [SEP] tokens [EOS] ",
        " [ bos ] these should [ sep ] work too [ eos ] ",
-       "some [ non ] tokens [ eol ] too"});
+       "some [ non ] tokens [ eol ] too",
+       long_row,
+       long_row,
+       long_row});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -210,26 +251,17 @@ TEST_F(TextNormalizeTest, NormalizeSlicedColumn)
 
   std::vector<cudf::column_view> sliced = cudf::split(strings, {4});
   auto results = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), true);
-  cudf::test::strings_column_wrapper expected({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
-  results = nvtext::normalize_characters(cudf::strings_column_view(sliced[1]), false);
-  cudf::test::strings_column_wrapper expected2({" $ 41 . 07", " [ a , b ] ", " 丏  丟 "});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
-}
-
-TEST_F(TextNormalizeTest, SlicedColumn)
-{
-  auto input = cudf::test::strings_column_wrapper(
-    {"abc£def", "éè â îô\taeio", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟"});
-
-  auto sliced = cudf::split(input, {4});
-
-  auto normalizer = nvtext::create_character_normalizer(true);
-  auto results =
-    nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), *normalizer);
   auto expected =
     cudf::test::strings_column_wrapper({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results  = nvtext::normalize_characters(cudf::strings_column_view(sliced[1]), false);
+  expected = cudf::test::strings_column_wrapper({" $ 41 . 07", " [ a , b ] ", " 丏  丟 "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto normalizer = nvtext::create_character_normalizer(true);
+  results  = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), *normalizer);
+  expected = cudf::test::strings_column_wrapper({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false);
