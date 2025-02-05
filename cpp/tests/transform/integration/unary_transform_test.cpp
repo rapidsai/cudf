@@ -241,12 +241,25 @@ __device__ inline void transform(
   //
   // ```py
   //
+  // from numba import cuda, float32
+  // from numba.cuda import compile_ptx_for_current_device
+  //
+  // # Define a CUDA device function
+  //
   // @cuda.jit(device=True)
   // def op(a, b, c):
-  //    return (a + b) * c
+  //         return (a + b) * c
+  //
+  // # Define argument types for the function
+  // arg_types = (float32, float32, float32)
+  //
+  // # Compile the device function as relocatable
+  // ptx, _ = cuda.compile_ptx_for_current_device(op, arg_types, device=True)
   //
   //
-  // print(cuda.compile_ptx_for_current_device(op, (float32, float32, float32), device=True))
+  // # Print the PTX code
+  // print("Relocatable PTX Code:")
+  // print(ptx)
   //
   //
   // ```
