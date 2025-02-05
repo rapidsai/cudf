@@ -114,4 +114,5 @@ static void bench_wordpiece_tokenizer(nvbench::state& state)
 
 NVBENCH_BENCH(bench_wordpiece_tokenizer)
   .set_name("wordpiece_tokenize")
-  .add_int64_axis("num_rows", {32768, 262144, 2097152});
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("max_words", {0, 20});
