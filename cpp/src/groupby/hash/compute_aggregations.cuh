@@ -61,7 +61,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
   auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
-  std::cout << "########### agg_kinds: ";
+  std::cout << "\n########### agg_kinds: ";
   for (auto const& it : agg_kinds) {
     std::cout << int(it) << " ";
   }
@@ -75,18 +75,19 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   std::cout << "###### available_shmem_size: " << available_shmem_size << "\n";
   auto const offsets_buffer_size = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
   std::cout << "###### offsets_buffer_size: " << offsets_buffer_size << "\n";
-  auto const data_buffer_size = available_shmem_size - offsets_buffer_size;
+  auto const data_buffer_size =
+    static_cast<size_type>(available_shmem_size) - static_cast<size_type>(offsets_buffer_size);
   std::cout << "###### data_buffer_size: " << data_buffer_size << "\n";
   auto const is_shared_memory_compatible = std::all_of(
     requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-      std::cout << "*** data type: " << request.values.type().id() << "\n";
+      std::cout << "*** data type: " << int(request.values.type().id()) << "\n";
 
       if (cudf::is_dictionary(request.values.type())) { return false; }
       // Ensure there is enough buffer space to store local aggregations up to the max cardinality
       // for shared memory aggregations
       auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
                                                                            size_of_functor{});
-      return static_cast<size_type>(data_buffer_size) >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+      return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
     });
   std::cout << "###### is_shared_memory_compatible: " << is_shared_memory_compatible << "\n";
 
