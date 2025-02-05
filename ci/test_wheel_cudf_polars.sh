@@ -22,7 +22,7 @@ echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/librmm
 echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_*.whl)" >> ./constraints.txt
 
 # echo to expand wildcard before adding `[test,experimental]` requires for pip
-python -m pip install \
+rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
