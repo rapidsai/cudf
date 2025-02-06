@@ -14,8 +14,8 @@ from collections.abc import Callable, Iterator, Mapping
 from enum import IntEnum
 from typing import Any, Literal
 
-import numpy as np
 import cupy as cp
+import numpy as np
 
 from rmm import RMMError
 
@@ -220,7 +220,9 @@ def make_final_proxy_type(
     @property  # type: ignore
     def _fsproxy_state(self) -> _State:
         try:
-            is_fast_type = isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
+            is_fast_type = isinstance(
+                self._fsproxy_wrapped, self._fsproxy_fast_type
+            )
         except AttributeError:
             is_fast_type = isinstance(self, self._fsproxy_fast_type)
         return _State.FAST if is_fast_type else _State.SLOW
