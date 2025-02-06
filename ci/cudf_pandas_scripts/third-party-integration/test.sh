@@ -34,18 +34,22 @@ main() {
             rapids-logger "Downloading artifacts from this pr jobs"
             CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
             PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+                --prepend-channel "${CPP_CHANNEL}" \
+                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
         else
-            CPP_CHANNEL=""
-            PYTHON_CHANNEL=""
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
         fi
-        rapids-logger "Generate Python testing dependencies"
-        rapids-dependency-file-generator \
-          --config "$dependencies_yaml" \
-          --output conda \
-          --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
-          --prepend-channel "${CPP_CHANNEL}" \
-          --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
