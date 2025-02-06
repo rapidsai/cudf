@@ -24,11 +24,13 @@ import java.util.Map;
 public class CompressionMetadataWriterOptions extends ColumnWriterOptions.StructColumnWriterOptions {
   private final CompressionType compressionType;
   private final Map<String, String> metadata;
+  private int stripeSizeRows;
 
   protected CompressionMetadataWriterOptions(Builder builder) {
     super(builder);
     this.compressionType = builder.compressionType;
     this.metadata = builder.metadata;
+    this.stripeSizeRows = builder.stripeSizeRows;
   }
 
   @Override
@@ -96,10 +98,15 @@ public class CompressionMetadataWriterOptions extends ColumnWriterOptions.Struct
     return childColumnOptions.length;
   }
 
+  public int getStripeSizeRows() {
+    return stripeSizeRows;
+  }
+
   public abstract static class Builder<T extends Builder,
         V extends CompressionMetadataWriterOptions> extends AbstractStructBuilder<T, V> {
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
+    int stripeSizeRows = 1000000;
 
     /**
      * Add a metadata key and a value
@@ -122,6 +129,11 @@ public class CompressionMetadataWriterOptions extends ColumnWriterOptions.Struct
      */
     public T withCompressionType(CompressionType compression) {
       this.compressionType = compression;
+      return (T) this;
+    }
+
+    public T withStripeSizeRows(int stripeSizeRows) {
+      this.stripeSizeRows = stripeSizeRows;
       return (T) this;
     }
   }
