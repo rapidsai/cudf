@@ -94,6 +94,8 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   return dst;
 }
 
+namespace snappy {
+
 template <typename T>
 [[nodiscard]] T load(uint8_t const* ptr)
 {
@@ -254,7 +256,7 @@ void append_varint(std::vector<uint8_t>& output, size_t v)
   output.push_back(v);
 }
 
-[[nodiscard]] std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src)
+[[nodiscard]] std::vector<std::uint8_t> compress(host_span<uint8_t const> src)
 {
   std::vector<uint8_t> dst;
   append_varint(dst, src.size());
@@ -278,6 +280,8 @@ void append_varint(std::vector<uint8_t>& output, size_t v)
 
   return dst;
 }
+
+}  // namespace snappy
 
 void device_compress(compression_type compression,
                      device_span<device_span<uint8_t const> const> inputs,
@@ -423,7 +427,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
   CUDF_FUNC_RANGE();
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
-    case compression_type::SNAPPY: return compress_snappy(src);
+    case compression_type::SNAPPY: return snappy::compress(src);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
