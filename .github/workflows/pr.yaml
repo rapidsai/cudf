@@ -360,7 +360,7 @@ jobs:
   third-party-integration-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
     with:
       build_type: pull-request
       arch: "amd64"
