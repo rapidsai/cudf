@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -9,7 +9,7 @@ import contextlib
 import os
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
 
@@ -182,6 +182,7 @@ def _callback(
     device: int | None,
     memory_resource: int | None,
     executor: Literal["pylibcudf", "dask-experimental"] | None,
+    sink_kwargs: dict[str, Any] | None = None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -193,7 +194,19 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "pylibcudf":
-            return ir.evaluate(cache={}).to_polars()
+            evaluated = ir.evaluate(cache={})
+            if sink_kwargs is None:
+                return evaluated.to_polars()
+            to = sink_kwargs.pop("to", None)
+            if to is None:
+                raise ValueError(
+                    "sink_kwargs must contain a 'to' key specifying the sink target "
+                    "e.g. {'to': 'csv'}"
+                )
+            sink_method = getattr(evaluated, f"sink_{to}", None)
+            if sink_method is None:
+                raise NotImplementedError(f"sink_{to} is currently not supported.")
+            return sink_method(sink_kwargs)
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 
@@ -240,7 +253,9 @@ def validate_config_options(config: dict) -> None:
         raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
 
 
-def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
+def execute_with_cudf(
+    nt: NodeTraverser, sink_kwargs: dict[str, Any] | None = None, *, config: GPUEngine
+) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -248,6 +263,9 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     ----------
     nt
         NodeTraverser
+
+    sink_kwargs
+        Keyword arguments to pass to IO sink operations
 
     config
         GPUEngine configuration object
@@ -297,5 +315,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                     device=device,
                     memory_resource=memory_resource,
                     executor=executor,
+                    sink_kwargs=sink_kwargs,
                 )
             )

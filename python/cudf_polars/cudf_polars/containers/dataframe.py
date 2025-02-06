@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A dataframe, with some properties."""
@@ -72,6 +72,14 @@ class DataFrame:
             else pl.col(c.name)
             for c in self.columns
         )
+
+    def sink_csv(self, sink_kwargs: dict[str, Any]) -> None:
+        """Sink the result into a CSV file."""
+        builder = plc.io.csv.CsvWriterOptions.builder(
+            plc.io.SinkInfo([None]),
+            self.table,
+        ).build()
+        plc.io.csv.write_csv(builder)
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
