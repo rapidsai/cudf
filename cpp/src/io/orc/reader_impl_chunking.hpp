@@ -316,6 +316,6 @@ std::size_t gather_stream_info_and_column_desc(
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
   std::vector<orc_stream_info>* stream_info,
-  cudf::detail::hostdevice_2dvector<ColumnDesc>* chunks);
+  cudf::detail::hostdevice_2dvector<column_desc>* chunks);
 
 }  // namespace cudf::io::orc::detail

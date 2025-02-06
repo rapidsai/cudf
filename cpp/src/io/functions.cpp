@@ -351,8 +351,8 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
 
   auto parse_column_statistics = [](auto const& raw_col_stats) {
     orc::detail::column_statistics stats_internal;
-    orc::detail::ProtobufReader(reinterpret_cast<uint8_t const*>(raw_col_stats.c_str()),
-                                raw_col_stats.size())
+    orc::detail::protobuf_reader(reinterpret_cast<uint8_t const*>(raw_col_stats.c_str()),
+                                 raw_col_stats.size())
       .read(stats_internal);
     return column_statistics(std::move(stats_internal));
   };
