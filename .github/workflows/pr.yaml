@@ -323,7 +323,7 @@ jobs:
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
-    # needs: wheel-build-cudf
+    needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
     with:
