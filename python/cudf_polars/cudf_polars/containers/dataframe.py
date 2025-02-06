@@ -27,6 +27,27 @@ if TYPE_CHECKING:
 __all__: list[str] = ["DataFrame"]
 
 
+def _raise_unsupported_sink_csv_options(
+    options: dict[str, Any], cloud_options: dict[str, Any]
+) -> None:
+    if include_bom := options["include_bom"]:
+        raise NotImplementedError(f"{include_bom=} is not currently not supported.")
+    serialize_options = options["serialize_options"]
+    for formats in (
+        "date_format",
+        "time_format",
+        "datetime_format",
+        "float_scientific",
+        "float_precision",
+    ):
+        if serialize_options[formats] is not None:
+            raise NotImplementedError(f"{formats} is not currently not supported.")
+    if (quote_style := serialize_options["quote_style"]) != "necessary":
+        raise NotImplementedError(f"{quote_style=} is not currently not supported.")
+    if (quote_char := chr(serialize_options["quote_style"])) != '"':
+        raise NotImplementedError(f"{quote_char=} is not currently not supported.")
+
+
 # Pacify the type checker. DataFrame init asserts that all the columns
 # have a string name, so let's narrow the type.
 class NamedColumn(Column):
@@ -75,10 +96,20 @@ class DataFrame:
 
     def sink_csv(self, sink_kwargs: dict[str, Any]) -> None:
         """Sink the result into a CSV file."""
-        builder = plc.io.csv.CsvWriterOptions.builder(
-            plc.io.SinkInfo([None]),
-            self.table,
-        ).build()
+        options = sink_kwargs["options"]
+        cloud_options = sink_kwargs["cloud_options"]
+        _raise_unsupported_sink_csv_options(options, cloud_options)
+        builder = (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([None]),
+                self.table,
+            )
+            .include_header(options["include_header"])
+            .na_rep(options["serialize_options"]["null"])
+            .line_terminator(options["serialize_options"]["line_terminator"])
+            .inter_column_delimiter(chr(options["serialize_options"]["separator"]))
+            .build()
+        )
         plc.io.csv.write_csv(builder)
 
     @cached_property
