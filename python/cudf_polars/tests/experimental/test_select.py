@@ -40,8 +40,8 @@ def test_select(df, engine):
 def test_select_unsupported_raises(df, engine):
     query = df.select(
         (pl.col("a") + pl.col("b")).max(),
-        # NOTE: We don't support `mean` yet
-        (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
+        # NOTE: We don't support `median` yet
+        (pl.col("a") * 2 + pl.col("b")).alias("d").median(),
     )
     with pytest.raises(
         pl.exceptions.ComputeError,
@@ -59,6 +59,8 @@ def test_select_unsupported_raises(df, engine):
         ),
         (pl.col("a").min() + pl.col("b").max(),),
         (pl.col("a") - (pl.col("b") + pl.col("c").max()).sum(),),
+        (pl.col("b").len(),),
+        (pl.col("a") - (pl.col("b") + pl.col("c").max()).mean(),),
     ],
 )
 def test_select_aggs(df, engine, aggs):

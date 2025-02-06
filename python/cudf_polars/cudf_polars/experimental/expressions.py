@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from cudf_polars.typing import ExprTransformer
 
 
-_SUPPORTED_AGGS = ("min", "max", "sum")
+_SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean")
 
 
 class FusedExpr(Expr):
@@ -142,6 +142,14 @@ def replace_sub_expr(e: Expr, rec: ExprTransformer):
     return reuse_if_unchanged(e, rec)
 
 
+def rename_agg(agg: Agg, new_name: str):
+    """Modify the name of an aggregation expression."""
+    return CachingVisitor(
+        replace_sub_expr,
+        state={"mapping": {agg: Agg(agg.dtype, new_name, agg.options, *agg.children)}},
+    )(agg)
+
+
 def decompose_expr_graph(expr: Expr) -> FusedExpr:
     """Transform an Expr into a graph of FusedExpr nodes."""
     root = expr
@@ -180,21 +188,51 @@ def evaluate_chunk(
     children: tuple[Expr, ...],
     *references: Column,
 ) -> Column:
-    """Evaluate a pointwise FusedExpr node."""
+    """Evaluate a single aggregation."""
     return expr.evaluate(df, mapping=dict(zip(children, references, strict=False)))
 
 
-def combine_chunks(
-    agg: Agg,
-    columns: Sequence[Column],
-) -> Column:
-    """Aggregate a sequence of Columns."""
-    return agg.op(
-        Column(
-            plc.concatenate.concatenate([col.obj for col in columns]),
-            name=columns[0].name,
-        )
+def evaluate_chunk_multi(
+    df: DataFrame,
+    exprs: Sequence[Expr],
+    children: tuple[Expr, ...],
+    *references: Column,
+) -> tuple[Column, ...]:
+    """Evaluate multiple aggregations."""
+    return tuple(
+        expr.evaluate(df, mapping=dict(zip(children, references, strict=False)))
+        for expr in exprs
     )
+
+
+def combine_chunks_multi(
+    column_chunks: Sequence[tuple[Column]],
+    combine_aggs: Sequence[Agg],
+    finalize: tuple[plc.DataType, str] | None,
+) -> Column:
+    """Aggregate Column chunks."""
+    column_chunk_lists = zip(*column_chunks, strict=False)
+
+    combined = [
+        agg.op(
+            Column(
+                plc.concatenate.concatenate([col.obj for col in column_chunk_list]),
+                name=column_chunk_list[0].name,
+            )
+        )
+        for agg, column_chunk_list in zip(
+            combine_aggs, column_chunk_lists, strict=False
+        )
+    ]
+
+    if finalize:
+        dt, op_name = finalize
+        op = getattr(plc.binaryop.BinaryOperator, op_name)
+        cols = [c.obj for c in combined]
+        return Column(plc.binaryop.binary_operation(*cols, op, dt))
+
+    assert len(combined) == 1
+    return combined[0]
 
 
 def make_agg_graph(
@@ -220,13 +258,30 @@ def make_agg_graph(
 
     graph: MutableMapping[Any, Any] = {}
 
+    agg_name = agg.name
+    finalize = None
+    if agg_name in ("min", "max", "sum"):
+        chunk_aggs = [agg]
+        combine_aggs = [agg]
+    elif agg_name in ("count",):
+        chunk_aggs = [agg]
+        combine_aggs = [rename_agg(agg, "sum")]
+    elif agg_name in ("mean",):
+        sum_agg = rename_agg(agg, "sum")
+        count_agg = rename_agg(agg, "count")
+        chunk_aggs = [sum_agg, count_agg]
+        combine_aggs = [sum_agg, sum_agg]
+        finalize = (agg.dtype, "DIV")
+    else:
+        raise NotImplementedError()
+
     # Pointwise operations
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
         graph[(chunk_name, i)] = (
-            evaluate_chunk,
+            evaluate_chunk_multi,
             (child_name, i),
-            expr.sub_expr,
+            chunk_aggs,
             expr.children,
             *[
                 (name, 0) if bcast else (name, i)
@@ -236,9 +291,10 @@ def make_agg_graph(
 
     # Combine results
     graph[(key_name, 0)] = (
-        combine_chunks,
-        expr.sub_expr,
+        combine_chunks_multi,
         list(graph.keys()),
+        combine_aggs,
+        finalize,
     )
 
     return graph
