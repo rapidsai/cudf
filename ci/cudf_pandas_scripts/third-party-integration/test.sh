@@ -20,7 +20,8 @@ main() {
     LIBS=$(extract_lib_from_dependencies_yaml "$dependencies_yaml")
     LIBS=${LIBS#[}
     LIBS=${LIBS%]}
-    if [ "$RAPIDS_BUILD_TYPE" != "pull-request" ]; then
+
+    if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
         CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
         PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
