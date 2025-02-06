@@ -120,6 +120,11 @@ def build_fusedexpr_select_graph(
 def _(
     ir: Select, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
+    # TODO: If we are doing aligned aggregations on multiple
+    # columns at once, we should build a task graph that
+    # evaluates the aligned expressions at the same time
+    # (rather than each task operating on an individual column).
+
     fused_exprs = [isinstance(ne.value, FusedExpr) for ne in ir.exprs]
     if any(fused_exprs):
         # Handle FusedExpr-based graph construction
