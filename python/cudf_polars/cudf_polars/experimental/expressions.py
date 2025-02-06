@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.traversal import toposort
+from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -92,7 +92,7 @@ def get_expr_partition_count(
     """
     expr_partition_count: MutableMapping[Expr, int] = update or {}
     for expr in exprs:
-        for node in toposort(expr, reverse=True):
+        for node in list(traversal([expr]))[::-1]:
             if isinstance(node, FusedExpr):
                 # Process the fused sub-expression graph first
                 if skip_fused_exprs:

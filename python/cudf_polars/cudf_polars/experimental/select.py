@@ -15,7 +15,6 @@ from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     reuse_if_unchanged,
-    toposort,
     traversal,
 )
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
@@ -49,7 +48,7 @@ def fuse_expr_graph(expr: Expr) -> FusedExpr:
     while True:
         exprs = [
             e
-            for e in toposort(root, reverse=True)
+            for e in list(traversal([root]))[::-1]
             if not (isinstance(e, FusedExpr) or e.is_pointwise)
         ]
         if not exprs:
@@ -231,7 +230,7 @@ def build_select_graph(
             child_count,
             update=expr_partition_count,
         )
-        for node in toposort(expr, reverse=True):
+        for node in list(traversal([expr]))[::-1]:
             assert isinstance(node, FusedExpr), f"{node} is not a FusedExpr"
             sub_expr = node.sub_expr
             if isinstance(sub_expr, Agg) and sub_expr.name in _SIMPLE_AGGS:

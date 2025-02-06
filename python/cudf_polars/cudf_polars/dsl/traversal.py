@@ -19,7 +19,6 @@ __all__: list[str] = [
     "CachingVisitor",
     "make_recursive",
     "reuse_if_unchanged",
-    "toposort",
     "traversal",
 ]
 
@@ -48,46 +47,6 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
             if child not in seen:
                 seen.add(child)
                 lifo.append(child)
-
-
-def toposort(node: NodeT, *, reverse: bool = False) -> list[NodeT]:
-    """
-    Sort nodes in topological order.
-
-    Parameters
-    ----------
-    node
-        Root of expression to traverse and sort.
-    reverse
-        Whether to return reverse topological ordering.
-
-    Returns
-    -------
-    List of nodes in the expression, sorted in
-    topological order. If reverse is False (the default),
-    each element of the resulting sequence is guaranteed
-    to come before any of its children.
-    """
-    nodes = traversal([node])
-    visited = set()
-    result = []
-
-    def dfs(node):
-        if node in visited:
-            return
-        visited.add(node)
-        for child in node.children:
-            dfs(child)
-        result.append(node)
-
-    for node in nodes:
-        if node not in visited:
-            dfs(node)
-
-    if reverse:
-        # Return "leaf-nodes-first" ordering
-        return result
-    return result[::-1]
 
 
 def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
