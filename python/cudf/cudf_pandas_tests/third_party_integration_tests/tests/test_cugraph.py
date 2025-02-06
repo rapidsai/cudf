@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import cugraph
 import cupy as cp
 import networkx as nx
@@ -52,6 +52,10 @@ def adjacency_matrix():
     return df
 
 
+# TODO: Tracking Issue https://github.com/rapidsai/cudf/issues/17934
+@pytest.mark.skip(
+    reason="TypeError: Could not construct DataFrame from <class 'pandas.core.frame.DataFrame'>"
+)
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_edgelist(df, algo):
     G = cugraph.Graph()
