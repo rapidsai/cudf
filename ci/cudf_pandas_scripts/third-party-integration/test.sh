@@ -20,6 +20,11 @@ main() {
     LIBS=$(extract_lib_from_dependencies_yaml "$dependencies_yaml")
     LIBS=${LIBS#[}
     LIBS=${LIBS%]}
+    if [ "$RAPIDS_BUILD_TYPE" != "pull-request" ]; then
+        rapids-logger "Downloading artifacts from this pr jobs"
+        CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+        PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+    fi
 
     ANY_FAILURES=0
 
@@ -30,10 +35,7 @@ main() {
 
         . /opt/conda/etc/profile.d/conda.sh
         # Check the value of RAPIDS_BUILD_TYPE
-        if [ "$RAPIDS_BUILD_TYPE" != "pull-request" ]; then
-            rapids-logger "Downloading artifacts from this pr jobs"
-            CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-            PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+        if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \
                 --config "$dependencies_yaml" \
