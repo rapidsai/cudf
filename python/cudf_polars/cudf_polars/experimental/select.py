@@ -12,14 +12,16 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import NamedExpr
 from cudf_polars.dsl.ir import Select
-from cudf_polars.dsl.traversal import (
-    CachingVisitor,
-    reuse_if_unchanged,
-    traversal,
-)
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
-from cudf_polars.experimental.expressions import FusedExpr, get_expr_partition_count
+from cudf_polars.experimental.expressions import (
+    _SIMPLE_AGGS,
+    _SUPPORTED_AGGS,
+    FusedExpr,
+    fuse_expr_graph,
+    get_expr_partition_count,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -27,51 +29,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.typing import ExprTransformer
-
-
-_SIMPLE_AGGS = ("min", "max", "sum")
-_SUPPORTED_AGGS = _SIMPLE_AGGS
-
-
-def replace_sub_expr(e: Expr, rec: ExprTransformer):
-    """Replace a target expression node."""
-    mapping = rec.state["mapping"]
-    if e in mapping:
-        return mapping[e]
-    return reuse_if_unchanged(e, rec)
-
-
-def fuse_expr_graph(expr: Expr) -> FusedExpr:
-    """Transform an Expr into a graph of FusedExpr nodes."""
-    root = expr
-    while True:
-        exprs = [
-            e
-            for e in list(traversal([root]))[::-1]
-            if not (isinstance(e, FusedExpr) or e.is_pointwise)
-        ]
-        if not exprs:
-            if isinstance(root, FusedExpr):
-                break  # We are done rewriting root
-            exprs = [root]
-        old = exprs[0]
-
-        # Check that we can handle old
-        if not old.is_pointwise and not (
-            isinstance(old, Agg) and old.name in _SUPPORTED_AGGS
-        ):
-            raise NotImplementedError(
-                f"Selection does not support {expr} for multiple partitions."
-            )
-
-        # Rewrite root to replace old with FusedExpr(old)
-        children = [child for child in traversal([old]) if isinstance(child, FusedExpr)]
-        new = FusedExpr(old.dtype, old, *children)
-        mapper = CachingVisitor(replace_sub_expr, state={"mapping": {old: new}})
-        root = mapper(root)
-
-    return root
 
 
 def decompose_select(
