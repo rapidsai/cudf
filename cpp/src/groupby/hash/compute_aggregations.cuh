@@ -78,20 +78,17 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   auto const data_buffer_size =
     static_cast<size_type>(available_shmem_size) - static_cast<size_type>(offsets_buffer_size);
   std::cout << "###### data_buffer_size: " << data_buffer_size << "\n";
-  auto const is_shared_memory_compatible = false;
-  /*
-  std::all_of(
-  requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
-    std::cout << "*** data type: " << int(request.values.type().id()) << "\n";
+  auto const is_shared_memory_compatible = std::all_of(
+    requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+      std::cout << "*** data type: " << int(request.values.type().id()) << "\n";
 
-    if (cudf::is_dictionary(request.values.type())) { return false; }
-    // Ensure there is enough buffer space to store local aggregations up to the max cardinality
-    // for shared memory aggregations
-    auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
-                                                                         size_of_functor{});
-    return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
-  });
-  */
+      if (cudf::is_dictionary(request.values.type())) { return false; }
+      // Ensure there is enough buffer space to store local aggregations up to the max cardinality
+      // for shared memory aggregations
+      auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
+                                                                           size_of_functor{});
+      return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+    });
   std::cout << "###### is_shared_memory_compatible: " << is_shared_memory_compatible << "\n";
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
@@ -171,6 +168,8 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              d_agg_kinds.data(),
                              stream);
 
+  stream.synchronize();
+
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
   // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
   // the temporary aggregation results. In these situations, we must fall back to a global memory
@@ -188,7 +187,9 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                  stride,
                                                  row_bitmask,
                                                  skip_rows_with_nulls});
+    stream.synchronize();
     extract_populated_keys(global_set, populated_keys, stream);
+    stream.synchronize();
   }
 
   // Add results back to sparse_results cache
