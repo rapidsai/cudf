@@ -41,6 +41,7 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - telemetry-setup
+      - third-party-integration-tests-cudf-pandas
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@nvks-runners
     if: always()
@@ -356,3 +357,17 @@ jobs:
     steps:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+  third-party-integration-tests-cudf-pandas:
+    needs: wheel-build-cudf
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
+    with:
+      build_type: pull-request
+      arch: "amd64"
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-v100-latest-1"
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: |
+        ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
