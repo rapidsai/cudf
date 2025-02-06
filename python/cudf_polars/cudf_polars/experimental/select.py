@@ -10,7 +10,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import FusedExpr, NamedExpr
+from cudf_polars.dsl.expressions.base import NamedExpr
 from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -20,6 +20,7 @@ from cudf_polars.dsl.traversal import (
 )
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.expressions import FusedExpr, get_expr_partition_count
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -208,40 +209,6 @@ def make_pointwise_graph(
     }
 
 
-def get_expr_partition_count(
-    exprs: Sequence[Expr], child_ir_count: int
-) -> MutableMapping[Expr, int]:
-    """Extract partition count for Expr nodes."""
-    partition_count: MutableMapping[Expr, int] = {}
-    for expr in exprs:
-        for node in toposort(expr, reverse=True):
-            if isinstance(node, FusedExpr):
-                # Process nodes of fused sub-expression graph first
-                partition_count.update(
-                    get_expr_partition_count([node.sub_expr], child_ir_count)
-                )
-                partition_count[node] = partition_count[node.sub_expr]
-            elif isinstance(node, Agg):
-                # Assume all aggregations produce 1 partition
-                partition_count[node] = 1
-            elif node.is_pointwise:
-                # Pointwise expressions should preserve child partition count
-                if node.children:
-                    # Assume maximum child partition count
-                    partition_count[node] = max(
-                        [partition_count[c] for c in node.children]
-                    )
-                else:
-                    # If no children, we are preserving the child-IR partition count
-                    partition_count[node] = child_ir_count
-            else:
-                raise NotImplementedError(
-                    f"{type(node)} not supported for multiple partitions."
-                )
-
-    return partition_count
-
-
 def build_select_graph(
     ir: Select, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
@@ -259,7 +226,11 @@ def build_select_graph(
         assert isinstance(ne.value, FusedExpr), f"{ne.value} is not a FusedExpr"
         expr: FusedExpr = ne.value
         roots.append(expr)
-        expr_partition_count.update(get_expr_partition_count([expr], child_count))
+        expr_partition_count = get_expr_partition_count(
+            [expr],
+            child_count,
+            update=expr_partition_count,
+        )
         for node in toposort(expr, reverse=True):
             assert isinstance(node, FusedExpr), f"{node} is not a FusedExpr"
             sub_expr = node.sub_expr

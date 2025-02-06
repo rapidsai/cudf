@@ -169,41 +169,6 @@ class ErrorExpr(Expr):
         self.is_pointwise = True
 
 
-class FusedExpr(Expr):
-    """
-    A single Expr node representing a fused Expr sub-graph.
-
-    Notes
-    -----
-    A FusedExpr may not contain more than one non-pointwise
-    Expr nodes. If the object does contain a non-pointwise
-    node, that node must be the root of sub_expr.
-    """
-
-    __slots__ = ("sub_expr",)
-    _non_child = ("dtype", "sub_expr")
-
-    def __init__(self, dtype: plc.DataType, sub_expr: Expr, *children: Expr):
-        self.dtype = dtype
-        self.sub_expr = sub_expr
-        self.children = children
-        self.is_pointwise = sub_expr.is_pointwise
-
-    def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:
-        """Evaluate this expression given a dataframe for context."""
-        return self.sub_expr.evaluate(df, context=context, mapping=mapping)
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return self.sub_expr.collect_agg(depth=depth)
-
-
 class NamedExpr:
     # NamedExpr does not inherit from Expr since it does not appear
     # when evaluating expressions themselves, only when constructing
