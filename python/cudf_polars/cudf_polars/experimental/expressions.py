@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
@@ -16,19 +18,17 @@ from cudf_polars.dsl.traversal import (
     reuse_if_unchanged,
     traversal,
 )
+from cudf_polars.experimental.base import get_key_name
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
-    import pylibcudf as plc
-
-    from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.base import AggInfo
     from cudf_polars.typing import ExprTransformer
 
 
-_SIMPLE_AGGS = ("min", "max", "sum")
-_SUPPORTED_AGGS = _SIMPLE_AGGS
+_SUPPORTED_AGGS = ("min", "max", "sum")
 
 
 class FusedExpr(Expr):
@@ -71,7 +71,7 @@ class FusedExpr(Expr):
         return self.sub_expr.collect_agg(depth=depth)
 
 
-def get_expr_partition_count(
+def extract_partition_counts(
     exprs: Sequence[Expr],
     child_ir_count: int,
     *,
@@ -99,39 +99,39 @@ def get_expr_partition_count(
     -------
     Mapping between Expr nodes and partition counts.
     """
-    expr_partition_count: MutableMapping[Expr, int] = update or {}
+    expr_partition_counts: MutableMapping[Expr, int] = update or {}
     for expr in exprs:
         for node in list(traversal([expr]))[::-1]:
             if isinstance(node, FusedExpr):
                 # Process the fused sub-expression graph first
                 if skip_fused_exprs:
                     continue  # Stay within the current sub expression
-                expr_partition_count = get_expr_partition_count(
+                expr_partition_counts = extract_partition_counts(
                     [node.sub_expr],
                     child_ir_count,
-                    update=expr_partition_count,
+                    update=expr_partition_counts,
                     skip_fused_exprs=True,
                 )
-                expr_partition_count[node] = expr_partition_count[node.sub_expr]
+                expr_partition_counts[node] = expr_partition_counts[node.sub_expr]
             elif isinstance(node, Agg):
                 # Assume all aggregations produce 1 partition
-                expr_partition_count[node] = 1
+                expr_partition_counts[node] = 1
             elif node.is_pointwise:
                 # Pointwise expressions should preserve child partition count
                 if node.children:
                     # Assume maximum child partition count
-                    expr_partition_count[node] = max(
-                        [expr_partition_count[c] for c in node.children]
+                    expr_partition_counts[node] = max(
+                        [expr_partition_counts[c] for c in node.children]
                     )
                 else:
                     # If no children, we are preserving the child-IR partition count
-                    expr_partition_count[node] = child_ir_count
+                    expr_partition_counts[node] = child_ir_count
             else:
                 raise NotImplementedError(
                     f"{type(node)} not supported for multiple partitions."
                 )
 
-    return expr_partition_count
+    return expr_partition_counts
 
 
 def replace_sub_expr(e: Expr, rec: ExprTransformer):
@@ -142,7 +142,7 @@ def replace_sub_expr(e: Expr, rec: ExprTransformer):
     return reuse_if_unchanged(e, rec)
 
 
-def fuse_expr_graph(expr: Expr) -> FusedExpr:
+def decompose_expr_graph(expr: Expr) -> FusedExpr:
     """Transform an Expr into a graph of FusedExpr nodes."""
     root = expr
     while True:
@@ -172,3 +172,116 @@ def fuse_expr_graph(expr: Expr) -> FusedExpr:
         root = mapper(root)
 
     return root
+
+
+def evaluate_chunk(
+    df: DataFrame,
+    expr: Expr,
+    children: tuple[Expr, ...],
+    *references: Column,
+) -> Column:
+    """Evaluate a pointwise FusedExpr node."""
+    return expr.evaluate(df, mapping=dict(zip(children, references, strict=False)))
+
+
+def combine_chunks(
+    agg: Agg,
+    columns: Sequence[Column],
+) -> Column:
+    """Aggregate a sequence of Columns."""
+    return agg.op(
+        Column(
+            plc.concatenate.concatenate([col.obj for col in columns]),
+            name=columns[0].name,
+        )
+    )
+
+
+def make_agg_graph(
+    expr: FusedExpr,
+    child_name: str,
+    expr_partition_counts: MutableMapping[Expr, int],
+) -> MutableMapping[Any, Any]:
+    """Build a FusedExpr aggregation graph."""
+    agg = expr.sub_expr
+    assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
+    assert agg.name in _SUPPORTED_AGGS, f"Agg {agg} not supported"
+
+    # NOTE: This algorithm only works for "simple" aggregations
+    # in which the same operations (e.g. sum) can be used for
+    # both the initial partition-wise phase, as well as the final
+    # "combine" phase. We also assume that intermediate results
+    # can be tracked in a single column (e.g. not true for mean).
+
+    key_name = get_key_name(expr)
+    expr_child_names = [get_key_name(c) for c in expr.children]
+    expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
+    input_count = max(expr_partition_counts[c] for c in agg.children)
+
+    graph: MutableMapping[Any, Any] = {}
+
+    # Pointwise operations
+    chunk_name = f"chunk-{key_name}"
+    for i in range(input_count):
+        graph[(chunk_name, i)] = (
+            evaluate_chunk,
+            (child_name, i),
+            expr.sub_expr,
+            expr.children,
+            *[
+                (name, 0) if bcast else (name, i)
+                for name, bcast in zip(expr_child_names, expr_bcast, strict=False)
+            ],
+        )
+
+    # Combine results
+    graph[(key_name, 0)] = (
+        combine_chunks,
+        expr.sub_expr,
+        list(graph.keys()),
+    )
+
+    return graph
+
+
+def make_pointwise_graph(
+    expr: FusedExpr,
+    child_name: str,
+    expr_partition_counts: MutableMapping[Expr, int],
+) -> MutableMapping[Any, Any]:
+    """Build simple pointwise FusedExpr graph."""
+    key_name = get_key_name(expr)
+    expr_child_names = [get_key_name(c) for c in expr.children]
+    expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
+    count = expr_partition_counts[expr]
+    return {
+        (key_name, i): (
+            evaluate_chunk,
+            (child_name, i),
+            expr.sub_expr,
+            expr.children,
+            *[
+                (name, 0) if bcast else (name, i)
+                for name, bcast in zip(expr_child_names, expr_bcast, strict=False)
+            ],
+        )
+        for i in range(count)
+    }
+
+
+def make_fusedexpr_graph(
+    expr: FusedExpr,
+    child_name: str,
+    expr_partition_counts: MutableMapping[Expr, int],
+) -> MutableMapping[Any, Any]:
+    """Build task graph for a FusedExpr node."""
+    sub_expr = expr.sub_expr
+    if isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
+        return make_agg_graph(expr, child_name, expr_partition_counts)
+    elif expr.is_pointwise:
+        return make_pointwise_graph(expr, child_name, expr_partition_counts)
+    else:
+        # TODO: Implement "complex" aggs (e.g. mean, std, etc)
+        raise NotImplementedError(
+            f"{type(sub_expr)} not supported for multiple partitions."
+        )
