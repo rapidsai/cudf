@@ -93,12 +93,17 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   return dst;
 }
 
-std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src) {
+std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
+{
   auto const compressed_size = ZSTD_compressBound(src.size());
   CUDF_EXPECTS(ZSTD_isError(compressed_size) == 0, "Error in estimating ZSTD compressed size");
   std::vector<std::uint8_t> compressed_buffer(compressed_size);
 
-  size_t const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()), compressed_size, reinterpret_cast<const void*>(src.data()), src.size(), 1);
+  size_t const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
+                                                compressed_size,
+                                                reinterpret_cast<const void*>(src.data()),
+                                                src.size(),
+                                                1);
   CUDF_EXPECTS(ZSTD_isError(compressed_size_) == 0, "Error in ZSTD compression");
 
   return compressed_buffer;
