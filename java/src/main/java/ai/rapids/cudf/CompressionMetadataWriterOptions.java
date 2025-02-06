@@ -24,7 +24,7 @@ import java.util.Map;
 public class CompressionMetadataWriterOptions extends ColumnWriterOptions.StructColumnWriterOptions {
   private final CompressionType compressionType;
   private final Map<String, String> metadata;
-  private  final int stripeSizeRows;
+  private final int stripeSizeRows;
 
   protected CompressionMetadataWriterOptions(Builder builder) {
     super(builder);
