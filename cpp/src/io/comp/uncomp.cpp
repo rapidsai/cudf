@@ -25,8 +25,10 @@
 #include <cudf/utilities/span.hpp>
 
 #include <zlib.h>  // uncompress
+#include <zstd.h>
 
 #include <cstring>  // memset
+#include <cstdint>
 
 namespace cudf::io::detail {
 
@@ -384,7 +386,8 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 /**
  * @brief ZSTD decompressor that uses nvcomp
  */
-size_t decompress_zstd(host_span<uint8_t const> src,
+/*
+size_t device_decompress_zstd(host_span<uint8_t const> src,
                        host_span<uint8_t> dst,
                        rmm::cuda_stream_view stream)
 {
@@ -422,6 +425,54 @@ size_t decompress_zstd(host_span<uint8_t const> src,
                             stream);
 
   return hd_stats[0].bytes_written;
+}
+*/
+
+size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst) {
+  size_t const decompressed_bytes = ZSTD_decompress(reinterpret_cast<void*>(dst.data()), dst.size(), reinterpret_cast<const void*>(const_cast<uint8_t*>(src.data())), src.size()); 
+  CUDF_EXPECTS(ZSTD_isError(decompressed_bytes) == 0, "ZSTD decompression error");
+  return decompressed_bytes;
+}
+
+unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
+{
+    unsigned long long totalDstSize = 0;
+    auto ZSTD_startingInputLength = []() {
+      return 5;
+    };
+    bool is_little_endian = []() {
+      uint16_t n = 0x1;
+      uint8_t *byte = reinterpret_cast<uint8_t*>(&n);
+      return (*byte == n);
+    }();
+    uint32_t magic_number = [is_little_endian, src]() {
+      uint32_t *p = reinterpret_cast<uint32_t*>(const_cast<void*>(src));
+      uint32_t ret = p[0];
+      if(is_little_endian)
+        return ret;
+      return __builtin_bswap32(ret);
+    }();
+
+    while (src_size >= ZSTD_startingInputLength()) {
+      CUDF_EXPECTS((magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) != ZSTD_MAGIC_SKIPPABLE_START, "Don't support skippable frames yet!");
+
+      unsigned long long const fcs = ZSTD_getFrameContentSize(src, src_size);
+      if (fcs >= ZSTD_CONTENTSIZE_ERROR) return fcs;
+      if (totalDstSize + fcs < totalDstSize)
+        return ZSTD_CONTENTSIZE_ERROR; /* check for overflow */
+      totalDstSize += fcs;
+
+      /* skip to next frame */
+      size_t const frameSrcSize = ZSTD_findFrameCompressedSize(src, src_size);
+      if (ZSTD_isError(frameSrcSize)) return ZSTD_CONTENTSIZE_ERROR;
+      CUDF_EXPECTS(frameSrcSize <= src_size, "Corrupted frame");
+      src = (const uint8_t *)src + frameSrcSize;
+      src_size -= frameSrcSize;
+    }  /* while (srcSize >= ZSTD_frameHeaderSize_prefix) */
+
+    if (src_size) return ZSTD_CONTENTSIZE_ERROR;
+
+    return totalDstSize;
 }
 
 struct source_properties {
@@ -530,6 +581,17 @@ source_properties get_source_properties(compression_type compression, host_span<
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
+    case compression_type::ZSTD: {
+      uncomp_len = 0;
+      comp_data = raw;
+      comp_len = src.size();
+      unsigned long long const ret = ZSTD_findDecompressedSize(reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
+      CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN, "Decompressed ZSTD size cannot be determined");
+      CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
+      uncomp_len = static_cast<size_t>(ret);
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
+    }
     default: CUDF_FAIL("Unsupported compressed stream type");
   }
 
@@ -552,7 +614,7 @@ size_t decompress(compression_type compression,
     case compression_type::GZIP: return decompress_gzip(src, dst);
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
-    case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
+    case compression_type::ZSTD: return decompress_zstd(src, dst);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -576,6 +638,11 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
     // INFLATE
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     decompress_gzip(src, dst);
+    return dst;
+  }
+  if (compression == compression_type::ZSTD) {
+    std::vector<uint8_t> dst(srcprops.uncomp_len);
+    decompress_zstd(src, dst);
     return dst;
   }
   if (compression == compression_type::ZIP) {
