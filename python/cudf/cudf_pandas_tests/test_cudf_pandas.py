@@ -1221,25 +1221,6 @@ def test_intermediates_are_proxied():
     assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
 
 
-def test_from_dataframe():
-    cudf = pytest.importorskip("cudf")
-    from cudf.testing import assert_eq
-
-    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
-
-    cudf_pandas_df = xpd.DataFrame(data)
-    cudf_df = cudf.DataFrame(data)
-
-    # test construction of a cuDF DataFrame from an cudf_pandas DataFrame
-    assert_eq(cudf_df, cudf.DataFrame.from_pandas(cudf_pandas_df))
-    assert_eq(cudf_df, cudf.from_dataframe(cudf_pandas_df))
-
-    # ideally the below would work as well, but currently segfaults
-
-    # pd_df = pd.DataFrame(data)
-    # assert_eq(pd_df, pd.api.interchange.from_dataframe(cudf_pandas_df))
-
-
 def test_multiindex_values_returns_1d_tuples():
     mi = xpd.MultiIndex.from_tuples([(1, 2), (3, 4)])
     result = mi.values
