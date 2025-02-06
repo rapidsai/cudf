@@ -381,7 +381,7 @@ void host_compress(compression_type compression,
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
-  return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", 0);
+  return getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"}) == "ON";
 }
 
 }  // namespace

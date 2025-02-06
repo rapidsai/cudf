@@ -28,7 +28,7 @@ namespace {
  * present.
  */
 template <typename T>
-T getenv_or(std::string_view env_var_name, T default_val)
+T getenv_or(std::string_view env_var_name, T const& default_val)
 {
   auto const env_val = std::getenv(env_var_name.data());
   if (env_val != nullptr) {
