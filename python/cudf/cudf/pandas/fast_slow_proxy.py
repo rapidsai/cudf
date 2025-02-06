@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterator, Mapping
 from enum import IntEnum
 from typing import Any, Literal
 
+import cupy as cp
 import numpy as np
 
 from rmm import RMMError
@@ -190,7 +191,10 @@ def make_final_proxy_type(
         # convert it to a fast one
         if self._fsproxy_state is _State.SLOW:
             return slow_to_fast(self._fsproxy_wrapped)
-        return self._fsproxy_wrapped
+        try:
+            return self._fsproxy_wrapped
+        except AttributeError:
+            return cp.asarray(self)
 
     @nvtx.annotate(
         "COPY_FAST_TO_SLOW",
@@ -202,7 +206,10 @@ def make_final_proxy_type(
         # convert it to a slow one
         if self._fsproxy_state is _State.FAST:
             return fast_to_slow(self._fsproxy_wrapped)
-        return self._fsproxy_wrapped
+        try:
+            return self._fsproxy_wrapped
+        except AttributeError:
+            return np.asarray(self)
 
     def as_gpu_object(self):
         return self._fsproxy_slow_to_fast()
@@ -212,11 +219,18 @@ def make_final_proxy_type(
 
     @property  # type: ignore
     def _fsproxy_state(self) -> _State:
-        return (
-            _State.FAST
-            if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
-            else _State.SLOW
-        )
+        try:
+            return (
+                _State.FAST
+                if isinstance(self._fsproxy_wrapped, self._fsproxy_fast_type)
+                else _State.SLOW
+            )
+        except AttributeError:
+            return (
+                _State.FAST
+                if isinstance(self, self._fsproxy_fast_type)
+                else _State.SLOW
+            )
 
     slow_dir = dir(slow_type)
     cls_dict = {

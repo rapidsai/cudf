@@ -24,6 +24,8 @@ runtest() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses="${NUM_PROCESSES}" \
+    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
 }
 
@@ -41,6 +43,8 @@ main() {
     -v \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses="${NUM_PROCESSES}" \
+    --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
 }
 
