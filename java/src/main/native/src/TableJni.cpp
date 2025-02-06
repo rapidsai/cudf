@@ -1487,7 +1487,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(JNIEnv* env,
                                                                 jstring j_true_value,
                                                                 jstring j_false_value,
                                                                 jint j_quote_style,
-                                                                jint j_stripe_size_rows,
                                                                 jstring j_output_path)
 {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
