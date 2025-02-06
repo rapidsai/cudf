@@ -26,17 +26,26 @@ main() {
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
-        echo "Build type $RAPIDS_BUILD_TYPE"
         CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
-
+        # Check the value of RAPIDS_BUILD_TYPE
+        if [ "$RAPIDS_BUILD_TYPE" != "pull-request" ]; then
+            rapids-logger "Downloading artifacts from this pr jobs"
+            CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+            PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+        else
+            CPP_CHANNEL=""
+            PYTHON_CHANNEL=""
+        fi
         rapids-logger "Generate Python testing dependencies"
         rapids-dependency-file-generator \
           --config "$dependencies_yaml" \
           --output conda \
           --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+          --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+          --prepend-channel "${CPP_CHANNEL}" \
+          --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
