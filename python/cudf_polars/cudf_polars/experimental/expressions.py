@@ -226,6 +226,7 @@ def combine_chunks_multi(
     ]
 
     if finalize:
+        # Perform optional BinOp on combined columns
         dt, op_name = finalize
         op = getattr(plc.binaryop.BinaryOperator, op_name)
         cols = [c.obj for c in combined]
@@ -245,11 +246,11 @@ def make_agg_graph(
     assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
     assert agg.name in _SUPPORTED_AGGS, f"Agg {agg} not supported"
 
-    # NOTE: This algorithm only works for "simple" aggregations
-    # in which the same operations (e.g. sum) can be used for
-    # both the initial partition-wise phase, as well as the final
-    # "combine" phase. We also assume that intermediate results
-    # can be tracked in a single column (e.g. not true for mean).
+    # NOTE: This algorithm assumes we are doing nested
+    # aggregations, or we are only aggregating a single
+    # column. If we are performing aligned aggregations
+    # across multiple columns at once, we should perform
+    # our reduction at the DataFrame level instead.
 
     key_name = get_key_name(expr)
     expr_child_names = [get_key_name(c) for c in expr.children]
@@ -258,24 +259,24 @@ def make_agg_graph(
 
     graph: MutableMapping[Any, Any] = {}
 
+    # Define operations for each aggregation stage
     agg_name = agg.name
-    finalize = None
-    if agg_name in ("min", "max", "sum"):
-        chunk_aggs = [agg]
-        combine_aggs = [agg]
-    elif agg_name in ("count",):
+    if agg_name == "count":
         chunk_aggs = [agg]
         combine_aggs = [rename_agg(agg, "sum")]
-    elif agg_name in ("mean",):
+        finalize = None
+    elif agg_name == "mean":
         sum_agg = rename_agg(agg, "sum")
         count_agg = rename_agg(agg, "count")
         chunk_aggs = [sum_agg, count_agg]
         combine_aggs = [sum_agg, sum_agg]
         finalize = (agg.dtype, "DIV")
     else:
-        raise NotImplementedError()
+        chunk_aggs = [agg]
+        combine_aggs = [agg]
+        finalize = None
 
-    # Pointwise operations
+    # Pointwise stage
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
         graph[(chunk_name, i)] = (
@@ -289,7 +290,7 @@ def make_agg_graph(
             ],
         )
 
-    # Combine results
+    # Combine and finalize
     graph[(key_name, 0)] = (
         combine_chunks_multi,
         list(graph.keys()),
