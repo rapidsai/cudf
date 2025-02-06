@@ -151,6 +151,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                          global_set,
                                                          populated_keys,
                                                          stream);
+  stream.synchronize();
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
