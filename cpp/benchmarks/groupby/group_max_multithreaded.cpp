@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
       thread_requests.emplace_back();
       thread_requests.back().values = vals->view();
       thread_requests.back().aggregations.push_back(
-        cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+        cudf::make_max_aggregation<cudf::groupby_aggregation>());
     }
   }
 
@@ -90,9 +90,9 @@ void bench_groupby_max_multithreaded(nvbench::state& state, nvbench::type_list<T
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_sum_multithreaded,
+NVBENCH_BENCH_TYPES(bench_groupby_max_multithreaded,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
-  .set_name("groupby_sum_multithreaded")
+  .set_name("groupby_max_multithreaded")
   .add_int64_axis("cardinality", {0})
   .add_int64_power_of_two_axis("num_rows", {12, 18})
   .add_float64_axis("null_probability", {0, 0.1, 0.9})
