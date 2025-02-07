@@ -37,9 +37,14 @@ namespace detail {
 template <typename T>
 struct cast_fn {
   template <typename U>
-  CUDF_HOST_DEVICE constexpr T operator()(U val) const
+  CUDF_HOST_DEVICE constexpr T operator()(U&& val) const
   {
-    return static_cast<T>(val);
+    return T{cuda::std::forward<U>(val)};
+  }
+  
+  CUDF_HOST_DEVICE constexpr T&& operator()(T&& val) const noexcept
+  {
+    return cuda::std::forward<T>(val);
   }
 };
 
