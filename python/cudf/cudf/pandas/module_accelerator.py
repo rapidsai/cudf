@@ -595,10 +595,10 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 )
             mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
-                pandas_wrappers = importlib.import_module(
+                lib_wrappers = importlib.import_module(
                     f".._wrappers.{mode.slow_lib}", __name__
                 )
-                pandas_wrappers.cudf.set_option("mode.pandas_compatible", True)
+                lib_wrappers.initial_setup()
             try:
                 (self,) = (
                     p
