@@ -265,11 +265,11 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups using bloom filters
    *
-   * @param sources Dataset sources
+   * @param bloom_filter_data Bloom filter data device buffers for each input row group
    * @param input_row_group_indices Lists of input row groups, one per source
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param equality_col_schemas schema indices of equality columns only
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
