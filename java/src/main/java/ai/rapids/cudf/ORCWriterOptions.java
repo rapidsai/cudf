@@ -23,17 +23,34 @@ package ai.rapids.cudf;
  * that will be used by the ORC writer to write the file.
  */
 public class ORCWriterOptions extends CompressionMetadataWriterOptions {
+  private int stripeSizeRows;
 
   private ORCWriterOptions(Builder builder) {
     super(builder);
+    this.stripeSizeRows = builder.stripeSizeRows;
   }
 
   public static Builder builder() {
     return new Builder();
   }
 
+  public int getStripeSizeRows() {
+    return stripeSizeRows;
+  }
+
   public static class Builder extends CompressionMetadataWriterOptions.Builder
           <Builder, ORCWriterOptions> {
+    // < 1M rows default orc stripe rows, defined in cudf/cpp/include/cudf/io/orc.hpp
+    private int stripeSizeRows = 1000000;
+
+    public Builder withStripeSizeRows(int stripeSizeRows) {
+      // maximum stripe size cannot be smaller than 512
+      if (stripeSizeRows < 512 || stripeSizeRows > 1000000) {
+        throw new IllegalArgumentException("Stripe size rows must be between 512 and 1M");
+      }
+      this.stripeSizeRows = stripeSizeRows;
+      return this;
+    }
 
     public ORCWriterOptions build() {
       return new ORCWriterOptions(this);
