@@ -1741,6 +1741,11 @@ _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
 _original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
+_original_from_pandas = cudf.from_pandas
+_original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
+_original_Series_from_pandas = cudf.Series.from_pandas
+_original_Index_from_pandas = cudf.BaseIndex.from_pandas
+_original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
 def wrap_init(original_init):
@@ -1774,6 +1779,65 @@ def wrap_call(original_call):
         return original_call(cls, data, *args, **kwargs)
 
     return wrapped_call
+
+
+def wrap_from_pandas(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas(obj, *args, **kwargs):
+        if is_proxy_object(obj):
+            obj = obj.as_gpu_object()
+            return obj
+        return original_call(obj, *args, **kwargs)
+
+    return wrapped_from_pandas
+
+
+def wrap_from_pandas_dataframe(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_dataframe(dataframe, *args, **kwargs):
+        if is_proxy_object(dataframe):
+            dataframe = dataframe.as_gpu_object()
+            if isinstance(dataframe, cudf.DataFrame):
+                return dataframe
+        return original_call(dataframe, *args, **kwargs)
+
+    return wrapped_from_pandas_dataframe
+
+
+def wrap_from_pandas_series(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_series(s, *args, **kwargs):
+        if is_proxy_object(s):
+            s = s.as_gpu_object()
+            if isinstance(s, cudf.Series):
+                return s
+        return original_call(s, *args, **kwargs)
+
+    return wrapped_from_pandas_series
+
+
+def wrap_from_pandas_index(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_index(index, *args, **kwargs):
+        if is_proxy_object(index):
+            index = index.as_gpu_object()
+            if isinstance(index, cudf.core.index.BaseIndex):
+                return index
+        return original_call(index, *args, **kwargs)
+
+    return wrapped_from_pandas_index
+
+
+def wrap_from_pandas_multiindex(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_multiindex(multiindex, *args, **kwargs):
+        if is_proxy_object(multiindex):
+            multiindex = multiindex.as_gpu_object()
+            if isinstance(multiindex, cudf.MultiIndex):
+                return multiindex
+        return original_call(multiindex, *args, **kwargs)
+
+    return wrapped_from_pandas_multiindex
 
 
 @functools.wraps(_original_DataFrame_init)
@@ -1811,7 +1875,19 @@ def initial_setup():
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
     cudf.core.index.IndexMeta.__call__ = wrap_call(_original_IndexMeta_call)
-
+    cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
+    cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
+        _original_DataFrame_from_pandas
+    )
+    cudf.Series.from_pandas = wrap_from_pandas_series(
+        _original_Series_from_pandas
+    )
+    cudf.BaseIndex.from_pandas = wrap_from_pandas_index(
+        _original_Index_from_pandas
+    )
+    cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(
+        _original_MultiIndex_from_pandas
+    )
     cudf.set_option("mode.pandas_compatible", True)
 
 
