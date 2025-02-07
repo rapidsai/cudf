@@ -381,7 +381,6 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     _denylist: tuple[str]
     _use_fast_lib: dict[int, bool]
     _disable_count: defaultdict[int, int]
-    _use_fast_lib_lock: threading.RLock = threading.RLock()
     _module_cache_prefix: str = "_slow_lib_"
 
     # TODO: Add possibility for either an explicit allow-list of
