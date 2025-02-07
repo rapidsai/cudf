@@ -28,8 +28,10 @@ __all__: list[str] = ["DataFrame"]
 
 
 def _get_valid_sink_csv_options(
-    options: dict[str, Any], cloud_options: dict[str, Any]
+    options: dict[str, Any], cloud_options: dict[str, Any] | None
 ) -> dict[str, Any]:
+    if cloud_options is not None:
+        raise NotImplementedError("cloud_options is not currently not supported.")
     if include_bom := options["include_bom"]:
         raise NotImplementedError(f"{include_bom=} is not currently not supported.")
     serialize_options = options["serialize_options"]
@@ -107,7 +109,7 @@ class DataFrame:
         )
         builder = (
             plc.io.csv.CsvWriterOptions.builder(
-                plc.io.SinkInfo([None]),
+                plc.io.SinkInfo(sink_kwargs["path"]),
                 self.table,
             )
             .include_header(valid_options["include_header"])
