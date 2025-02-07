@@ -1841,7 +1841,9 @@ def wrap_from_pandas_multiindex(original_call):
 
 
 @functools.wraps(_original_DataFrame_init)
-def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
+def DataFrame_init_(
+    self, data=None, index=None, columns=None, *args, **kwargs
+):
     data_is_proxy = is_proxy_object(data)
 
     if data_is_proxy:
