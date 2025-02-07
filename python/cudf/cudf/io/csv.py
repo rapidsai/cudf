@@ -176,9 +176,10 @@ def read_csv(
                 cudf_dtype = cudf.dtype(col_type)
                 cudf_dtypes[k] = cudf_dtype
                 plc_dtypes[k] = _get_plc_data_type_from_dtype(cudf_dtype)
-        elif isinstance(dtype, str) or isinstance(
+        elif isinstance(
             dtype,
             (
+                str,
                 np.dtype,
                 pd.api.extensions.ExtensionDtype,
                 cudf.core.dtypes._BaseDtype,
