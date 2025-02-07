@@ -13,7 +13,8 @@ __all__ = [
     "CharacterNormalizer"
     "normalize_characters",
     "normalize_spaces",
-    "characters_normalize"]
+    "characters_normalize"
+]
 
 cdef class CharacterNormalizer:
     """The normalizer object to be used with ``normalize_characters``.
