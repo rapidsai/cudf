@@ -7,6 +7,13 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_narwhals
 
+RAPIDS_VERSION="$(rapids-version)"
+
+rapids-mamba-retry install \
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
+  "cudf-polars=${RAPIDS_VERSION}"
+
 rapids-logger "Check GPU usage"
 nvidia-smi
 rapids-print-env
