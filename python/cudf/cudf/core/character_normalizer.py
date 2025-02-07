@@ -14,10 +14,10 @@ class CharacterNormalizer:
     Parameters
     ----------
     do_lower : bool
-        Set to True if the normalizer should also lower-case
+        If True, the normalizer should also lower-case
         while normalizing.
-    special_tokens : cudf string series
-        Strings column of special tokens.
+    special_tokens : cudf.Series
+        Series of special tokens.
     """
 
     def __init__(
@@ -33,12 +33,13 @@ class CharacterNormalizer:
         """
         Parameters
         ----------
-        text : cudf string series
+        text : cudf.Series
             The strings to be normalized.
 
         Returns
         -------
-        Normalized strings
+        cudf.Series
+            Normalized strings
         """
         result = text._column.normalize_characters(self.normalizer)
 
