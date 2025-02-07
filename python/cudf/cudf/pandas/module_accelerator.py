@@ -380,7 +380,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 
     _denylist: tuple[str]
     _use_fast_lib: dict[int, bool]
-    _use_fast_lib_bkp: defaultdict[int, list[bool]]
+    _disable_count: defaultdict[int, int]
     _use_fast_lib_lock: threading.RLock = threading.RLock()
     _module_cache_prefix: str = "_slow_lib_"
 
@@ -414,7 +414,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         # These initializations do not need to be protected since a given instance is
         # always being created on a given thread.
         self._use_fast_lib = {threading.get_ident(): True}
-        self._use_fast_lib_bkp = defaultdict(list)
+        self._disable_count = defaultdict(int)
         return self
 
     def _populate_module(self, mod: ModuleType):
@@ -506,19 +506,14 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         Context manager for disabling things
         """
-        self._use_fast_lib_bkp[threading.get_ident()].append(
-            # The first time that a thread is disabled, unless it was the main
-            # thread it won't have an entry in the dictionary, which implicitly
-            # means it is running in fast mode.
-            self._use_fast_lib.get(threading.get_ident(), True)
-        )
+        self._disable_count[threading.get_ident()] += 1
         self._use_fast_lib[threading.get_ident()] = False
         try:
             yield
         finally:
-            self._use_fast_lib[threading.get_ident()] = self._use_fast_lib_bkp[
-                threading.get_ident()
-            ].pop()
+            self._disable_count[threading.get_ident()] -= 1
+            if self._disable_count[threading.get_ident()] == 0:
+                self._use_fast_lib[threading.get_ident()] = True
 
     @staticmethod
     def getattr_real_or_wrapped(
