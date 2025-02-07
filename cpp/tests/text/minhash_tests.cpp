@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,41 @@ TEST_F(MinHashTest, Permuted)
     LCW64{ 121498891461700668ul,  171065800427907402ul,  97466271004074331ul},
     LCW64{  54617739511834072ul,  231454301607238929ul,  97466271004074331ul},
     LCW64{ 576418665851990314ul,  231454301607238929ul,  97466271004074331ul}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
+TEST_F(MinHashTest, Ngrams)
+{
+  using LCWS = cudf::test::lists_column_wrapper<cudf::string_view>;
+  auto input =
+    LCWS({LCWS{"The", "quick", "brown", "fox", "jumpéd", "over", "the", "lazy", "brown", "dog."},
+          LCWS{"The", "quick", "brown", "fox", "jumpéd", "over", "the", "lazy", "brown", "dog."}});
+
+  auto view = cudf::lists_column_view(input);
+
+  auto first  = thrust::counting_iterator<uint32_t>(10);
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results =
+    nvtext::minhash_ngrams(view, 4, 0, cudf::column_view(params), cudf::column_view(params));
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW32 expected({
+    LCW32{230924604u, 55492793u, 963436400u},
+    LCW32{230924604u, 55492793u, 963436400u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 =
+    nvtext::minhash64_ngrams(view, 4, 0, cudf::column_view(params64), cudf::column_view(params64));
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+  LCW64 expected64({
+    LCW64{ 208926840193078200ul, 576399628675212695ul, 312927673584437419ul},
+    LCW64{ 208926840193078200ul, 576399628675212695ul, 312927673584437419ul}
   });
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
