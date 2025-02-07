@@ -20,8 +20,18 @@ def per_thread_work(_):
         assert not is_enabled(pd.DataFrame())
 
         # Do some fake work to allow other threads to potentially modify this one
-        for _ in range(10000):
+        for _ in range(1000):
             sleep(1e-6)
+
+        assert not is_enabled(pd.DataFrame())
+
+        # Ensure that nesting the context manager works too
+        with disable_module_accelerator():
+            assert not is_enabled(pd.DataFrame())
+            for _ in range(1000):
+                sleep(1e-6)
+
+            assert not is_enabled(pd.DataFrame())
         assert not is_enabled(pd.DataFrame())
 
     assert is_enabled(pd.DataFrame())
