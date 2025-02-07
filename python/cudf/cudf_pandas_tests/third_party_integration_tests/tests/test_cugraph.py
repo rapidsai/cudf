@@ -63,6 +63,10 @@ def test_cugraph_from_pandas_edgelist(df, algo):
     return getattr(cugraph, algo)(G).to_pandas().values
 
 
+# TODO: Tracking Issue https://github.com/rapidsai/cudf/issues/17934
+@pytest.mark.skip(
+    reason="TypeError: Could not construct DataFrame from <class 'pandas.core.frame.DataFrame'>"
+)
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
     G = cugraph.Graph()
@@ -71,6 +75,10 @@ def test_cugraph_from_pandas_adjacency(adjacency_matrix, algo):
     return res.sort_values(list(res.columns)).values
 
 
+# TODO: Tracking Issue https://github.com/rapidsai/cudf/issues/17934
+@pytest.mark.skip(
+    reason="TypeError: Could not construct DataFrame from <class 'pandas.core.frame.DataFrame'>"
+)
 @pytest.mark.parametrize("algo", cugraph_algos)
 def test_cugraph_from_numpy_array(df, algo):
     G = cugraph.Graph()
