@@ -256,7 +256,7 @@ dependencies:
       - output_types: conda
         packages:
         # TODO: Remove numpy pinning once https://github.com/catboost/catboost/issues/2671 is resolved
-          - numpy==1.26.4
+          - numpy>=1.23,<2.0.0
           - scipy
           - scikit-learn
           - catboost
@@ -278,7 +278,7 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[pandas]
+              - ibis-framework[pandas]==9.5.*
   test_hvplot:
     common:
       - output_types: conda
