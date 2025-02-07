@@ -553,29 +553,11 @@ def _validate_args(
             )
 
 
-def _get_plc_data_type_from_dtype(dtype) -> plc.DataType:
+def _get_plc_data_type_from_dtype(dtype: DtypeObj) -> plc.DataType:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
     if isinstance(dtype, cudf.CategoricalDtype):
+        # TODO: should we do this generally in dtype_to_pylibcudf_type?
         dtype = dtype.categories.dtype
-    elif isinstance(dtype, str):
-        if dtype == "category":
-            return plc.DataType(plc.types.TypeId.STRING)
-        elif dtype == "date32":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_DAYS)
-        elif dtype in ("date", "date64"):
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp[us]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MICROSECONDS)
-        elif dtype == "timestamp[s]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_SECONDS)
-        elif dtype == "timestamp[ms]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp[ns]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_NANOSECONDS)
-
-    dtype = cudf.dtype(dtype)
     return dtype_to_pylibcudf_type(dtype)
