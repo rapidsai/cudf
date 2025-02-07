@@ -263,7 +263,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
-std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
+size_type get_available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -276,7 +276,7 @@ std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
 }
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
-                                std::size_t available_shmem_size,
+                                size_type available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
                                 bool skip_rows_with_nulls,
