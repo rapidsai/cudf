@@ -41,7 +41,7 @@ struct cast_fn {
   {
     return T{cuda::std::forward<U>(val)};
   }
-  
+
   CUDF_HOST_DEVICE constexpr T&& operator()(T&& val) const noexcept
   {
     return cuda::std::forward<T>(val);
