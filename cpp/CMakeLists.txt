@@ -778,6 +778,7 @@ add_library(
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
+  src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
