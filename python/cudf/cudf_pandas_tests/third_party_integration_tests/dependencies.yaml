@@ -241,9 +241,7 @@ dependencies:
           - numpy
           - scipy
           - scikit-learn
-          - pip
-          - pip:
-            - xgboost>=2.0.1
+          - xgboost==2.1.4
   test_cuml:
     common:
       - output_types: conda
