@@ -413,9 +413,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 
         # These initializations do not need to be protected since a given instance is
         # always being created on a given thread.
-        self._use_fast_lib = {}
+        self._use_fast_lib = {threading.get_ident(): True}
         self._use_fast_lib_bkp = defaultdict(list)
-        self._use_fast_lib[threading.get_ident()] = True
         return self
 
     def _populate_module(self, mod: ModuleType):
