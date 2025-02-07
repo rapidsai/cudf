@@ -50,6 +50,12 @@ TYPED_TEST(TypedDispatcherTest, TypeToId)
 {
   EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                     type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam volatile>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const volatile>()},
+                                    type_tester<TypeParam>{}));
 }
 
 namespace {
