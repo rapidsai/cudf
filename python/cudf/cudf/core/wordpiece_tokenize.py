@@ -13,7 +13,7 @@ class WordPieceVocabulary:
 
     Parameters
     ----------
-    vocabulary : str
+    vocabulary : cudf.Series
         Strings column of vocabulary terms
     """
 
@@ -26,7 +26,7 @@ class WordPieceVocabulary:
         """
         Parameters
         ----------
-        text : cudf string series
+        text : cudf.Series
             The strings to be tokenized.
         max_words_per_row : int
             Maximum number of words to tokenize per row.
@@ -34,7 +34,8 @@ class WordPieceVocabulary:
 
         Returns
         -------
-        Token values
+        cudf.Series
+            Token values
         """
         result = text._column.wordpiece_tokenize(
             self.vocabulary, max_words_per_row
