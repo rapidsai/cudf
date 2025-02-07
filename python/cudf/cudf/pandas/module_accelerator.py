@@ -15,6 +15,7 @@ import sys
 import threading
 import warnings
 from abc import abstractmethod
+from collections import defaultdict
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
 from typing import Any, ContextManager, NamedTuple  # noqa: UP035
@@ -378,8 +379,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     """
 
     _denylist: tuple[str]
-    _use_fast_lib: bool
-    _use_fast_lib_lock: threading.RLock
+    _use_fast_lib: dict[int, bool]
+    _use_fast_lib_bkp: defaultdict[int, list[bool]]
+    _use_fast_lib_lock: threading.RLock = threading.RLock()
     _module_cache_prefix: str = "_slow_lib_"
 
     # TODO: Add possibility for either an explicit allow-list of
@@ -409,9 +411,11 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
-        # Lock to manage temporarily disabling delivering wrapped attributes
-        self._use_fast_lib_lock = threading.RLock()
-        self._use_fast_lib = True
+        # These initializations do not need to be protected since a given instance is
+        # always being created on a given thread.
+        self._use_fast_lib = {}
+        self._use_fast_lib_bkp = defaultdict(list)
+        self._use_fast_lib[threading.get_ident()] = True
         return self
 
     def _populate_module(self, mod: ModuleType):
@@ -503,20 +507,19 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         Context manager for disabling things
         """
-        with self._use_fast_lib_lock:
-            # Have to hold the lock to modify this variable since
-            # another thread might be reading it.
-            # Modification has to happen with the lock held for the
-            # duration, so if someone else has modified things, then
-            # we block trying to acquire the lock (hence it is safe to
-            # release the lock after modifying this value)
-            saved = self._use_fast_lib
-            self._use_fast_lib = False
+        self._use_fast_lib_bkp[threading.get_ident()].append(
+            # The first time that a thread is disabled, unless it was the main
+            # thread it won't have an entry in the dictionary, which implicitly
+            # means it is running in fast mode.
+            self._use_fast_lib.get(threading.get_ident(), True)
+        )
+        self._use_fast_lib[threading.get_ident()] = False
         try:
             yield
         finally:
-            with self._use_fast_lib_lock:
-                self._use_fast_lib = saved
+            self._use_fast_lib[threading.get_ident()] = self._use_fast_lib_bkp[
+                threading.get_ident()
+            ].pop()
 
     @staticmethod
     def getattr_real_or_wrapped(
@@ -545,14 +548,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         The requested attribute (either real or wrapped)
         """
-        with loader._use_fast_lib_lock:
-            # Have to hold the lock to read this variable since
-            # another thread might modify it.
-            # Modification has to happen with the lock held for the
-            # duration, so if someone else has modified things, then
-            # we block trying to acquire the lock (hence it is safe to
-            # release the lock after reading this value)
-            use_real = not loader._use_fast_lib
+        use_real = not loader._use_fast_lib.get(threading.get_ident(), True)
         if not use_real:
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
