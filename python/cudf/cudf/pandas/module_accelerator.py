@@ -18,7 +18,7 @@ from abc import abstractmethod
 from collections import defaultdict
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, NamedTuple  # noqa: UP035
+from typing import Any, ContextManager, NamedTuple, cast  # noqa: UP035
 
 from typing_extensions import Self
 
@@ -541,7 +541,25 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         The requested attribute (either real or wrapped)
         """
-        use_real = not loader._use_fast_lib.get(threading.get_ident(), True)
+        use_real = (
+            not loader._use_fast_lib.get(threading.get_ident(), True)
+            # If acceleration was disabled on the main thread, we should respect that.
+            # This only works because we currently have no way to re-enable other than
+            # exiting the disable context, so disabling on the parent thread means that
+            # the inner threads will also typically be disabled. This logic breaks if
+            # the parent thread queues work on a thread and only then disables
+            # acceleration because in that case there is a potential race condition by
+            # which the child thread may wind up disabled even though the parent was not
+            # disabled when the child was launched. That is a fairly rare pattern though
+            # and we can document the limitations.
+            or not loader._use_fast_lib.get(
+                # casting promises that the main thread's ident is not None, which will
+                # always be True for that thread but would be false for any other thread
+                # that hasn't yet started executing.
+                cast(int, threading.main_thread().ident),
+                True,
+            )
+        )
         if not use_real:
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
@@ -605,6 +623,19 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 def disable_module_accelerator() -> contextlib.ExitStack:
     """
     Temporarily disable any module acceleration.
+
+    This function only offers limited guarantees of thread safety.
+    Cases that will work:
+        - multiple threads are launched and each independently turns off acceleration
+        - a single thread turns off acceleration and then launches multiple threads
+          inside the context manager
+
+    Cases that trigger race conditions:
+        - a single thread launches multiple threads and then enters the context manager
+          while those threads are still running
+        - nested thread launching and acceleration disabling, i.e. if a thread launches
+          a that disables acceleration and then launches another thread, the innermost
+          thread will not have the accelerator disabled.
     """
     with ImportLock(), contextlib.ExitStack() as stack:
         for finder in sys.meta_path:
