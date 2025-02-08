@@ -4124,7 +4124,8 @@ def test_agg_duplicate_aggs_pandas_compat_raises():
         with pytest.raises(NotImplementedError):
             dfgb.agg(agg)
 
-    result = dfgb.agg(agg)
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
     expected = cudf.DataFrame(
         [4.5, 6.0],
         index=cudf.Index([1, 2], name="a"),

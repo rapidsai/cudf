@@ -1648,15 +1648,20 @@ class GroupBy(Serializable, Reducible, Scannable):
         # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
         if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
-                if cudf.get_option("mode.pandas_compatible") and any(
+                if any(
                     is_list_like(values) and len(set(values)) != len(values)  # type: ignore[arg-type]
                     for values in aggs.values()
                 ):
-                    # In non pandas_compatible mode, we would just drop the duplicate aggregation.
-                    # Should we issue a UserWarning?
-                    raise NotImplementedError(
-                        "duplicate aggregations per column are currently not supported."
-                    )
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise NotImplementedError(
+                            "Duplicate aggregations per column are currently not supported."
+                        )
+                    else:
+                        warnings.warn(
+                            "Duplicate aggregations per column found. "
+                            "The resulting duplicate columns will be dropped.",
+                            UserWarning,
+                        )
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
