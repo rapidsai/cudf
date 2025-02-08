@@ -278,7 +278,7 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[pandas]==9.5.*
+              - ibis-framework[pandas]
   test_hvplot:
     common:
       - output_types: conda
