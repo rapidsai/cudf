@@ -99,7 +99,6 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
                                                   idx);
     }
   }
-  block.sync();
 }
 
 __device__ void compute_pre_aggregrations(cudf::size_type col_start,
@@ -174,7 +173,6 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                                   idx);
     }
   }
-  block.sync();
 }
 
 /* Takes the local_mapping_index and global_mapping_index to compute
@@ -234,6 +232,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_mask_offsets,
                                   cardinality,
                                   d_agg_kinds);
+    block.sync();
 
     compute_pre_aggregrations(col_start,
                               col_end,
@@ -259,6 +258,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                shmem_agg_res_offsets,
                                shmem_agg_mask_offsets,
                                d_agg_kinds);
+    block.sync();
   }
 }
 }  // namespace
