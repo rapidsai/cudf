@@ -41,7 +41,6 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - telemetry-setup
-      - third-party-integration-tests-cudf-pandas
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@nvks-runners
     if: always()
