@@ -634,8 +634,8 @@ def disable_module_accelerator() -> contextlib.ExitStack:
         - a single thread launches multiple threads and then enters the context manager
           while those threads are still running
         - nested thread launching and acceleration disabling, i.e. if a thread launches
-          a that disables acceleration and then launches another thread, the innermost
-          thread will not have the accelerator disabled.
+          a thread that disables acceleration and then launches another thread, the
+          innermost thread will not have the accelerator disabled.
     """
     with ImportLock(), contextlib.ExitStack() as stack:
         for finder in sys.meta_path:
