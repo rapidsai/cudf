@@ -31,7 +31,11 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import _get_base_dtype, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    _get_base_dtype,
+    cudf_dtype_to_pa_type,
+)
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -182,7 +186,7 @@ def _resolve_mixed_dtypes(
     lhs_unit = units.index(lhs_time_unit)
     rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
     rhs_unit = units.index(rhs_time_unit)
-    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+    return np.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
 
 class DatetimeColumn(column.ColumnBase):
@@ -757,7 +761,7 @@ class DatetimeColumn(column.ColumnBase):
             }
             and other_is_datetime64
         ):
-            out_dtype = cudf.dtype(np.bool_)
+            out_dtype = np.dtype(np.bool_)
         elif op == "__add__" and other_is_timedelta:
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
@@ -778,7 +782,7 @@ class DatetimeColumn(column.ColumnBase):
             "NULL_EQUALS",
             "NULL_NOT_EQUALS",
         }:
-            out_dtype = cudf.dtype(np.bool_)
+            out_dtype = np.dtype(np.bool_)
             if isinstance(other, ColumnBase) and not isinstance(
                 other, DatetimeColumn
             ):
@@ -823,13 +827,14 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            max_int = np.iinfo(cudf.dtype("int64")).max
+            int64 = np.dtype(np.int64)
+            max_int = np.iinfo(int64).max
 
             max_dist = np.timedelta64(
-                self.max().astype(cudf.dtype("int64"), copy=False), self_res
+                self.max().astype(int64, copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(cudf.dtype("int64"), copy=False), self_res
+                self.min().astype(int64, copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
@@ -842,7 +847,7 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
+        elif to_dtype == np.dtype(np.int64) or to_dtype == CUDF_STRING_DTYPE:
             # can safely cast to representation, or string
             return True
         else:

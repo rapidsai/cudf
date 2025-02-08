@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,13 +46,15 @@ void unary_operation(mutable_column_view output,
       .instantiate(cudf::type_to_name(output.type()),  // list of template arguments
                    cudf::type_to_name(input.type()));
 
-  std::string cuda_source =
-    is_ptx ? cudf::jit::parse_single_function_ptx(udf,  //
-                                                  "GENERIC_UNARY_OP",
-                                                  cudf::type_to_name(output_type),
-                                                  {0})
-           : cudf::jit::parse_single_function_cuda(udf,  //
-                                                   "GENERIC_UNARY_OP");
+  std::string cuda_source = is_ptx ? cudf::jit::parse_single_function_ptx(
+                                       udf,  //
+                                       "GENERIC_UNARY_OP",
+                                       {
+                                         {0, "void *"},                         // output argument
+                                         {1, cudf::type_to_name(input.type())}  // input argument
+                                       })
+                                   : cudf::jit::parse_single_function_cuda(udf,  //
+                                                                           "GENERIC_UNARY_OP");
 
   cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(
