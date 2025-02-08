@@ -667,11 +667,12 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
 
+  // Reading 0]\n[3000]\n[4000]\n[5000]\n
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{fname})
       .lines(true)
       .byte_range_offset(11)
-      .byte_range_size(20);
+      .byte_range_size(24);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 

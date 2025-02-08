@@ -233,13 +233,8 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   auto const delimiter                = reader_opts.get_delimiter();
   auto const num_extra_delimiters     = num_delimiter_chars * sources.size();
   std::size_t const chunk_offset      = reader_opts.get_byte_range_offset();
-  std::size_t chunk_size              = reader_opts.get_byte_range_size();
-
-  CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
-               "Invalid offsetting",
-               std::invalid_argument);
-  auto should_load_till_last_source = !chunk_size || chunk_size >= total_source_size - chunk_offset;
-  chunk_size = should_load_till_last_source ? total_source_size - chunk_offset : chunk_size;
+  std::size_t const chunk_size              = reader_opts.get_byte_range_size();
+  auto const should_load_till_last_source = chunk_offset + chunk_size == total_source_size;
 
   int num_subchunks_prealloced        = should_load_till_last_source ? 0 : max_subchunks_prealloced;
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
@@ -258,12 +253,21 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto const first_delim_pos =
     chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, delimiter, stream);
+  auto is_last_char_delimiter = [delimiter, readbufspan, stream]() {
+    char last_char;
+    cudf::detail::cuda_memcpy<char>(
+      host_span<char>(&last_char, 1, false),
+      readbufspan.subspan(readbufspan.size() - 1, 1),
+      stream);
+    return last_char == delimiter;
+  }();
+
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_buffer(0, stream);
     return std::make_pair(datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf)),
                           std::nullopt);
-  } else if (!should_load_till_last_source) {
+  } else if (!should_load_till_last_source && !is_last_char_delimiter) {
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
@@ -300,16 +304,36 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
       }
     }
 
-    auto const batch_limit = static_cast<size_t>(std::numeric_limits<int32_t>::max());
-    CUDF_EXPECTS(static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
-                   batch_limit,
-                 "The size of the JSON buffer returned by every batch cannot exceed INT_MAX bytes");
+    auto const batch_limit = getenv_or<std::size_t>("LIBCUDF_JSON_BATCH_SIZE", static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+    if(static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) < batch_limit) {
+      return std::make_pair(
+        datasource::owning_buffer<rmm::device_buffer>(
+          std::move(buffer),
+          reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+          next_delim_pos - first_delim_pos - shift_for_nonzero_offset + 1),
+        std::nullopt);
+    }
+    device_span<char const> bufsubspan = bufspan.subspan(first_delim_pos + shift_for_nonzero_offset, next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
+    auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
+    auto rev_it_end = thrust::make_reverse_iterator(bufsubspan.begin());
+    auto const second_last_delimiter_it =
+      thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
+    CUDF_EXPECTS(second_last_delimiter_it != rev_it_end, "A single JSON line cannot be larger than 2GB"); 
+    auto const last_line_size = static_cast<size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
+    CUDF_EXPECTS(last_line_size < batch_limit, "A single JSON line cannot be larger than 2GB"); 
+
+    rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<size_t>(thrust::distance(second_last_delimiter_it, rev_it_end)), last_line_size + 1, stream);
+    
     return std::make_pair(
       datasource::owning_buffer<rmm::device_buffer>(
         std::move(buffer),
         reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
-        next_delim_pos - first_delim_pos - shift_for_nonzero_offset),
-      std::nullopt);
+        next_delim_pos - first_delim_pos - shift_for_nonzero_offset - last_line_size),
+      datasource::owning_buffer<rmm::device_buffer>(
+        std::move(second_buffer),
+        reinterpret_cast<uint8_t*>(second_buffer.data()),
+        second_buffer.size())
+    );
   }
 
   // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
@@ -317,7 +341,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   // table generated from the JSONL input remains unchanged since empty lines are ignored by the
   // parser.
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
-  if (num_chars) {
+  if (num_chars && !is_last_char_delimiter) {
     auto last_char = delimiter;
     cudf::detail::cuda_memcpy_async<char>(
       device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size())
@@ -345,10 +369,6 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
 {
   CUDF_FUNC_RANGE();
   auto bufviews = get_record_range_raw_input(sources, reader_opts, stream);
-  /*
-  datasource::owning_buffer<rmm::device_buffer> bufview =
-    get_record_range_raw_input(sources, reader_opts, stream);
-  */
 
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
@@ -360,7 +380,14 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   auto buffer = cudf::device_span<char const>(reinterpret_cast<char const*>(bufviews.first.data()),
                                               bufviews.first.size());
   stream.synchronize();
+  std::printf("first hbuf = ");
+  auto hbuf = cudf::detail::make_std_vector_sync(buffer, stream);
+  for(auto c : hbuf)
+    std::printf("%c", c);
+  std::printf("==========================\n");
+
   auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
+  stream.synchronize();
 
   if (!bufviews.second.has_value())
     return std::make_pair(std::move(first_partial_table), std::nullopt);
@@ -374,6 +401,12 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   buffer = cudf::device_span<char const>(
     reinterpret_cast<char const*>(bufviews.second.value().data()), bufviews.second.value().size());
   stream.synchronize();
+  std::printf("second hbuf = ");
+  hbuf = cudf::detail::make_std_vector_sync(buffer, stream);
+  for(auto c : hbuf)
+    std::printf("%c", c);
+  std::printf("==========================\n");
+
   auto second_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
 
   return std::make_pair(std::move(first_partial_table), std::move(second_partial_table));
@@ -398,7 +431,11 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     reader_opts.is_enabled_lines() || total_source_size < std::numeric_limits<int32_t>::max(),
     "Parsing Regular JSON inputs of size greater than INT_MAX bytes is not supported");
 
-  std::size_t chunk_offset     = reader_opts.get_byte_range_offset();
+  // TODO: move the offset and size logic from get_record_range_raw_input here
+  std::size_t const chunk_offset     = reader_opts.get_byte_range_offset();
+  CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
+               "Invalid offsetting",
+               std::invalid_argument);
   std::size_t chunk_size       = reader_opts.get_byte_range_size();
   chunk_size                   = !chunk_size ? total_source_size - chunk_offset
                                              : std::min(chunk_size, total_source_size - chunk_offset);
@@ -442,21 +479,26 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
     i++;
   }
+
   /*
    * If there is a single batch, then we can directly return the table without the
    * unnecessary concatenate. The size of batch_offsets is 1 if all sources are empty,
    * or if end_bytes_size is larger than total_source_size.
    */
-  // if (batch_offsets.size() <= 2) return read_batch(sources, reader_opts, stream, mr);
-
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
+  batched_reader_opts.set_byte_range_offset(chunk_offset);
+  batched_reader_opts.set_byte_range_size(chunk_size);
 
-  auto partial_tables_ =
-    read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
-  partial_tables.emplace_back(std::move(partial_tables_.first));
-  if (partial_tables_.second.has_value())
-    partial_tables.emplace_back(std::move(partial_tables_.second.value()));
+  auto insert_partial_tables = [&partial_tables](std::pair<table_with_metadata, std::optional<table_with_metadata>> &&partial_table_pair) {
+    if (partial_table_pair.first.tbl->num_columns() == 0 && partial_table_pair.first.tbl->num_rows() == 0) return false;
+    partial_tables.emplace_back(std::move(partial_table_pair.first));
+    if (partial_table_pair.second.has_value()) {
+      if (partial_table_pair.second.value().tbl->num_columns() == 0 && partial_table_pair.second.value().tbl->num_rows() == 0) return false;
+      partial_tables.emplace_back(std::move(partial_table_pair.second.value()));
+    }
+    return true;
+  };
 
   // recursive lambda to construct schema_element. Here, we assume that the table from the
   // first batch contains all the columns in the concatenated table, and that the partial tables
@@ -506,54 +548,47 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
     return schema;
   };
-  batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
-  batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
-  partial_tables_ =
-    read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
-  partial_tables.emplace_back(std::move(partial_tables_.first));
-  if (partial_tables_.second.has_value())
-    partial_tables.emplace_back(std::move(partial_tables_.second.value()));
-  /*
-  partial_tables.emplace_back(
-    read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
-  */
 
-  auto& tbl = partial_tables.back().tbl;
-  std::vector<column_view> children;
-  for (size_type j = 0; j < tbl->num_columns(); j++) {
-    children.emplace_back(tbl->get_column(j));
-  }
-  batched_reader_opts.set_dtypes(
-    construct_schema(children, partial_tables.back().metadata.schema_info, schema));
-  batched_reader_opts.enable_prune_columns(true);
-
-  // Dispatch individual batches to read_batch and push the resulting table into
-  // partial_tables array. Note that the reader options need to be updated for each
-  // batch to adjust byte range offset and byte range size.
-  for (std::size_t batch_offset_pos = 1; batch_offset_pos < batch_offsets.size() - 1;
-       batch_offset_pos++) {
-    batched_reader_opts.set_byte_range_offset(batch_offsets[batch_offset_pos]);
-    batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
-                                            batch_offsets[batch_offset_pos]);
-    /*
-    auto partial_table =
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
-    */
-    auto partial_tables_ =
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
-
-    if (partial_tables_.first.tbl->num_columns() == 0 &&
-        partial_tables_.first.tbl->num_rows() == 0) {
-      CUDF_EXPECTS(batch_offset_pos == batch_offsets.size() - 2,
-                   "Only the partial table generated by the last batch can be empty");
-      break;
+  //std::printf("batch_offsets.size() = %lu\n", batch_offsets.size());
+  if (batch_offsets.size() <= 2) {
+    auto has_inserted = insert_partial_tables(read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+    if(!has_inserted) {
+      return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}), {std::vector<column_name_info>{}}};
     }
-    // partial_tables.emplace_back(std::move(partial_table));
-    partial_tables.emplace_back(std::move(partial_tables_.first));
-    if (partial_tables_.second.has_value())
-      partial_tables.emplace_back(std::move(partial_tables_.second.value()));
+  }
+  else {
+    batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
+    batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
+    insert_partial_tables(read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+
+    auto& tbl = partial_tables.back().tbl;
+    std::vector<column_view> children;
+    for (size_type j = 0; j < tbl->num_columns(); j++) {
+      children.emplace_back(tbl->get_column(j));
+    }
+    batched_reader_opts.set_dtypes(
+      construct_schema(children, partial_tables.back().metadata.schema_info, schema));
+    batched_reader_opts.enable_prune_columns(true);
+
+    // Dispatch individual batches to read_batch and push the resulting table into
+    // partial_tables array. Note that the reader options need to be updated for each
+    // batch to adjust byte range offset and byte range size.
+    for (std::size_t batch_offset_pos = 1; batch_offset_pos < batch_offsets.size() - 1;
+         batch_offset_pos++) {
+      batched_reader_opts.set_byte_range_offset(batch_offsets[batch_offset_pos]);
+      batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
+                                              batch_offsets[batch_offset_pos]);
+      auto has_inserted = insert_partial_tables(read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+
+      if(!has_inserted) {
+        CUDF_EXPECTS(batch_offset_pos == batch_offsets.size() - 2,
+                     "Only the partial table generated by the last batch can be empty");
+        break;
+      }
+    }
   }
 
+  //std::printf("partial_tables.size() = %lu\n", partial_tables.size());
   auto expects_schema_equality =
     std::all_of(partial_tables.begin() + 1,
                 partial_tables.end(),
