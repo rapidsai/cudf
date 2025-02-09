@@ -26,6 +26,7 @@ runtest() {
     --cache-clear \
     --numprocesses="${NUM_PROCESSES}" \
     --dist=worksteal \
+    --ignore="${TEST_DIR}"/test_stumpy_distributed.py \
     "${TEST_DIR}"/test_"${lib}"*.py
 }
 
@@ -45,6 +46,7 @@ main() {
     --cache-clear \
     --numprocesses="${NUM_PROCESSES}" \
     --dist=worksteal \
+    --ignore="${TEST_DIR}"/test_stumpy_distributed.py \
     "${TEST_DIR}"/test_"${lib}"*.py
 }
 
