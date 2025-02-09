@@ -10,6 +10,7 @@ from dask.distributed import Client, LocalCluster
 
 pytestmark = pytest.mark.skip("TODO: Fix failures with stump_distributed")
 
+
 def stumpy_assert_equal(expected, got):
     def as_float64(x):
         if isinstance(x, (tuple, list)):
