@@ -290,9 +290,9 @@ class Column:
     @property
     def size(self):
         """Return the size of the column."""
-        return self.size
+        return self.obj.size()
 
     @property
     def null_count(self):
         """Return the number of Null values in the column."""
-        return self.null_count
+        return self.obj.null_count()
