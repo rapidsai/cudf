@@ -12,6 +12,7 @@ from packaging import version
 from ..fast_slow_proxy import (
     _fast_slow_function_call,
     _FastSlowAttribute,
+    _FinalProxy,
     is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -162,6 +163,8 @@ flatiter = make_final_proxy_type(
     slow_to_fast=lambda slow: cupy.asarray(slow).flat,
     additional_attributes={
         "__array__": array_method,
+        "__reduce__": _FinalProxy.__reduce__,
+        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
