@@ -211,6 +211,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
   block.sync();
 
   while (col_end < num_cols) {
+    block.sync();
     if (block.thread_rank() == 0) {
       calculate_columns_to_aggregate(col_start,
                                      col_end,
@@ -258,7 +259,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                shmem_agg_res_offsets,
                                shmem_agg_mask_offsets,
                                d_agg_kinds);
-    block.sync();
   }
 }
 }  // namespace
