@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -4103,4 +4103,15 @@ def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
     assert_eq(result, expected)

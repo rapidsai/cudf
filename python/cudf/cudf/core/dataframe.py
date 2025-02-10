@@ -27,7 +27,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -48,7 +47,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core import column, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
@@ -5564,16 +5563,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
             return df
-        elif hasattr(dataframe, "__dataframe__"):
-            # TODO: Probably should be handled in the constructor as
-            # this isn't pandas specific
-            assert version.parse(cudf.__version__) < version.parse("25.04.00")
-            warnings.warn(
-                "Support for loading dataframes via the `__dataframe__` interchange "
-                "protocol is deprecated",
-                FutureWarning,
-            )
-            return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
                 f"Could not construct DataFrame from {type(dataframe)}"
@@ -6728,7 +6717,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             prepared._data[col]
                         )
                         if common_dtype.kind != "M"
-                        else cudf.dtype("float64")
+                        else np.dtype(np.float64)
                     )
                     .fillna(np.nan)
                 )
@@ -7730,15 +7719,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             periods=periods, freq=freq, **kwargs
         )
 
-    def __dataframe__(
-        self, nan_as_null: bool = False, allow_copy: bool = True
-    ):
-        assert version.parse(cudf.__version__) < version.parse("25.04.00")
-        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
-        return df_protocol.__dataframe__(
-            self, nan_as_null=nan_as_null, allow_copy=allow_copy
-        )
-
     def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
         Count number of distinct elements in specified axis.
@@ -8181,29 +8161,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             index=metadata.get("index"),
         )
         return df
-
-
-def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
-    """
-    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
-
-    .. note::
-
-        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
-
-    Parameters
-    ----------
-    df : DataFrameXchg
-        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
-    allow_copy : bool, default: True
-        Whether to allow copying the memory to perform the conversion
-        (if false then zero-copy approach is requested).
-
-    Returns
-    -------
-    :class:`DataFrame`
-    """
-    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
 def make_binop_func(op, postprocess=None):
