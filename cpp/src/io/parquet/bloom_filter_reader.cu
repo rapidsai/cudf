@@ -591,7 +591,7 @@ equality_literals_collector::equality_literals_collector(ast::expression const& 
                                                          cudf::size_type num_input_columns)
   : _num_input_columns{num_input_columns}
 {
-  _equality_literals.resize(_num_input_columns);
+  _literals.resize(_num_input_columns);
   expr.accept(*this);
 }
 
@@ -636,7 +636,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
     // Push to the corresponding column's literals list iff equality predicate is seen
     if (op == ast_operator::EQUAL) {
       auto const col_idx = v->get_column_index();
-      _equality_literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
+      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
     }
   } else {
     // Just visit the operands and ignore any output
