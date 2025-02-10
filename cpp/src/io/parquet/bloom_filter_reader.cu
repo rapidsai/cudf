@@ -646,9 +646,9 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   return expr;
 }
 
-std::vector<std::vector<ast::literal*>> equality_literals_collector::get_equality_literals() &&
+std::vector<std::vector<ast::literal*>> equality_literals_collector::get_literals() &&
 {
-  return std::move(_equality_literals);
+  return std::move(_literals);
 }
 
 std::vector<std::reference_wrapper<ast::expression const>>

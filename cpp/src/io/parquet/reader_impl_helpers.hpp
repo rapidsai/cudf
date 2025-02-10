@@ -574,7 +574,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() &&;
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() &&;
 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
@@ -583,7 +583,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   size_type _num_input_columns;
 
  private:
-  std::vector<std::vector<ast::literal*>> _equality_literals;
+  std::vector<std::vector<ast::literal*>> _literals;
 };
 
 /**

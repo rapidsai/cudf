@@ -472,7 +472,7 @@ aggregate_reader_metadata::filter_row_groups(
   // Collect equality literals for each input table column for bloom filtering
   auto const equality_literals =
     equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
-      .get_equality_literals();
+      .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
