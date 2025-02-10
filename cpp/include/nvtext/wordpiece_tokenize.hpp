@@ -40,7 +40,7 @@ struct wordpiece_vocabulary {
    * Token ids are the row indices within the vocabulary column.
    * Each vocabulary entry is expected to be unique otherwise the behavior is undefined.
    *
-   * @throw cudf::logic_error if `vocabulary` contains nulls or is empty
+   * @throw std::invalid_argument if `vocabulary` contains nulls or is empty
    *
    * @param input Strings for the vocabulary
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -61,7 +61,7 @@ struct wordpiece_vocabulary {
  * Token ids are the row indices within the vocabulary column.
  * Each vocabulary entry is expected to be unique otherwise the behavior is undefined.
  *
- * @throw cudf::logic_error if `vocabulary` contains nulls or is empty
+ * @throw std::invalid_argument if `vocabulary` contains nulls or is empty
  *
  * @param input Strings for the vocabulary
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -74,13 +74,33 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Returns the token ids for the input string by using a word-piece
- * tokenizer with the given vocabulary limited by a specified maximum number
- * of words per row
+ * @brief Returns the token ids for the input string a wordpiece tokenizer
+ * algorithm with the given vocabulary.
  *
- * ```
- * [['I', 'have', 'a', 'new', 'GP', '##U', '!', '[PAD]']]
- * ```
+ * Example:
+ * @code{.pseudo}
+ * vocabulary = ["[UNK]", "a", "have", "I", "new", "GP", "##U", "!"]
+ * v = load_wordpiece_vocabulary(vocabulary)
+ * input = ["I have a new GPU now !"]
+ * t = wordpiece_tokenize(i,v)
+ * t is now [[3, 2, 1, 4, 5, 6, 0, 7]]
+ * @endcode
+ *
+ * The `max_words_per_row` also optionally limits the output by only processing
+ * a maximum number of words per row. Here a word is defined as consecutive
+ * sequence of characters delimited by space character(s).
+ *
+ * Example:
+ * @code{.pseudo}
+ * vocabulary = ["[UNK]", "a", "have", "I", "new", "GP", "##U", "!"]
+ * v = load_wordpiece_vocabulary(vocabulary)
+ * input = ["I have  a new GPU now !"]
+ * t4 = wordpiece_tokenize(i,v,4)
+ * t4 is now [[3, 2, 1, 4]]
+ * t5 = wordpiece_tokenize(i,v,5)
+ * t5 is now [[3, 2, 1, 4, 5, 6]]
+ * @endcode
+ *
  * Any null row entry results in a corresponding null entry in the output
  *
  * @param input Strings column to tokenize
