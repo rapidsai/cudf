@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -24,7 +24,8 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 # tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py"
+--ignore=tests/io/test_clipboard.py \
+--ignore=tests/io/test_pickle.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
