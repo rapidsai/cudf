@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -29,13 +29,9 @@ rapids-print-env
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-LIBRMM_CHANNEL=$(_rapids-get-pr-artifact rmm 1808 cpp conda)
-PYLIBRMM_CHANNEL=$(_rapids-get-pr-artifact rmm 1808 python conda)
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  --channel "${LIBRMM_CHANNEL}" \
-  --channel "${PYLIBRMM_CHANNEL}" \
   "libcudf=${RAPIDS_VERSION}"
 
 rapids-logger "Check GPU usage"
