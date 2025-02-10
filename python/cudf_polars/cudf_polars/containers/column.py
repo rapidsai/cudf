@@ -288,7 +288,7 @@ class Column:
         return 0
 
     @property
-    def size(self):
+    def size(self) -> int:
         """Return the size of the column."""
         return self.obj.size()
 
