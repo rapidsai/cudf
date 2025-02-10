@@ -37,12 +37,9 @@ using cudf::io::detail::compression_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
 
 [[nodiscard]] std::vector<uint8_t> vector_from_string(std::string const& str)
+{
   return {reinterpret_cast<uint8_t const*>(str.data()),
           reinterpret_cast<uint8_t const*>(str.data() + str.size())};
-}
-{
-  return {reinterpret_cast<uint8_t const*>(str.c_str()),
-          reinterpret_cast<uint8_t const*>(str.c_str()) + strlen(str.c_str())};
 }
 
 /**
