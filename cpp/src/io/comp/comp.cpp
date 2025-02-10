@@ -197,7 +197,7 @@ size_t compress_block(host_span<uint8_t const> input, hash_table& table, host_sp
 
       if (not word_match_found) {
         // keep looking for a match with increasing stride
-        for (;;) {
+        while (true) {
           auto* const entry = table.entry(static_cast<uint32_t>(data));
           candidate         = input.begin() + *entry;
           *entry            = in_it - input.begin();
