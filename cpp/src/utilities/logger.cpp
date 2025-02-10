@@ -24,10 +24,10 @@ namespace CUDF_EXPORT cudf {
 rapids_logger::sink_ptr default_logger_sink()
 {
   auto* filename = std::getenv("CUDF_DEBUG_LOG_FILE");
-  return (filename == nullptr)
-           ? static_cast<rapids_logger::sink_ptr>(std::make_shared<rapids_logger::stderr_sink_mt>())
-           : static_cast<rapids_logger::sink_ptr>(
-               std::make_shared<rapids_logger::basic_file_sink_mt>(filename, true));
+  if (filename != nullptr) {
+    return std::make_shared<rapids_logger::basic_file_sink_mt>(filename, true);
+  }
+  return std::make_shared<rapids_logger::stderr_sink_mt>();
 }
 
 std::string default_logger_pattern() { return "[%6t][%H:%M:%S:%f][%-6l] %v"; }
