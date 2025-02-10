@@ -39,7 +39,7 @@ struct cast_fn {
   template <typename U>
   CUDF_HOST_DEVICE constexpr T operator()(U&& val) const
   {
-    return T{static_cast<T>(cuda::std::forward<U>(val))};
+    return static_cast<T>(cuda::std::forward<U>(val));
   }
 
   CUDF_HOST_DEVICE constexpr T&& operator()(T&& val) const noexcept
