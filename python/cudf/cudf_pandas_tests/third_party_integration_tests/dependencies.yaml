@@ -249,8 +249,7 @@ dependencies:
           - scipy
           - scikit-learn
           - pip
-          - pip:
-            - xgboost>=2.0.1
+          - xgboost>=2.0.1
   test_catboost:
     common:
       - output_types: conda
@@ -278,7 +277,7 @@ dependencies:
         packages:
           - pip
           - pip:
-              - ibis-framework[pandas]
+              - ibis-framework[pandas]<10.0.0
   test_hvplot:
     common:
       - output_types: conda
