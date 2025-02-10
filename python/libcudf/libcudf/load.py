@@ -51,10 +51,11 @@ def load_library():
         # them. librmm does not yet have a load_library() function, so we just import
         # it.
         import libkvikio
-        import librmm  # noqa: F401
+        import librmm
         import rapids_logger
 
         rapids_logger.load_library()
+        librmm.load_library()
         libkvikio.load_library()
     except ModuleNotFoundError:
         # libcudf's runtime dependency on libkvikio may be satisfied by a natively
