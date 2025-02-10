@@ -527,7 +527,7 @@ def write_to_dataset(
     return metadata
 
 
-def _parse_metadata(meta) -> tuple[bool, Any, Any]:
+def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
     file_is_range_index = False
     file_index_cols = None
     file_column_dtype = None
@@ -541,7 +541,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, Any]:
         ):
             file_is_range_index = True
     if "column_indexes" in meta and len(meta["column_indexes"]) == 1:
-        file_column_dtype = meta["column_indexes"][0]["numpy_type"]
+        file_column_dtype = np.dtype(meta["column_indexes"][0]["numpy_type"])
     return file_is_range_index, file_index_cols, file_column_dtype
 
 
@@ -2368,6 +2368,6 @@ def _process_metadata(
                 df.index.names = index_col
 
     if df._num_columns == 0 and column_index_type is not None:
-        df._data.label_dtype = cudf.dtype(column_index_type)
+        df._data.label_dtype = column_index_type
 
     return df
