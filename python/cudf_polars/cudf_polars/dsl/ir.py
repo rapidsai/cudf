@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import itertools
 import json
-import time
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -219,10 +218,17 @@ class IR(Node["IR"]):
         """
         if node_timer:
             # TODO: fix naming (make class instance value)
-            return node_timer.record(str(type(self)).split(".")[-1], self.do_evaluate, (*self._non_child_args,             *(
-                child.evaluate(cache=cache, node_timer=node_timer)
-                for child in self.children
-            )))
+            return node_timer.record(
+                str(type(self)).split(".")[-1],
+                self.do_evaluate,
+                (
+                    *self._non_child_args,
+                    *(
+                        child.evaluate(cache=cache, node_timer=node_timer)
+                        for child in self.children
+                    ),
+                ),
+            )
         else:
             return self.do_evaluate(
                 *self._non_child_args,
