@@ -48,8 +48,7 @@ def load_library():
     """Dynamically load libcudf.so and its dependencies"""
     try:
         # librmm and libkvikio must be loaded before libcudf because libcudf references
-        # them. librmm does not yet have a load_library() function, so we just import
-        # it.
+        # them.
         import libkvikio
         import librmm
         import rapids_logger
