@@ -7,7 +7,7 @@ import os
 import warnings
 from collections import abc
 from io import BytesIO, StringIO
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf.api.types import is_hashable, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
@@ -25,6 +25,10 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from cudf._typing import DtypeObj
+
 
 _CSV_HEX_TYPE_MAP = {
     "hex": np.dtype("int64"),
@@ -158,33 +162,49 @@ def read_csv(
             header = 0
 
     hex_cols: list[abc.Hashable] = []
-    new_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
+    cudf_dtypes: list[DtypeObj] | dict[abc.Hashable, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
-            new_dtypes = {}
+            plc_dtypes = {}
+            cudf_dtypes = {}
             for k, col_type in dtype.items():
-                if is_hashable(col_type) and col_type in _CSV_HEX_TYPE_MAP:
+                if isinstance(col_type, str) and col_type in _CSV_HEX_TYPE_MAP:
                     col_type = _CSV_HEX_TYPE_MAP[col_type]
                     hex_cols.append(str(k))
 
-                new_dtypes[k] = _get_plc_data_type_from_dtype(
-                    cudf.dtype(col_type)
-                )
-        elif cudf.api.types.is_scalar(dtype) or isinstance(
-            dtype, (np.dtype, pd.api.extensions.ExtensionDtype, type)
+                cudf_dtype = cudf.dtype(col_type)
+                cudf_dtypes[k] = cudf_dtype
+                plc_dtypes[k] = _get_plc_data_type_from_dtype(cudf_dtype)
+        elif isinstance(
+            dtype,
+            (
+                str,
+                np.dtype,
+                pd.api.extensions.ExtensionDtype,
+                cudf.core.dtypes._BaseDtype,
+                type,
+            ),
         ):
-            if is_hashable(dtype) and dtype in _CSV_HEX_TYPE_MAP:
+            if isinstance(dtype, str) and dtype in _CSV_HEX_TYPE_MAP:
                 dtype = _CSV_HEX_TYPE_MAP[dtype]
                 hex_cols.append(0)
-
-            cast(list, new_dtypes).append(_get_plc_data_type_from_dtype(dtype))
+            else:
+                dtype = cudf.dtype(dtype)
+            cudf_dtypes = dtype
+            cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
-                if is_hashable(col_dtype) and col_dtype in _CSV_HEX_TYPE_MAP:
+                if (
+                    isinstance(col_dtype, str)
+                    and col_dtype in _CSV_HEX_TYPE_MAP
+                ):
                     col_dtype = _CSV_HEX_TYPE_MAP[col_dtype]
                     hex_cols.append(index)
-
-                new_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
+                else:
+                    col_dtype = cudf.dtype(col_dtype)
+                cudf_dtypes.append(col_dtype)
+                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
         else:
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
@@ -243,7 +263,7 @@ def read_csv(
     if hex_cols is not None:
         options.set_parse_hex(list(hex_cols))
 
-    options.set_dtypes(new_dtypes)
+    options.set_dtypes(plc_dtypes)
 
     if true_values is not None:
         options.set_true_values([str(val) for val in true_values])
@@ -266,15 +286,21 @@ def read_csv(
     ca = ColumnAccessor(data, rangeindex=len(data) == 0)
     df = cudf.DataFrame._from_data(ca)
 
-    if isinstance(dtype, abc.Mapping):
-        for k, v in dtype.items():
-            if isinstance(cudf.dtype(v), cudf.CategoricalDtype):
-                df._data[str(k)] = df._data[str(k)].astype(v)
-    elif dtype == "category" or isinstance(dtype, cudf.CategoricalDtype):
+    # Cast result to categorical if specified in dtype=
+    # since categorical is not handled in pylibcudf
+    if isinstance(cudf_dtypes, dict):
+        to_category = {
+            k: v
+            for k, v in cudf_dtypes.items()
+            if isinstance(v, cudf.CategoricalDtype)
+        }
+        if to_category:
+            df = df.astype(to_category)
+    elif isinstance(cudf_dtypes, cudf.CategoricalDtype):
         df = df.astype(dtype)
-    elif isinstance(dtype, abc.Collection) and not is_scalar(dtype):
-        for index, col_dtype in enumerate(dtype):
-            if isinstance(cudf.dtype(col_dtype), cudf.CategoricalDtype):
+    elif isinstance(cudf_dtypes, list):
+        for index, col_dtype in enumerate(cudf_dtypes):
+            if isinstance(col_dtype, cudf.CategoricalDtype):
                 col_name = df._column_names[index]
                 df._data[col_name] = df._data[col_name].astype(col_dtype)
 
@@ -527,30 +553,11 @@ def _validate_args(
             )
 
 
-def _get_plc_data_type_from_dtype(dtype) -> plc.DataType:
+def _get_plc_data_type_from_dtype(dtype: DtypeObj) -> plc.DataType:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
     if isinstance(dtype, cudf.CategoricalDtype):
+        # TODO: should we do this generally in dtype_to_pylibcudf_type?
         dtype = dtype.categories.dtype
-    elif dtype == "category":
-        dtype = "str"
-
-    if isinstance(dtype, str):
-        if dtype == "date32":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_DAYS)
-        elif dtype in ("date", "date64"):
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp[us]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MICROSECONDS)
-        elif dtype == "timestamp[s]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_SECONDS)
-        elif dtype == "timestamp[ms]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype == "timestamp[ns]":
-            return plc.DataType(plc.types.TypeId.TIMESTAMP_NANOSECONDS)
-
-    dtype = cudf.dtype(dtype)
     return dtype_to_pylibcudf_type(dtype)
