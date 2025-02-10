@@ -380,12 +380,6 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   auto buffer = cudf::device_span<char const>(reinterpret_cast<char const*>(bufviews.first.data()),
                                               bufviews.first.size());
   stream.synchronize();
-  std::printf("first hbuf = ");
-  auto hbuf = cudf::detail::make_std_vector_sync(buffer, stream);
-  for(auto c : hbuf)
-    std::printf("%c", c);
-  std::printf("==========================\n");
-
   auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
   stream.synchronize();
 
@@ -401,12 +395,6 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   buffer = cudf::device_span<char const>(
     reinterpret_cast<char const*>(bufviews.second.value().data()), bufviews.second.value().size());
   stream.synchronize();
-  std::printf("second hbuf = ");
-  hbuf = cudf::detail::make_std_vector_sync(buffer, stream);
-  for(auto c : hbuf)
-    std::printf("%c", c);
-  std::printf("==========================\n");
-
   auto second_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
 
   return std::make_pair(std::move(first_partial_table), std::move(second_partial_table));
@@ -549,7 +537,6 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     return schema;
   };
 
-  //std::printf("batch_offsets.size() = %lu\n", batch_offsets.size());
   if (batch_offsets.size() <= 2) {
     auto has_inserted = insert_partial_tables(read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
     if(!has_inserted) {
@@ -588,7 +575,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
   }
 
-  //std::printf("partial_tables.size() = %lu\n", partial_tables.size());
+  if(partial_tables.size() == 1) return std::move(partial_tables[0]);
   auto expects_schema_equality =
     std::all_of(partial_tables.begin() + 1,
                 partial_tables.end(),
