@@ -178,7 +178,7 @@ def _callback(
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
-    node_timer: NodeTimer | None,
+    node_timer: NodeTimer,
     *,
     device: int | None,
     memory_resource: int | None,

@@ -217,18 +217,20 @@ class IR(Node["IR"]):
             If evaluation fails. Ideally this should not occur, since the
             translation phase should fail earlier.
         """
-        start = time.perf_counter_ns()
-        df = self.do_evaluate(
-            *self._non_child_args,
-            *(
+        if node_timer:
+            # TODO: fix naming (make class instance value)
+            return node_timer.record(str(type(self)).split(".")[-1], self.do_evaluate, (*self._non_child_args,             *(
                 child.evaluate(cache=cache, node_timer=node_timer)
                 for child in self.children
-            ),
-        )
-        stop = time.perf_counter_ns()
-        if node_timer:
-            node_timer.store(str(type(self)).split(".")[-1], start, stop)
-        return df
+            )))
+        else:
+            return self.do_evaluate(
+                *self._non_child_args,
+                *(
+                    child.evaluate(cache=cache, node_timer=node_timer)
+                    for child in self.children
+                ),
+            )
 
 
 class ErrorNode(IR):
