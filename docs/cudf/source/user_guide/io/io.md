@@ -83,7 +83,7 @@ IO format.
 ## KvikIO Integration
 
 cuDF leverages the [KvikIO](https://github.com/rapidsai/kvikio) library for high-performance
-I/O features, such as parallel I/O operations and Nvidia Magnum IO GPUDirect Storage (GDS).
+I/O features, such as parallel I/O operations and NVIDIA Magnum IO GPUDirect Storage (GDS).
 
 Many IO APIs can use Magnum IO GPUDirect Storage (GDS) library to optimize
 IO operations.  GDS enables a direct data path for direct memory access
