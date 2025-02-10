@@ -223,8 +223,8 @@ TEST_P(JsonLargeReaderTest, MultiBatchFailing)
   batch_size_upper_bound = json_string.size();
   this->set_batch_size(batch_size_upper_bound);
   std::string really_long_string = R"(haha)";
-  std::size_t log_repetitions =
-    static_cast<std::size_t>(std::floor(std::log2(static_cast<double>(json_string.size()) / really_long_string.size())));
+  std::size_t log_repetitions    = static_cast<std::size_t>(
+    std::floor(std::log2(static_cast<double>(json_string.size()) / really_long_string.size())));
   really_long_string.reserve(really_long_string.size() * (1UL << log_repetitions));
   for (std::size_t i = 0; i < log_repetitions; i++) {
     really_long_string += really_long_string;
@@ -249,8 +249,7 @@ TEST_P(JsonLargeReaderTest, MultiBatchFailing)
   constexpr int num_sources = 1;
   std::vector<cudf::host_span<std::byte>> chostbufs(
     num_sources,
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(cdata.data()),
-                               cdata.size()));
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(cdata.data()), cdata.size()));
 
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options cjson_lines_options =
