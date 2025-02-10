@@ -30,8 +30,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import search
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -49,11 +48,14 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
     find_common_type,
     is_mixed_with_object_dtype,
 )
@@ -123,13 +125,13 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search_sorted(
+    lower_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="left",
         ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
-    upper_bound = search_sorted(
+    upper_bound = search.search_sorted(
         list(sort_vals._columns),
         keys,
         side="right",
@@ -262,9 +264,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ):
-        assert (len(self) <= 1) or (
-            ascending == (self.step > 0)
-        ), "Invalid ascending flag"
+        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
+            "Invalid ascending flag"
+        )
         return search_range(value, self._range, side=side)
 
     def factorize(
@@ -1218,9 +1220,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -1366,7 +1368,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = copying.scatter([indices], scatter_map, [result])[0]
+        result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
@@ -3347,50 +3349,56 @@ def interval_range(
             "freq, exactly three must be specified"
         )
 
-    start = cudf.Scalar(start) if start is not None else start
-    end = cudf.Scalar(end) if end is not None else end
     if periods is not None and not cudf.api.types.is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
             FutureWarning,
         )
-    periods = cudf.Scalar(int(periods)) if periods is not None else periods
-    freq = cudf.Scalar(freq) if freq is not None else freq
-
     if start is None:
         start = end - freq * periods
     elif freq is None:
-        quotient, remainder = divmod((end - start).value, periods.value)
+        quotient, remainder = divmod(end - start, periods)
         if remainder:
             freq = (end - start) / periods
         else:
-            freq = cudf.Scalar(int(quotient))
+            freq = int(quotient)
     elif periods is None:
-        periods = cudf.Scalar(int((end - start) / freq))
+        periods = int((end - start) / freq)
     elif end is None:
         end = start + periods * freq
 
+    pa_start = pa.scalar(start)
+    pa_end = pa.scalar(end)
+    pa_freq = pa.scalar(freq)
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not _is_non_decimal_numeric_dtype(cudf_dtype_from_pa_type(x.type))
+        for x in (pa_start, pa.scalar(periods), pa_freq, pa_end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
-    periods = periods.astype("int64")
-    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
-    start = start.astype(common_dtype)
-    freq = freq.astype(common_dtype)
+    common_dtype = find_common_type(
+        (
+            cudf_dtype_from_pa_type(pa_start.type),
+            cudf_dtype_from_pa_type(pa_freq.type),
+            cudf_dtype_from_pa_type(pa_end.type),
+        )
+    )
+    pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
+    pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
     with acquire_spill_lock():
         bin_edges = libcudf.column.Column.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=pa_scalar_to_plc_scalar(pa_start),
+                step=pa_scalar_to_plc_scalar(pa_freq),
             )
         )
-    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
+    return IntervalIndex.from_breaks(
+        bin_edges.astype(common_dtype), closed=closed, name=name
+    )
 
 
 class IntervalIndex(Index):

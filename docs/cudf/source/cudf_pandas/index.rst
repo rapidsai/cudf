@@ -20,7 +20,7 @@ automatically **falling back to pandas** for other operations.
 
 .. figure:: ../_static/colab.png
     :width: 200px
-    :target: https://nvda.ws/rapids-cudf
+    :target: https://nvda.ws/3BnjYjN
 
     Try it on Google Colab!
 

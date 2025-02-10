@@ -1,4 +1,13 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+
+ci:
+  autofix_commit_msg: "[pre-commit.ci] auto code formatting"
+  autofix_prs: false
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: quarterly
+  skip: ["verify-alpha-spec"]
+  submodules: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -32,13 +41,6 @@ repos:
                "python/cudf_polars/cudf_polars",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.9.1
-    hooks:
-      - id: nbqa-isort
-        # Use the cudf_kafka isort orderings in notebooks so that dask
-        # and RAPIDS packages have their own sections.
-        args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v16.0.6
     hooks:
@@ -144,15 +146,13 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    rev: v0.9.3
     hooks:
       - id: ruff
         args: ["--fix"]
-        files: python/.*$
       - id: ruff-format
-        files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.4.0
+    rev: v0.5.0
     hooks:
       - id: verify-copyright
         exclude: |
@@ -163,11 +163,19 @@ repos:
             cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-alpha-spec
+      - id: verify-codeowners
+        args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.16.0
+    rev: v1.17.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning"]
+        files: ^ci/
 
 default_language_version:
       python: python3

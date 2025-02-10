@@ -4,13 +4,12 @@
 import argparse
 import os
 import re
-import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from xml.dom import minidom
 
 parser = argparse.ArgumentParser()
-parser.add_argument("log_file", type=str, default=".ninja_log", help=".ninja_log file")
+parser.add_argument(
+    "log_file", type=str, default=".ninja_log", help=".ninja_log file"
+)
 parser.add_argument(
     "--fmt",
     type=str,
@@ -146,8 +145,8 @@ def format_file_size(input_size):
 
 
 def replace_placeholder_patterns(input_string: str) -> str:
-    pattern = r'(_h_env_placehold)[_placehold]+'
-    return re.sub(pattern, r'\1...', input_string)
+    pattern = r"(_h_env_placehold)[_placehold]+"
+    return re.sub(pattern, r"\1...", input_string)
 
 
 # adjust name for display
@@ -262,7 +261,9 @@ def output_html(entries, sorted_list, cmp_entries, args):
 
     # output detail table in build-time descending order
     print("<table id='detail' bgcolor='#EEEEEE'>")
-    print("<tr><th>File</th>", "<th>Compile time</th>", "<th>Size</th>", sep="")
+    print(
+        "<tr><th>File</th>", "<th>Compile time</th>", "<th>Size</th>", sep=""
+    )
     if cmp_entries:
         print("<th>t-cmp</th>", sep="")
     print("</tr>")
@@ -282,7 +283,9 @@ def output_html(entries, sorted_list, cmp_entries, args):
         print("<td align='right'>", build_time_str, "</td>", sep="", end="")
         print("<td align='right'>", file_size_str, "</td>", sep="", end="")
         # output diff column
-        cmp_entry = cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        cmp_entry = (
+            cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        )
         if cmp_entry:
             diff_time = build_time - (cmp_entry[1] - cmp_entry[0])
             diff_time_str = format_build_time(diff_time)
@@ -347,7 +350,9 @@ def output_csv(entries, sorted_list, cmp_entries, args):
         entry = entries[name]
         build_time = entry[1] - entry[0]
         file_size = entry[2]
-        cmp_entry = cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        cmp_entry = (
+            cmp_entries[name] if cmp_entries and name in cmp_entries else None
+        )
         print(build_time, file_size, name, sep=",", end="")
         if cmp_entry:
             diff_time = build_time - (cmp_entry[1] - cmp_entry[0])

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import enum
@@ -419,8 +419,7 @@ class _CuDFColumn:
 
         elif null == _MaskKind.NAN:
             raise RuntimeError(
-                "This column uses NaN as null "
-                "so does not have a separate mask"
+                "This column uses NaN as null so does not have a separate mask"
             )
         elif null == _MaskKind.NON_NULLABLE:
             raise RuntimeError(

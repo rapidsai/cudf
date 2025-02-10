@@ -16,7 +16,7 @@ import pylibcudf as plc
 import cudf
 import cudf.core.column.column as column
 from cudf.api.types import is_integer, is_scalar
-from cudf.core._internals import binaryop, unary
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
+    from cudf.core.column import DecimalBaseColumn
 
 _unaryop_map = {
     "ASIN": "ARCSIN",
@@ -130,8 +131,7 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            nan_col = unary.is_nan(self)
-            return nan_col.indices_of(True)
+            return self.isnan().indices_of(True)
         else:
             return super().indices_of(value)
 
@@ -149,7 +149,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
 
         # Normalize value to scalar/column
-        device_value: cudf.Scalar | ColumnBase = (
+        value_normalized: cudf.Scalar | ColumnBase = (
             cudf.Scalar(
                 value,
                 dtype=self.dtype
@@ -160,12 +160,17 @@ class NumericalColumn(NumericalBaseColumn):
             else as_column(value)
         )
 
-        if self.dtype.kind != "b" and device_value.dtype.kind == "b":
+        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
             raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
         else:
-            device_value = device_value.astype(self.dtype)
+            value_normalized = value_normalized.astype(self.dtype)
 
         out: ColumnBase | None  # If None, no need to perform mimic inplace.
+        device_value = (
+            value_normalized.device_value
+            if isinstance(value_normalized, cudf.Scalar)
+            else value_normalized
+        )
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
@@ -203,7 +208,12 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
         unaryop = plc.unary.UnaryOperator[unaryop]
-        return unary.unary_operation(self, unaryop)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.unary.unary_operation(
+                    self.to_pylibcudf(mode="read"), unaryop
+                )
+            )
 
     def __invert__(self):
         if self.dtype.kind in "ui":
@@ -421,16 +431,14 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(
-        self, dtype: Dtype
-    ) -> "cudf.core.column.DecimalBaseColumn":
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
@@ -446,9 +454,8 @@ class NumericalColumn(NumericalBaseColumn):
     @functools.cached_property
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
-            return 0
-        nan_col = unary.is_nan(self)
-        return nan_col.sum()
+            return super().nan_count
+        return self.isnan().sum()
 
     def _process_values_for_isin(
         self, values: Sequence
