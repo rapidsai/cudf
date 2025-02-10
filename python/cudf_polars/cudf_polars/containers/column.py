@@ -293,6 +293,6 @@ class Column:
         return self.obj.size()
 
     @property
-    def null_count(self):
+    def null_count(self) -> int:
         """Return the number of Null values in the column."""
         return self.obj.null_count()
