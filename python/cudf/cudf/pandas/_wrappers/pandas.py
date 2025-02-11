@@ -35,7 +35,6 @@ from ..fast_slow_proxy import (
     _DELETE,
     _fast_slow_function_call,
     _FastSlowAttribute,
-    _FinalProxy,
     _FunctionProxy,
     _maybe_wrap_result,
     _Unusable,
@@ -294,8 +293,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "__reduce__": _FinalProxy.__reduce__,
-        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
@@ -1572,19 +1569,6 @@ SemiMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
-
-# SingleBlockManager = make_final_proxy_type(
-#     "SingleBlockManager",
-#     _Unusable,
-#     pd.core.internals.SingleBlockManager,
-#     fast_to_slow=_Unusable(),
-#     slow_to_fast=_Unusable(),
-#     additional_attributes={"__hash__": _FastSlowAttribute("__hash__"),
-#     "__reduce__": _FinalProxy.__reduce__,
-#         "__setstate__": _FinalProxy.__setstate__,
-#         "axes": _FastSlowAttribute("axes", private=True),
-#         },
-# )
 
 SemiMonthEnd = make_final_proxy_type(
     "SemiMonthEnd",
