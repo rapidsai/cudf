@@ -62,6 +62,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     can_convert_to_column,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -115,7 +116,7 @@ def _describe_timetype(obj, percentiles, typ):
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles)
-                .astype("str")
+                .astype(CUDF_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
             )
@@ -1460,12 +1461,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype("str")
+                    preprocess.astype(CUDF_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                "str"
+                                CUDF_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -4181,9 +4182,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * np.int32(
-            1000
-        )
+        extra = self.series._column.millisecond.astype(
+            np.dtype(np.int32)
+        ) * np.int32(1000)
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4443,7 +4444,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int8
         """
         return self._return_result_like_self(
-            self.series._column.quarter.astype(np.int8)
+            self.series._column.quarter.astype(np.dtype(np.int8))
         )
 
     @_performance_tracking
