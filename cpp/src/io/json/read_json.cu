@@ -261,6 +261,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   std::int64_t buffer_offset = 0;
   auto readbufspan =
     ingest_raw_input(bufspan, sources, chunk_offset, chunk_size, delimiter, stream);
+  auto const requested_size = readbufspan.size();
 
   auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto const first_delim_pos =
@@ -339,7 +340,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     }
     device_span<char const> bufsubspan =
       bufspan.subspan(first_delim_pos + shift_for_nonzero_offset,
-                      next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
+                      requested_size - first_delim_pos - shift_for_nonzero_offset);
     auto rev_it_begin = thrust::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = thrust::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
@@ -347,6 +348,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
+      next_delim_pos - requested_size +
       static_cast<size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
     CUDF_EXPECTS(last_line_size < batch_size,
                  "A single JSON line cannot be larger than the batch size limit");
