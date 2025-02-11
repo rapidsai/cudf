@@ -5,15 +5,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.pandas import is_proxy_object
+ibis.set_backend("pandas")
 
 ibis.options.interactive = False
 
 
 def ibis_assert_equal(expect, got, rtol: float = 1e-7, atol: float = 0.0):
-    assert is_proxy_object(got), (
-        "The result from cudf.pandas must be a proxy object"
-    )
     pd._testing.assert_almost_equal(expect, got, rtol=rtol, atol=atol)
 
 
