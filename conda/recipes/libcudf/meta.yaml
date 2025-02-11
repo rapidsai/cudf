@@ -66,8 +66,8 @@ requirements:
     - nvcomp {{ nvcomp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
-    - fmt {{ fmt_version }}
     - flatbuffers {{ flatbuffers_version }}
+    - rapids-logger =0.1
     - zlib {{ zlib_version }}
 
 outputs:
@@ -99,6 +99,7 @@ outputs:
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
+        - rapids-logger =0.1
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
