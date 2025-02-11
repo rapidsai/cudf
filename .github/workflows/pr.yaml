@@ -142,6 +142,7 @@ jobs:
     with:
       build_type: pull-request
       run_script: "ci/cpp_linters.sh"
+      node_type: "cpu16"
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
