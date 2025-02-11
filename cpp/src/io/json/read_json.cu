@@ -439,7 +439,7 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
 
 /**
  * @brief Helper function that implements the batching logic for the JSONL reader.
- * The goal of the batched reader is to handle reading mutiple JSONL sources whose total cumulative
+ * The goal of the batched reader is to handle reading multiple JSONL sources whose total cumulative
  * size exceeds the integer limit imposed by the JSON tokenizer. The batching logic divides the
  * requested input byte range spanning sources into smaller batches, each of which itself spans
  * multiple sources. The batches are constructed such that the byte subrange in each batch does not
