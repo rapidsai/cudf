@@ -77,6 +77,72 @@ std::unique_ptr<column> segmented_gather(
   rmm::cuda_stream_view stream       = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Segmented gather of the elements within a list element in each row of a list column
+ * according to `start` and `length`. `source_column` with any depth is supported.
+ *
+ * @throws cudf::invalid_argument if `start` contains zero.
+ * @throws std::invalid_argument if `length` contains negative value.
+ * @throws cudf::invalid_argument if `start` or `length` is not list column of an index type.
+ * @throws cudf::invalid_argument if the sizes of `source_column`, `start`, `length` are not
+ * identify.
+ *
+ * The indices starts from 1, while negative values are counted from the end.
+ * If indices in `start` are outside the range `[-n, n]`, where `n` is the number of
+ * elements in corresponding row of the source column, the result list is empty.
+ * If `length` is zero, the result list is empty.
+ *
+ * @code{.pseudo}
+ * source_column   : [
+ *  {"1", "2", "3"},
+ *  {"1", "2", "3"},
+ *  {"1", "2", "3"},
+ *  {"1", "2", "3"},
+ *  {"1", "2", "3"},
+ *  {"1", "2", "3"}
+ * ]
+ * start : [1, 2, 4, -1, -3, -4]
+ * length: [2, 10, 2, 2, 10, 2]
+ *
+ * result : [{"1", "2"}, {"2", "3"}, {}, {"3"}, {"1", "2", "3"}, {}]
+ * @endcode
+ *
+ * @param source_column View into the list column to gather from
+ * @param start
+ * @param length
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to allocate any returned objects
+ * @return column with elements in list of rows gathered based on `gather_map_list`
+ *
+ */
+std::unique_ptr<column> segmented_gather(
+  lists_column_view const& source_column,
+  column_view const& start,
+  column_view const& length,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::unique_ptr<column> segmented_gather(
+  lists_column_view const& source_column,
+  size_type const start,
+  size_type const length,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::unique_ptr<column> segmented_gather(
+  lists_column_view const& source_column,
+  column_view const& start,
+  size_type const length,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+std::unique_ptr<column> segmented_gather(
+  lists_column_view const& source_column,
+  size_type const start,
+  column_view const& length,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 }  // namespace lists
 }  // namespace CUDF_EXPORT cudf

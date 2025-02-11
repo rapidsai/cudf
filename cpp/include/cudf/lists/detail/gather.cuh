@@ -315,6 +315,30 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr);
 
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         column_view const& start,
+                                         column_view const& length,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
+
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         size_type const start,
+                                         size_type const length,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
+
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         column_view const& start,
+                                         size_type const length,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
+
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         size_type const start,
+                                         column_view const& length,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf
