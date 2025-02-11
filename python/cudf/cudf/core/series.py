@@ -633,6 +633,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             data = {}
         if dtype is not None:
             dtype = cudf.dtype(dtype)
+
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
@@ -687,9 +688,6 @@ class Series(SingleColumnFrame, IndexedFrame):
                 column = column.copy(deep=True)
 
         assert isinstance(column, ColumnBase)
-
-        if dtype is not None:
-            column = column.astype(dtype)
 
         if name_from_data is not None and name is None:
             name = name_from_data
