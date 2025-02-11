@@ -203,10 +203,10 @@ TEST_P(JsonLargeReaderTest, MultiBatchDoubleBufferInput)
   cudf::io::compression_type const comptype = GetParam();
 
   // This test constructs a JSON input of size two times the batch size but sets the batch boundary
-  // to be after the start of the last record in the batch i.e. the size of the last record in the
-  // input is approximately the same as the size of all preceding records. Since the reader now ends
-  // up reading twice the allowed batch size per batch, it has to split the read buffer in two, each
-  // of size <= the batch size.
+  // after the start of the last record in the batch i.e. the input is constructed such that the
+  // size of the last record is approximately the same as the size of all preceding records. Since
+  // the reader now ends up reading twice the allowed batch size per batch, it has to split the read
+  // buffer in two, each part of size <= the batch size.
   std::string json_string      = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": "11" }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": "12" }
@@ -255,7 +255,7 @@ TEST_P(JsonLargeReaderTest, MultiBatchDoubleBufferInput)
       .compression(comptype);
 
   // Read full test data via existing, nested JSON lines reader
-  auto result = cudf::io::read_json(cjson_lines_options);
+  auto const result = cudf::io::read_json(cjson_lines_options);
 
   ASSERT_EQ(result.tbl->num_columns(), 3);
   ASSERT_EQ(result.tbl->num_rows(), 15);
