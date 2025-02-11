@@ -581,6 +581,8 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   size_type _num_input_columns;
+
+ private:
   std::vector<std::vector<ast::literal*>> _literals;
 };
 
