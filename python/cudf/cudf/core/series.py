@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
+        Dtype,
         NotImplementedType,
         ScalarLike,
     )
@@ -630,7 +631,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
-
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
@@ -2124,18 +2126,19 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
                     "Only the Series name can be used for the key in Series "
                     "dtype mappings."
                 )
+            dtype = {self.name: cudf.dtype(dtype[self.name])}
         else:
-            dtype = {self.name: dtype}
+            dtype = {self.name: cudf.dtype(dtype)}
         return super().astype(dtype, copy, errors)
 
     @_performance_tracking

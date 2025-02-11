@@ -2074,7 +2074,7 @@ def as_column(
             )
         elif dtype is None and pa.types.is_null(arbitrary.type):
             # default "empty" type
-            dtype = "str"
+            dtype = CUDF_STRING_DTYPE
         col = ColumnBase.from_arrow(arbitrary)
 
         if dtype is not None:
