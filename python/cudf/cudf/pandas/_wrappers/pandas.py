@@ -35,6 +35,7 @@ from ..fast_slow_proxy import (
     _DELETE,
     _fast_slow_function_call,
     _FastSlowAttribute,
+    _FinalProxy,
     _FunctionProxy,
     _maybe_wrap_result,
     _Unusable,
@@ -293,6 +294,8 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "__reduce__": _FinalProxy.__reduce__,
+        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
@@ -1570,6 +1573,19 @@ SemiMonthBegin = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+# SingleBlockManager = make_final_proxy_type(
+#     "SingleBlockManager",
+#     _Unusable,
+#     pd.core.internals.SingleBlockManager,
+#     fast_to_slow=_Unusable(),
+#     slow_to_fast=_Unusable(),
+#     additional_attributes={"__hash__": _FastSlowAttribute("__hash__"),
+#     "__reduce__": _FinalProxy.__reduce__,
+#         "__setstate__": _FinalProxy.__setstate__,
+#         "axes": _FastSlowAttribute("axes", private=True),
+#         },
+# )
+
 SemiMonthEnd = make_final_proxy_type(
     "SemiMonthEnd",
     _Unusable,
@@ -1710,30 +1726,6 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
-
-
-# timestamps and timedeltas are not proxied, but non-proxied
-# pandas types are currently not picklable. Thus, we define
-# custom reducer/unpicker functions for these types:
-def _reduce_obj(obj):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        # args can contain objects that are unpicklable
-        # when the module accelerator is disabled
-        # (freq is of a proxy type):
-        pickled_args = pickle.dumps(obj.__reduce__())
-
-    return _unpickle_obj, (pickled_args,)
-
-
-def _unpickle_obj(pickled_args):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        unpickler, args = pickle.loads(pickled_args)
-    obj = unpickler(*args)
-    return obj
 
 
 # Save the original __init__ methods
@@ -1893,6 +1885,113 @@ def initial_setup():
     cudf.set_option("mode.pandas_compatible", True)
 
 
+# timestamps and timedeltas are not proxied, but non-proxied
+# pandas types are currently not picklable. Thus, we define
+# custom reducer/unpicker functions for these types:
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        # import pdb;pdb.set_trace()
+        # args can contain objects that are unpicklable
+        # when the module accelerator is disabled
+        # (freq is of a proxy type):
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickler, args = pickle.loads(pickled_args)
+    obj = unpickler(*args)
+    return obj
+
+
+def _generic_reduce_obj(obj, unpickle_func):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return unpickle_func, (pickled_args,)
+
+
+def _frame_unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickled_intermediate = pickle.loads(pickled_args)
+        reconstructor_func = unpickled_intermediate[0]
+        obj = reconstructor_func(*unpickled_intermediate[1])
+        obj.__setstate__(unpickled_intermediate[2])
+    return obj
+
+
+def _index_unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickled_intermediate = pickle.loads(pickled_args)
+        reconstructor_func = unpickled_intermediate[0]
+        obj = reconstructor_func(*unpickled_intermediate[1])
+
+    return obj
+
+
+def _reduce_offset_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__getstate__())
+
+    return _unpickle_offset_obj, (pickled_args,)
+
+
+def _unpickle_offset_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        data = pickle.loads(pickled_args)
+        data.pop("_offset")
+        data.pop("_use_relativedelta")
+    obj = pd._libs.tslibs.offsets.DateOffset(**data)
+    return obj
+
+
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
+
+
+# Register custom reducer/unpickler functions for pandas objects
+# so that they can be pickled/unpickled correctly:
+copyreg.dispatch_table[pd.Series] = lambda obj: _generic_reduce_obj(
+    obj, _frame_unpickle_obj
+)
+copyreg.dispatch_table[pd.DataFrame] = lambda obj: _generic_reduce_obj(
+    obj, _frame_unpickle_obj
+)
+
+copyreg.dispatch_table[pd.Index] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.RangeIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.DatetimeIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.TimedeltaIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.CategoricalIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+
+copyreg.dispatch_table[pd._libs.tslibs.offsets.DateOffset] = _reduce_offset_obj
