@@ -374,7 +374,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
   if (num_chars && !is_last_char_delimiter) {
     auto last_char = delimiter;
-    cudf::detail::cuda_memcpy_async<char>(
+    cudf::detail::cuda_memcpy<char>(
       device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size())
         .subspan(readbufspan.size(), 1),
       host_span<char const>(&last_char, 1, false),
@@ -390,8 +390,8 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     std::nullopt);
 }
 
-// Helper function to read the current batch using byte range offsets and size
-// passed
+// Helper function to read the current batch using the byte range offsets and size
+// passed, normalize it, and construct a partial table.
 std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   host_span<std::unique_ptr<datasource>> sources,
   json_reader_options const& reader_opts,
@@ -399,35 +399,39 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto bufviews = get_record_range_raw_input(sources, reader_opts, stream);
+  // The second owning buffer in the pair returned by get_record_range_raw_input may not be
+  // populated depending on the size of the actual byte range read. The first owning buffer will
+  // always be non-empty.
+  auto owning_buffers = get_record_range_raw_input(sources, reader_opts, stream);
 
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(
-      bufviews.first, reader_opts.get_delimiter(), stream, cudf::get_current_device_resource_ref());
-  }
-
-  auto buffer = cudf::device_span<char const>(reinterpret_cast<char const*>(bufviews.first.data()),
-                                              bufviews.first.size());
-  stream.synchronize();
-  auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
-  stream.synchronize();
-
-  if (!bufviews.second.has_value())
-    return std::make_pair(std::move(first_partial_table), std::nullopt);
-
-  if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(bufviews.second.value(),
+    normalize_single_quotes(owning_buffers.first,
                             reader_opts.get_delimiter(),
                             stream,
                             cudf::get_current_device_resource_ref());
+    stream.synchronize();
+  }
+
+  auto buffer = cudf::device_span<char const>(
+    reinterpret_cast<char const*>(owning_buffers.first.data()), owning_buffers.first.size());
+  auto first_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
+  if (!owning_buffers.second.has_value())
+    return std::make_pair(std::move(first_partial_table), std::nullopt);
+
+  // Repeat the normalization and table construction steps for the second buffer if it exists
+  if (reader_opts.is_enabled_normalize_single_quotes()) {
+    normalize_single_quotes(owning_buffers.second.value(),
+                            reader_opts.get_delimiter(),
+                            stream,
+                            cudf::get_current_device_resource_ref());
+    stream.synchronize();
   }
   buffer = cudf::device_span<char const>(
-    reinterpret_cast<char const*>(bufviews.second.value().data()), bufviews.second.value().size());
-  stream.synchronize();
+    reinterpret_cast<char const*>(owning_buffers.second.value().data()),
+    owning_buffers.second.value().size());
   auto second_partial_table = device_parse_nested_json(buffer, reader_opts, stream, mr);
-
   return std::make_pair(std::move(first_partial_table), std::move(second_partial_table));
 }
 
@@ -440,8 +444,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
    * The batched JSON reader enforces that the size of each batch is at most INT_MAX
    * bytes (~2.14GB). Batches are defined to be byte range chunks - characterized by
    * chunk offset and chunk size - that may span across multiple source files.
-   * Note that the batched reader does not work for compressed inputs or for regular
-   * JSON inputs.
+   * Note that batching sources does not work for for regular JSON inputs.
    */
   std::size_t const total_source_size = sources_size(sources, 0, 0);
 
@@ -715,7 +718,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       thread_tasks.begin(), thread_tasks.end(), std::size_t{0}, [](std::size_t sum, auto& task) {
         return sum + task.get();
       });
-    CUDF_EXPECTS(bytes_read == total_bytes_to_read, "something's fishy");
+    CUDF_EXPECTS(bytes_read == total_bytes_to_read,
+                 "Incorrect number of bytes read by multithreaded reader");
   }
 
   return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
