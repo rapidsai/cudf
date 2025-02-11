@@ -1,6 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
 from libc.stdint cimport int64_t
 from libc.time cimport tm, mktime, time_t
@@ -26,6 +25,7 @@ from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 from .column cimport Column
 from .types cimport DataType
 
+from cpython cimport bool as py_bool
 from functools import singledispatch
 
 __all__ = ["Scalar"]
@@ -122,11 +122,21 @@ def _(py_val):
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)
     return slr
 
-#@_from_py.register(int)
-#def _(py_val):
-#    cdef unique_ptr[scalar] c_obj = make_fixed_width_scalar(py_val)
-#    cdef DataType dtype = DataType(type_id.INT64)
-#    return _new_scalar(c_obj, dtype)
+@_from_py.register(int)
+def _(py_val):
+    cdef DataType dtype = DataType(type_id.INT64)
+    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+    (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)
+    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+    return slr
+
+@_from_py.register(py_bool)
+def _(py_val):
+    cdef DataType dtype = DataType(type_id.BOOL8)
+    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+    (<numeric_scalar[cbool]*>c_obj.get()).set_value(py_val)
+    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+    return slr
 
 #@_from_py.register(py_bool)
 #def _(py_val):
