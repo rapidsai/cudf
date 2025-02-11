@@ -20,6 +20,7 @@
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -277,4 +278,54 @@ TEST_P(JsonLargeReaderTest, MultiBatchDoubleBufferInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(2),
     cudf::test::strings_column_wrapper(expected_c_col.begin(), expected_c_col.end()));
+}
+
+TEST_P(JsonLargeReaderTest, OverBatchLimitLine)
+{
+  cudf::io::compression_type const comptype = GetParam();
+
+  // This test constructs a JSONL input of size three times the batch limit. The input contains a
+  // single JSONL which will be completely read in the first batch itself. Since we cannot divide a
+  // single line, we expect the test to throw
+  std::string json_string           = R"({ "a": { "y" : 6}, "b" : [1, 2, 3], "c": ")";
+  std::string really_long_string    = R"(libcudf)";
+  std::size_t const log_repetitions = 5;
+  really_long_string.reserve(really_long_string.size() * (1UL << log_repetitions));
+  for (std::size_t i = 0; i < log_repetitions; i++) {
+    really_long_string += really_long_string;
+  }
+  json_string += really_long_string + "\" }\n";
+
+  std::size_t const batch_size = json_string.size() / 3;
+  // set smaller batch_size to reduce file size and execution time
+  this->set_batch_size(batch_size);
+
+  std::vector<std::uint8_t> cdata;
+  if (comptype != cudf::io::compression_type::NONE) {
+    cdata = cudf::io::detail::compress(
+      comptype,
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
+                                     json_string.size()),
+      cudf::get_default_stream());
+  } else {
+    cdata = std::vector<uint8_t>(
+      reinterpret_cast<uint8_t const*>(json_string.data()),
+      reinterpret_cast<uint8_t const*>(json_string.data()) + json_string.size());
+  }
+
+  constexpr int num_sources = 1;
+  std::vector<cudf::host_span<std::byte>> chostbufs(
+    num_sources,
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(cdata.data()), cdata.size()));
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options cjson_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{
+        cudf::host_span<cudf::host_span<std::byte>>(chostbufs.data(), chostbufs.size())})
+      .lines(true)
+      .compression(comptype);
+
+  // Read full test data via existing, nested JSON lines reader
+  EXPECT_THROW(cudf::io::read_json(cjson_lines_options), cudf::logic_error);
 }

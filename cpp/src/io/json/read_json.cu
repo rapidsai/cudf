@@ -345,11 +345,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto const second_last_delimiter_it =
       thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
-                 "A single JSON line cannot be larger than the integer limit");
+                 "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
       static_cast<size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
     CUDF_EXPECTS(last_line_size < batch_size,
-                 "A single JSON line cannot be larger than the integer limit");
+                 "A single JSON line cannot be larger than the batch size limit");
 
     rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<size_t>(thrust::distance(
                                                            second_last_delimiter_it, rev_it_end)),
@@ -462,7 +462,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   // Sanity checks of byte range offset and clamping of byte range size
   std::size_t const chunk_offset = reader_opts.get_byte_range_offset();
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
-               "Invalid offsetting",
+               "Invalid byte range offset",
                std::invalid_argument);
   std::size_t chunk_size       = reader_opts.get_byte_range_size();
   chunk_size                   = !chunk_size ? total_source_size - chunk_offset
