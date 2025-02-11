@@ -3343,7 +3343,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             value = as_column(value)
 
         if _is_scalar_or_zero_d_array(value):
-            dtype = np.dtype(np.float64)
+            dtype = None
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 value = value.item()
