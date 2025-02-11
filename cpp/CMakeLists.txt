@@ -100,6 +100,7 @@ option(
   "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
   ON
 )
+option(CUDF_MIXED_JOINS_ARCH "Architecture to compile mixed-joins code for. If set to `all`, CUDF will be compiled for all supported architectures" "70-virtual")
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -338,7 +339,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
 )
 
-set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES "70-virtual")
+set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES ${CUDF_MIXED_JOINS_ARCH})
 
 add_library(
   cudf
@@ -983,8 +984,7 @@ add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(
-  cudf_mixed_joins PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger
-                          $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
+  cudf_mixed_joins PUBLIC rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
 )
 
 target_link_libraries(
