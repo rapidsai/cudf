@@ -390,8 +390,10 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     std::nullopt);
 }
 
-// Helper function to read the current batch using the byte range offsets and size
-// passed, normalize it, and construct a partial table.
+/**
+ * @brief Helper function to read the current batch using the byte range offsets and size
+ * passed, normalize it, and construct a partial table.
+ */
 std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   host_span<std::unique_ptr<datasource>> sources,
   json_reader_options const& reader_opts,
@@ -435,17 +437,21 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
   return std::make_pair(std::move(first_partial_table), std::move(second_partial_table));
 }
 
+/**
+ * @brief Helper function that implements the batching logic for the JSONL reader.
+ * The goal of the batched reader is to handle reading mutiple JSONL sources whose total cumulative
+ * size exceeds the integer limit imposed by the JSON tokenizer. The batching logic divides the
+ * requested input byte range spanning sources into smaller batches, each of which itself spans
+ * multiple sources. The batches are constructed such that the byte subrange in each batch does not
+ * exceed the batch size, which is either set using the environment variable
+ * LIBCUDF_JSON_BATCH_SIZE, or is set to a little under the integer limit. Note that batching
+ * sources does not work for for regular JSON inputs.
+ */
 table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> sources,
                                    json_reader_options const& reader_opts,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  /*
-   * The batched JSON reader enforces that the size of each batch is at most INT_MAX
-   * bytes (~2.14GB). Batches are defined to be byte range chunks - characterized by
-   * chunk offset and chunk size - that may span across multiple source files.
-   * Note that batching sources does not work for for regular JSON inputs.
-   */
   std::size_t const total_source_size = sources_size(sources, 0, 0);
 
   // Batching is enabled only for JSONL inputs, not regular JSON files
@@ -453,7 +459,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     reader_opts.is_enabled_lines() || total_source_size < std::numeric_limits<int32_t>::max(),
     "Parsing Regular JSON inputs of size greater than INT_MAX bytes is not supported");
 
-  // TODO: move the offset and size logic from get_record_range_raw_input here
+  // Sanity checks of byte range offset and clamping of byte range size
   std::size_t const chunk_offset = reader_opts.get_byte_range_offset();
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
                "Invalid offsetting",
@@ -463,13 +469,10 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
                                              : std::min(chunk_size, total_source_size - chunk_offset);
   std::size_t const batch_size = get_batch_size(chunk_size);
 
-  /*
-   * Identify the position (zero-indexed) of starting source file from which to begin
-   * batching based on byte range offset. If the offset is larger than the sum of all
-   * source sizes, then start_source is total number of source files i.e. no file is
-   * read
-   */
-
+  // Identify the position (zero-indexed) of starting source file from which to begin
+  // batching based on byte range offset. If the offset is larger than the sum of all
+  // source sizes, then start_source is total number of source files i.e. no file is
+  // read.
   // Prefix sum of source file sizes
   std::size_t pref_source_size = 0;
   // Starting source file from which to being batching evaluated using byte range offset
@@ -480,12 +483,10 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
     return sources.size();
   }();
-  /*
-   * Construct batches of byte ranges spanning source files, with the starting position of batches
-   * indicated by `batch_offsets`. `pref_bytes_size` gives the bytes position from which the current
-   * batch begins, and `end_bytes_size` gives the terminal bytes position after which reading
-   * stops.
-   */
+  // Construct batches of byte ranges spanning source files, with the starting position of batches
+  // indicated by `batch_offsets`. `pref_bytes_size` gives the bytes position from which the current
+  // batch begins, and `end_bytes_size` gives the terminal bytes position after which reading
+  // stops.
   std::size_t pref_bytes_size = chunk_offset;
   std::size_t end_bytes_size  = chunk_offset + chunk_size;
   std::vector<std::size_t> batch_offsets{pref_bytes_size};
@@ -502,16 +503,14 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     i++;
   }
 
-  /*
-   * If there is a single batch, then we can directly return the table without the
-   * unnecessary concatenate. The size of batch_offsets is 1 if all sources are empty,
-   * or if end_bytes_size is larger than total_source_size.
-   */
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
   batched_reader_opts.set_byte_range_offset(chunk_offset);
   batched_reader_opts.set_byte_range_size(chunk_size);
 
+  // lambda to insert the partial tables into the vector. Since read_batch function returns a pair
+  // of partial tables where the second table is optional, we insert a table into the vector only if
+  // it is non-empty
   auto insert_partial_tables =
     [&partial_tables](
       std::pair<table_with_metadata, std::optional<table_with_metadata>>&& partial_table_pair) {
@@ -578,6 +577,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   };
 
   if (batch_offsets.size() <= 2) {
+    // single batch
     auto has_inserted = insert_partial_tables(
       read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
     if (!has_inserted) {
@@ -585,6 +585,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
                                  {std::vector<column_name_info>{}}};
     }
   } else {
+    // multiple batches
     batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
     batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
     insert_partial_tables(
@@ -618,6 +619,7 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
   }
 
+  // If there is a single partial table, then there is no need to concatenate
   if (partial_tables.size() == 1) return std::move(partial_tables[0]);
   auto expects_schema_equality =
     std::all_of(partial_tables.begin() + 1,
