@@ -339,8 +339,8 @@ __device__ inline void transform(
 template <typename T>
 struct TenaryDecimalOperationTest : public cudf::test::BaseFixture {};
 
-// TODO: add decimal128 support
-using UdfDecimalTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using UdfDecimalTypes =
+  cudf::test::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
 
 TYPED_TEST_SUITE(TenaryDecimalOperationTest, UdfDecimalTypes);
 
@@ -352,15 +352,15 @@ TYPED_TEST(TenaryDecimalOperationTest, TransformDecimalsAndScalar)
 
   // clang-format off
   std::string const cuda =
-    "__device__ inline void transform(" 
+    "__device__ inline void transform("
     + type_name + "::rep * out_rep, int32_t out_scale, "
     + type_name + "::rep a_rep, int32_t a_scale, "
     + type_name + "::rep b_rep, int32_t b_scale, "
     + type_name + "::rep c_rep, int32_t c_scale) {\n"
     + type_name + " a(numeric::scaled_integer{a_rep, numeric::scale_type{a_scale}});\n"
     + type_name + " b(numeric::scaled_integer{b_rep, numeric::scale_type{b_scale}});\n"
-    + type_name + " c(numeric::scaled_integer{c_rep, numeric::scale_type{c_scale}});\n" 
-    + "auto out = ((a + b) * c);" 
+    + type_name + " c(numeric::scaled_integer{c_rep, numeric::scale_type{c_scale}});\n"
+    + "auto out = ((a + b) * c);"
     + "*out_rep = out.rescaled(numeric::scale_type{out_scale}).value();\n"
     + " }";
   // clang-format on
