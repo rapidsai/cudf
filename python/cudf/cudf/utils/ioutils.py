@@ -771,6 +771,9 @@ on_bad_lines : {'error', 'recover'}, default 'error'
 
     - ``'error'``, raise an Exception when a bad line is encountered.
     - ``'recover'``, fills the row with <NA> when a bad line is encountered.
+kwargs : Additional parameters to be passed to the JSON reader. These are experimental features subject to change.
+    - ``'normalize_single_quotes'``, normalize single quotes to double quotes in the input buffer
+    - ``'delimiter'``, delimiter separating records in JSONL inputs
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.

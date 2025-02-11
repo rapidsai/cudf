@@ -372,13 +372,13 @@ cdef class JsonReaderOptionsBuilder:
         self.c_obj.dayfirst(val)
         return self
 
-    cpdef JsonReaderOptionsBuilder delimiter(self, char delimiter):
+    cpdef JsonReaderOptionsBuilder delimiter(self, str delimiter):
         """
         Set delimiter character separating records in JSON lines inputs
 
         Parameters
         ----------
-        delimiter : char
+        delimiter : str
             Character to be used as delimiter separating records
 
         Returns
