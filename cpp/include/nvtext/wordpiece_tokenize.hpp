@@ -75,7 +75,7 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
 
 /**
  * @brief Returns the token ids for the input string a wordpiece tokenizer
- * algorithm with the given vocabulary.
+ * algorithm with the given vocabulary
  *
  * Example:
  * @code{.pseudo}
@@ -101,12 +101,12 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
  * t5 is now [[3, 2, 1, 4, 5, 6]]
  * @endcode
  *
- * Any null row entry results in a corresponding null entry in the output
+ * Any null row entry results in a corresponding null entry in the output.
  *
  * @param input Strings column to tokenize
  * @param vocabulary Used to lookup tokens within `input`
- * @param max_words_per_row Maximum number of words to tokenize for each row;
- *        Default 0 processes all words when tokenizing.
+ * @param max_words_per_row Maximum number of words to tokenize for each row.
+ *                          Default 0 tokenizes all words.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Lists column of token ids

@@ -450,7 +450,7 @@ TEST(TextSubwordTest, WordPiece)
 
   auto input = cudf::test::strings_column_wrapper(
     {"the quick brown fox jumped over",
-     "the lazy brown dog",
+     "the  lazy  brown  dog",
      " ate brown cheese dog fox jumped lazy quick over the [UNK] "});
   auto sv      = cudf::strings_column_view(input);
   auto results = nvtext::wordpiece_tokenize(sv, *vocab);
