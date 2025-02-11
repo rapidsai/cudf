@@ -208,17 +208,27 @@ size_type find_first_delimiter(device_span<char const> d_data,
 }
 
 /**
- * @brief Get the byte range between record starts and ends starting from the given range.
+ * @brief Get the byte range between record starts and ends starting from the given range. The
+ * actual byte range read and returned will contain complete JSONL records, and will include the
+ * delimiter at the end of the last record.
  *
  * if get_byte_range_offset == 0, then we can skip the first delimiter search
  * if get_byte_range_offset != 0, then we need to search for the first delimiter in given range.
  * if not found, skip this chunk, if found, then search for first delimiter in next range until we
- * find a delimiter. Use this as actual range for parsing.
+ * find a delimiter. Use this as actual range for parsing. If the size of actual byte range to be
+ * parsed is greater than the integer limit (or the requested batch size), then split the ingested
+ * buffer in two. Note that as long as no single record in the JSONL input is of size larger than
+ * the requested batch size, we are guaranteed that each of the two buffers will be within the batch
+ * size limit - the size of the first buffer is capped at the batch limit by the batching logic
+ * itself, and the second buffer contains only the last record which was incomplete in the initial
+ * byte range requested. If the size of the actual byte range to be parsed does not exceed batch
+ * limits, then the second buffer is empty.
  *
  * @param sources Data sources to read from
  * @param reader_opts JSON reader options with range offset and range size
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @returns Data source owning buffer enclosing the bytes read
+ * @returns A pair of data source owning buffers together enclosing the bytes read. The second
+ * buffer may or may not be empty depending on the condition described above.
  */
 std::pair<datasource::owning_buffer<rmm::device_buffer>,
           std::optional<datasource::owning_buffer<rmm::device_buffer>>>
@@ -228,12 +238,14 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
 {
   CUDF_FUNC_RANGE();
 
-  std::size_t const total_source_size     = sources_size(sources, 0, 0);
-  auto constexpr num_delimiter_chars      = 1;
-  auto const delimiter                    = reader_opts.get_delimiter();
-  auto const num_extra_delimiters         = num_delimiter_chars * sources.size();
-  std::size_t const chunk_offset          = reader_opts.get_byte_range_offset();
-  std::size_t const chunk_size            = reader_opts.get_byte_range_size();
+  std::size_t const total_source_size = sources_size(sources, 0, 0);
+  auto constexpr num_delimiter_chars  = 1;
+  auto const delimiter                = reader_opts.get_delimiter();
+  auto const num_extra_delimiters     = num_delimiter_chars * sources.size();
+  std::size_t const chunk_offset      = reader_opts.get_byte_range_offset();
+  std::size_t const chunk_size        = reader_opts.get_byte_range_size();
+  // Sanity checks for the byte range offset and size are handled by the batching logic.
+  // We only need to check if we are reading until the end of the last source in this function.
   auto const should_load_till_last_source = chunk_offset + chunk_size == total_source_size;
 
   int num_subchunks_prealloced        = should_load_till_last_source ? 0 : max_subchunks_prealloced;
@@ -253,6 +265,9 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto const first_delim_pos =
     chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, delimiter, stream);
+  // If the requested byte range ends with a delimiter, we do not need to add an extra delimiter at
+  // the end of the ingested buffer, nor do we need to continue reading any more of the input since
+  // the last position of the byte range coincides with the end of a record.
   auto is_last_char_delimiter = [delimiter, readbufspan, stream]() {
     char last_char;
     cudf::detail::cuda_memcpy<char>(host_span<char>(&last_char, 1, false),
@@ -291,6 +306,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
           // delimiter character
           next_delim_pos = buffer_offset + readbufspan.size();
         } else {
+          // Reallocate-and-retry policy
           // Our buffer_size estimate is insufficient to read until the end of the line! We need to
           // allocate more memory and try again!
           num_subchunks_prealloced *= 2;
@@ -303,10 +319,17 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
       }
     }
 
-    auto const batch_limit = getenv_or<std::size_t>(
+    // If the size of the ingested buffer is less than the batch size, we can simply return the
+    // buffer as is, and set the optional second buffer to null. If the size of the ingested buffer
+    // exceed the batch size limits due to the reallocate-and-retry policy, we split the ingested
+    // buffer in two parts. The second part only contains the last record in the buffer, while the
+    // first part contains all the remaining lines.
+    // As long as the size of no record exceeds the batch size limit placed, we are guaranteed that
+    // the returned buffer(s) will be below the batch limit.
+    auto const batch_size = getenv_or<std::size_t>(
       "LIBCUDF_JSON_BATCH_SIZE", static_cast<size_t>(std::numeric_limits<int32_t>::max()));
     if (static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
-        batch_limit) {
+        batch_size) {
       return std::make_pair(
         datasource::owning_buffer<rmm::device_buffer>(
           std::move(buffer),
@@ -322,10 +345,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto const second_last_delimiter_it =
       thrust::find(rmm::exec_policy(stream), rev_it_begin, rev_it_end, delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
-                 "A single JSON line cannot be larger than 2GB");
+                 "A single JSON line cannot be larger than the integer limit");
     auto const last_line_size =
       static_cast<size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
-    CUDF_EXPECTS(last_line_size < batch_limit, "A single JSON line cannot be larger than 2GB");
+    CUDF_EXPECTS(last_line_size < batch_size,
+                 "A single JSON line cannot be larger than the integer limit");
 
     rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<size_t>(thrust::distance(
                                                            second_last_delimiter_it, rev_it_end)),
