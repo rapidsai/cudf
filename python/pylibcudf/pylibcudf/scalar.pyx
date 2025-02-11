@@ -138,14 +138,9 @@ def _(py_val):
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)
     return slr
 
-#@_from_py.register(py_bool)
-#def _(py_val):
-#    cdef unique_ptr[scalar] c_obj = make_fixed_width_scalar(py_val)
-#    cdef DataType dtype = DataType(type_id.BOOL8)
-#    return _new_scalar(c_obj, dtype)
-
-#@_from_py.register(str)
-#def _(py_val):
-#    cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
-#    cdef DataType dtype = DataType(type_id.STRING)
-#    return _new_scalar(c_obj, dtype)
+@_from_py.register(str)
+def _(py_val):
+    cdef DataType dtype = DataType(type_id.STRING)
+    cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
+    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+    return slr
