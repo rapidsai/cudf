@@ -41,6 +41,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -342,7 +343,7 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
   if (idx >= total_count) { return; }
   auto const begin = d_normalized + (idx * MAX_NEW_CHARS) + 1;
   if (*begin != '[') { return; }
-  auto const end   = begin + std::min(6L, total_count - idx) * MAX_NEW_CHARS;
+  auto const end   = begin + cuda::std::min(6L, total_count - idx) * MAX_NEW_CHARS;
   auto const match = thrust::find(thrust::seq, begin, end, static_cast<uint32_t>(']'));
   if (match == end) { return; }
   char candidate[8];
