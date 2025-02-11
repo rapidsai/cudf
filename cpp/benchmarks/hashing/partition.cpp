@@ -21,6 +21,7 @@
 #include <cudf/partitioning.hpp>
 
 #include <algorithm>
+#include <numeric>
 
 class Hashing : public cudf::benchmark {};
 
