@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.5"]
+      cuda: ["11.8", "12.8"]
       arch: [x86_64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
@@ -24,6 +24,7 @@ files:
       - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_nvcomp
+      - depends_on_rapids_logger
       - depends_on_rmm
       - develop
       - docs
@@ -177,6 +178,7 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+      - depends_on_rapids_logger
   py_run_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
@@ -184,7 +186,9 @@ files:
       table: project
     includes:
       - depends_on_libkvikio
+      - depends_on_librmm
       - depends_on_nvcomp
+      - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -424,7 +428,6 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
   depends_on_nvcomp:
@@ -525,6 +528,10 @@ dependencies:
               cuda: "12.5"
             packages:
               - cuda-version=12.5
+          - matrix:
+              cuda: "12.8"
+            packages:
+              - cuda-version=12.8
   cuda:
     specific:
       - output_types: conda
@@ -1137,6 +1144,15 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_rapids_logger:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-logger==0.1.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
   test_python_pandas_cudf:
     common:
       - output_types: [requirements, pyproject]

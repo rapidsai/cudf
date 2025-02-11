@@ -20,6 +20,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -49,6 +50,7 @@ from cudf.core.index import RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.utils import (
     _compile_or_get,
     _get_input_args_from_frame,
@@ -3258,7 +3260,7 @@ class IndexedFrame(Frame):
             True, length=len(self), dtype=bool
         )._scatter_by_column(
             distinct,
-            cudf.Scalar(False),
+            pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
         )
         return cudf.Series._from_column(result, index=self.index, name=name)
@@ -5025,7 +5027,7 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype: dict[Any, Dtype],
+        dtype: Dtype | dict[Any, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -6338,13 +6340,13 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def rank(
         self,
-        axis=0,
-        method="average",
-        numeric_only=False,
-        na_option="keep",
-        ascending=True,
-        pct=False,
-    ):
+        axis: Literal[0, "index"] = 0,
+        method: Literal["average", "min", "max", "first", "dense"] = "average",
+        numeric_only: bool = False,
+        na_option: Literal["keep", "top", "bottom"] = "keep",
+        ascending: bool = True,
+        pct: bool = False,
+    ) -> Self:
         """
         Compute numerical data ranks (1 through n) along axis.
 
@@ -6402,7 +6404,7 @@ class IndexedFrame(Frame):
         if numeric_only:
             if isinstance(
                 source, cudf.Series
-            ) and not _is_non_decimal_numeric_dtype(self.dtype):
+            ) and not _is_non_decimal_numeric_dtype(self.dtype):  # type: ignore[attr-defined]
                 raise TypeError(
                     "Series.rank does not allow numeric_only=True with "
                     "non-numeric dtype."
@@ -6414,7 +6416,7 @@ class IndexedFrame(Frame):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return source.astype("float64")
+                return source.astype(np.dtype(np.float64))
             elif source._num_columns != num_cols:
                 dropped_cols = True
 
@@ -6447,6 +6449,8 @@ class IndexedFrame(Frame):
             else plc.types.NullPolicy.INCLUDE
         )
 
+        if cudf.get_option("mode.pandas_compatible"):
+            source = source.nans_to_nulls()
         with acquire_spill_lock():
             result_columns = [
                 libcudf.column.Column.from_pylibcudf(

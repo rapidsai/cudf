@@ -48,11 +48,15 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
     find_common_type,
     is_mixed_with_object_dtype,
 )
@@ -1725,12 +1729,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == cudf.dtype("object")
+                        if this.dtype == CUDF_STRING_DTYPE
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
+                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
@@ -3346,50 +3350,56 @@ def interval_range(
             "freq, exactly three must be specified"
         )
 
-    start = cudf.Scalar(start) if start is not None else start
-    end = cudf.Scalar(end) if end is not None else end
     if periods is not None and not cudf.api.types.is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
             FutureWarning,
         )
-    periods = cudf.Scalar(int(periods)) if periods is not None else periods
-    freq = cudf.Scalar(freq) if freq is not None else freq
-
     if start is None:
         start = end - freq * periods
     elif freq is None:
-        quotient, remainder = divmod((end - start).value, periods.value)
+        quotient, remainder = divmod(end - start, periods)
         if remainder:
             freq = (end - start) / periods
         else:
-            freq = cudf.Scalar(int(quotient))
+            freq = int(quotient)
     elif periods is None:
-        periods = cudf.Scalar(int((end - start) / freq))
+        periods = int((end - start) / freq)
     elif end is None:
         end = start + periods * freq
 
+    pa_start = pa.scalar(start)
+    pa_end = pa.scalar(end)
+    pa_freq = pa.scalar(freq)
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not _is_non_decimal_numeric_dtype(cudf_dtype_from_pa_type(x.type))
+        for x in (pa_start, pa.scalar(periods), pa_freq, pa_end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
-    periods = periods.astype("int64")
-    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
-    start = start.astype(common_dtype)
-    freq = freq.astype(common_dtype)
+    common_dtype = find_common_type(
+        (
+            cudf_dtype_from_pa_type(pa_start.type),
+            cudf_dtype_from_pa_type(pa_freq.type),
+            cudf_dtype_from_pa_type(pa_end.type),
+        )
+    )
+    pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
+    pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
     with acquire_spill_lock():
         bin_edges = libcudf.column.Column.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value,
-                step=freq.device_value,
+                init=pa_scalar_to_plc_scalar(pa_start),
+                step=pa_scalar_to_plc_scalar(pa_freq),
             )
         )
-    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
+    return IntervalIndex.from_breaks(
+        bin_edges.astype(common_dtype), closed=closed, name=name
+    )
 
 
 class IntervalIndex(Index):
