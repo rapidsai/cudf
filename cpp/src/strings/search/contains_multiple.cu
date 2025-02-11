@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -180,7 +180,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
     for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
       auto const begin = bools + (target_idx * tile_size);
       d_results[target_idx][str_idx] =
-        thrust::any_of(thrust::seq, begin, begin + tile_size, thrust::identity<bool>{});
+        thrust::any_of(thrust::seq, begin, begin + tile_size, cuda::std::identity{});
       // cooperative_group any() implementation was almost 3x slower than this parallel reduce
     }
   }
