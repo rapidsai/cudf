@@ -10,14 +10,6 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type
 
 
-cdef extern from "<chrono>" namespace "std" nogil:
-    cdef cppclass time_point:
-        pass
-    cdef cppclass system_clock:
-        @staticmethod
-        time_point from_time_t(time_t t) except +
-
-
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
         scalar() except +libcudf_exception_handler
@@ -41,7 +33,6 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         timestamp_scalar(int64_t value, bool is_valid) except +libcudf_exception_handler
         timestamp_scalar(int32_t value) except +libcudf_exception_handler
         timestamp_scalar(int32_t value, bool is_valid) except +libcudf_exception_handler
-        void set_value(time_point value) except +libcudf_exception_handler
         int64_t ticks_since_epoch_64 "ticks_since_epoch"()\
             except +libcudf_exception_handler
         int32_t ticks_since_epoch_32 "ticks_since_epoch"()\

@@ -11,14 +11,11 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     numeric_scalar,
     timestamp_scalar,
-    time_point,
-    system_clock,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
-    make_numeric_scalar,
     make_string_scalar,
-    make_timestamp_scalar,
+    make_numeric_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
 from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
@@ -29,23 +26,10 @@ from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 from .column cimport Column
 from .types cimport DataType
 
+from functools import singledispatch
+
 __all__ = ["Scalar"]
 
-
-cdef time_point _datetime_to_time_point(datetime.datetime dt):
-    if dt.tzinfo is not None:
-        raise NotImplementedError("datetimes with timezones are not supported.")
-    if dt.microsecond != 0:
-        raise NotImplementedError("Non-zero mircoseconds are not supported.")
-    cdef tm time_struct
-    time_struct.tm_year = dt.year - 1900
-    time_struct.tm_mon = dt.month - 1
-    time_struct.tm_mday = dt.day
-    time_struct.tm_hour = dt.hour
-    time_struct.tm_min = dt.minute
-    time_struct.tm_sec = dt.second
-    cdef time_t time = mktime(&time_struct)
-    return system_clock.from_time_t(time)
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -118,32 +102,40 @@ cdef class Scalar:
     def from_py(cls, py_val):
         """Convert a Python standard library object to a Scalar.
         """
-        cdef DataType dtype
-        cdef time_point tp
-        if isinstance(py_val, py_bool):
-            dtype = DataType(type_id.BOOL8)
-            c_val = make_numeric_scalar(dtype.c_obj)
-            (<numeric_scalar[cbool]*>c_val.get()).set_value(py_val)
-        elif isinstance(py_val, int):
-            dtype = DataType(type_id.INT64)
-            c_val = make_numeric_scalar(dtype.c_obj)
-            (<numeric_scalar[int64_t]*>c_val.get()).set_value(py_val)
-        elif isinstance(py_val, float):
-            dtype = DataType(type_id.FLOAT64)
-            c_val = make_numeric_scalar(dtype.c_obj)
-            (<numeric_scalar[double]*>c_val.get()).set_value(py_val)
-        elif isinstance(py_val, str):
-            dtype = DataType(type_id.STRING)
-            c_val = make_string_scalar(py_val.encode())
-        elif isinstance(py_val, datetime.datetime):
-            dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-            c_val = make_timestamp_scalar(dtype.c_obj)
-            tp = _datetime_to_time_point(py_val)
-            (<timestamp_scalar[timestamp_us]*>c_val.get()).set_value(tp)
-        else:
-            raise NotImplementedError(f"{type(py_val).__name__} is not supported.")
+        return _from_py(py_val)
 
-        cdef Scalar s = Scalar.__new__(Scalar)
-        s.c_obj.swap(c_val)
-        s._data_type = dtype
-        return s
+cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
+    cdef Scalar s = Scalar.__new__(Scalar)
+    s.c_obj.swap(c_obj)
+    s._data_type = dtype
+    return s
+
+@singledispatch
+def _from_py(py_val):
+    raise NotImplementedError(f"{type(py_val).__name__} is not supported.")
+
+@_from_py.register(float)
+def _(py_val):
+    cdef DataType dtype = DataType(type_id.FLOAT64)
+    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+    (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
+    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+    return slr
+
+#@_from_py.register(int)
+#def _(py_val):
+#    cdef unique_ptr[scalar] c_obj = make_fixed_width_scalar(py_val)
+#    cdef DataType dtype = DataType(type_id.INT64)
+#    return _new_scalar(c_obj, dtype)
+
+#@_from_py.register(py_bool)
+#def _(py_val):
+#    cdef unique_ptr[scalar] c_obj = make_fixed_width_scalar(py_val)
+#    cdef DataType dtype = DataType(type_id.BOOL8)
+#    return _new_scalar(c_obj, dtype)
+
+#@_from_py.register(str)
+#def _(py_val):
+#    cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
+#    cdef DataType dtype = DataType(type_id.STRING)
+#    return _new_scalar(c_obj, dtype)
