@@ -1129,7 +1129,7 @@ def _parquet_to_frame(
                 _dtype = (
                     partition_meta[name].dtype
                     if partition_meta is not None
-                    else None
+                    else np.dtype(np.float64)
                 )
                 if pd.isna(value):
                     dfs[-1][name] = column_empty(

@@ -601,12 +601,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = column.column_empty(0, dtype="object")
+            names = column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
