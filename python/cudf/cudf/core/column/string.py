@@ -4986,7 +4986,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, seed: np.uint32 = 0, as_list: bool = False
+        self, n: int = 5, as_list: bool = False, seed: np.uint32 = 0
     ) -> SeriesOrIndex:
         """
         Generate hashes of n-grams from characters in a column of strings.
