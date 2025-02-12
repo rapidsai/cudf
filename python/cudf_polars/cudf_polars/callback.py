@@ -183,7 +183,7 @@ def _callback(
     memory_resource: int | None,
     executor: Literal["pylibcudf", "dask-experimental"] | None,
     sink_kwargs: dict[str, Any] | None = None,
-) -> pl.DataFrame:
+) -> pl.DataFrame | None:
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
