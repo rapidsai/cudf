@@ -151,6 +151,8 @@ ndarray = make_final_proxy_type(
         "_fsproxy_wrap": classmethod(wrap_ndarray),
         "base": _FastSlowAttribute("base", private=True),
         "data": _FastSlowAttribute("data", private=True),
+        "__reduce__": _FinalProxy.__reduce__,
+        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
@@ -163,8 +165,6 @@ flatiter = make_final_proxy_type(
     slow_to_fast=lambda slow: cupy.asarray(slow).flat,
     additional_attributes={
         "__array__": array_method,
-        "__reduce__": _FinalProxy.__reduce__,
-        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
