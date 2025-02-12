@@ -267,7 +267,7 @@ class aggregate_reader_metadata {
    *
    * @param bloom_filter_data Bloom filter data device buffers for each input row group
    * @param input_row_group_indices Lists of input row groups, one per source
-   * @param equality_literals Lists of equality literals, one per each input row group
+   * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param equality_col_schemas schema indices of equality columns only
@@ -279,7 +279,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
     std::vector<rmm::device_buffer>& bloom_filter_data,
     host_span<std::vector<size_type> const> input_row_group_indices,
-    host_span<std::vector<ast::literal*> const> equality_literals,
+    host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,
     host_span<int const> equality_col_schemas,

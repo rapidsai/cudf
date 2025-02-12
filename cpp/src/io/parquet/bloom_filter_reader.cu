@@ -510,7 +510,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
   host_span<std::vector<size_type> const> input_row_group_indices,
-  host_span<std::vector<ast::literal*> const> equality_literals,
+  host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
   host_span<int const> equality_col_schemas,
@@ -556,13 +556,13 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       auto const& dtype = output_dtypes[input_col_idx];
 
       // Skip if no equality literals for this column
-      if (equality_literals[input_col_idx].empty()) { return; }
+      if (literals[input_col_idx].empty()) { return; }
 
       // Skip if non-comparable (compound) type except string
       if (cudf::is_compound(dtype) and dtype.id() != cudf::type_id::STRING) { return; }
 
       // Add a column for all literals associated with an equality column
-      for (auto const& literal : equality_literals[input_col_idx]) {
+      for (auto const& literal : literals[input_col_idx]) {
         bloom_filter_membership_columns.emplace_back(cudf::type_dispatcher<dispatch_storage_type>(
           dtype, bloom_filter_col, equality_col_idx, dtype, literal, stream));
       }
@@ -574,8 +574,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
-  bloom_filter_expression_converter bloom_filter_expr{
-    filter.get(), num_input_columns, {equality_literals}};
+  bloom_filter_expression_converter bloom_filter_expr{filter.get(), num_input_columns, {literals}};
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
