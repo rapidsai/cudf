@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from polars.exceptions import InvalidOperationError
 
@@ -22,11 +22,11 @@ from pylibcudf.traits import is_floating_point
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     import polars as pl
+
+    from cudf_polars.typing import ColumnHeader, ColumnOptions
 
 __all__: list[str] = ["Column"]
 
@@ -59,7 +59,7 @@ class Column:
 
     @classmethod
     def deserialize(
-        cls, header: Mapping[str, Any], frames: tuple[memoryview, plc.gpumemoryview]
+        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
     ) -> Self:
         """
         Create a Column from a serialized representation returned by `.serialize()`.
@@ -84,7 +84,7 @@ class Column:
 
     def serialize(
         self,
-    ) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
+    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
         """
         Serialize the Column into header and frames.
 
@@ -104,13 +104,13 @@ class Column:
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
         packed = plc.contiguous_split.pack(plc.Table([self.obj]))
-        column_kwargs = {
+        column_kwargs: ColumnOptions = {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
         }
-        header = {
+        header: ColumnHeader = {
             "column_kwargs": column_kwargs,
             "frame_count": 2,
         }
