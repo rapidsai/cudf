@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column.hpp>
@@ -188,6 +187,15 @@ TEST_F(MinHashTest, EmptyTest)
   auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t>({1, 2, 3});
   results = nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
   EXPECT_EQ(results->size(), 0);
+
+  auto empty = cudf::test::lists_column_wrapper<cudf::string_view>();
+  auto lview = cudf::lists_column_view(empty);
+  results =
+    nvtext::minhash_ngrams(lview, 4, 0, cudf::column_view(params), cudf::column_view(params));
+  EXPECT_EQ(results->size(), 0);
+  results =
+    nvtext::minhash64_ngrams(lview, 4, 0, cudf::column_view(params64), cudf::column_view(params64));
+  EXPECT_EQ(results->size(), 0);
 }
 
 TEST_F(MinHashTest, ErrorsTest)
@@ -195,17 +203,20 @@ TEST_F(MinHashTest, ErrorsTest)
   auto input = cudf::test::strings_column_wrapper({"this string intentionally left blank"});
   auto view  = cudf::strings_column_view(input);
   auto empty = cudf::test::fixed_width_column_wrapper<uint32_t>();
-  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(empty), cudf::column_view(empty), 0),
-               std::invalid_argument);
+  auto eview = cudf::column_view(empty);
+  EXPECT_THROW(nvtext::minhash(view, 0, eview, eview, 0), std::invalid_argument);
   auto empty64 = cudf::test::fixed_width_column_wrapper<uint64_t>();
-  EXPECT_THROW(
-    nvtext::minhash64(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 0),
-    std::invalid_argument);
-  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(empty), cudf::column_view(empty), 4),
-               std::invalid_argument);
-  EXPECT_THROW(
-    nvtext::minhash64(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 4),
-    std::invalid_argument);
+  auto eview64 = cudf::column_view(empty64);
+  EXPECT_THROW(nvtext::minhash64(view, 0, eview64, eview64, 0), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash(view, 0, eview, eview, 4), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash64(view, 0, eview64, eview64, 4), std::invalid_argument);
+
+  auto empty_list = cudf::test::lists_column_wrapper<cudf::string_view>();
+  auto lview      = cudf::lists_column_view(empty_list);
+  EXPECT_THROW(nvtext::minhash_ngrams(lview, 0, 0, eview, eview), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash64_ngrams(lview, 0, 0, eview64, eview64), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash_ngrams(lview, 4, 0, eview, eview), std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash64_ngrams(lview, 4, 0, eview64, eview64), std::invalid_argument);
 
   std::vector<std::string> h_input(50000, "");
   input = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
@@ -213,18 +224,20 @@ TEST_F(MinHashTest, ErrorsTest)
 
   auto const zeroes = thrust::constant_iterator<uint32_t>(0);
   auto params       = cudf::test::fixed_width_column_wrapper<uint32_t>(zeroes, zeroes + 50000);
-  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4),
-               std::overflow_error);
+  auto pview        = cudf::column_view(params);
+  EXPECT_THROW(nvtext::minhash(view, 0, pview, pview, 4), std::overflow_error);
   auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t>(zeroes, zeroes + 50000);
-  EXPECT_THROW(
-    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4),
-    std::overflow_error);
+  auto pview64  = cudf::column_view(params64);
+  EXPECT_THROW(nvtext::minhash64(view, 0, pview64, pview64, 4), std::overflow_error);
 
-  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(empty), 4),
-               std::invalid_argument);
-  EXPECT_THROW(
-    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(empty64), 4),
-    std::invalid_argument);
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(h_input.size() + 1));
+  auto input_ngrams =
+    cudf::make_lists_column(h_input.size(), offsets.release(), input.release(), 0, {});
+  lview = cudf::lists_column_view(input_ngrams->view());
+  EXPECT_THROW(nvtext::minhash_ngrams(lview, 4, 0, pview, pview), std::overflow_error);
+  EXPECT_THROW(nvtext::minhash64_ngrams(lview, 4, 0, pview64, pview64), std::overflow_error);
 }
 
 TEST_F(MinHashTest, Ngrams)

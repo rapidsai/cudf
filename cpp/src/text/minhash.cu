@@ -70,6 +70,7 @@ constexpr cudf::size_type blocks_per_row = 64;
 
 /**
  * @brief Hashing kernel launched as a thread per tile-size (block or warp)
+ * for strings column
  *
  * This kernel computes the hashes for each string using the seed and the specified
  * hash function. The width is used to compute rolling substrings to hash over.
@@ -161,6 +162,29 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
   }
 }
 
+/**
+ * @brief Hashing kernel launched as a thread per tile-size (block or warp)
+ * for lists column
+ *
+ * This kernel computes the hashes for each row using the seed and the specified
+ * hash function. The ngrams identifies consecutive strings to hash over in
+ * sliding window formation. The hashes are stored in d_hashes and used as input
+ * to the minhash_kernel.
+ *
+ * This kernel also counts the number of rows above the wide_row_threshold
+ * and proactively initializes the output values for those rows.
+ *
+ * @tparam HashFunction The hash function to use for this kernel
+ * @tparam hash_value_type Derived from HashFunction result_type
+ *
+ * @param d_input The input column to hash
+ * @param seed The seed used for the hash function
+ * @param ngrams Number of strings in each row to hash
+ * @param d_hashes The resulting hash values are stored here
+ * @param threshold_count Stores the number of rows above wide_row_threshold
+ * @param param_count Number of parameters (used for the proactive initialize)
+ * @param d_results Final results vector (used for the proactive initialize)
+ */
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
 CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view const d_input,
                                        hash_value_type seed,
@@ -236,9 +260,9 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
  * @brief Permutation calculation kernel
  *
  * This kernel uses the hashes from the minhash_seed_kernel or minhash_ngrams_kernel
- * and the 'parameter_a' and 'parameter_b' values to compute the final output results.
+ * and the 'parameter_a' and 'parameter_b' values to compute the final output.
  * The output is the number of input rows (N) by the number of parameter values (M).
- * Each output[i] is the calculated result for parameter_a/b[0:M].
+ * Each row output[i] is the calculated result for parameter_a/b[0:M].
  *
  * This kernel is launched with either blocks per row of 1 for rows
  * below the wide_row_threshold or blocks per row = blocks_per_rows
@@ -358,6 +382,46 @@ CUDF_KERNEL void minhash_kernel(offsets_type offsets_itr,
   }
 }
 
+/**
+ * @brief Partition input rows by row size
+ *
+ * The returned index is the first row above the wide_row_threshold size.
+ * The returned vector are the indices partitioned above and below the
+ * wide_row_threshold size.
+ *
+ * @param size Number of rows in the input column
+ * @param threshold_count Number of rows above wide_row_threshold
+ * @param tfn Transform function returns the size of each row
+ * @param stream Stream used for allocation and kernel launches
+ */
+template <typename transform_fn>
+std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input(
+  cudf::size_type size,
+  cudf::size_type threshold_count,
+  transform_fn tfn,
+  rmm::cuda_stream_view stream)
+{
+  auto indices = rmm::device_uvector<cudf::size_type>(size, stream);
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  cudf::size_type threshold_index = threshold_count < size ? size : 0;
+
+  // if we counted a split of above/below threshold then
+  // compute partitions based on the size of each string
+  if ((threshold_count > 0) && (threshold_count < size)) {
+    auto sizes = rmm::device_uvector<cudf::size_type>(size, stream);
+    auto begin = thrust::counting_iterator<cudf::size_type>(0);
+    auto end   = begin + size;
+    thrust::transform(rmm::exec_policy_nosync(stream), begin, end, sizes.data(), tfn);
+    // these 2 are slightly faster than using partition()
+    thrust::sort_by_key(
+      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
+    auto const lb = thrust::lower_bound(
+      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
+    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), lb));
+  }
+  return {threshold_index, std::move(indices)};
+}
+
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
 std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                          hash_value_type seed,
@@ -407,32 +471,13 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
-  auto const threshold_count = d_threshold_count.value(stream);
 
-  auto indices = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
-  cudf::size_type threshold_index = threshold_count < input.size() ? input.size() : 0;
-
-  // if we counted a split of above/below threshold then
-  // compute partitions based on the size of each string
-  if ((threshold_count > 0) && (threshold_count < input.size())) {
-    auto sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<cudf::size_type>(0),
-                      thrust::counting_iterator<cudf::size_type>(input.size()),
-                      sizes.data(),
-                      cuda::proclaim_return_type<cudf::size_type>(
-                        [d_strings = *d_strings] __device__(auto idx) -> cudf::size_type {
-                          if (d_strings.is_null(idx)) { return 0; }
-                          return d_strings.element<cudf::string_view>(idx).size_bytes();
-                        }));
-    // these 2 are slightly faster than using partition()
-    thrust::sort_by_key(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
-    auto const lb = thrust::lower_bound(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
-    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), lb));
-  }
+  auto transform_fn = [d_strings = *d_strings] __device__(auto idx) -> cudf::size_type {
+    if (d_strings.is_null(idx)) { return 0; }
+    return d_strings.element<cudf::string_view>(idx).size_bytes();
+  };
+  auto [threshold_index, indices] =
+    partition_input(input.size(), d_threshold_count.value(stream), transform_fn, stream);
 
   auto input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
@@ -513,32 +558,13 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
                                                                          d_threshold_count.data(),
                                                                          parameter_a.size(),
                                                                          d_results);
-  auto const threshold_count = d_threshold_count.value(stream);
 
-  auto indices = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
-  cudf::size_type threshold_index = threshold_count < input.size() ? input.size() : 0;
-
-  // if we counted a split of above/below threshold then
-  // compute partitions based on the size of each string
-  if ((threshold_count > 0) && (threshold_count < input.size())) {
-    auto sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::counting_iterator<cudf::size_type>(0),
-      thrust::counting_iterator<cudf::size_type>(input.size()),
-      sizes.data(),
-      cuda::proclaim_return_type<cudf::size_type>([d_list] __device__(auto idx) -> cudf::size_type {
-        if (d_list.is_null(idx)) { return 0; }
-        return cudf::list_device_view(d_list, idx).size();
-      }));
-    // these 2 are slightly faster than using partition()
-    thrust::sort_by_key(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
-    auto const lb = thrust::lower_bound(
-      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
-    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), lb));
-  }
+  auto sizes_fn = [d_list] __device__(auto idx) -> cudf::size_type {
+    if (d_list.is_null(idx)) { return 0; }
+    return cudf::list_device_view(d_list, idx).size();
+  };
+  auto [threshold_index, indices] =
+    partition_input(input.size(), d_threshold_count.value(stream), sizes_fn, stream);
 
   auto input_offsets = input.offsets_begin() + input.offset();
   using offset_type  = decltype(input_offsets);
