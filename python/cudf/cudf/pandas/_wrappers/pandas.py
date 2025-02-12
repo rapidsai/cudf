@@ -1869,17 +1869,10 @@ def initial_setup():
     cudf.set_option("mode.pandas_compatible", True)
 
 
-# timestamps and timedeltas are not proxied, but non-proxied
-# pandas types are currently not picklable. Thus, we define
-# custom reducer/unpicker functions for these types:
 def _reduce_obj(obj):
     from cudf.pandas.module_accelerator import disable_module_accelerator
 
     with disable_module_accelerator():
-        # import pdb;pdb.set_trace()
-        # args can contain objects that are unpicklable
-        # when the module accelerator is disabled
-        # (freq is of a proxy type):
         pickled_args = pickle.dumps(obj.__reduce__())
 
     return _unpickle_obj, (pickled_args,)
@@ -1949,7 +1942,7 @@ copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
 
-
+# TODO: Need to find a way to unpickle cross-version(old) pickled objects.
 # Register custom reducer/unpickler functions for pandas objects
 # so that they can be pickled/unpickled correctly:
 copyreg.dispatch_table[pd.Series] = lambda obj: _generic_reduce_obj(
