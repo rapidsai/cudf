@@ -3769,6 +3769,8 @@ def as_index(
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
+    if dtype is not None:
+        dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, cudf.MultiIndex):
         if dtype is not None:

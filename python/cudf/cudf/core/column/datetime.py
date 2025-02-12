@@ -896,7 +896,7 @@ class DatetimeColumn(column.ColumnBase):
         If no transitions occur, the tuple `(False, False)` is returned.
         """
         transition_times, offsets = get_tz_data(zone_name)
-        offsets = offsets.astype(f"timedelta64[{self.time_unit}]")  # type: ignore[assignment]
+        offsets = offsets.astype(np.dtype(f"timedelta64[{self.time_unit}]"))  # type: ignore[assignment]
 
         if len(offsets) == 1:  # no transitions
             return False, False

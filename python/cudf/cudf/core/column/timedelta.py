@@ -221,7 +221,11 @@ class TimeDeltaColumn(ColumnBase):
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                out_dtype = (
+                    np.dtype(np.float64)
+                    if op == "__truediv__"
+                    else np.dtype(np.int64)
+                )
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
