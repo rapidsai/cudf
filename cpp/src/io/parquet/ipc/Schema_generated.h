@@ -1393,9 +1393,9 @@ inline ::flatbuffers::Offset<RunEndEncoded> CreateRunEndEncoded(
 }
 
 /// Exact decimal value represented as an integer value in two's
-/// complement. Currently only 128-bit (16-byte) and 256-bit (32-byte) integers
-/// are used. The representation uses the endianness indicated
-/// in the Schema.
+/// complement. Currently 32-bit (4-byte), 64-bit (8-byte),
+/// 128-bit (16-byte) and 256-bit (32-byte) integers are used.
+/// The representation uses the endianness indicated in the Schema.
 struct Decimal FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef DecimalBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -1407,7 +1407,7 @@ struct Decimal FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   int32_t precision() const { return GetField<int32_t>(VT_PRECISION, 0); }
   /// Number of digits after the decimal point "."
   int32_t scale() const { return GetField<int32_t>(VT_SCALE, 0); }
-  /// Number of bits per value. The only accepted widths are 128 and 256.
+  /// Number of bits per value. The accepted widths are 32, 64, 128 and 256.
   /// We use bitWidth for consistency with Int::bitWidth.
   int32_t bitWidth() const { return GetField<int32_t>(VT_BITWIDTH, 128); }
   bool Verify(::flatbuffers::Verifier& verifier) const
