@@ -23,6 +23,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/unary.hpp>
 
+#include <numeric>
 #include <vector>
 
 using TypesToNegate = cudf::test::Types<int8_t,
