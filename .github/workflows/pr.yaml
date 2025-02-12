@@ -324,7 +324,6 @@ jobs:
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
-    continue-on-error: true
     needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
