@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,7 +37,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -129,12 +129,12 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
     if (values.has_nulls()) {
       auto input = thrust::make_transform_iterator(
         make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
-        thrust::identity<ResultDeviceType>{});
+        cudf::detail::cast_fn<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
       result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     } else {
       auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
-                                                   thrust::identity<ResultDeviceType>{});
+                                                   cudf::detail::cast_fn<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
     }
     return result;

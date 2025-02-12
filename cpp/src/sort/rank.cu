@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@
 
 #include <cuda/functional>
 #include <cuda/std/type_traits>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -204,7 +203,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        thrust::minimum{},
-                                       thrust::identity{},
+                                       cuda::std::identity{},
                                        stream);
 }
 
@@ -222,7 +221,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        thrust::maximum{},
-                                       thrust::identity{},
+                                       cuda::std::identity{},
                                        stream);
 }
 
