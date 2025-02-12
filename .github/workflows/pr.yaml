@@ -1,6 +1,5 @@
 name: pr
 
-
 on:
   push:
     branches:
