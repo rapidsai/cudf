@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A dataframe, with some properties."""
 
 from __future__ import annotations
 
-import pickle
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, cast
 
@@ -211,8 +210,6 @@ class DataFrame:
         ]
         header = {
             "columns_kwargs": columns_kwargs,
-            # Dask Distributed uses "type-serialized" to dispatch deserialization
-            "type-serialized": pickle.dumps(type(self)),
             "frame_count": 2,
         }
         return header, packed.release()

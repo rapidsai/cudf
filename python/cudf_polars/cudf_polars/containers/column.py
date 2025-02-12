@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A column, with some properties."""
@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from polars.exceptions import InvalidOperationError
 
@@ -22,6 +22,8 @@ from pylibcudf.traits import is_floating_point
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
     import polars as pl
@@ -54,6 +56,65 @@ class Column:
         self.is_scalar = self.obj.size() == 1
         self.name = name
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
+
+    @classmethod
+    def deserialize(
+        cls, header: Mapping[str, Any], frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a Column from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        Column
+            The deserialized Column.
+        """
+        packed_metadata, packed_gpu_data = frames
+        (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        ).columns()
+        return cls(plc_column, **header["column_kwargs"])
+
+    def serialize(
+        self,
+    ) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the Column into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+        >>> from cudf_polars.experimental.dask_serialize import register
+        >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(plc.Table([self.obj]))
+        column_kwargs = {
+            "is_sorted": self.is_sorted,
+            "order": self.order,
+            "null_order": self.null_order,
+            "name": self.name,
+        }
+        header = {
+            "column_kwargs": column_kwargs,
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
