@@ -93,15 +93,15 @@ class Column:
 
         To enable dask support, dask serializers must be registered
 
-        >>> from cudf_polars.experimental.dask_serialize import register
-        >>> register()
+            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> register()
 
         Returns
         -------
         header
             A dict containing any picklable metadata required to reconstruct the object.
         frames
-            Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
+            Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
         packed = plc.contiguous_split.pack(plc.Table([self.obj]))
         column_kwargs = {
