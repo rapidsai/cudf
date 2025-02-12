@@ -267,6 +267,7 @@ class aggregate_reader_metadata {
    *
    * @param bloom_filter_data Bloom filter data device buffers for each input row group
    * @param input_row_group_indices Lists of input row groups, one per source
+   * @param equality_literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param equality_col_schemas schema indices of equality columns only
