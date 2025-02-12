@@ -333,10 +333,10 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
+      continue-on-error: true
       container_image: "rapidsai/ci-conda:latest"
       run_script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
-      continue-on-error: true
   pandas-tests:
     # run the Pandas unit tests using PR branch
     needs: [wheel-build-cudf, changed-files]
