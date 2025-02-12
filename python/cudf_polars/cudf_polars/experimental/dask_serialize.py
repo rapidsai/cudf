@@ -70,7 +70,4 @@ def register() -> None:
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-            import pdb
-
-            pdb.set_trace()
             return Column.deserialize(header, frames)
