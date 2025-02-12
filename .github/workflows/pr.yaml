@@ -327,7 +327,7 @@ jobs:
     continue-on-error: true
     needs: conda-python-build
     secrets: inherit
-    steps:
+    step:
       - name: Third party integration tests cudf.pandas
         uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
         with:
