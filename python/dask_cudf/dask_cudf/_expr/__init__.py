@@ -3,6 +3,7 @@
 from packaging.version import Version
 
 import dask
+from dask.dataframe import get_collection_type  # noqa: F401
 
 if Version(dask.__version__) > Version("2024.12.1"):
     import dask.dataframe.dask_expr._shuffle as _shuffle_module
@@ -12,7 +13,6 @@ if Version(dask.__version__) > Version("2024.12.1"):
         Index as DXIndex,
         Series as DXSeries,
         from_dict,
-        get_collection_type,
         new_collection,
     )
     from dask.dataframe.dask_expr._cumulative import (
@@ -57,7 +57,6 @@ else:
         Index as DXIndex,
         Series as DXSeries,
         from_dict,
-        get_collection_type,
         new_collection,
     )
     from dask_expr._cumulative import CumulativeBlockwise  # noqa: F401
