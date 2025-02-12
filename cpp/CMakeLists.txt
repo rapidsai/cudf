@@ -100,9 +100,10 @@ option(
   "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
   ON
 )
+option(CUDF_MIXED_JOINS_JIT "Enable driver PTX-JIT compilation for mixed-join kernels" ON)
 option(
   CUDF_MIXED_JOINS_ARCH
-  "Architecture to compile mixed-joins code for. If set to `all`, CUDF will be compiled for all supported architectures"
+  "Architecture to compile mixed-join kernels for. If set to `all`, CUDF will be compiled for all supported architectures"
   "70-virtual"
 )
 
@@ -343,7 +344,9 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
 )
 
-set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES ${CUDF_MIXED_JOINS_ARCH})
+if(CUDF_MIXED_JOINS_JIT)
+  set_target_properties(cudf_mixed_joins PROPERTIES CUDA_ARCHITECTURES ${CUDF_MIXED_JOINS_ARCH})
+endif()
 
 add_library(
   cudf
