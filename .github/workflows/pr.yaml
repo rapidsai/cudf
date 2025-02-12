@@ -326,7 +326,7 @@ jobs:
   third-party-integration-tests-cudf-pandas:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@25.04
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
