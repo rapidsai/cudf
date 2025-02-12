@@ -4986,7 +4986,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def hash_character_ngrams(
-        self, n: int = 5, as_list: bool = False
+        self, n: int = 5, seed: np.uint32 = 0, as_list: bool = False
     ) -> SeriesOrIndex:
         """
         Generate hashes of n-grams from characters in a column of strings.
@@ -4997,6 +4997,8 @@ class StringMethods(ColumnMethods):
         n : int
             The degree of the n-gram (number of consecutive characters).
             Default is 5.
+        seed: uint32
+            The seed value for the hash algorithm.
         as_list : bool
             Set to True to return the hashes in a list column where each
             list element is the hashes for each string.
@@ -5021,7 +5023,7 @@ class StringMethods(ColumnMethods):
         """
 
         result = self._return_or_inplace(
-            self._column.hash_character_ngrams(n),
+            self._column.hash_character_ngrams(n, seed),
             retain_index=True,
         )
         if isinstance(result, cudf.Series) and not as_list:
@@ -6176,9 +6178,11 @@ class StringColumn(column.ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def hash_character_ngrams(self, ngrams: int) -> ListColumn:
+    def hash_character_ngrams(
+        self, ngrams: int, seed: np.uint32
+    ) -> ListColumn:
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
-            self.to_pylibcudf(mode="read"), ngrams
+            self.to_pylibcudf(mode="read"), ngrams, seed
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
