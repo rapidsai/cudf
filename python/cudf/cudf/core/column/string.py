@@ -4997,17 +4997,17 @@ class StringMethods(ColumnMethods):
         n : int
             The degree of the n-gram (number of consecutive characters).
             Default is 5.
-        seed: uint32
-            The seed value for the hash algorithm.
         as_list : bool
             Set to True to return the hashes in a list column where each
             list element is the hashes for each string.
+        seed: uint32
+            The seed value for the hash algorithm.
 
         Examples
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['abcdefg','stuvwxyz'])
-        >>> str_series.str.hash_character_ngrams(5, True)
+        >>> str_series.str.hash_character_ngrams(n=5, as_list=True)
         0               [3902511862, 570445242, 4202475763]
         1    [556054766, 3166857694, 3760633458, 192452857]
         dtype: list
