@@ -16,7 +16,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
-from cudf.utils.dtypes import dtype_to_pylibcudf_type
+from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
 try:
     import ujson as json  # type: ignore[import-untyped]
@@ -220,7 +220,9 @@ def read_orc(
                 data={
                     col_name: cudf.core.column.column_empty(
                         row_count=0,
-                        dtype=schema.field(col_name).type.to_pandas_dtype(),
+                        dtype=cudf_dtype_from_pa_type(
+                            schema.field(col_name).type
+                        ),
                     )
                     for col_name in col_names
                 }
