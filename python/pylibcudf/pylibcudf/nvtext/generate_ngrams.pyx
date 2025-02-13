@@ -82,6 +82,7 @@ cpdef Column generate_character_ngrams(Column input, size_type ngrams = 2):
         )
     return Column.from_libcudf(move(c_result))
 
+
 cpdef Column hash_character_ngrams(Column input, size_type ngrams, uint32_t seed):
     """
     Returns a lists column of hash values of the characters in each string
