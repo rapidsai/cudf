@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -33,6 +33,7 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
         RINT
         BIT_INVERT
         NOT
+        NEGATE
 
     cdef extern unique_ptr[column] unary_operation(
         column_view input,

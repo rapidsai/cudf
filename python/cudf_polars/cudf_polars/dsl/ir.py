@@ -100,7 +100,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     """
     if len(columns) == 0:
         return []
-    lengths: set[int] = {column.obj.size() for column in columns}
+    lengths: set[int] = {column.size for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
@@ -116,7 +116,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             )
     return [
         column
-        if column.obj.size() != 1
+        if column.size != 1
         else Column(
             plc.Column.from_scalar(column.obj_scalar, nrows),
             is_sorted=plc.types.Sorted.YES,
@@ -696,14 +696,12 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "predicate", "projection")
-    _non_child = ("schema", "df", "projection", "predicate", "config_options")
+    __slots__ = ("config_options", "df", "projection")
+    _non_child = ("schema", "df", "projection", "config_options")
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    predicate: expr.NamedExpr | None
-    """Mask to apply."""
     config_options: dict[str, Any]
     """GPU-specific configuration options"""
 
@@ -712,15 +710,13 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        predicate: expr.NamedExpr | None,
         config_options: dict[str, Any],
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
-        self.predicate = predicate
         self.config_options = config_options
-        self._non_child_args = (schema, df, self.projection, predicate)
+        self._non_child_args = (schema, df, self.projection)
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -736,7 +732,6 @@ class DataFrameScan(IR):
             schema_hash,
             id(self.df),
             self.projection,
-            self.predicate,
             json.dumps(self.config_options),
         )
 
@@ -746,7 +741,6 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: tuple[str, ...] | None,
-        predicate: expr.NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         pdf = pl.DataFrame._from_pydf(df)
@@ -826,7 +820,7 @@ class Reduce(IR):
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
-        assert all(column.obj.size() == 1 for column in columns)
+        assert all(column.size == 1 for column in columns)
         return DataFrame(columns)
 
 

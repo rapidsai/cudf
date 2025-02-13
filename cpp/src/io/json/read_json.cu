@@ -36,6 +36,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
@@ -164,23 +165,26 @@ std::size_t estimate_size_per_subchunk(std::size_t chunk_size)
 }
 
 /**
- * @brief Return the upper bound on the batch size for the JSON reader.
+ * @brief Return the batch size for the JSON reader.
  *
- * The datasources passed to the JSON reader are split into batches demarcated by byte range
- * offsets and read iteratively. The batch size is capped at INT_MAX bytes, which is the
- * default value returned by the function. This value can be overridden at runtime using the
- * environment variable LIBCUDF_JSON_BATCH_SIZE
+ * The datasources passed to the JSON reader are read iteratively in batches demarcated by byte
+ * range offsets. The tokenizer requires the JSON buffer read in each batch to be of size at most
+ * INT_MAX bytes.
+ * Since the byte range corresponding to a given batch can cause the last JSON line
+ * in the batch to be incomplete, the batch size returned by this function allows for an additional
+ * `max_subchunks_prealloced` subchunks to be allocated beyond the byte range offsets. Since the
+ * size of the subchunk depends on the size of the byte range, the batch size is variable and cannot
+ * be directly controlled by the user. As a workaround, the environment variable
+ * LIBCUDF_JSON_BATCH_SIZE can be used to set a fixed batch size at runtime.
  *
  * @return size in bytes
  */
-std::size_t get_batch_size_upper_bound()
+std::size_t get_batch_size(std::size_t chunk_size)
 {
-  auto const batch_size_str         = std::getenv("LIBCUDF_JSON_BATCH_SIZE");
-  int64_t const batch_size          = batch_size_str != nullptr ? std::atol(batch_size_str) : 0L;
-  auto const batch_limit            = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-  auto const batch_size_upper_bound = static_cast<std::size_t>(
-    (batch_size > 0 && batch_size < batch_limit) ? batch_size : batch_limit);
-  return batch_size_upper_bound;
+  auto const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
+  auto const batch_limit       = static_cast<std::size_t>(std::numeric_limits<int32_t>::max()) -
+                           (max_subchunks_prealloced * size_per_subchunk);
+  return std::min(batch_limit, getenv_or<std::size_t>("LIBCUDF_JSON_BATCH_SIZE", batch_limit));
 }
 
 /**
@@ -294,6 +298,10 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       }
     }
 
+    auto const batch_limit = static_cast<size_t>(std::numeric_limits<int32_t>::max());
+    CUDF_EXPECTS(static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
+                   batch_limit,
+                 "The size of the JSON buffer returned by every batch cannot exceed INT_MAX bytes");
     return datasource::owning_buffer<rmm::device_buffer>(
       std::move(buffer),
       reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
@@ -364,15 +372,11 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     reader_opts.is_enabled_lines() || total_source_size < std::numeric_limits<int32_t>::max(),
     "Parsing Regular JSON inputs of size greater than INT_MAX bytes is not supported");
 
-  std::size_t chunk_offset = reader_opts.get_byte_range_offset();
-  std::size_t chunk_size   = reader_opts.get_byte_range_size();
-  chunk_size               = !chunk_size ? total_source_size - chunk_offset
-                                         : std::min(chunk_size, total_source_size - chunk_offset);
-
-  std::size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
-  std::size_t const batch_size_upper_bound = get_batch_size_upper_bound();
-  std::size_t const batch_size =
-    batch_size_upper_bound - (max_subchunks_prealloced * size_per_subchunk);
+  std::size_t chunk_offset     = reader_opts.get_byte_range_offset();
+  std::size_t chunk_size       = reader_opts.get_byte_range_size();
+  chunk_size                   = !chunk_size ? total_source_size - chunk_offset
+                                             : std::min(chunk_size, total_source_size - chunk_offset);
+  std::size_t const batch_size = get_batch_size(chunk_size);
 
   /*
    * Identify the position (zero-indexed) of starting source file from which to begin
@@ -421,14 +425,85 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
+
+  // recursive lambda to construct schema_element. Here, we assume that the table from the
+  // first batch contains all the columns in the concatenated table, and that the partial tables
+  // from all following batches contain the same set of columns
+  std::function<schema_element(cudf::host_span<column_view const> cols,
+                               cudf::host_span<column_name_info const> names,
+                               schema_element & schema)>
+    construct_schema;
+  schema_element schema{data_type{cudf::type_id::STRUCT}};
+  construct_schema = [&construct_schema](cudf::host_span<column_view const> children,
+                                         cudf::host_span<column_name_info const> children_props,
+                                         schema_element& schema) -> schema_element {
+    CUDF_EXPECTS(
+      children.size() == children_props.size(),
+      "Mismatch in the number of children columns and children column properties received");
+
+    if (schema.type == data_type{cudf::type_id::LIST}) {
+      schema.column_order = {"element"};
+      CUDF_EXPECTS(children.size() == 2, "List should have two children");
+      auto element_idx = children_props[0].name == "element" ? 0 : 1;
+      schema_element child_schema{children[element_idx].type()};
+      std::vector<column_view> grandchildren_cols;
+      std::transform(children[element_idx].child_begin(),
+                     children[element_idx].child_end(),
+                     std::back_inserter(grandchildren_cols),
+                     [](auto& gc) { return gc; });
+      schema.child_types["element"] =
+        construct_schema(grandchildren_cols, children_props[element_idx].children, child_schema);
+    } else {
+      std::vector<std::string> col_order;
+      std::transform(children_props.begin(),
+                     children_props.end(),
+                     std::back_inserter(col_order),
+                     [](auto& c_prop) { return c_prop.name; });
+      schema.column_order = std::move(col_order);
+      for (auto i = 0ul; i < children.size(); i++) {
+        schema_element child_schema{children[i].type()};
+        std::vector<column_view> grandchildren_cols;
+        std::transform(children[i].child_begin(),
+                       children[i].child_end(),
+                       std::back_inserter(grandchildren_cols),
+                       [](auto& gc) { return gc; });
+        schema.child_types[children_props[i].name] =
+          construct_schema(grandchildren_cols, children_props[i].children, child_schema);
+      }
+    }
+
+    return schema;
+  };
+  batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
+  batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
+  partial_tables.emplace_back(
+    read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+
+  auto& tbl = partial_tables.back().tbl;
+  std::vector<column_view> children;
+  for (size_type j = 0; j < tbl->num_columns(); j++) {
+    children.emplace_back(tbl->get_column(j));
+  }
+  batched_reader_opts.set_dtypes(
+    construct_schema(children, partial_tables.back().metadata.schema_info, schema));
+  batched_reader_opts.enable_prune_columns(true);
+
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
   // batch to adjust byte range offset and byte range size.
-  for (std::size_t i = 0; i < batch_offsets.size() - 1; i++) {
-    batched_reader_opts.set_byte_range_offset(batch_offsets[i]);
-    batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
-    partial_tables.emplace_back(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+  for (std::size_t batch_offset_pos = 1; batch_offset_pos < batch_offsets.size() - 1;
+       batch_offset_pos++) {
+    batched_reader_opts.set_byte_range_offset(batch_offsets[batch_offset_pos]);
+    batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
+                                            batch_offsets[batch_offset_pos]);
+    auto partial_table =
+      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref());
+    if (partial_table.tbl->num_columns() == 0 && partial_table.tbl->num_rows() == 0) {
+      CUDF_EXPECTS(batch_offset_pos == batch_offsets.size() - 2,
+                   "Only the partial table generated by the last batch can be empty");
+      break;
+    }
+    partial_tables.emplace_back(std::move(partial_table));
   }
 
   auto expects_schema_equality =

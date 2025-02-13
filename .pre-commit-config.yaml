@@ -152,7 +152,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.4.0
+    rev: v0.6.0
     hooks:
       - id: verify-copyright
         exclude: |
@@ -163,11 +163,19 @@ repos:
             cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-alpha-spec
+      - id: verify-codeowners
+        args: [--fix, --project-prefix=cudf]
   - repo: https://github.com/rapidsai/dependency-file-generator
     rev: v1.17.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning"]
+        files: ^ci/
 
 default_language_version:
       python: python3
