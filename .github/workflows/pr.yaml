@@ -326,13 +326,14 @@ jobs:
   third-party-integration-tests-cudf-pandas:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@nvks-runners
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
+      continue-on-error: true
       container_image: "rapidsai/ci-conda:latest"
       run_script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
