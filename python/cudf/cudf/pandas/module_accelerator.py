@@ -18,7 +18,7 @@ from abc import abstractmethod
 from collections import defaultdict
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, NamedTuple, cast  # noqa: UP035
+from typing import Any, ContextManager, NamedTuple  # noqa: UP035
 
 from typing_extensions import Self
 
@@ -379,7 +379,6 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     """
 
     _denylist: tuple[str]
-    _use_fast_lib: dict[int, bool]
     _disable_count: defaultdict[int, int]
     _module_cache_prefix: str = "_slow_lib_"
 
@@ -410,9 +409,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
-        # These initializations do not need to be protected since a given instance is
+        # This initialization does not need to be protected since a given instance is
         # always being created on a given thread.
-        self._use_fast_lib = {threading.get_ident(): True}
         self._disable_count = defaultdict(int)
         return self
 
@@ -506,13 +504,10 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         Context manager for disabling things
         """
         self._disable_count[threading.get_ident()] += 1
-        self._use_fast_lib[threading.get_ident()] = False
         try:
             yield
         finally:
             self._disable_count[threading.get_ident()] -= 1
-            if self._disable_count[threading.get_ident()] == 0:
-                self._use_fast_lib[threading.get_ident()] = True
 
     @staticmethod
     def getattr_real_or_wrapped(
@@ -542,7 +537,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         The requested attribute (either real or wrapped)
         """
         use_real = (
-            not loader._use_fast_lib.get(threading.get_ident(), True)
+            loader._disable_count[threading.get_ident()] == 0
             # If acceleration was disabled on the main thread, we should respect that.
             # This only works because we currently have no way to re-enable other than
             # exiting the disable context, so disabling on the parent thread means that
@@ -552,13 +547,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # which the child thread may wind up disabled even though the parent was not
             # disabled when the child was launched. That is a fairly rare pattern though
             # and we can document the limitations.
-            or not loader._use_fast_lib.get(
-                # casting promises that the main thread's ident is not None, which will
-                # always be True for that thread but would be false for any other thread
-                # that hasn't yet started executing.
-                cast(int, threading.main_thread().ident),
-                True,
-            )
+            # The main thread is always started, so the ident is always an int
+            or loader._disable_count[threading.main_thread().ident] == 0 # type: ignore
         )
         if not use_real:
             # Only need to check the denylist if we're not turned off.
