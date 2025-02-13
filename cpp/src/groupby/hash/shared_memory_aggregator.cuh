@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,11 @@
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
+__device__ constexpr void set_mask(bool* mask)
+{
+  if (not *mask) { cudf::detail::atomic_max(mask, true); }
+}
+
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
   __device__ void operator()(
@@ -52,7 +57,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -74,7 +79,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -97,7 +102,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -117,7 +122,7 @@ struct update_target_element_shmem<
     auto value            = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -137,7 +142,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -202,7 +207,7 @@ struct update_target_element_shmem<
       }
     }
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 
@@ -228,7 +233,7 @@ struct update_target_element_shmem<
       }
     }
 
-    if (!target_mask[target_index]) { target_mask[target_index] = true; }
+    set_mask(target_mask + target_index);
   }
 };
 

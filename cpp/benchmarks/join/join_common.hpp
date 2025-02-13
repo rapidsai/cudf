@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/std/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/random/linear_congruential_engine.h>
@@ -85,7 +85,7 @@ void BM_join(state_type& state, Join JoinFunc)
       thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
     return cudf::detail::valid_if(validity,
                                   validity + size,
-                                  thrust::identity<bool>{},
+                                  cuda::std::identity{},
                                   cudf::get_default_stream(),
                                   cudf::get_current_device_resource_ref());
   };

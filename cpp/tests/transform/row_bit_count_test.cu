@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -348,7 +348,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
                    ints_view.begin<int32_t>(),
                    ints_view.end<int32_t>(),
-                   thrust::identity{});
+                   cuda::std::identity{});
 
   // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
   auto list_offsets =

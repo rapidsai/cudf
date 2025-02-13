@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
@@ -141,7 +141,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                                               thrust::make_counting_iterator(end_counter),
                                               invalid_index_map->begin(),
                                               right_indices_complement->begin(),
-                                              thrust::identity{}) -
+                                              cuda::std::identity{}) -
                               right_indices_complement->begin();
     right_indices_complement->resize(indices_count, stream);
   }

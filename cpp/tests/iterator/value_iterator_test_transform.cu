@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,20 @@
 
 #include <cudf_test/random.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/functional>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 struct TransformedIteratorTest : public IteratorTest<int8_t> {};
+
+template <typename T>
+struct cast_fn {
+  template <typename U>
+  __device__ T operator()(U const& val) const
+  {
+    return static_cast<T>(val);
+  }
+};
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by transform_iterator and
@@ -57,7 +66,7 @@ TEST_F(TransformedIteratorTest, null_iterator_upcast)
 
   // GPU test
   auto it_dev        = cudf::detail::make_null_replacement_iterator(*d_col, T{0});
-  auto it_dev_upcast = thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
+  auto it_dev_upcast = thrust::make_transform_iterator(it_dev, cast_fn<T_upcast>{});
   this->iterator_test_thrust(replaced_array, it_dev_upcast, d_col->size());
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
 }
@@ -100,7 +109,7 @@ TEST_F(TransformedIteratorTest, null_iterator_square)
 
   // GPU test
   auto it_dev         = cudf::detail::make_null_replacement_iterator(*d_col, T{0});
-  auto it_dev_upcast  = thrust::make_transform_iterator(it_dev, thrust::identity<T_upcast>());
+  auto it_dev_upcast  = thrust::make_transform_iterator(it_dev, cast_fn<T_upcast>{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev_upcast, transformer);
   this->iterator_test_thrust(replaced_array, it_dev_squared, d_col->size());
   this->iterator_test_cub(expected_value, it_dev_squared, d_col->size());

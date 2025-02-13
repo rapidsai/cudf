@@ -4,6 +4,7 @@ import warnings
 from functools import cached_property
 
 from dask import config
+from dask.dataframe import get_collection_type
 from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.dispatch import get_parallel_type
 from dask.typing import no_default
@@ -16,7 +17,6 @@ from dask_cudf._expr import (
     DXSeries,
     FrameBase,
     _raise_if_object_series,
-    get_collection_type,
     new_collection,
 )
 

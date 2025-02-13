@@ -430,7 +430,9 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return np.float64("nan")
 
 
-def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
+def get_allowed_combinations_for_operator(
+    dtype_l: np.dtype, dtype_r: np.dtype, op: str
+) -> np.dtype:
     error = TypeError(
         f"{op} not supported between {dtype_l} and {dtype_r} scalars"
     )
@@ -456,18 +458,19 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
     # special rules for string
     if dtype_l == "object" or dtype_r == "object":
         if (dtype_l == dtype_r == "object") and op == "__add__":
-            return "str"
+            return CUDF_STRING_DTYPE
         else:
             raise error
 
     # Check if we can directly operate
 
     for valid_combo in allowed:
-        ltype, rtype, outtype = valid_combo
-        if np.can_cast(dtype_l.char, ltype) and np.can_cast(
-            dtype_r.char, rtype
+        ltype, rtype, outtype = valid_combo  # type: ignore[misc]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]
+            dtype_r.char,
+            rtype,  # type: ignore[has-type]
         ):
-            return outtype
+            return np.dtype(outtype)  # type: ignore[has-type]
 
     raise error
 

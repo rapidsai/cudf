@@ -76,7 +76,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
       // for shared memory aggregations
       auto const size = cudf::type_dispatcher<cudf::dispatch_storage_type>(request.values.type(),
                                                                            size_of_functor{});
-      return static_cast<size_type>(data_buffer_size) >= (size * GROUPBY_CARDINALITY_THRESHOLD);
+      return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
     });
 
   // Performs naive global memory aggregations when the workload is not compatible with shared

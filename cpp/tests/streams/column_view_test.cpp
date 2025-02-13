@@ -23,6 +23,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/transform.hpp>
 
+#include <numeric>
 #include <random>
 #include <vector>
 
