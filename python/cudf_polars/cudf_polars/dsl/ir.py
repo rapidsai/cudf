@@ -100,7 +100,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     """
     if len(columns) == 0:
         return []
-    lengths: set[int] = {column.size for column in columns}
+    lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
@@ -116,7 +116,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             )
     return [
         column
-        if column.size != 1
+        if column.obj.size() != 1
         else Column(
             plc.Column.from_scalar(column.obj_scalar, nrows),
             is_sorted=plc.types.Sorted.YES,
@@ -716,7 +716,11 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.config_options = config_options
-        self._non_child_args = (schema, df, self.projection)
+        self._non_child_args = (
+            schema,
+            pl.DataFrame._from_pydf(df),
+            self.projection,
+        )
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -743,10 +747,9 @@ class DataFrameScan(IR):
         projection: tuple[str, ...] | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        pdf = pl.DataFrame._from_pydf(df)
         if projection is not None:
-            pdf = pdf.select(projection)
-        df = DataFrame.from_polars(pdf)
+            df = df.select(projection)
+        df = DataFrame.from_polars(df)
         assert all(
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
@@ -820,8 +823,32 @@ class Reduce(IR):
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
-        assert all(column.size == 1 for column in columns)
+        assert all(column.obj.size() == 1 for column in columns)
         return DataFrame(columns)
+
+
+class AggInfoWrapper:
+    """Serializable wrapper for GroupBy aggregation info."""
+
+    agg_requests: Sequence[expr.NamedExpr]
+    agg_infos: Sequence[expr.AggInfo]
+
+    def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
+        self.agg_requests = tuple(agg_requests)
+        self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
+
+    def __reduce__(self):
+        """Pickle an AggInfoWrapper object."""
+        return (AggInfoWrapper, (self.agg_requests,))
+
+
+class GroupbyOptions:
+    """Serializable wrapper for polars GroupbyOptions."""
+
+    def __init__(self, polars_groupby_options: Any):
+        self.dynamic = polars_groupby_options.dynamic
+        self.rolling = polars_groupby_options.rolling
+        self.slice = polars_groupby_options.slice
 
 
 class GroupBy(IR):
@@ -857,7 +884,7 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = options
+        self.options = GroupbyOptions(options)
         self.children = (df,)
         if self.options.rolling:
             raise NotImplementedError(
@@ -867,13 +894,12 @@ class GroupBy(IR):
             raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
-        self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            options,
-            self.agg_infos,
+            self.options,
+            AggInfoWrapper(self.agg_requests),
         )
 
     @staticmethod
@@ -911,7 +937,7 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: Any,
-        agg_infos: Sequence[expr.AggInfo],
+        agg_info_wrapper: AggInfoWrapper,
         df: DataFrame,
     ):
         """Evaluate and return a dataframe."""
@@ -931,7 +957,7 @@ class GroupBy(IR):
         # TODO: uniquify
         requests = []
         replacements: list[expr.Expr] = []
-        for info in agg_infos:
+        for info in agg_info_wrapper.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
                     # A count aggregation, doesn't touch the column,
@@ -999,6 +1025,21 @@ class GroupBy(IR):
         return DataFrame(broadcasted).slice(options.slice)
 
 
+class PredicateWrapper:
+    """Serializable wrapper for a predicate expression."""
+
+    predicate: expr.Expr
+    ast: plc.expressions.Expression
+
+    def __init__(self, predicate: expr.Expr):
+        self.predicate = predicate
+        self.ast = to_ast(predicate)
+
+    def __reduce__(self):
+        """Pickle a PredicateWrapper object."""
+        return (PredicateWrapper, (self.predicate,))
+
+
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
@@ -1034,22 +1075,22 @@ class ConditionalJoin(IR):
         self.predicate = predicate
         self.options = options
         self.children = (left, right)
-        self.ast_predicate = to_ast(predicate)
+        predicate_wrapper = PredicateWrapper(predicate)
         _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not join_nulls
         assert not coalesce
         assert maintain_order == "none"
-        if self.ast_predicate is None:
+        if predicate_wrapper.ast is None:
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (self.ast_predicate, zlice, suffix, maintain_order)
+        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
 
     @classmethod
     def do_evaluate(
         cls,
-        predicate: plc.expressions.Expression,
+        predicate_wrapper: PredicateWrapper,
         zlice: tuple[int, int] | None,
         suffix: str,
         maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
@@ -1057,7 +1098,11 @@ class ConditionalJoin(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        lg, rg = plc.join.conditional_inner_join(left.table, right.table, predicate)
+        lg, rg = plc.join.conditional_inner_join(
+            left.table,
+            right.table,
+            predicate_wrapper.ast,
+        )
         left = DataFrame.from_table(
             plc.copying.gather(
                 left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK

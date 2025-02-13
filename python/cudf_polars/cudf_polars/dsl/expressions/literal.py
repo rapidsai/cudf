@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -18,8 +18,6 @@ from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
-
-    import pyarrow as pa
 
     import polars as pl
 
@@ -61,10 +59,13 @@ class LiteralColumn(Expr):
     _non_child = ("dtype", "value")
     value: pa.Array[Any]
 
-    def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
+    def __init__(self, dtype: plc.DataType, value: pl.Series | pa.Array) -> None:
         self.dtype = dtype
-        data = value.to_arrow()
-        self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+        if isinstance(value, pa.Array):
+            self.value = value
+        else:
+            data = value.to_arrow()
+            self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
         self.children = ()
         self.is_pointwise = True
 
