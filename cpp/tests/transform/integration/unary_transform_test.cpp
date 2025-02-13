@@ -339,10 +339,7 @@ __device__ inline void transform(
 template <typename T>
 struct TenaryDecimalOperationTest : public cudf::test::BaseFixture {};
 
-using UdfDecimalTypes =
-  cudf::test::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
-
-TYPED_TEST_SUITE(TenaryDecimalOperationTest, UdfDecimalTypes);
+TYPED_TEST_SUITE(TenaryDecimalOperationTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(TenaryDecimalOperationTest, TransformDecimalsAndScalar)
 {
