@@ -248,21 +248,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-<<<<<<< HEAD
-          - cuml==24.12.*
-=======
           - cuml==25.2.*,>=0.0.0a0
->>>>>>> upstream/branch-25.02
           - scikit-learn
   test_cugraph:
     common:
       - output_types: conda
         packages:
-<<<<<<< HEAD
-          - cugraph==24.12.*
-=======
           - cugraph==25.2.*,>=0.0.0a0
->>>>>>> upstream/branch-25.02
           - networkx
   test_ibis:
     common:
