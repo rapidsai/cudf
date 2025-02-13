@@ -5701,7 +5701,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         a: [[1,2,3]]
         b: [[4,5,6]]
         """
-        # import pdb;pdb.set_trace()
+
         data = self
         index_descr: Sequence[dict[str, Any]] | Sequence[str] = []
         write_index = preserve_index is not False

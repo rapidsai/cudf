@@ -974,7 +974,6 @@ def test_dataframe_list_round_trip():
             metadata=metadata,
         )
 
-        # Create a dummy table with the defined schema and some data
         data = {"text": ["asd", "pqr"], "list_col": [[1, 2, 3], [4, 5]]}
 
         table = pa.Table.from_pydict(data, schema=schema)
