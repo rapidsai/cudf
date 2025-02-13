@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,15 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::groupby::detail::hash {
-std::size_t get_available_shared_memory_size(cudf::size_type grid_size);
+size_type get_available_shared_memory_size(cudf::size_type grid_size);
 
-std::size_t constexpr compute_shmem_offsets_size(cudf::size_type num_cols)
+size_type constexpr compute_shmem_offsets_size(cudf::size_type num_cols)
 {
-  return sizeof(cudf::size_type) * num_cols;
+  return static_cast<size_type>(sizeof(cudf::size_type) * num_cols);
 }
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
-                                std::size_t available_shmem_size,
+                                cudf::size_type available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
                                 bool skip_rows_with_nulls,

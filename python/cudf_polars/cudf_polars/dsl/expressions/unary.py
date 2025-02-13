@@ -236,7 +236,7 @@ class UnaryFunction(Expr):
                 else plc.types.Order.DESCENDING
             )
             null_order = plc.types.NullOrder.BEFORE
-            if column.obj.null_count() > 0 and (n := column.obj.size()) > 1:
+            if column.null_count > 0 and (n := column.size) > 1:
                 # PERF: This invokes four stream synchronisations!
                 has_nulls_first = not plc.copying.get_element(column.obj, 0).is_valid()
                 has_nulls_last = not plc.copying.get_element(
