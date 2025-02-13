@@ -954,3 +954,10 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     )
     ser = cudf.Series._from_column(col_empty_offset)
     assert ser.memory_usage() == 8
+
+
+def test_list_methods_setattr():
+    ser = cudf.Series([["a", "b", "c"], ["d", "e", "f"]])
+
+    with pytest.raises(AttributeError):
+        ser.list.a = "b"
