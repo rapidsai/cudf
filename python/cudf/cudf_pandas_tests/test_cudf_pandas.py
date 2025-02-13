@@ -1979,3 +1979,18 @@ def test_numpy_data_access():
     actual = xs.values.data
 
     assert type(expected) is type(actual)
+
+
+def test_pickle_round_trip_proxy_numpy_array(array):
+    arr, proxy_arr = array
+    pickled_arr = BytesIO()
+    pickled_proxy_arr = BytesIO()
+    pickle.dump(arr, pickled_arr)
+    pickle.dump(proxy_arr, pickled_proxy_arr)
+
+    pickled_arr.seek(0)
+    pickled_proxy_arr.seek(0)
+
+    np.testing.assert_equal(
+        pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
+    )
