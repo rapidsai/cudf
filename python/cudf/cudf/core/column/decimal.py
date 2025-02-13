@@ -25,6 +25,7 @@ from cudf.core.dtypes import (
     DecimalDtype,
 )
 from cudf.core.mixins import BinaryOperand
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 if TYPE_CHECKING:
@@ -98,7 +99,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                cudf.core.column.column_empty(0, dtype="object"),
+                cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
     def __pow__(self, other):

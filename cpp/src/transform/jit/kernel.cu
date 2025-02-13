@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,20 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
-template <typename TypeOut, typename TypeIn>
-CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
+/// @brief This class supports striding into columns of data as either scalars or actual
+/// columns at no runtime cost. Although it implies the kernel will be recompiled if scalar and
+/// column inputs are interchanged.
+template <typename T, int multiplier>
+struct strided {
+  T data;
+
+  __device__ T const& get(int64_t index) const { return (&data)[index * multiplier]; }
+
+  __device__ T& get(int64_t index) { return (&data)[index * multiplier]; }
+};
+
+template <typename Out, typename... In>
+CUDF_KERNEL void kernel(cudf::size_type size, Out* __restrict__ out, In const* __restrict__... ins)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -43,7 +55,7 @@ CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data
   thread_index_type const stride = block_size * gridDim.x;
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
-    GENERIC_UNARY_OP(&out_data[i], in_data[i]);
+    GENERIC_TRANSFORM_OP(&out->get(i), ins->get(i)...);
   }
 }
 
