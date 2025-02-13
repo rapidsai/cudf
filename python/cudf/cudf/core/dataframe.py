@@ -19,7 +19,7 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numba
@@ -86,6 +86,7 @@ from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -2456,15 +2457,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Convert float to integer
         if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
+            map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            cat_index = cast(
-                cudf.core.column.CategoricalColumn,
-                map_index.astype("category"),
-            )
-            map_index = cat_index.codes
+            map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -6367,7 +6364,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64", copy=False)
+            coerced = coerced.astype(np.dtype(np.int64), copy=False)
         return coerced, mask, common_dtype
 
     @_performance_tracking
@@ -8077,7 +8074,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dropna=dropna,
             )
             .size()
-            .astype("int64")
+            .astype(np.dtype(np.int64))
         )
         if sort:
             result = result.sort_values(ascending=ascending)
