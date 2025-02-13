@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import pandas as pd
 import pytest
 import seaborn as sns
@@ -54,9 +54,6 @@ def test_scatter(df):
     return ax
 
 
-@pytest.mark.skip(
-    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
-)
 def test_lineplot_with_sns_data():
     df = sns.load_dataset("flights")
     ax = sns.lineplot(data=df, x="month", y="passengers")
