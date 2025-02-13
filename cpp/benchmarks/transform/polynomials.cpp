@@ -80,7 +80,7 @@ static void BM_transform_polynomials(nvbench::state& state)
     static_assert(std::is_same_v<key_type, float> || std::is_same_v<key_type, double>);
 
     // clang-format off
-    std::string udf = 
+    std::string udf =
     "__device__ inline void compute_polynomial(" + type + "* out, " + type + " x, " + params_decl + ")" +
 "{ "
 " *out = " + expr + ";"
