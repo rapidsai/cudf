@@ -30,18 +30,14 @@
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-[[nodiscard]] std::unique_ptr<column> make_preceding_range_window(
+template std::unique_ptr<column> make_range_window<rolling::direction::PRECEDING>(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
   order order,
   null_order null_order,
   range_window_type window,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  return make_range_window<rolling::direction::PRECEDING>(
-    orderby, grouping, order, null_order, window, stream, mr);
-}
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

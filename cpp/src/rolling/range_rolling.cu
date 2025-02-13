@@ -154,11 +154,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bo
 {
   auto make_preceding = [&](std::optional<detail::rolling::preprocessed_group_info> const& grouping,
                             cudf::null_order null_order) {
-    return make_preceding_range_window(orderby, grouping, order, null_order, preceding, stream, mr);
+    return make_range_window<detail::rolling::direction::PRECEDING>(
+      orderby, grouping, order, null_order, preceding, stream, mr);
   };
   auto make_following = [&](std::optional<detail::rolling::preprocessed_group_info> const& grouping,
                             cudf::null_order null_order) {
-    return make_following_range_window(orderby, grouping, order, null_order, following, stream, mr);
+    return make_range_window<detail::rolling::direction::FOLLOWING>(
+      orderby, grouping, order, null_order, following, stream, mr);
   };
 
   if (group_keys.num_columns() > 0) {
