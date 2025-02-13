@@ -50,6 +50,19 @@ struct preprocessed_group_info {
 }  // namespace rolling
 
 /**
+ * @brief Compute the number of nulls in each group.
+ *
+ * @param orderby Column with null mask.
+ * @param offsets Offset array defining the (sorted) groups.
+ * @param stream CUDA stream used for kernel launches
+ * @return device_uvector containing the null count per group.
+ */
+[[nodiscard]] rmm::device_uvector<cudf::size_type> nulls_per_group(
+  column_view const& orderby,
+  rmm::device_uvector<size_type> const& offsets,
+  rmm::cuda_stream_view stream);
+
+/**
  * @copydoc std::unique_ptr<column> rolling_window(
  *            column_view const& input,
  *            column_view const& preceding_window,

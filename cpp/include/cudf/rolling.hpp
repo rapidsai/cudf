@@ -100,35 +100,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Constructs preceding and following columns given window range specifications.
- *
- * @param group_keys Possibly empty table of sorted keys defining groups.
- * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
- * be sorted groupwise.
- * @param order Sort order of the `orderby` column.
- * @param preceding Type of the preceding window.
- * @param following Type of the following window.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @note Using `make_range_window_bounds(table_view const&, column_view const&, order, null_order,
- * window_type, window_type, rmm::cuda_stream_view, rmm::device_async_resource_ref)` is preferred,
- * since this function requires the launch of an additional kernel to deduce the null order of the
- * orderby column.
- *
- * @return pair of preceding and following columns that define the window bounds for each row,
- * suitable for passing to `rolling_window`.
- */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
-  table_view const& group_keys,
-  column_view const& orderby,
-  order order,
-  range_window_type preceding,
-  range_window_type following,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
  *
  * This function aggregates values in a window around each element i of the input column, and

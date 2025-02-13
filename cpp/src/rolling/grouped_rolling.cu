@@ -367,6 +367,53 @@ std::unique_ptr<table> grouped_range_rolling_window(
   return std::make_unique<table>(std::move(results));
 }
 
+[[nodiscard]] static null_order deduce_null_order(
+  column_view const& orderby,
+  order order,
+  rmm::device_uvector<size_type> const& offsets,
+  rmm::device_uvector<size_type> const& per_group_nulls,
+  rmm::cuda_stream_view stream)
+{
+  auto d_orderby = column_device_view::create(orderby, stream);
+  if (order == order::ASCENDING) {
+    // Sort order is ASCENDING
+    // null_order was either BEFORE or AFTER
+    // If at least one group has a null at the beginning and that
+    // group has more entries than the null count of the group, must
+    // be nulls at starts of groups (BEFORE),otherwise must be nulls at end (AFTER)
+    auto it = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<bool>(
+        [d_orderby       = *d_orderby,
+         d_offsets       = offsets.data(),
+         nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
+          return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
+                 d_orderby.is_null_nocheck(d_offsets[i]);
+        }));
+    auto is_before = thrust::reduce(
+      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    return is_before ? null_order::BEFORE : null_order::AFTER;
+  } else {
+    // Sort order is DESCENDING
+    // null_order was either BEFORE or AFTER
+    // If at least one group has a null at the end and that group has
+    // more entries than the null count of the group must be nulls at ends of groups (BEFORE).
+    // Otherwise must be nulls at start (AFTER)
+    auto it = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<bool>(
+        [d_orderby       = *d_orderby,
+         d_offsets       = offsets.data(),
+         nulls_per_group = per_group_nulls.data()] __device__(size_type i) -> bool {
+          return nulls_per_group[i] < (d_offsets[i + 1] - d_offsets[i]) &&
+                 d_orderby.is_null_nocheck(d_offsets[i + 1] - 1);
+        }));
+    auto is_before = thrust::reduce(
+      rmm::exec_policy_nosync(stream), it, it + offsets.size() - 1, false, thrust::logical_or<>{});
+    return is_before ? null_order::BEFORE : null_order::AFTER;
+  }
+}
+
 /**
  * @copydoc  std::unique_ptr<column> grouped_range_rolling_window(
  *               table_view const& group_keys,
@@ -416,14 +463,58 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
       return bounded_closed{bound.range_scalar()};
     }
   };
-  auto [preceding_column, following_column] =
-    make_range_windows(group_keys,
-                       order_by_column,
-                       order,
-                       get_window_type(preceding),
-                       get_window_type(following),
-                       stream,
-                       cudf::get_current_device_resource_ref());
+  auto [preceding_column, following_column] = [&]() {
+    if (group_keys.num_columns() > 0 && order_by_column.has_nulls()) {
+      using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
+      sort_helper helper{group_keys, null_policy::INCLUDE, sorted::YES, {}};
+      auto const& labels   = helper.group_labels(stream);
+      auto const& offsets  = helper.group_offsets(stream);
+      auto per_group_nulls = order_by_column.has_nulls()
+                               ? detail::nulls_per_group(order_by_column, offsets, stream)
+                               : rmm::device_uvector<size_type>{0, stream};
+      detail::rolling::preprocessed_group_info grouping{labels, offsets, per_group_nulls};
+      auto null_order = deduce_null_order(order_by_column, order, offsets, per_group_nulls, stream);
+      // Don't use make_range_windows since that reconstructs the grouping info.
+      // This is polyfill code anyway, so can be removed after this public API is deprecated and
+      // removed.
+      return std::pair{
+        detail::make_range_window<rolling::direction::PRECEDING>(
+          order_by_column,
+          grouping,
+          order,
+          null_order,
+          get_window_type(preceding),
+          stream,
+          cudf::get_current_device_resource_ref()),
+        detail::make_range_window<rolling::direction::FOLLOWING>(
+          order_by_column,
+          grouping,
+          order,
+          null_order,
+          get_window_type(following),
+          stream,
+          cudf::get_current_device_resource_ref()),
+      };
+    } else {
+      auto null_order =
+        order_by_column.has_nulls()
+          ? (((order == order::ASCENDING && order_by_column.null_count(0, 1, stream) == 1) ||
+              (order == order::DESCENDING &&
+               order_by_column.null_count(
+                 order_by_column.size() - 1, order_by_column.size(), stream) == 1))
+               ? null_order::BEFORE
+               : null_order::AFTER)
+          : null_order::BEFORE;
+      return make_range_windows(group_keys,
+                                order_by_column,
+                                order,
+                                null_order,
+                                get_window_type(preceding),
+                                get_window_type(following),
+                                stream,
+                                cudf::get_current_device_resource_ref());
+    }
+  }();
 
   return detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
