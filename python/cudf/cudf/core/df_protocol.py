@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import enum
@@ -419,8 +419,7 @@ class _CuDFColumn:
 
         elif null == _MaskKind.NAN:
             raise RuntimeError(
-                "This column uses NaN as null "
-                "so does not have a separate mask"
+                "This column uses NaN as null so does not have a separate mask"
             )
         elif null == _MaskKind.NON_NULLABLE:
             raise RuntimeError(
@@ -799,8 +798,7 @@ def _set_missing_values(
             valid_mask = _ensure_gpu_buffer(
                 valid_mask[0], valid_mask[1], allow_copy
             )
-            boolmask = as_column(valid_mask._buf, dtype="bool")
-            bitmask = cudf._lib.transform.bools_to_mask(boolmask)
+            bitmask = as_column(valid_mask._buf, dtype="bool").as_mask()
             return cudf_col.set_mask(bitmask)
         elif null == _MaskKind.BITMASK:
             valid_mask = _ensure_gpu_buffer(

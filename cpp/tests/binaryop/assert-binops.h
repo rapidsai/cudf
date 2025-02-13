@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -69,6 +69,20 @@ struct NearEqualComparator {
   }
 };
 
+template <typename TypeLhs, typename ScalarType>
+TypeLhs scalar_host_value(cudf::scalar const& lhs)
+{
+  auto sclr   = static_cast<ScalarType const&>(lhs);
+  auto stream = cudf::get_default_stream();
+  if constexpr (std::is_same_v<ScalarType, cudf::string_scalar>) {
+    return sclr.to_string(stream);
+  } else if constexpr (std::is_same_v<ScalarType, cudf::fixed_point_scalar<TypeLhs>>) {
+    return sclr.fixed_point_value(stream);
+  } else {
+    return sclr.value(stream);
+  }
+}
+
 template <typename TypeOut,
           typename TypeLhs,
           typename TypeRhs,
@@ -81,7 +95,7 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto lhs_h    = static_cast<ScalarType const&>(lhs).operator TypeLhs();
+  auto lhs_h    = scalar_host_value<TypeLhs, ScalarType>(lhs);
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);
   auto rhs_data = rhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);
@@ -129,7 +143,7 @@ void ASSERT_BINOP(cudf::column_view const& out,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
-  auto rhs_h    = static_cast<ScalarType const&>(rhs).operator TypeRhs();
+  auto rhs_h    = scalar_host_value<TypeRhs, ScalarType>(rhs);
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
   auto out_h    = cudf::test::to_host<TypeOut>(out);

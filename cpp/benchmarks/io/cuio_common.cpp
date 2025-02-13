@@ -17,7 +17,7 @@
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>

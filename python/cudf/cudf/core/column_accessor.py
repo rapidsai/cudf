@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class _NestedGetItemDict(dict):
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ for nested elements."""
         # As described in the pandas docs
-        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index  # noqa: E501
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
         # accessing nested elements of a multiindex must be done using a tuple.
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.
@@ -62,10 +62,10 @@ def _to_flat_dict_inner(d: dict, parents: tuple = ()):
     for k, v in d.items():
         if not isinstance(v, d.__class__):
             if parents:
-                k = parents + (k,)
+                k = (*parents, k)
             yield (k, v)
         else:
-            yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
+            yield from _to_flat_dict_inner(d=v, parents=(*parents, k))
 
 
 class ColumnAccessor(abc.MutableMapping):
@@ -207,10 +207,15 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def level_names(self) -> tuple[abc.Hashable, ...]:
+        if self.is_cached("to_pandas_index"):
+            return self.to_pandas_index.names
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
+
+    def is_cached(self, attr_name: str) -> bool:
+        return attr_name in self.__dict__
 
     @property
     def nlevels(self) -> int:
@@ -262,7 +267,12 @@ class ColumnAccessor(abc.MutableMapping):
         new_ncols: int
             len(self) after self._data was modified
         """
-        cached_properties = ("columns", "names", "_grouped_data")
+        cached_properties = (
+            "columns",
+            "names",
+            "_grouped_data",
+            "to_pandas_index",
+        )
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
@@ -276,6 +286,7 @@ class ColumnAccessor(abc.MutableMapping):
             except AttributeError:
                 pass
 
+    @cached_property
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
@@ -692,7 +703,7 @@ class ColumnAccessor(abc.MutableMapping):
                 level = 0
             if level != 0:
                 raise IndexError(
-                    f"Too many levels: Index has only 1 level, not {level+1}"
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
                 )
 
             if isinstance(mapper, Mapping):
@@ -726,10 +737,10 @@ class ColumnAccessor(abc.MutableMapping):
         }
         new_ncols = len(self)
         self._level_names = (
-            self._level_names[:level] + self._level_names[level + 1 :]
+            self.level_names[:level] + self.level_names[level + 1 :]
         )
 
-        if len(self._level_names) == 1:
+        if len(self.level_names) == 1:
             # can't use nlevels, as it depends on multiindex
             self.multiindex = False
         self._clear_cache(old_ncols, new_ncols)

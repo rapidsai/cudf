@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -36,7 +36,7 @@ from pygments.lexer import RegexLexer
 from pygments.token import Text as PText
 from sphinx.addnodes import pending_xref
 from sphinx.ext import intersphinx
-from sphinx.ext.autodoc import ClassDocumenter, bool_option
+from sphinx.ext.autodoc import ClassDocumenter
 from sphinx.highlighting import lexers
 
 
@@ -439,6 +439,8 @@ _names_to_skip_in_cpp = {
     # Sphinx doesn't know how to distinguish between the ORC and Parquet
     # definitions because Breathe doesn't to preserve namespaces for enums.
     "TypeKind",
+    # Span subclasses access base class members
+    "base::",
 }
 
 _domain_objects = None
@@ -594,6 +596,8 @@ nitpick_ignore = [
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
+    ("py:class", "np.uint32"),
+    ("py:class", "np.uint64"),
 ]
 
 
@@ -690,15 +694,16 @@ class PLCIntEnumDocumenter(ClassDocumenter):
         enum_object: IntEnum = self.object
 
         if self.object.__name__ != "Kind":
-            self.add_line(f"See also :cpp:enum:`cudf::{self.object.__name__}`.", source_name)
+            self.add_line(
+                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                source_name,
+            )
         self.add_line("", source_name)
         self.add_line("Enum members", source_name)
         self.add_line("", source_name)
 
         for the_member_name in enum_object.__members__:  # type: ignore[attr-defined]
-            self.add_line(
-                f"* ``{the_member_name}``", source_name
-            )
+            self.add_line(f"* ``{the_member_name}``", source_name)
             self.add_line("", source_name)
 
 

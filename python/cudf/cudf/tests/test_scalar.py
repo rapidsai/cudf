@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import datetime
 import re
@@ -10,10 +10,11 @@ import pyarrow as pa
 import pytest
 from packaging import version
 
+import pylibcudf as plc
 import rmm
 
 import cudf
-from cudf._lib.copying import get_element
+from cudf.core.buffer import acquire_spill_lock
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
@@ -143,9 +144,12 @@ def test_scalar_host_initialization(value):
 @pytest.mark.parametrize("value", SCALAR_VALUES)
 def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
-    dev_slr = get_element(column, 0)
-
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    with acquire_spill_lock():
+        dev_slr = plc.copying.get_element(
+            column.to_pylibcudf(mode="read"),
+            0,
+        )
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -159,14 +163,33 @@ def test_scalar_device_initialization(value):
 @pytest.mark.parametrize("value", DECIMAL_VALUES)
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.skipif(
+                pa._generated_version.version_tuple[0] < 19,
+                reason="decimal32 format string only supported in pyarrow>=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.skipif(
+                pa._generated_version.version_tuple[0] < 19,
+                reason="decimal64 format string only supported in pyarrow>=19",
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_scalar_device_initialization_decimal(value, decimal_type):
     dtype = decimal_type._from_decimal(value)
     column = cudf.Series([str(value)]).astype(dtype)._column
-    dev_slr = get_element(column, 0)
-
-    s = cudf.Scalar.from_device_scalar(dev_slr)
+    with acquire_spill_lock():
+        dev_slr = plc.copying.get_element(
+            column.to_pylibcudf(mode="read"),
+            0,
+        )
+    s = cudf.Scalar.from_pylibcudf(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -351,7 +374,7 @@ def test_scalar_implicit_float_conversion(value):
     got = float(cudf.Scalar(value))
 
     assert expect == got
-    assert type(expect) == type(got)
+    assert type(expect) is type(got)
 
 
 @pytest.mark.parametrize("value", [1, -1, 1.5, 0, "1", True, False])
@@ -360,7 +383,7 @@ def test_scalar_implicit_int_conversion(value):
     got = int(cudf.Scalar(value))
 
     assert expect == got
-    assert type(expect) == type(got)
+    assert type(expect) is type(got)
 
 
 @pytest.mark.parametrize("cls", [int, float, bool])
@@ -377,7 +400,23 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 @pytest.mark.parametrize(
     "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    [
+        pytest.param(
+            cudf.Decimal32Dtype,
+            marks=pytest.mark.skipif(
+                pa._generated_version.version_tuple[0] < 19,
+                reason="decimal32 format string only supported in pyarrow>=19",
+            ),
+        ),
+        pytest.param(
+            cudf.Decimal64Dtype,
+            marks=pytest.mark.skipif(
+                pa._generated_version.version_tuple[0] < 19,
+                reason="decimal64 format string only supported in pyarrow>=19",
+            ),
+        ),
+        cudf.Decimal128Dtype,
+    ],
 )
 def test_device_scalar_direct_construction(value, decimal_type):
     value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
@@ -388,7 +427,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
         else decimal_type._from_decimal(value)
     )
 
-    s = cudf._lib.scalar.DeviceScalar(value, dtype)
+    s = cudf.Scalar(value, dtype)
 
     assert s.value == value or np.isnan(s.value) and np.isnan(value)
     if isinstance(
@@ -454,13 +493,13 @@ def test_scalar_cache_rmm_hook():
 def test_default_integer_bitwidth_scalar(default_integer_bitwidth):
     # Test that integer scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128)
-    assert slr.dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert slr.dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
 
 
 def test_default_float_bitwidth_scalar(default_float_bitwidth):
     # Test that float scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128.0)
-    assert slr.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert slr.dtype == np.dtype(f"f{default_float_bitwidth // 8}")
 
 
 def test_scalar_numpy_casting():

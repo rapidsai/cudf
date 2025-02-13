@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.5"]
+      cuda: ["11.8", "12.8"]
       arch: [x86_64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
@@ -382,14 +382,28 @@ dependencies:
         matrices:
           - matrix:
               arch: x86_64
+              cuda: "11.8"
             packages:
               - gcc_linux-64=11.*
-              - sysroot_linux-64==2.17
+              - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
+              cuda: "11.8"
             packages:
               - gcc_linux-aarch64=11.*
-              - sysroot_linux-aarch64==2.17
+              - sysroot_linux-aarch64==2.28
+          - matrix:
+              arch: x86_64
+              cuda: "12.*"
+            packages:
+              - gcc_linux-64=13.*
+              - sysroot_linux-64==2.28
+          - matrix:
+              arch: aarch64
+              cuda: "12.*"
+            packages:
+              - gcc_linux-aarch64=13.*
+              - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
           - matrix:
@@ -413,7 +427,6 @@ dependencies:
           - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
-          - spdlog>=1.14.1,<1.15
   depends_on_nvcomp:
     common:
       - output_types: conda
@@ -425,12 +438,21 @@ dependencies:
         matrices:
           - matrix:
               cuda: "12.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu12==4.1.0.6
           - matrix:
               cuda: "11.*"
+              use_cuda_wheels: "true"
             packages:
               - nvidia-nvcomp-cu11==4.1.0.6
+          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
+          # (e.g. for DLFW and pip devcontainers)
+          - matrix:
+              use_cuda_wheels: "false"
+            packages:
+          # if no matching matrix selectors passed, list the unsuffixed packages
+          # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
               - nvidia-nvcomp==4.1.0.6
@@ -461,7 +483,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=14.0.0,<19.0.0a0
+          - pyarrow>=14.0.0,<20.0.0a0
       - output_types: [requirements, pyproject]
         packages:
           # pyarrow 17.0.0 wheels have a subtle issue around threading that
@@ -469,8 +491,8 @@ dependencies:
           # be highly dependent on the exact build configuration, so we'll just
           # avoid 17.0.0 for now unless we observe similar issues in future
           # releases as well.
-          - pyarrow>=14.0.0,<19.0.0a0; platform_machine=='x86_64'
-          - pyarrow>=14.0.0,<19.0.0a0,!=17.0.0; platform_machine=='aarch64'
+          - pyarrow>=14.0.0,<20.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<20.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -503,6 +525,10 @@ dependencies:
               cuda: "12.5"
             packages:
               - cuda-version=12.5
+          - matrix:
+              cuda: "12.8"
+            packages:
+              - cuda-version=12.8
   cuda:
     specific:
       - output_types: conda
@@ -612,17 +638,27 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
+<<<<<<< HEAD
           - dask-cuda==24.12.*
+=======
+          - dask-cuda==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - *doxygen
           - make
           - myst-nb
           - nbsphinx
           - numpydoc
           - pandoc
-          # https://github.com/pydata/pydata-sphinx-theme/issues/1539
-          - pydata-sphinx-theme!=0.14.2
+          # Minimum version for safe parallel writing again.
+          # https://github.com/pydata/pydata-sphinx-theme/pull/1859
+          # https://github.com/pydata/pydata-sphinx-theme/releases/tag/v0.15.4
+          - pydata-sphinx-theme>=0.15.4
           - scipy
-          - sphinx
+          # Needed for safe parallel writes as with the pydata-sphinx-theme pin above
+          # https://github.com/sphinx-doc/sphinx/issues/12409
+          # https://github.com/sphinx-doc/sphinx/pull/12888
+          # https://github.com/sphinx-doc/sphinx/releases/tag/v8.1.0
+          - sphinx>=8.1.0
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
@@ -679,17 +715,18 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0,<=12.6.0
+              - cuda-python>=12.6.2,<13.0a0
           - matrix: {cuda: "11.*"}
             packages: &run_pylibcudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
+              - cuda-python>=11.8.5,<12.0a0
           - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.0.13,<0.0.18
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0a0
+          - &numba-dep numba>=0.59.1,<0.61.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -705,10 +742,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0,<=12.6.0
+              - cuda-python>=12.6.2,<13.0a0
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
+              - cuda-python>=11.8.5,<12.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
@@ -748,18 +785,27 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.15
+          - polars>=1.20,<1.22
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+<<<<<<< HEAD
           - rapids-dask-dependency==24.12.*
+=======
+          - rapids-dask-dependency==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+<<<<<<< HEAD
           - pynvml>=11.4.1,<12.0.0a0
           - rapids-dask-dependency==24.12.*
+=======
+          - pynvml>=12.0.0,<13.0.0a0
+          - rapids-dask-dependency==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
   run_custreamz:
     common:
       - output_types: conda
@@ -811,11 +857,12 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - *numba-cuda-dep
+              - numba-cuda==0.2.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - numba-cuda==0.0.15
+              - *numba-cuda-dep
+              - *numba-dep
               - pandas==2.2.3
           - matrix:
             packages:
@@ -879,18 +926,15 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.0.0
+              - pyarrow==14.*
           - matrix:
             packages:
       - output_types: conda
         matrices:
           - matrix:
-              arch: x86_64
+              cuda: "12.*"
             packages:
-              # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch>=2.1.0
-              # We only install these on x86_64 to avoid pulling pytorch as a
-              # dependency of transformers.
+              - pytorch>=2.4.0
               - *tokenizers
               - *transformers
           - matrix:
@@ -899,15 +943,20 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+<<<<<<< HEAD
           - dask-cuda==24.12.*
+=======
+          - dask-cuda==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - *numba-cuda-dep
+          - *numba-dep
     specific:
       - output_types: [conda, requirements]
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.0.1
+              - pyarrow==14.*
           - matrix:
             packages:
   test_python_cudf_polars:
@@ -919,7 +968,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &libcudf_unsuffixed libcudf==24.12.*
+=======
+          - &libcudf_unsuffixed libcudf==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -933,18 +986,30 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - libcudf-cu12==24.12.*
+=======
+              - libcudf-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - libcudf-cu11==24.12.*
+=======
+              - libcudf-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_pylibcudf:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &pylibcudf_unsuffixed pylibcudf==24.12.*
+=======
+          - &pylibcudf_unsuffixed pylibcudf==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -958,18 +1023,30 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - pylibcudf-cu12==24.12.*
+=======
+              - pylibcudf-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - pylibcudf-cu11==24.12.*
+=======
+              - pylibcudf-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - {matrix: null, packages: [*pylibcudf_unsuffixed]}
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &cudf_unsuffixed cudf==24.12.*
+=======
+          - &cudf_unsuffixed cudf==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -983,18 +1060,30 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - cudf-cu12==24.12.*
+=======
+              - cudf-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - cudf-cu11==24.12.*
+=======
+              - cudf-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - {matrix: null, packages: [*cudf_unsuffixed]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &cudf_kafka_unsuffixed cudf_kafka==24.12.*
+=======
+          - &cudf_kafka_unsuffixed cudf_kafka==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1008,12 +1097,20 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - cudf_kafka-cu12==24.12.*
+=======
+              - cudf_kafka-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - cudf_kafka-cu11==24.12.*
+=======
+              - cudf_kafka-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - {matrix: null, packages: [*cudf_kafka_unsuffixed]}
   depends_on_cupy:
     common:
@@ -1034,7 +1131,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &libkvikio_unsuffixed libkvikio==24.12.*
+=======
+          - &libkvikio_unsuffixed libkvikio==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           - --extra-index-url=https://pypi.nvidia.com
@@ -1046,12 +1147,20 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - libkvikio-cu12==24.12.*
+=======
+              - libkvikio-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - libkvikio-cu11==24.12.*
+=======
+              - libkvikio-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
             packages:
               - *libkvikio_unsuffixed
@@ -1059,7 +1168,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &librmm_unsuffixed librmm==24.12.*
+=======
+          - &librmm_unsuffixed librmm==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1073,12 +1186,20 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - librmm-cu12==24.12.*
+=======
+              - librmm-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - librmm-cu11==24.12.*
+=======
+              - librmm-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
             packages:
               - *librmm_unsuffixed
@@ -1086,7 +1207,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
+<<<<<<< HEAD
           - &rmm_unsuffixed rmm==24.12.*
+=======
+          - &rmm_unsuffixed rmm==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1100,12 +1225,20 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - rmm-cu12==24.12.*
+=======
+              - rmm-cu12==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
               cuda: "11.*"
               cuda_suffixed: "true"
             packages:
+<<<<<<< HEAD
               - rmm-cu11==24.12.*
+=======
+              - rmm-cu11==25.2.*,>=0.0.0a0
+>>>>>>> upstream/branch-25.02
           - matrix:
             packages:
               - *rmm_unsuffixed

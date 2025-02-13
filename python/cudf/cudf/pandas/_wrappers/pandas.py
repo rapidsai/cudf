@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
@@ -35,6 +35,7 @@ from ..fast_slow_proxy import (
     _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
+    _maybe_wrap_result,
     _Unusable,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
@@ -68,8 +69,6 @@ try:
 except ImportError:
     ipython_shell = None
 
-cudf.set_option("mode.pandas_compatible", True)
-
 
 def _pandas_util_dir():
     # In pandas 2.0, pandas.util contains public APIs under
@@ -77,8 +76,8 @@ def _pandas_util_dir():
     # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
     res = list(
         set(
-            list(importlib.import_module("pandas.util").__dict__.keys())
-            + [
+            [
+                *list(importlib.import_module("pandas.util").__dict__.keys()),
                 "Appender",
                 "Substitution",
                 "_exceptions",
@@ -219,7 +218,7 @@ _CategoricalAccessor = make_intermediate_proxy_type(
 def _DataFrame__dir__(self):
     # Column names that are string identifiers are added to the dir of the
     # DataFrame
-    # See https://github.com/pandas-dev/pandas/blob/43691a2f5d235b08f0f3aa813d8fdcb7c4ce1e47/pandas/core/indexes/base.py#L878  # noqa: E501
+    # See https://github.com/pandas-dev/pandas/blob/43691a2f5d235b08f0f3aa813d8fdcb7c4ce1e47/pandas/core/indexes/base.py#L878
     _pd_df_dir = dir(pd.DataFrame)
     return _pd_df_dir + [
         colname
@@ -266,6 +265,12 @@ if ipython_shell:
     html_formatter.for_type(DataFrame, custom_repr_html)
 
 
+def _Series_dtype(self):
+    # Fast-path to extract dtype from the current
+    # object without round-tripping through the slow<->fast
+    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
+
+
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -285,6 +290,7 @@ Series = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
+        "dtype": property(_Series_dtype),
     },
 )
 

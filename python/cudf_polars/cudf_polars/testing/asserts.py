@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Device-aware assertions."""
@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
 
+# Will be overriden by `conftest.py` with the value from the `--executor`
+# command-line argument
+Executor = None
+
+
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
@@ -34,6 +39,7 @@ def assert_gpu_result_equal(
     rtol: float = 1e-05,
     atol: float = 1e-08,
     categorical_as_str: bool = False,
+    executor: str | None = None,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -71,6 +77,9 @@ def assert_gpu_result_equal(
         Absolute tolerance for float comparisons
     categorical_as_str
         Decat categoricals to strings before comparing
+    executor
+        The executor configuration to pass to `GPUEngine`. If not specified
+        uses the module level `Executor` attribute.
 
     Raises
     ------
@@ -80,7 +89,7 @@ def assert_gpu_result_equal(
         If GPU collection failed in some way.
     """
     if engine is None:
-        engine = GPUEngine(raise_on_fail=True)
+        engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
 
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
@@ -126,9 +135,9 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
-            assert any(
-                isinstance(err, err_type) for err_type in exceptions
-            ), f"Translation DID NOT RAISE {exceptions}"
+            assert any(isinstance(err, err_type) for err_type in exceptions), (
+                f"Translation DID NOT RAISE {exceptions}"
+            )
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -132,6 +132,8 @@ ConfigureTest(
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
+  groupby/host_udf_example_tests.cu
+  groupby/host_udf_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -190,6 +192,7 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
+  hashing/xxhash_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 
@@ -217,11 +220,12 @@ ConfigureTest(
   REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
+  reductions/host_udf_example_tests.cu
+  reductions/list_rank_test.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
   GPUS 1
   PERCENT 70
@@ -314,14 +318,15 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -693,6 +698,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
 endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COLUMN_VIEW_TEST streams/column_view_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
@@ -701,6 +707,7 @@ ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE tes
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_INTEROP streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
@@ -718,11 +725,13 @@ ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROUND_TEST streams/round_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SCALAR_TEST streams/scalar_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_STREAM_COMPACTION_TEST streams/stream_compaction_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_STRINGS_TEST
+  streams/strings/attributes_test.cpp
   streams/strings/case_test.cpp
   streams/strings/combine_test.cpp
   streams/strings/contains_test.cpp
@@ -740,6 +749,7 @@ ConfigureTest(
 )
 ConfigureTest(
   STREAM_TEXT_TEST
+  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

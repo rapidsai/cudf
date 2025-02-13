@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,10 @@
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
 #include "detail/rolling_jit.hpp"
+#include "detail/rolling_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/rolling.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -41,109 +43,6 @@
 namespace cudf {
 
 namespace detail {
-
-/// Preceding window calculation functor.
-template <bool preceding_less_than_1>
-struct row_based_preceding_calc {
-  cudf::size_type const* _group_offsets_begin;
-  cudf::size_type const* _group_labels_begin;
-  cudf::size_type const _preceding_window;
-
-  row_based_preceding_calc(rmm::device_uvector<cudf::size_type> const& group_offsets,
-                           rmm::device_uvector<cudf::size_type> const& group_labels,
-                           cudf::size_type const& preceding_window)
-    : _group_offsets_begin(group_offsets.data()),
-      _group_labels_begin(group_labels.data()),
-      _preceding_window(preceding_window)
-  {
-  }
-
-  __device__ cudf::size_type operator()(cudf::size_type const& idx) const
-  {
-    auto group_label = _group_labels_begin[idx];
-    if constexpr (preceding_less_than_1) {  // where 1 indicates only the current row.
-      auto group_end = _group_offsets_begin[group_label + 1];
-      return thrust::maximum{}(_preceding_window, -(group_end - 1 - idx));
-    } else {
-      auto group_start = _group_offsets_begin[group_label];
-      return thrust::minimum{}(_preceding_window,
-                               idx - group_start + 1);  // Preceding includes current row.
-    }
-  }
-};
-
-/// Helper to materialize preceding-window column, corrected to respect group boundaries.
-/// E.g. If preceding window == 5, then,
-///   1. For the first row in the group, the preceding is set to 1,
-///   2. For the next row in the group, preceding is set to 2, etc.
-std::unique_ptr<cudf::column> make_preceding_column(
-  rmm::device_uvector<cudf::size_type> const& group_offsets,
-  rmm::device_uvector<cudf::size_type> const& group_labels,
-  cudf::size_type const& preceding_window,
-  cudf::size_type const& num_rows,
-  rmm::cuda_stream_view stream)
-{
-  if (preceding_window < 1) {
-    auto const calc = row_based_preceding_calc<true>(group_offsets, group_labels, preceding_window);
-    return cudf::detail::expand_to_column(calc, num_rows, stream);
-  } else {
-    auto const calc =
-      row_based_preceding_calc<false>(group_offsets, group_labels, preceding_window);
-    return cudf::detail::expand_to_column(calc, num_rows, stream);
-  }
-}
-
-/// Following window calculation functor.
-template <bool following_less_than_0>
-struct row_based_following_calc {
-  cudf::size_type const* _group_offsets_begin;
-  cudf::size_type const* _group_labels_begin;
-  cudf::size_type const _following_window;
-
-  row_based_following_calc(rmm::device_uvector<cudf::size_type> const& group_offsets,
-                           rmm::device_uvector<cudf::size_type> const& group_labels,
-                           cudf::size_type const& following_window)
-    : _group_offsets_begin(group_offsets.data()),
-      _group_labels_begin(group_labels.data()),
-      _following_window(following_window)
-  {
-  }
-
-  __device__ cudf::size_type operator()(cudf::size_type const& idx) const
-  {
-    auto group_label = _group_labels_begin[idx];
-    if constexpr (following_less_than_0) {
-      auto group_start = _group_offsets_begin[group_label];
-      return thrust::maximum{}(_following_window, -(idx - group_start) - 1);
-    } else {
-      auto group_end =
-        _group_offsets_begin[group_label + 1];  // Cannot fall off the end, since offsets
-                                                // is capped with `input.size()`.
-      return thrust::minimum{}(_following_window, (group_end - 1) - idx);
-    }
-  }
-};
-
-/// Helper to materialize following-window column, corrected to respect group boundaries.
-/// i.e. If following window == 5, then:
-///   1. For the last row in the group, the following is set to 0.
-///   2. For the second last row in the group, following is set to 1, etc.
-std::unique_ptr<cudf::column> make_following_column(
-  rmm::device_uvector<cudf::size_type> const& group_offsets,
-  rmm::device_uvector<cudf::size_type> const& group_labels,
-  cudf::size_type const& following_window,
-  cudf::size_type const& num_rows,
-  rmm::cuda_stream_view stream)
-{
-  if (following_window < 0) {
-    auto const calc = row_based_following_calc<true>(group_offsets, group_labels, following_window);
-    return cudf::detail::expand_to_column(calc, num_rows, stream);
-  } else {
-    auto const calc =
-      row_based_following_calc<false>(group_offsets, group_labels, following_window);
-    return cudf::detail::expand_to_column(calc, num_rows, stream);
-  }
-}
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
@@ -207,10 +106,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
-  assert(group_offsets.size() >= 2 && group_offsets.element(0, stream) == 0 &&
-         group_offsets.element(group_offsets.size() - 1, stream) == input.size() &&
-         "Must have at least one group.");
-
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{
       group_offsets.data(), group_labels.data(), preceding_window};
@@ -228,18 +123,14 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                             stream,
                                             mr);
   } else {
-    auto const preceding_column =
-      make_preceding_column(group_offsets, group_labels, preceding_window, input.size(), stream);
-    auto const following_column =
-      make_following_column(group_offsets, group_labels, following_window, input.size(), stream);
-    return cudf::detail::rolling_window(input,
-                                        default_outputs,
-                                        preceding_column->view().begin<cudf::size_type>(),
-                                        following_column->view().begin<cudf::size_type>(),
-                                        min_periods,
-                                        aggr,
-                                        stream,
-                                        mr);
+    namespace utils = cudf::detail::rolling;
+    auto groups     = utils::grouped{group_labels.data(), group_offsets.data()};
+    auto preceding =
+      utils::make_clamped_window_iterator<utils::direction::PRECEDING>(preceding_window, groups);
+    auto following =
+      utils::make_clamped_window_iterator<utils::direction::FOLLOWING>(following_window, groups);
+    return cudf::detail::rolling_window(
+      input, default_outputs, preceding, following, min_periods, aggr, stream, mr);
   }
 }
 
@@ -418,7 +309,7 @@ template <typename T, CUDF_ENABLE_IF(cudf::column_device_view::has_element_acces
 /// at the beginning of the column or at the end.
 /// If no null values are founds, null_begin and null_end are 0.
 std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
-  column_view const& orderby_column)
+  column_view const& orderby_column, rmm::cuda_stream_view stream)
 {
   auto const num_rows  = orderby_column.size();
   auto const num_nulls = orderby_column.null_count();
@@ -428,7 +319,7 @@ std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
     return std::make_tuple(0, num_nulls);
   }
 
-  auto const first_row_is_null = orderby_column.null_count(0, 1) == 1;
+  auto const first_row_is_null = orderby_column.null_count(0, 1, stream) == 1;
 
   return first_row_is_null ? std::make_tuple(0, num_nulls)
                            : std::make_tuple(num_rows - num_nulls, num_rows);
@@ -450,7 +341,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
-  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] =
+    get_null_bounds_for_orderby_column(orderby_column, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
   auto const preceding_calculator = cuda::proclaim_return_type<size_type>(
@@ -739,7 +631,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] =
+    get_null_bounds_for_orderby_column(orderby_column, stream);
   auto const p_orderby_device_view = cudf::column_device_view::create(orderby_column, stream);
 
   auto const preceding_calculator = cuda::proclaim_return_type<size_type>(

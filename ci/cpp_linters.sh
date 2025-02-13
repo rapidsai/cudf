@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -20,12 +20,15 @@ set +u
 conda activate clang_tidy
 set -u
 
-RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
-
 source rapids-configure-sccache
 
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
-cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -GNinja
+
+iwyu_flag=""
+if [[ "${RAPIDS_BUILD_TYPE:-}" == "nightly" ]]; then
+  iwyu_flag="-DCUDF_IWYU=ON"
+fi
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON ${iwyu_flag} -DBUILD_TESTS=OFF -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
 
 # Remove invalid components of the path for local usage. The path below is

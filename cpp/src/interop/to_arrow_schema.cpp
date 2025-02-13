@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ struct dispatch_to_arrow_type {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   int operator()(column_view input_view, column_metadata const&, ArrowSchema* out)
   {
-    cudf::type_id id = input_view.type().id();
+    cudf::type_id const id = input_view.type().id();
     switch (id) {
       case cudf::type_id::TIMESTAMP_SECONDS:
         return ArrowSchemaSetTypeDateTime(
@@ -76,15 +76,10 @@ struct dispatch_to_arrow_type {
 };
 
 template <typename DeviceType>
-int decimals_to_arrow(column_view input, ArrowSchema* out)
+int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
-  // Arrow doesn't support decimal32/decimal64 currently. decimal128
-  // is the smallest that arrow supports besides float32/float64 so we
-  // upcast to decimal128.
-  return ArrowSchemaSetTypeDecimal(out,
-                                   NANOARROW_TYPE_DECIMAL128,
-                                   cudf::detail::max_precision<DeviceType>(),
-                                   -input.type().scale());
+  return ArrowSchemaSetTypeDecimal(
+    out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
 
 template <>
@@ -93,7 +88,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
 }
 
 template <>
@@ -102,7 +97,9 @@ int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
+  // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
 }
 
 template <>
@@ -111,7 +108,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
                                                             ArrowSchema* out)
 {
   using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
 }
 
 template <>
@@ -186,7 +183,7 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  cudf::dictionary_column_view dview{input};
+  cudf::dictionary_column_view const dview{input};
 
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, id_to_arrow_type(dview.indices().type().id())));
   NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(out));

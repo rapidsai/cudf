@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Defines pytest fixtures for all benchmarks.
 
@@ -56,18 +56,16 @@ import pytest_cases
 # into the main repo.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-# Turn off isort until we upgrade to 5.8.0
-# https://github.com/pycqa/isort/issues/1594
-from config import (  # noqa: W0611, E402, F401
+from config import (
     NUM_COLS,
     NUM_ROWS,
-    collect_ignore,
-    cudf,  # noqa: W0611, E402, F401
-    pytest_collection_modifyitems,
-    pytest_sessionfinish,
-    pytest_sessionstart,
+    collect_ignore,  # noqa: F401
+    cudf,
+    pytest_collection_modifyitems,  # noqa: F401
+    pytest_sessionfinish,  # noqa: F401
+    pytest_sessionstart,  # noqa: F401
 )
-from utils import (  # noqa: E402
+from utils import (
     OrderedSet,
     collapse_fixtures,
     column_generators,
@@ -85,9 +83,9 @@ fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
 
     def make_dataframe(nr, nc, column_generator=column_generator):
-        assert nc <= len(
-            string.ascii_lowercase
-        ), "make_dataframe only supports a maximum of 26 columns"
+        assert nc <= len(string.ascii_lowercase), (
+            "make_dataframe only supports a maximum of 26 columns"
+        )
         return cudf.DataFrame(
             {
                 f"{string.ascii_lowercase[i]}": column_generator(nr)

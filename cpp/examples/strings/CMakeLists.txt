@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 cmake_minimum_required(VERSION 3.26.4)
 
@@ -6,7 +6,6 @@ include(../set_cuda_architecture.cmake)
 
 # initialize cuda architecture
 rapids_cuda_init_architectures(strings_examples)
-rapids_cuda_set_architectures(RAPIDS)
 
 project(
   strings_examples
@@ -15,6 +14,9 @@ project(
 )
 
 include(../fetch_dependencies.cmake)
+
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 

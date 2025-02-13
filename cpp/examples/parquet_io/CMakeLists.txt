@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 cmake_minimum_required(VERSION 3.26.4)
 
@@ -6,7 +6,6 @@ include(../set_cuda_architecture.cmake)
 
 # initialize cuda architecture
 rapids_cuda_init_architectures(parquet_io)
-rapids_cuda_set_architectures(RAPIDS)
 
 project(
   parquet_io
@@ -15,6 +14,9 @@ project(
 )
 
 include(../fetch_dependencies.cmake)
+
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
 
 add_library(parquet_io_utils OBJECT common_utils.cpp io_source.cpp)
 target_compile_features(parquet_io_utils PRIVATE cxx_std_17)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -134,8 +135,8 @@ extract_code_points_from_utf8(unsigned char const* strings,
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
 
-  for (int i = 0; i < std::min(static_cast<size_t>(max_utf8_blocks_for_char),
-                               total_bytes - start_byte_for_thread);
+  for (int i = 0; i < cuda::std::min(static_cast<size_t>(max_utf8_blocks_for_char),
+                                     total_bytes - start_byte_for_thread);
        ++i) {
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
@@ -217,9 +218,8 @@ CUDF_KERNEL void kernel_data_normalizer(unsigned char const* strings,
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  cudf::thread_index_type const char_for_thread =
-    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
-  uint32_t num_new_chars = 0;
+  auto const char_for_thread = cudf::detail::grid_1d::global_thread_id();
+  uint32_t num_new_chars     = 0;
 
   if (char_for_thread < total_bytes) {
     auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);

@@ -917,7 +917,6 @@ def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
-    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),
@@ -1222,7 +1221,7 @@ def test_groupby_column_numeral():
         pd.Series([0, 2, 0]),
         pd.Series([0, 2, 0], index=[0, 2, 1]),
     ],
-)  # noqa: E501
+)
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -2016,8 +2015,8 @@ def test_multi_agg():
 @pytest.mark.parametrize(
     "agg",
     (
-        list(itertools.combinations(["count", "max", "min", "nunique"], 2))
-        + [
+        [
+            *itertools.combinations(["count", "max", "min", "nunique"], 2),
             {"b": "min", "c": "mean"},
             {"b": "max", "c": "mean"},
             {"b": "count", "c": "mean"},
@@ -2473,16 +2472,25 @@ def test_groupby_unique(by, data, dtype):
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
+    gdf = cudf.from_pandas(pdf)
+    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
     check_dtype = func not in _index_type_aggs
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -3961,8 +3969,8 @@ def test_group_by_value_counts_with_count_column():
 def test_groupby_internal_groups_empty(gdf):
     # test that we don't segfault when calling the internal
     # .groups() method with an empty list:
-    gb = gdf.groupby("y")._groupby
-    _, _, grouped_vals = gb.groups([])
+    gb = gdf.groupby("y")
+    _, _, grouped_vals = gb._groups([])
     assert grouped_vals == []
 
 
@@ -4075,3 +4083,24 @@ def test_get_group_list_like():
 
     with pytest.raises(KeyError):
         df.groupby(["a"]).get_group([1])
+
+
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)
+
+
+def test_size_as_index_false():
+    df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
+    expected = df.groupby("a", as_index=False).size()
+    result = cudf.from_pandas(df).groupby("a", as_index=False).size()
+    assert_eq(result, expected)
+
+
+def test_size_series_with_name():
+    ser = pd.Series(range(3), name="foo")
+    expected = ser.groupby(ser).size()
+    result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_eq(result, expected)

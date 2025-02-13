@@ -22,6 +22,7 @@
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -927,7 +928,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
                               get_json_object_options options)
 {
   auto tid          = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   size_type warp_valid_count{0};
 

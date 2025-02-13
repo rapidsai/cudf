@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
+#include <cuda/std/array>
+#include <cuda/std/functional>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -307,12 +309,14 @@ class WriteCoalescingCallbackWrapper {
   {
     __syncthreads();
     if constexpr (!DiscardTranslatedOutput) {
-      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
         out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
       }
     }
     if constexpr (!DiscardIndexOutput) {
-      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
         out_idx_it[tile_out_offset + out_char] =
           temp_storage.compacted_offset[out_char] + tile_in_offset;
       }
@@ -342,8 +346,9 @@ class WriteCoalescingCallbackWrapper {
 template <int32_t NUM_INSTANCES, typename TransitionTableT>
 class StateVectorTransitionOp {
  public:
-  __device__ __forceinline__ StateVectorTransitionOp(
-    TransitionTableT const& transition_table, std::array<StateIndexT, NUM_INSTANCES>& state_vector)
+  __device__ __forceinline__
+  StateVectorTransitionOp(TransitionTableT const& transition_table,
+                          cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector)
     : transition_table(transition_table), state_vector(state_vector)
   {
   }
@@ -360,7 +365,7 @@ class StateVectorTransitionOp {
   }
 
  public:
-  std::array<StateIndexT, NUM_INSTANCES>& state_vector;
+  cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector;
   TransitionTableT const& transition_table;
 };
 
@@ -620,7 +625,7 @@ struct AgentDFA {
     SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
-    std::array<StateIndexT, NUM_STATES>& state_vector)
+    cuda::std::array<StateIndexT, NUM_STATES>& state_vector)
   {
     using StateVectorTransitionOpT = StateVectorTransitionOp<NUM_STATES, TransitionTableT>;
 
@@ -796,10 +801,10 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   // Stage 1: Compute the state-transition vector
   if (IS_TRANS_VECTOR_PASS || IS_SINGLE_PASS) {
     // Keeping track of the state for each of the <NUM_STATES> state machines
-    std::array<StateIndexT, NUM_STATES> state_vector;
+    cuda::std::array<StateIndexT, NUM_STATES> state_vector;
 
     // Initialize the seed state transition vector with the identity vector
-    thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
+    thrust::sequence(thrust::seq, cuda::std::begin(state_vector), cuda::std::end(state_vector));
 
     // Compute the state transition vector
     agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,
@@ -893,7 +898,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
     __syncthreads();
 
     using OffsetPrefixScanCallbackOpT_ =
-      cub::TilePrefixCallbackOp<OffsetT, cub::Sum, OutOffsetScanTileState>;
+      cub::TilePrefixCallbackOp<OffsetT, cuda::std::plus<>, OutOffsetScanTileState>;
 
     using OutOffsetBlockScan =
       cub::BlockScan<OffsetT, BLOCK_THREADS, cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
@@ -911,7 +916,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
         .ExclusiveScan(count_chars_callback_op.out_count,
                        thread_out_offset,
                        static_cast<OffsetT>(0),
-                       cub::Sum{},
+                       cuda::std::plus{},
                        block_aggregate);
       tile_out_count = block_aggregate;
       if (threadIdx.x == 0 /*and not IS_LAST_TILE*/) {
@@ -923,10 +928,11 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
       }
     } else {
       auto prefix_op = OffsetPrefixScanCallbackOpT_(
-        offset_tile_state, prefix_callback_temp_storage, cub::Sum{}, tile_idx);
+        offset_tile_state, prefix_callback_temp_storage, cuda::std::plus{}, tile_idx);
 
       OutOffsetBlockScan(scan_temp_storage)
-        .ExclusiveScan(count_chars_callback_op.out_count, thread_out_offset, cub::Sum{}, prefix_op);
+        .ExclusiveScan(
+          count_chars_callback_op.out_count, thread_out_offset, cuda::std::plus{}, prefix_op);
       tile_out_offset = prefix_op.GetExclusivePrefix();
       tile_out_count  = prefix_op.GetBlockAggregate();
       if (tile_idx == gridDim.x - 1 && threadIdx.x == 0) {

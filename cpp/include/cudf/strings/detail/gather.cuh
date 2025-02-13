@@ -85,15 +85,15 @@ CUDF_KERNEL void gather_chars_fn_string_parallel(StringIterator strings_begin,
   constexpr size_t out_datatype_size = sizeof(uint4);
   constexpr size_t in_datatype_size  = sizeof(uint);
 
-  int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_warp_id   = global_thread_id / cudf::detail::warp_size;
-  int warp_lane        = global_thread_id % cudf::detail::warp_size;
-  int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
+  auto const global_thread_id = cudf::detail::grid_1d::global_thread_id();
+  auto const global_warp_id   = global_thread_id / cudf::detail::warp_size;
+  auto const warp_lane        = global_thread_id % cudf::detail::warp_size;
+  auto const nwarps           = cudf::detail::grid_1d::grid_stride() / cudf::detail::warp_size;
 
   auto const alignment_offset = reinterpret_cast<std::uintptr_t>(out_chars) % out_datatype_size;
   uint4* out_chars_aligned    = reinterpret_cast<uint4*>(out_chars - alignment_offset);
 
-  for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
+  for (auto istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
     auto const out_start = out_offsets[istring];
     auto const out_end   = out_offsets[istring + 1];
 

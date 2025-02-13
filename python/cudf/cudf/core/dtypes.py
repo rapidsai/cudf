@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -56,7 +56,10 @@ def dtype(arbitrary):
     else:
         if np_dtype.kind in set("OU"):
             return np.dtype("object")
-        elif np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+        elif (
+            np_dtype
+            not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+        ):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
@@ -121,8 +124,9 @@ def _check_type(
         f"Deserialization expected {header['frame_count']} frames, "
         f"but received {len(frames)}."
     )
+    klass = Serializable._name_type_map[header["type-serialized-name"]]
     assert is_valid_class(
-        klass := Serializable._name_type_map[header["type-serialized-name"]],
+        klass,
         cls,
     ), f"Header-encoded {klass=} does not match decoding {cls=}."
 
@@ -188,9 +192,7 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
-            )
+            col = cudf.core.column.column_empty(0, dtype="object")
         else:
             col = self._categories
         return cudf.Index._from_column(col)
@@ -229,7 +231,7 @@ class CategoricalDtype(_BaseDtype):
         >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
         >>> cudf_dtype
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """  # noqa: E501
+        """
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -246,7 +248,7 @@ class CategoricalDtype(_BaseDtype):
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> dtype.to_pandas()
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """  # noqa: E501
+        """
         if self._categories is None:
             categories = None
         elif self._categories.dtype.kind == "f":
@@ -391,7 +393,7 @@ class ListDtype(_BaseDtype):
         ListDtype(float32)
         >>> deep_nested_type.element_type.element_type.element_type
         'float32'
-        """  # noqa: E501
+        """
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         elif isinstance(self._typ.value_type, pa.StructType):
@@ -412,7 +414,7 @@ class ListDtype(_BaseDtype):
         ListDtype(ListDtype(ListDtype(float32)))
         >>> deep_nested_type.leaf_type
         'float32'
-        """  # noqa: E501
+        """
         if isinstance(self.element_type, ListDtype):
             return self.element_type.leaf_type
         else:
@@ -478,7 +480,7 @@ class ListDtype(_BaseDtype):
 
     def __repr__(self):
         if isinstance(self.element_type, (ListDtype, StructDtype)):
-            return f"{type(self).__name__}({repr(self.element_type)})"
+            return f"{type(self).__name__}({self.element_type!r})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
@@ -516,6 +518,28 @@ class ListDtype(_BaseDtype):
     def itemsize(self):
         return self.element_type.itemsize
 
+    def _recursively_replace_fields(self, result: list) -> list:
+        """
+        Return a new list result but with the keys of dict element by the keys in StructDtype.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        if isinstance(self.element_type, StructDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, dict)
+                else res
+                for res in result
+            ]
+        elif isinstance(self.element_type, ListDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, list)
+                else res
+                for res in result
+            ]
+        return result
+
 
 class StructDtype(_BaseDtype):
     """
@@ -549,7 +573,7 @@ class StructDtype(_BaseDtype):
     >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
     >>> nested_struct_dtype
     StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('O')}), 'c': dtype('uint8')})
-    """  # noqa: E501
+    """
 
     name = "struct"
 
@@ -675,6 +699,26 @@ class StructDtype(_BaseDtype):
             for field in self._typ
         )
 
+    def _recursively_replace_fields(self, result: dict) -> dict:
+        """
+        Return a new dict result but with the keys replaced by the keys in self.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        new_result = {}
+        for (new_field, field_dtype), result_value in zip(
+            self.fields.items(), result.values()
+        ):
+            if isinstance(field_dtype, StructDtype) and isinstance(
+                result_value, dict
+            ):
+                new_result[new_field] = (
+                    field_dtype._recursively_replace_fields(result_value)
+                )
+            else:
+                new_result[new_field] = result_value
+        return new_result
+
 
 decimal_dtype_template = textwrap.dedent(
     """
@@ -720,7 +764,7 @@ decimal_dtype_template = textwrap.dedent(
         >>> decimal{size}_dtype = cudf.Decimal{size}Dtype(precision=9, scale=2)
         >>> decimal{size}_dtype
         Decimal{size}Dtype(precision=9, scale=2)
-    """  # noqa: E501
+    """
 )
 
 
@@ -733,7 +777,7 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def str(self):
-        return f"{str(self.name)}({self.precision}, {self.scale})"
+        return f"{self.name!s}({self.precision}, {self.scale})"
 
     @property
     def precision(self):
@@ -936,7 +980,7 @@ class IntervalDtype(StructDtype):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
         return (
-            type(self) == type(other)
+            type(self) is type(other)
             and self.subtype == other.subtype
             and self.closed == other.closed
         )

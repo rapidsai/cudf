@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 cmake_minimum_required(VERSION 3.26.4)
 
@@ -6,7 +6,6 @@ include(../set_cuda_architecture.cmake)
 
 # initialize cuda architecture
 rapids_cuda_init_architectures(nested_types)
-rapids_cuda_set_architectures(RAPIDS)
 
 project(
   nested_types
@@ -15,6 +14,9 @@ project(
 )
 
 include(../fetch_dependencies.cmake)
+
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
 
 # Configure your project here
 add_executable(deduplication deduplication.cpp)

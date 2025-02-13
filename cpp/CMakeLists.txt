@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -91,7 +91,9 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
+option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
+option(CUDF_IWYU "Enable IWYU during compilation" OFF)
+option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -159,9 +161,7 @@ endif()
 
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
-if(CUDF_STATIC_LINTERS)
-  # For simplicity, for now we assume that all linters can be installed into an environment where
-  # any linter is being run. We could relax this requirement if desired.
+if(CUDF_CLANG_TIDY)
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
@@ -188,7 +188,9 @@ if(CUDF_STATIC_LINTERS)
         "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
     )
   endif()
+endif()
 
+if(CUDF_IWYU)
   find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
 endif()
 
@@ -201,38 +203,43 @@ function(enable_static_checkers target)
     _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_STATIC_LINTERS)
-    if(_LINT_CLANG_TIDY)
-      # clang will complain about unused link libraries on the compile line unless we specify
-      # -Qunused-arguments.
+  if(_LINT_CLANG_TIDY)
+    # clang will complain about unused link libraries on the compile line unless we specify
+    # -Qunused-arguments.
+    if(CUDF_CLANG_TIDY_AUTOFIX)
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY
+                             "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
+      )
+    else()
       set_target_properties(
         ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
       )
     endif()
-    if(_LINT_IWYU)
-      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
-      # relevant since they don't show up in any other build so it's better to suppress them until
-      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
-      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
-      # compile flags. To do this completely cleanly we should modify the flags on the target rather
-      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
-      # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
-        if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${_flag})
-        endif()
-      endforeach()
-      set(CUDF_CXX_FLAGS
-          "${CUDF_CXX_FLAGS}"
-          PARENT_SCOPE
-      )
-      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
-    endif()
-    foreach(file IN LISTS _LINT_SKIPPED_FILES)
-      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
-    endforeach()
   endif()
+  if(_LINT_IWYU)
+    # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+    # relevant since they don't show up in any other build so it's better to suppress them until we
+    # can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not appear to
+    # be sufficient, we must also ensure that it is set to the underlying target's CXX compile
+    # flags. To do this completely cleanly we should modify the flags on the target rather than the
+    # global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run the linters
+    # on real builds.
+    foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+      list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+      if(_flag_index EQUAL -1)
+        list(APPEND CUDF_CXX_FLAGS ${_flag})
+      endif()
+    endforeach()
+    set(CUDF_CXX_FLAGS
+        "${CUDF_CXX_FLAGS}"
+        PARENT_SCOPE
+    )
+    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+  endif()
+  foreach(file IN LISTS _LINT_SKIPPED_FILES)
+    set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+  endforeach()
 endfunction()
 
 # ##################################################################################################
@@ -266,6 +273,11 @@ endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+
+include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
+rapids_cpm_rapids_logger()
+rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
+
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find NVTX
@@ -292,8 +304,6 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
 include(cmake/thirdparty/get_fmt.cmake)
-# find spdlog
-include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
@@ -326,6 +336,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/Add.cu
@@ -433,7 +444,6 @@ add_library(
   src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
-  src/groupby/sort/scan.cpp
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
@@ -441,6 +451,8 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/host_udf_aggregation.cpp
+  src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
@@ -450,6 +462,7 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
+  src/hash/xxhash_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
@@ -465,13 +478,13 @@ add_library(
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
   src/io/comp/comp.cpp
+  src/io/comp/comp.cu
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -503,6 +516,7 @@ add_library(
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
+  src/io/parquet/bloom_filter_reader.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -765,7 +779,6 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
-  src/utilities/logger.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -812,9 +825,18 @@ set_target_properties(
 
 # Note: This must come before the target_compile_options below so that the function can modify the
 # flags if necessary.
-enable_static_checkers(
-  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
-)
+if(CUDF_CLANG_TIDY OR CUDF_IWYU)
+  set(linters)
+  if(CUDF_CLANG_TIDY)
+    list(APPEND linters CLANG_TIDY)
+  endif()
+  if(CUDF_IWYU)
+    list(APPEND linters IWYU)
+  endif()
+  enable_static_checkers(
+    cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ${linters}
+  )
+endif()
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
@@ -894,11 +916,10 @@ if(CUDF_LARGE_STRINGS_DISABLED)
   target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
-# Define RMM logging level
-target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
-
-# Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
+# Define logging level
+target_compile_definitions(
+  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=CUDF_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
+)
 
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
@@ -912,15 +933,26 @@ if(TARGET CUDA::cuFile${_cufile_suffix})
   target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
 endif()
 
+# Remove this after upgrading to a CCCL that has a proper CMake option. See
+# https://github.com/NVIDIA/cccl/pull/2844
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
+  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
+          nanoarrow
+          rmm::rmm_logger_impl
+          cudf_logger_impl
 )
 
 # Add Conda library, and include paths if specified
@@ -999,7 +1031,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
                            $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -1076,7 +1108,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm rmm::rmm_logger rmm::rmm_logger_impl)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()

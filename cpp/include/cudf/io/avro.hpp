@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,6 +208,7 @@ class avro_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -215,6 +216,7 @@ class avro_reader_options_builder {
  */
 table_with_metadata read_avro(
   avro_reader_options const& options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

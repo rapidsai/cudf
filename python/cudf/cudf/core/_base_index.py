@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -10,20 +10,19 @@ import pandas as pd
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.copying import _gather_map_is_valid, gather
-from cudf._lib.stream_compaction import (
-    apply_boolean_mask,
-    drop_duplicates,
-    drop_nulls,
-)
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
+from cudf.core.copy_types import GatherMap
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
-from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    can_convert_to_column,
+    is_mixed_with_object_dtype,
+)
 from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
@@ -132,7 +131,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -147,7 +146,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -264,7 +263,7 @@ class BaseIndex(Serializable):
         slice(1, 3, None)
         >>> multi_index.get_loc(('b', 'e'))
         1
-        """  # noqa: E501
+        """
 
     def max(self):
         """The maximum value of the index."""
@@ -323,11 +322,11 @@ class BaseIndex(Serializable):
         elif is_integer(level):
             if level != 0:
                 raise IndexError(
-                    f"Cannot get level: {level} " f"for index with 1 level"
+                    f"Cannot get level: {level} for index with 1 level"
                 )
             return self
         else:
-            raise KeyError(f"Requested level with name {level} " "not found")
+            raise KeyError(f"Requested level with name {level} not found")
 
     @property
     def names(self):
@@ -349,7 +348,7 @@ class BaseIndex(Serializable):
 
         self.name = values[0]
 
-    def _clean_nulls_from_index(self):
+    def _pandas_repr_compatible(self):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
@@ -413,7 +412,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
-    def nlevels(self):
+    def nlevels(self) -> int:
         """
         Number of levels.
         """
@@ -1446,7 +1445,7 @@ class BaseIndex(Serializable):
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
         res = res.sort_values(
-            by=res._data.to_pandas_index()[1:], ignore_index=True
+            by=res._data.to_pandas_index[1:], ignore_index=True
         )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
@@ -1465,7 +1464,7 @@ class BaseIndex(Serializable):
             ._data
         )
 
-        if sort is {None, True} and len(other):
+        if sort in {None, True} and len(other):
             return intersection_result.sort_values()
         return intersection_result
 
@@ -1941,9 +1940,8 @@ class BaseIndex(Serializable):
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
         return self._from_columns_like_self(
-            drop_duplicates(
+            stream_compaction.drop_duplicates(
                 list(self._columns),
-                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
@@ -2029,10 +2027,9 @@ class BaseIndex(Serializable):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            drop_nulls(
+            stream_compaction.drop_nulls(
                 data_columns,
                 how=how,
-                keys=range(len(data_columns)),
             ),
             self._column_names,
         )
@@ -2048,15 +2045,11 @@ class BaseIndex(Serializable):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if gather_map.dtype.kind not in "iu":
-            gather_map = gather_map.astype(size_type_dtype)
+            gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
-        if not _gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
+        GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
-            gather(list(self._columns), gather_map, nullify=nullify),
+            copying.gather(self._columns, gather_map, nullify=nullify),
             self._column_names,
         )
 
@@ -2105,7 +2098,9 @@ class BaseIndex(Serializable):
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(
-            apply_boolean_mask(list(self._columns), boolean_mask),
+            stream_compaction.apply_boolean_mask(
+                list(self._columns), boolean_mask
+            ),
             column_names=self._column_names,
         )
 
