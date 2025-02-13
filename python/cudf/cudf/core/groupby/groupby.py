@@ -657,7 +657,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the size of each group.
         """
-        col = cudf.core.column.column_empty(len(self.obj), "int8")
+        col = column_empty(len(self.obj), np.dtype(np.int8))
         result = (
             cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
@@ -684,10 +684,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         return (
             cudf.Series._from_column(
-                cudf.core.column.column_empty(
-                    len(self.obj),
-                    "int8",
-                ),
+                column_empty(len(self.obj), np.dtype(np.int8)),
                 index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
@@ -1643,12 +1640,25 @@ class GroupBy(Serializable, Reducible, Scannable):
         the keys. The aggs are applied to the corresponding column in the tuple.
         Each agg can be string or lambda functions.
         """
-
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
         # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
         # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
         if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
+                if any(
+                    is_list_like(values) and len(set(values)) != len(values)  # type: ignore[arg-type]
+                    for values in aggs.values()
+                ):
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise NotImplementedError(
+                            "Duplicate aggregations per column are currently not supported."
+                        )
+                    else:
+                        warnings.warn(
+                            "Duplicate aggregations per column found. "
+                            "The resulting duplicate columns will be dropped.",
+                            UserWarning,
+                        )
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
