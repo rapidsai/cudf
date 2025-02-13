@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
+from numba.np import numpy_support
 
 import pylibcudf as plc
 
@@ -14,10 +15,21 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
+from cudf.utils import cudautils
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import ScalarLike
     from cudf.core.column.decimal import DecimalDtype
+
+
+_unaryop_map = {
+    "ASIN": "ARCSIN",
+    "ACOS": "ARCCOS",
+    "ATAN": "ARCTAN",
+    "INVERT": "BIT_INVERT",
+}
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
@@ -267,4 +279,27 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
+        )
+
+    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
+        if callable(unaryop):
+            nb_type = numpy_support.from_dtype(self.dtype)
+            nb_signature = (nb_type,)
+            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
+            np_dtype = np.dtype(compiled_op[1])
+            return self.transform(compiled_op, np_dtype)
+
+        unaryop = unaryop.upper()
+        unaryop = _unaryop_map.get(unaryop, unaryop)
+        unaryop = plc.unary.UnaryOperator[unaryop]
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.unary.unary_operation(
+                    self.to_pylibcudf(mode="read"), unaryop
+                )
+            )
+
+    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
+        raise NotImplementedError(
+            "transform is not implemented for NumericalBaseColumn"
         )

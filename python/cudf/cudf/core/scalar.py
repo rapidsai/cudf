@@ -25,6 +25,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    cudf_dtype_from_pa_type,
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
@@ -75,6 +76,13 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
             raise ValueError(f"Can not coerce {value} to StructDType")
         else:
             return NA, dtype
+
+    if isinstance(value, pa.Scalar):
+        # TODO: Avoid converting to a Python scalar since we
+        # end up converting pyarrow.Scalars to pylibcudf.Scalars
+        if dtype is None:
+            dtype = cudf_dtype_from_pa_type(value.type)
+        return value.as_py(), dtype
 
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
         value = pa.scalar(
@@ -468,16 +476,16 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         # https://github.com/numpy/numpy/issues/17552
         return f"{self.__class__.__name__}({self.value!s}, dtype={self.dtype})"
 
-    def _binop_result_dtype_or_error(self, other, op):
+    def _binop_result_dtype_or_error(self, other, op) -> np.dtype:
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
-            return np.bool_
+            return np.dtype(np.bool_)
 
         out_dtype = get_allowed_combinations_for_operator(
             self.dtype, other.dtype, op
         )
 
         # datetime handling
-        if out_dtype in {"M", "m"}:
+        if out_dtype.kind in {"M", "m"}:
             if self.dtype.char in {"M", "m"} and other.dtype.char not in {
                 "M",
                 "m",
@@ -494,10 +502,10 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return cudf.dtype("m8" + f"[{res}]")
+                    return np.dtype(f"m8[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
-        return cudf.dtype(out_dtype)
+        return out_dtype
 
     def _binaryop(self, other, op: str):
         if is_scalar(other):
@@ -537,9 +545,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return cudf.dtype("float32")
+                return np.dtype(np.float32)
             else:
-                return cudf.dtype("float64")
+                return np.dtype(np.float64)
         return self.dtype
 
     def _scalar_unaop(self, op) -> None | Self:

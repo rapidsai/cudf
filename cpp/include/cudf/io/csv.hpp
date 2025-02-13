@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -916,7 +916,7 @@ class csv_reader_options_builder {
    */
   csv_reader_options_builder& prefix(std::string pfx)
   {
-    options._prefix = pfx;
+    options._prefix = std::move(pfx);
     return *this;
   }
 
@@ -1450,7 +1450,7 @@ class csv_writer_options {
    *
    * @return string to used for null entries
    */
-  [[nodiscard]] std::string get_na_rep() const { return _na_rep; }
+  [[nodiscard]] std::string const& get_na_rep() const { return _na_rep; }
 
   /**
    * @brief Whether to write headers to csv.
@@ -1471,7 +1471,7 @@ class csv_writer_options {
    *
    * @return Character used for separating lines
    */
-  [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
+  [[nodiscard]] std::string const& get_line_terminator() const { return _line_terminator; }
 
   /**
    * @brief Returns character used for separating column values.
@@ -1485,14 +1485,14 @@ class csv_writer_options {
    *
    * @return string used for values != 0 in INT8 types
    */
-  [[nodiscard]] std::string get_true_value() const { return _true_value; }
+  [[nodiscard]] std::string const& get_true_value() const { return _true_value; }
 
   /**
    * @brief Returns string used for values == 0 in INT8 types.
    *
    * @return string used for values == 0 in INT8 types
    */
-  [[nodiscard]] std::string get_false_value() const { return _false_value; }
+  [[nodiscard]] std::string const& get_false_value() const { return _false_value; }
 
   /**
    * @brief Returns the quote style for the writer.
@@ -1519,7 +1519,7 @@ class csv_writer_options {
    *
    * @param val String to represent null value
    */
-  void set_na_rep(std::string val) { _na_rep = val; }
+  void set_na_rep(std::string val) { _na_rep = std::move(val); }
 
   /**
    * @brief Enables/Disables headers being written to csv.
@@ -1540,7 +1540,7 @@ class csv_writer_options {
    *
    * @param term Character to represent line termination
    */
-  void set_line_terminator(std::string term) { _line_terminator = term; }
+  void set_line_terminator(std::string term) { _line_terminator = std::move(term); }
 
   /**
    * @brief Sets character used for separating column values.
@@ -1554,14 +1554,14 @@ class csv_writer_options {
    *
    * @param val String to represent values != 0 in INT8 types
    */
-  void set_true_value(std::string val) { _true_value = val; }
+  void set_true_value(std::string val) { _true_value = std::move(val); }
 
   /**
    * @brief Sets string used for values == 0 in INT8 types.
    *
    * @param val String to represent values == 0 in INT8 types
    */
-  void set_false_value(std::string val) { _false_value = val; }
+  void set_false_value(std::string val) { _false_value = std::move(val); }
 
   /**
    * @brief (Re)sets the table being written.
