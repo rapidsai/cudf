@@ -126,6 +126,16 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     return result
 
 
+def ndarray__reduce__(self):
+    return (
+        ndarray.__new__,
+        (
+            ndarray,
+            self._fsproxy_wrapped,
+        ),
+    )
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -140,6 +150,7 @@ ndarray = make_final_proxy_type(
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
         "__array_ufunc__": ndarray__array_ufunc__,
+        "__reduce__": ndarray__reduce__,
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device

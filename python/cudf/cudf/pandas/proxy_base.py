@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -20,16 +20,3 @@ class ProxyNDarrayBase(np.ndarray):
         if obj is None:
             return
         self._fsproxy_wrapped = getattr(obj, "_fsproxy_wrapped", obj)
-
-    def __reduce__(self):
-        return (
-            ProxyNDarrayBase.__new__,
-            (
-                ProxyNDarrayBase,
-                self._fsproxy_wrapped,
-            ),
-            (self._fsproxy_wrapped,),
-        )
-
-    def __setstate__(self, state):
-        self._fsproxy_wrapped = state[0]
