@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
@@ -112,8 +113,10 @@ class NodeTraverser(Protocol):
 class NodeTimer(Protocol):
     """Abstract protocol for polars NodeTimer."""
 
-    def store(self, name: str, start: int, end: int) -> None:
-        """Store node timing information."""
+    def record(
+        self, name: str, callback: Callable[..., DataFrame], args: tuple[Any]
+    ) -> DataFrame:
+        """Record node timing information."""
         ...
 
 

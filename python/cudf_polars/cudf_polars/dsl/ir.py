@@ -131,7 +131,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("_non_child_args", "schema")
+    __slots__ = ("_non_child_args", "profile_name", "schema")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     # Concrete classes should set this up with the arguments that will
@@ -139,6 +139,8 @@ class IR(Node["IR"]):
     _non_child_args: tuple[Any, ...]
     schema: Schema
     """Mapping from column names to their data types."""
+    profile_name: str
+    """Profile name to use during .profile() calls"""
 
     def get_hashable(self) -> Hashable:
         """
@@ -219,7 +221,7 @@ class IR(Node["IR"]):
         if node_timer:
             # TODO: fix naming (make class instance value)
             return node_timer.record(
-                str(type(self)).split(".")[-1],
+                self.profile_name,
                 self.do_evaluate,
                 (
                     *self._non_child_args,
@@ -242,7 +244,7 @@ class IR(Node["IR"]):
 class ErrorNode(IR):
     """Represents an error translating the IR."""
 
-    __slots__ = ("error",)
+    __slots__ = ("error", "profile_name")
     _non_child = (
         "schema",
         "error",
@@ -254,12 +256,13 @@ class ErrorNode(IR):
         self.schema = schema
         self.error = error
         self.children = ()
+        self.profile_name = "error_node"
 
 
 class PythonScan(IR):
     """Representation of input from a python function."""
 
-    __slots__ = ("options", "predicate")
+    __slots__ = ("options", "predicate", "profile_name")
     _non_child = ("schema", "options", "predicate")
     options: Any
     """Arbitrary options."""
@@ -271,6 +274,7 @@ class PythonScan(IR):
         self.options = options
         self.predicate = predicate
         self._non_child_args = (schema, options, predicate)
+        self.profile_name = "python_scan"
         self.children = ()
         raise NotImplementedError("PythonScan not implemented")
 
@@ -284,6 +288,7 @@ class Scan(IR):
         "n_rows",
         "paths",
         "predicate",
+        "profile_name",
         "reader_options",
         "row_index",
         "skip_rows",
@@ -364,6 +369,7 @@ class Scan(IR):
             row_index,
             predicate,
         )
+        self.profile_name = "scan"
         self.children = ()
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
@@ -683,7 +689,7 @@ class Cache(IR):
     Used for CSE at the plan level.
     """
 
-    __slots__ = ("key",)
+    __slots__ = ("key", "profile_name")
     _non_child = ("schema", "key")
     key: int
     """The cache key."""
@@ -691,6 +697,7 @@ class Cache(IR):
     def __init__(self, schema: Schema, key: int, value: IR):
         self.schema = schema
         self.key = key
+        self.profile_name = "cache"
         self.children = (value,)
         self._non_child_args = (key,)
 
@@ -728,7 +735,7 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("config_options", "df", "profile_name", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
     """Polars LazyFrame object."""
@@ -748,6 +755,7 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.config_options = config_options
+        self.profile_name = "dataframe_scan"
         self._non_child_args = (schema, df, self.projection)
         self.children = ()
 
@@ -789,7 +797,7 @@ class DataFrameScan(IR):
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
-    __slots__ = ("exprs", "should_broadcast")
+    __slots__ = ("exprs", "profile_name", "should_broadcast")
     _non_child = ("schema", "exprs", "should_broadcast")
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
@@ -806,6 +814,7 @@ class Select(IR):
         self.schema = schema
         self.exprs = tuple(exprs)
         self.should_broadcast = should_broadcast
+        self.profile_name = "select"
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
 
@@ -831,7 +840,7 @@ class Reduce(IR):
     This is a special case of :class:`Select` where all outputs are a single row.
     """
 
-    __slots__ = ("exprs",)
+    __slots__ = ("exprs", "profile_name")
     _non_child = ("schema", "exprs")
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
@@ -841,6 +850,7 @@ class Reduce(IR):
     ):  # pragma: no cover; polars doesn't emit this node yet
         self.schema = schema
         self.exprs = tuple(exprs)
+        self.profile_name = "reduce"
         self.children = (df,)
         self._non_child_args = (self.exprs,)
 
@@ -865,6 +875,7 @@ class GroupBy(IR):
         "keys",
         "maintain_order",
         "options",
+        "profile_name",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
     keys: tuple[expr.NamedExpr, ...]
@@ -885,6 +896,7 @@ class GroupBy(IR):
         options: Any,
         df: IR,
     ):
+        self.profile_name = "group_by"
         self.schema = schema
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
@@ -1034,7 +1046,7 @@ class GroupBy(IR):
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
-    __slots__ = ("ast_predicate", "options", "predicate")
+    __slots__ = ("ast_predicate", "options", "predicate", "profile_name")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
     """Expression predicate to join on"""
@@ -1065,6 +1077,7 @@ class ConditionalJoin(IR):
         self.schema = schema
         self.predicate = predicate
         self.options = options
+        self.profile_name = "ie_join"
         self.children = (left, right)
         self.ast_predicate = to_ast(predicate)
         _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
@@ -1116,7 +1129,7 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
+    __slots__ = ("left_on", "options", "profile_name", "right_on")
     _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
@@ -1153,6 +1166,7 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
+        self.profile_name = "join"
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
@@ -1364,7 +1378,7 @@ class Join(IR):
 class HStack(IR):
     """Add new columns to a dataframe."""
 
-    __slots__ = ("columns", "should_broadcast")
+    __slots__ = ("columns", "profile_name", "should_broadcast")
     _non_child = ("schema", "columns", "should_broadcast")
     should_broadcast: bool
     """Should the resulting evaluated columns be broadcast to the same length."""
@@ -1379,6 +1393,7 @@ class HStack(IR):
         self.schema = schema
         self.columns = tuple(columns)
         self.should_broadcast = should_broadcast
+        self.profile_name = "hstack"
         self._non_child_args = (self.columns, self.should_broadcast)
         self.children = (df,)
 
@@ -1410,7 +1425,7 @@ class HStack(IR):
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
-    __slots__ = ("keep", "stable", "subset", "zlice")
+    __slots__ = ("keep", "profile_name", "stable", "subset", "zlice")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
@@ -1437,6 +1452,7 @@ class Distinct(IR):
         self.zlice = zlice
         self.stable = stable
         self._non_child_args = (keep, subset, zlice, stable)
+        self.profile_name = "distinct"
         self.children = (df,)
 
     _KEEP_MAP: ClassVar[dict[str, plc.stream_compaction.DuplicateKeepOption]] = {
@@ -1497,7 +1513,7 @@ class Distinct(IR):
 class Sort(IR):
     """Sort a dataframe."""
 
-    __slots__ = ("by", "null_order", "order", "stable", "zlice")
+    __slots__ = ("by", "null_order", "order", "profile_name", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
@@ -1533,6 +1549,7 @@ class Sort(IR):
             self.stable,
             self.zlice,
         )
+        self.profile_name = "sort"
         self.children = (df,)
 
     @classmethod
@@ -1578,7 +1595,7 @@ class Sort(IR):
 class Slice(IR):
     """Slice a dataframe."""
 
-    __slots__ = ("length", "offset")
+    __slots__ = ("length", "offset", "profile_name")
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
@@ -1590,6 +1607,7 @@ class Slice(IR):
         self.offset = offset
         self.length = length
         self._non_child_args = (offset, length)
+        self.profile_name = "slice"
         self.children = (df,)
 
     @classmethod
@@ -1601,7 +1619,7 @@ class Slice(IR):
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
-    __slots__ = ("mask",)
+    __slots__ = ("mask", "profile_name")
     _non_child = ("schema", "mask")
     mask: expr.NamedExpr
     """Expression to produce the filter mask."""
@@ -1610,6 +1628,7 @@ class Filter(IR):
         self.schema = schema
         self.mask = mask
         self._non_child_args = (mask,)
+        self.profile_name = "filter"
         self.children = (df,)
 
     @classmethod
@@ -1622,12 +1641,13 @@ class Filter(IR):
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
-    __slots__ = ()
+    __slots__ = ("profile_name",)
     _non_child = ("schema",)
 
     def __init__(self, schema: Schema, df: IR):
         self.schema = schema
         self._non_child_args = (schema,)
+        self.profile_name = "projection"
         self.children = (df,)
 
     @classmethod
@@ -1643,7 +1663,7 @@ class Projection(IR):
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
-    __slots__ = ("name", "options")
+    __slots__ = ("name", "options", "profile_name")
     _non_child = ("schema", "name", "options")
     name: str
     """Name of the function to apply"""
@@ -1667,6 +1687,7 @@ class MapFunction(IR):
         self.schema = schema
         self.name = name
         self.options = options
+        self.profile_name = "map_function"
         self.children = (df,)
         if self.name not in MapFunction._NAMES:
             raise NotImplementedError(f"Unhandled map function {self.name}")
@@ -1778,7 +1799,7 @@ class MapFunction(IR):
 class Union(IR):
     """Concatenate dataframes vertically."""
 
-    __slots__ = ("zlice",)
+    __slots__ = ("profile_name", "zlice")
     _non_child = ("schema", "zlice")
     zlice: tuple[int, int] | None
     """Optional slice to apply to the result."""
@@ -1787,6 +1808,7 @@ class Union(IR):
         self.schema = schema
         self.zlice = zlice
         self._non_child_args = (zlice,)
+        self.profile_name = "union"
         self.children = children
         schema = self.children[0].schema
 
@@ -1803,12 +1825,13 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ()
+    __slots__ = ("profile_name",)
     _non_child = ("schema",)
 
     def __init__(self, schema: Schema, *children: IR):
         self.schema = schema
         self._non_child_args = ()
+        self.profile_name = "hconcat"
         self.children = children
 
     @staticmethod
