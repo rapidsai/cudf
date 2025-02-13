@@ -24,38 +24,17 @@
 
 namespace cudf::io {
 
-namespace cufile_integration {
-
-namespace {
-/**
- * @brief Defines which cuFile usage to enable.
- */
-enum class usage_policy : uint8_t { OFF, GDS, ALWAYS, KVIKIO };
-
-/**
- * @brief Get the current usage policy.
- */
-usage_policy get_env_policy()
-{
-  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
-  if (env_val == "OFF") return usage_policy::OFF;
-  if (env_val == "GDS") return usage_policy::GDS;
-  if (env_val == "ALWAYS") return usage_policy::ALWAYS;
-  if (env_val == "KVIKIO") return usage_policy::KVIKIO;
-  CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
-}
-}  // namespace
-
-bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
-
-bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
-
-bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
+namespace kvikio_integration {
 
 void set_up_kvikio()
 {
   static std::once_flag flag{};
   std::call_once(flag, [] {
+    // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
+    // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
+    // initialized.
+    cudaFree(nullptr);
+
     auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
     kvikio::defaults::compat_mode_reset(compat_mode);
 
@@ -63,7 +42,8 @@ void set_up_kvikio()
     kvikio::defaults::thread_pool_nthreads_reset(nthreads);
   });
 }
-}  // namespace cufile_integration
+
+}  // namespace kvikio_integration
 
 namespace nvcomp_integration {
 

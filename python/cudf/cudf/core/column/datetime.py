@@ -601,12 +601,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = column.column_empty(0, dtype="object")
+            names = column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -981,6 +981,28 @@ class DatetimeColumn(column.ColumnBase):
         raise TypeError(
             "Cannot convert tz-naive timestamps, use tz_localize to localize"
         )
+
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+        else:
+            # Workaround for datetime types until the following issue is fixed:
+            # https://github.com/apache/arrow/issues/45341
+            return pd.Index(
+                pa_array.to_numpy(zero_copy_only=False, writable=True)
+            )
 
 
 class DatetimeTZColumn(DatetimeColumn):
