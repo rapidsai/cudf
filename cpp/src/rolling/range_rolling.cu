@@ -77,7 +77,7 @@ rmm::device_uvector<cudf::size_type> nulls_per_group(column_view const& orderby,
   return null_counts;
 }
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_window_bounds(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   column_view const& orderby,
   order order,
@@ -122,7 +122,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   CUDF_EXPECTS(
     group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.size(),
     "If a grouping table is provided, it must have same number of rows as the orderby column.");
-  return detail::make_range_window_bounds(
+  return detail::make_range_windows(
     group_keys, orderby, order, null_order, preceding, following, stream, mr);
 }
 
