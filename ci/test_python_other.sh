@@ -7,19 +7,9 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_other
 
-RAPIDS_VERSION="$(rapids-version)"
-
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
-  "dask-cudf=${RAPIDS_VERSION}" \
-  "cudf_kafka=${RAPIDS_VERSION}" \
-  "custreamz=${RAPIDS_VERSION}" \
-  "cudf-polars=${RAPIDS_VERSION}"
-
 rapids-logger "Check GPU usage"
 nvidia-smi
-
+rapids-print-env
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
