@@ -53,7 +53,7 @@ class Column:
         name: str | None = None,
     ):
         self.obj = column
-        self.is_scalar = self.obj.size() == 1
+        self.is_scalar = self.size == 1
         self.name = name
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
 
@@ -131,9 +131,7 @@ class Column:
             If the column is not length-1.
         """
         if not self.is_scalar:
-            raise ValueError(
-                f"Cannot convert a column of length {self.obj.size()} to scalar"
-            )
+            raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
         return plc.copying.get_element(self.obj, 0)
 
     def rename(self, name: str | None, /) -> Self:
@@ -303,7 +301,7 @@ class Column:
         -------
         Self with metadata set.
         """
-        if self.obj.size() <= 1:
+        if self.size <= 1:
             is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
@@ -329,7 +327,7 @@ class Column:
     def mask_nans(self) -> Self:
         """Return a shallow copy of self with nans masked out."""
         if plc.traits.is_floating_point(self.obj.type()):
-            old_count = self.obj.null_count()
+            old_count = self.null_count
             mask, new_count = plc.transform.nans_to_nulls(self.obj)
             result = type(self)(self.obj.with_mask(mask, new_count))
             if old_count == new_count:
@@ -349,3 +347,13 @@ class Column:
                 )
             ).as_py()
         return 0
+
+    @property
+    def size(self) -> int:
+        """Return the size of the column."""
+        return self.obj.size()
+
+    @property
+    def null_count(self) -> int:
+        """Return the number of Null values in the column."""
+        return self.obj.null_count()

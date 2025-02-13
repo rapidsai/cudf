@@ -79,7 +79,6 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -464,7 +463,6 @@ add_library(
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
-  src/interop/decimal_conversion_utilities.cu
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
@@ -547,7 +545,6 @@ add_library(
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
-  src/io/utilities/file_io_utilities.cpp
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
@@ -923,15 +920,6 @@ target_compile_definitions(
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
 
-# Enable cuFile support
-set(_cufile_suffix)
-if(CUDA_STATIC_CUFILE)
-  set(_cufile_suffix _static)
-endif()
-if(TARGET CUDA::cuFile${_cufile_suffix})
-  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
-endif()
-
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
@@ -944,7 +932,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
+          kvikio::kvikio nanoarrow
 )
 
 # Add Conda library, and include paths if specified
