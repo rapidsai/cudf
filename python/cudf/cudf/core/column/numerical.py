@@ -182,7 +182,7 @@ class NumericalColumn(NumericalBaseColumn):
     @acquire_spill_lock()
     def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
         plc_column = plc.transform.transform(
-            self.to_pylibcudf(mode="read"),
+            [self.to_pylibcudf(mode="read")],
             compiled_op[0],
             plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
             True,
