@@ -42,52 +42,53 @@ static void BM_transform_polynomials(nvbench::state& state)
                                   distribution_id::NORMAL,
                                   static_cast<key_type>(0),
                                   static_cast<key_type>(1));
-  auto table = create_random_table({cudf::type_to_id<key_type>()}, row_count{num_rows}, profile);
-  auto column_view = table->get_column(0);
+  auto column = create_random_column(cudf::type_to_id<key_type>(), row_count{num_rows}, profile);
 
-  std::vector<key_type> constants;
+  std::vector<std::unique_ptr<cudf::column>> constants;
 
-  {
-    std::random_device random_device;
-    std::mt19937 generator;
-    std::uniform_real_distribution<key_type> distribution{0, 1};
-
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(order + 1),
-                   std::back_inserter(constants),
-                   [&](int) { return distribution(generator); });
-  }
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(order + 1),
+    std::back_inserter(constants),
+    [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(num_rows);
   state.add_global_memory_writes<key_type>(num_rows);
+
+  std::vector<cudf::column_view> inputs{*column};
+  std::transform(constants.begin(),
+                 constants.end(),
+                 std::back_inserter(inputs),
+                 [](auto& col) -> cudf::column_view { return *col; });
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
 
     cudf::scoped_range range{"benchmark_iteration"};
 
-    std::string expr = std::to_string(constants[0]);
+    std::string type = cudf::type_to_name(cudf::data_type{cudf::type_to_id<key_type>()});
 
-    for (cudf::size_type i = 0; i < order; i++) {
-      expr = "( " + expr + " ) * x + " + std::to_string(constants[i + 1]);
+    std::string params_decl = type + " c0";
+    std::string expr        = "c0";
+
+    for (cudf::size_type i = 1; i < order + 1; i++) {
+      expr = "( " + expr + " ) * x +  c" + std::to_string(i);
+      params_decl += ", " + type + " c" + std::to_string(i);
     }
 
     static_assert(std::is_same_v<key_type, float> || std::is_same_v<key_type, double>);
-    std::string type = std::is_same_v<key_type, float> ? "float" : "double";
 
-    std::string udf = R"***(
-__device__ inline void    compute_polynomial   (
-       )***" + type + R"***(* out,
-       )***" + type + R"***( x
-)
-{
-  *out = )***" + expr +
-                      R"***(;
-}
-)***";
+    // clang-format off
+    std::string udf = 
+    "__device__ inline void compute_polynomial(" + type + "* out, " + type + " x, " + params_decl + ")" +
+"{ "
+" *out = " + expr + ";"
+"}";
 
-    cudf::transform(column_view,
+    // clang-format on
+
+    cudf::transform(inputs,
                     udf,
                     cudf::data_type{cudf::type_to_id<key_type>()},
                     false,
