@@ -76,6 +76,13 @@ files:
       - py_version
       - test_base
       - test_xgboost
+  test_catboost:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_catboost
   test_cuml:
     output: none
     includes:
@@ -243,6 +250,15 @@ dependencies:
           - scikit-learn
           - pip
           - xgboost>=2.0.1
+  test_catboost:
+    common:
+      - output_types: conda
+        packages:
+        # TODO: Remove numpy pinning once https://github.com/catboost/catboost/issues/2671 is resolved
+          - numpy>=1.23,<2.0.0
+          - scipy
+          - scikit-learn
+          - catboost
   test_cuml:
     common:
       - output_types: conda
