@@ -12,7 +12,6 @@ from packaging import version
 from ..fast_slow_proxy import (
     _fast_slow_function_call,
     _FastSlowAttribute,
-    _FinalProxy,
     is_proxy_object,
     make_final_proxy_type,
     make_intermediate_proxy_type,
@@ -151,8 +150,6 @@ ndarray = make_final_proxy_type(
         "_fsproxy_wrap": classmethod(wrap_ndarray),
         "base": _FastSlowAttribute("base", private=True),
         "data": _FastSlowAttribute("data", private=True),
-        "__reduce__": _FinalProxy.__reduce__,
-        "__setstate__": _FinalProxy.__setstate__,
     },
 )
 
