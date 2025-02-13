@@ -22,4 +22,14 @@ class ProxyNDarrayBase(np.ndarray):
         self._fsproxy_wrapped = getattr(obj, "_fsproxy_wrapped", obj)
 
     def __reduce__(self):
-        return (self.__class__, (self._fsproxy_wrapped,))
+        return (
+            ProxyNDarrayBase.__new__,
+            (
+                ProxyNDarrayBase,
+                self._fsproxy_wrapped,
+            ),
+            (self._fsproxy_wrapped,),
+        )
+
+    def __setstate__(self, state):
+        self._fsproxy_wrapped = state[0]
