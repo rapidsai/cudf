@@ -185,6 +185,8 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                         long_row},
                                                        {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = nvtext::normalize_characters(sv, *normalizer);  // test normalizer re-use
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false);
   results    = nvtext::normalize_characters(sv, *normalizer);
@@ -202,6 +204,8 @@ TEST_F(TextNormalizeTest, WithNormalizer)
                                                    long_row,
                                                    long_row},
                                                   {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = nvtext::normalize_characters(sv, *normalizer);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -231,6 +235,8 @@ TEST_F(TextNormalizeTest, SpecialTokens)
        long_row,
        long_row});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = nvtext::normalize_characters(sv, *normalizer);  // and again
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false, stv);
   results    = nvtext::normalize_characters(sv, *normalizer);
@@ -241,6 +247,8 @@ TEST_F(TextNormalizeTest, SpecialTokens)
        long_row,
        long_row,
        long_row});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = nvtext::normalize_characters(sv, *normalizer);  // and again
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

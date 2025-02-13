@@ -545,13 +545,8 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 {
   if (input.is_empty()) { return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING}); }
 
-  auto const first_offset  = (input.offset() == 0) ? 0
-                                                   : cudf::strings::detail::get_offset_value(
-                                                      input.offsets(), input.offset(), stream);
-  auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                               ? input.chars_size(stream)
-                               : cudf::strings::detail::get_offset_value(
-                                 input.offsets(), input.size() + input.offset(), stream);
+  auto [first_offset, last_offset] =
+    cudf::strings::detail::get_first_and_last_offset(input, stream);
   auto const chars_size    = last_offset - first_offset;
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
