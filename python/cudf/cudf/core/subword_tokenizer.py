@@ -5,6 +5,7 @@ from __future__ import annotations
 import warnings
 
 import cupy as cp
+import numpy as np
 
 import pylibcudf as plc
 
@@ -19,7 +20,7 @@ def _cast_to_appropriate_type(ar, cast_type):
     elif cast_type == "tf":
         from tensorflow.experimental.dlpack import from_dlpack
 
-    return from_dlpack(ar.astype("int32").toDlpack())
+    return from_dlpack(ar.astype(np.dtype(np.int32)).toDlpack())
 
 
 class SubwordTokenizer:

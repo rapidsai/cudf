@@ -28,6 +28,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
+    column_empty,
     deserialize_columns,
     serialize_columns,
 )
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from types import ModuleType
 
-    from cudf._typing import Dtype, ScalarLike
+    from cudf._typing import Dtype, DtypeObj, ScalarLike
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -319,7 +320,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return self._num_rows
 
     @_performance_tracking
-    def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
+    def astype(
+        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+    ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
@@ -999,7 +1002,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].astype("category")
+                result[name] = result[name].astype(
+                    cudf.CategoricalDtype(
+                        categories=column_empty(0, dtype=result[name].dtype)
+                    )
+                )
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"

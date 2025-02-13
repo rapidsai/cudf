@@ -62,6 +62,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     can_convert_to_column,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -77,6 +78,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
+        Dtype,
         NotImplementedType,
         ScalarLike,
     )
@@ -115,7 +117,7 @@ def _describe_timetype(obj, percentiles, typ):
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles)
-                .astype("str")
+                .astype(CUDF_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
             )
@@ -629,6 +631,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
@@ -684,9 +688,6 @@ class Series(SingleColumnFrame, IndexedFrame):
                 column = column.copy(deep=True)
 
         assert isinstance(column, ColumnBase)
-
-        if dtype is not None:
-            column = column.astype(dtype)
 
         if name_from_data is not None and name is None:
             name = name_from_data
@@ -1460,12 +1461,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype("str")
+                    preprocess.astype(CUDF_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                "str"
+                                CUDF_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -2123,18 +2124,19 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
                     "Only the Series name can be used for the key in Series "
                     "dtype mappings."
                 )
+            dtype = {self.name: cudf.dtype(dtype[self.name])}
         else:
-            dtype = {self.name: dtype}
+            dtype = {self.name: cudf.dtype(dtype)}
         return super().astype(dtype, copy, errors)
 
     @_performance_tracking
@@ -4181,9 +4183,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * np.int32(
-            1000
-        )
+        extra = self.series._column.millisecond.astype(
+            np.dtype(np.int32)
+        ) * np.int32(1000)
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4443,7 +4445,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int8
         """
         return self._return_result_like_self(
-            self.series._column.quarter.astype(np.int8)
+            self.series._column.quarter.astype(np.dtype(np.int8))
         )
 
     @_performance_tracking

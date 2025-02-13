@@ -28,6 +28,7 @@ from cudf.core.column.methods import ColumnMethods
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     dtype_to_pylibcudf_type,
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -329,13 +331,15 @@ class StringMethods(ColumnMethods):
                 )
             ):
                 other_cols = (
-                    column.as_column(frame.reindex(parent_index), dtype="str")
+                    column.as_column(
+                        frame.reindex(parent_index), dtype=CUDF_STRING_DTYPE
+                    )
                     if (
                         parent_index is not None
                         and isinstance(frame, cudf.Series)
                         and not frame.index.equals(parent_index)
                     )
-                    else column.as_column(frame, dtype="str")
+                    else column.as_column(frame, dtype=CUDF_STRING_DTYPE)
                     for frame in others
                 )
             elif others is not None and not isinstance(others, StringMethods):
@@ -346,7 +350,9 @@ class StringMethods(ColumnMethods):
                 ):
                     others = others.reindex(parent_index)
 
-                other_cols = [column.as_column(others, dtype="str")]
+                other_cols = [
+                    column.as_column(others, dtype=CUDF_STRING_DTYPE)
+                ]
             else:
                 raise TypeError(
                     "others must be Series, Index, DataFrame, np.ndarrary "
@@ -819,10 +825,14 @@ class StringMethods(ColumnMethods):
             # TODO: we silently ignore the `regex=` flag here
             if case is False:
                 input_column = self.lower()._column  # type: ignore[union-attr]
-                col_pat = cudf.Index(pat, dtype="str").str.lower()._column  # type: ignore[union-attr]
+                col_pat = (
+                    cudf.Index(pat, dtype=CUDF_STRING_DTYPE)
+                    .str.lower()
+                    ._column
+                )  # type: ignore[union-attr]
             else:
                 input_column = self._column
-                col_pat = column.as_column(pat, dtype="str")
+                col_pat = column.as_column(pat, dtype=CUDF_STRING_DTYPE)
             with acquire_spill_lock():
                 plc_result = plc.strings.find.contains(
                     input_column.to_pylibcudf(mode="read"),
@@ -1049,15 +1059,21 @@ class StringMethods(ColumnMethods):
                     plc_result = plc.strings.replace_re.replace_re(
                         self._column.to_pylibcudf(mode="read"),
                         list(pat),
-                        column.as_column(repl, dtype="str").to_pylibcudf(
-                            mode="read"
-                        ),
+                        column.as_column(
+                            repl, dtype=CUDF_STRING_DTYPE
+                        ).to_pylibcudf(mode="read"),
                     )
                     result = Column.from_pylibcudf(plc_result)
             else:
                 result = self._column.replace_multiple(
-                    cast(StringColumn, column.as_column(pat, dtype="str")),
-                    cast(StringColumn, column.as_column(repl, dtype="str")),
+                    cast(
+                        StringColumn,
+                        column.as_column(pat, dtype=CUDF_STRING_DTYPE),
+                    ),
+                    cast(
+                        StringColumn,
+                        column.as_column(repl, dtype=CUDF_STRING_DTYPE),
+                    ),
                 )
             return self._return_or_inplace(result)
         # Pandas treats 0 as all
@@ -3946,9 +3962,9 @@ class StringMethods(ColumnMethods):
         if isinstance(pat, str):
             plc_pat = pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string()))
         elif isinstance(pat, tuple) and all(isinstance(p, str) for p in pat):
-            plc_pat = column.as_column(pat, dtype="str").to_pylibcudf(
-                mode="read"
-            )
+            plc_pat = column.as_column(
+                pat, dtype=CUDF_STRING_DTYPE
+            ).to_pylibcudf(mode="read")
         else:
             raise TypeError(
                 f"expected a string or tuple, not {type(pat).__name__}"
@@ -5550,7 +5566,7 @@ def _massage_string_arg(
 
     if allow_col:
         if isinstance(value, list):
-            return column.as_column(value, dtype="str")  # type: ignore[return-value]
+            return column.as_column(value, dtype=CUDF_STRING_DTYPE)  # type: ignore[return-value]
 
         if isinstance(value, StringColumn):
             return value
@@ -5796,23 +5812,22 @@ class StringColumn(column.ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        out_dtype = cudf.api.types.dtype(dtype)
-        if out_dtype.kind == "b":
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if dtype.kind == "b":
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")
                 )
                 result = Column.from_pylibcudf(plc_column)
             return (result > np.int8(0)).fillna(False)
-        elif out_dtype.kind in {"i", "u"}:
+        elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
-        elif out_dtype.kind == "f":
+        elif dtype.kind == "f":
             if not self.is_float().all():
                 raise ValueError(
                     "Could not convert strings to float "
@@ -5820,10 +5835,8 @@ class StringColumn(column.ColumnBase):
                 )
             cast_func = plc.strings.convert.convert_floats.to_floats
         else:
-            raise ValueError(
-                f"dtype must be a numerical type, not {out_dtype}"
-            )
-        plc_dtype = dtype_to_pylibcudf_type(out_dtype)
+            raise ValueError(f"dtype must be a numerical type, not {dtype}")
+        plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
@@ -5885,7 +5898,7 @@ class StringColumn(column.ColumnBase):
         return result_col  # type: ignore[return-value]
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         not_null = self.apply_boolean_mask(self.notnull())
         if len(not_null) == 0:
@@ -5898,13 +5911,13 @@ class StringColumn(column.ColumnBase):
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def as_decimal_column(
-        self, dtype: Dtype
+        self, dtype: DecimalDtype
     ) -> cudf.core.column.DecimalBaseColumn:
         plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
             self.to_pylibcudf(mode="read"),

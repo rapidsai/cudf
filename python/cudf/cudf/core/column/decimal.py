@@ -71,8 +71,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self,
-        dtype: Dtype,
-    ) -> "DecimalBaseColumn":
+        dtype: DecimalDtype,
+    ) -> DecimalBaseColumn:
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
@@ -222,7 +222,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return NotImplemented
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
