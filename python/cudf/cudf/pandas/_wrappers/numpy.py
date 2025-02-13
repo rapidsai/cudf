@@ -127,6 +127,13 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
 
 
 def ndarray__reduce__(self):
+    # As it stands the custom pickling logic used for all other
+    # proxy types is incompatible with our proxy ndarray. The pickle
+    # constructor we use to deserialize the other proxy types calls
+    # object.__new__(type) which you cannot call on subclasses of
+    # numpy arrays because the new array won't be created with numpy's
+    # specific memory management logic. Therefore, we have to handle
+    # serialization separately for proxy arrays.
     return (
         ndarray.__new__,
         (
