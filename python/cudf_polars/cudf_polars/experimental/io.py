@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -42,7 +42,6 @@ def _(
                 ir.schema,
                 ir.df.slice(offset, length),
                 ir.projection,
-                ir.predicate,
                 ir.config_options,
             )
             for offset in range(0, nrows, length)
@@ -244,7 +243,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
 
     # Use average total_uncompressed_size of three files
     # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
-    n_sample = 3
+    n_sample = min(3, len(ir.paths))
     column_sizes = {}
     ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
     for i, frag in enumerate(ds.get_fragments()):

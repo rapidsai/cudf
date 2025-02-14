@@ -44,7 +44,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-EXPECTED_FAILURES: Mapping[str, str] = {
+EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -122,6 +122,9 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_filter_and_limit[single-parquet-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_csv-write_csv]": "Need to add include_file_path to IR",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_parquet-write_parquet]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_csv-write_csv]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_ndjson-write_ndjson]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_ndjson-write_ndjson]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[read_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[<lambda>-write_csv]": "Need to add include_file_path to IR",
@@ -176,6 +179,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input15-expected15-input_dtype15-output_dtype15]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input16-expected16-input_dtype16-output_dtype16]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_binary_agg_with_literal": "Incorrect broadcasting of literals in groupby-agg",
+    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_aggregated_scalar_elementwise_15602": "Unsupported boolean function/dtype combination in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_schemas[data1-expr1-expected_select1-expected_gb1]": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/operations/test_join.py::test_cross_join_slice_pushdown": "Need to implement slice pushdown for cross joins",
@@ -205,6 +209,11 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # polars that the requested timezone is unknown.
     # Since this is random, just skip it, rather than xfailing.
     "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+    # The test may segfault with the legacy streaming engine. We should
+    # remove this skip when all polars tests use the new streaming engine.
+    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
+    # Fails in CI, but passes locally
+    "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
 }
 
 
@@ -219,4 +228,15 @@ def pytest_collection_modifyitems(
         if item.nodeid in TESTS_TO_SKIP:
             item.add_marker(pytest.mark.skip(reason=TESTS_TO_SKIP[item.nodeid]))
         elif item.nodeid in EXPECTED_FAILURES:
-            item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))
+            if isinstance(EXPECTED_FAILURES[item.nodeid], tuple):
+                # the second entry in the tuple is the condition to xfail on
+                item.add_marker(
+                    pytest.mark.xfail(
+                        condition=EXPECTED_FAILURES[item.nodeid][1],
+                        reason=EXPECTED_FAILURES[item.nodeid][0],
+                    ),
+                )
+            else:
+                item.add_marker(
+                    pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid])
+                )

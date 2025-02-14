@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 
@@ -9,13 +9,17 @@ set -euo pipefail
 
 RAPIDS_VERSION="$(rapids-version)"
 
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
 FILE_KEY=$1
 rapids-dependency-file-generator \
   --output conda \
-  --file-key ${FILE_KEY} \
+  --file-key "${FILE_KEY}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
     | tee "${ENV_YAML_DIR}/env.yaml"
 
@@ -25,10 +29,6 @@ rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 set +u
 conda activate test
 set -u
-
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
@@ -41,4 +41,5 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
   "cudf=${RAPIDS_VERSION}" \
+  "pylibcudf=${RAPIDS_VERSION}" \
   "libcudf=${RAPIDS_VERSION}"

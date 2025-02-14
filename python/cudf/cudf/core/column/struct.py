@@ -120,7 +120,7 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return dict(zip(self.dtype.fields, result.values()))
+        return self.dtype._recursively_replace_fields(result)
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):
@@ -267,13 +267,15 @@ class StructMethods(ColumnMethods):
         2  3  z
         3  4  a
         """
+        data = {
+            name: col.copy(deep=True)
+            for name, col in zip(
+                self._column.dtype.fields, self._column.children
+            )
+        }
+        rangeindex = len(data) == 0
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
-                {
-                    name: col.copy(deep=True)
-                    for name, col in zip(
-                        self._column.dtype.fields, self._column.children
-                    )
-                }
+                data, rangeindex=rangeindex
             )
         )

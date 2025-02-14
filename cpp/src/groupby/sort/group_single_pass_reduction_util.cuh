@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/std/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -204,7 +204,7 @@ struct group_reduction_functor<
                    thrust::logical_or{});
 
       auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
+        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
     return result;
@@ -257,7 +257,7 @@ struct group_reduction_functor<
                    thrust::logical_or{});
 
       auto [null_mask, null_count] =
-        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
+        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
 

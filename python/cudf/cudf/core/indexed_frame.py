@@ -20,6 +20,7 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
@@ -27,7 +28,6 @@ import pylibcudf as plc
 import cudf
 import cudf._lib as libcudf
 import cudf.core
-import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -38,7 +38,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -50,6 +50,7 @@ from cudf.core.index import RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.utils import (
     _compile_or_get,
     _get_input_args_from_frame,
@@ -3122,7 +3123,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_duplicates(
+            stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3255,12 +3256,13 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
-        result = copying.scatter(
-            [cudf.Scalar(False)],
+        result = as_column(
+            True, length=len(self), dtype=bool
+        )._scatter_by_column(
             distinct,
-            [as_column(True, length=len(self), dtype=bool)],
+            pa_scalar_to_plc_scalar(pa.scalar(False)),
             bounds_check=False,
-        )[0]
+        )
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
@@ -3659,6 +3661,9 @@ class IndexedFrame(Frame):
             by_columns = by_in_index
         else:
             raise KeyError(by)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
@@ -3895,7 +3900,7 @@ class IndexedFrame(Frame):
                 df._data[name].copy(deep=deep)
                 if name in df._data
                 else cudf.core.column.column.column_empty(
-                    dtype=dtypes.get(name, np.float64),
+                    dtype=dtypes.get(name, np.dtype(np.float64)),
                     row_count=len(index),
                 )
             )
@@ -4378,7 +4383,7 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_nulls(
+            stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(subset),
@@ -4401,7 +4406,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.apply_boolean_mask(
+            stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),
@@ -5022,7 +5027,7 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype: dict[Any, Dtype],
+        dtype: Dtype | dict[Any, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -6335,13 +6340,13 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def rank(
         self,
-        axis=0,
-        method="average",
-        numeric_only=False,
-        na_option="keep",
-        ascending=True,
-        pct=False,
-    ):
+        axis: Literal[0, "index"] = 0,
+        method: Literal["average", "min", "max", "first", "dense"] = "average",
+        numeric_only: bool = False,
+        na_option: Literal["keep", "top", "bottom"] = "keep",
+        ascending: bool = True,
+        pct: bool = False,
+    ) -> Self:
         """
         Compute numerical data ranks (1 through n) along axis.
 
@@ -6399,7 +6404,7 @@ class IndexedFrame(Frame):
         if numeric_only:
             if isinstance(
                 source, cudf.Series
-            ) and not _is_non_decimal_numeric_dtype(self.dtype):
+            ) and not _is_non_decimal_numeric_dtype(self.dtype):  # type: ignore[attr-defined]
                 raise TypeError(
                     "Series.rank does not allow numeric_only=True with "
                     "non-numeric dtype."
@@ -6411,7 +6416,7 @@ class IndexedFrame(Frame):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return source.astype("float64")
+                return source.astype(np.dtype(np.float64))
             elif source._num_columns != num_cols:
                 dropped_cols = True
 
@@ -6444,6 +6449,8 @@ class IndexedFrame(Frame):
             else plc.types.NullPolicy.INCLUDE
         )
 
+        if cudf.get_option("mode.pandas_compatible"):
+            source = source.nans_to_nulls()
         with acquire_spill_lock():
             result_columns = [
                 libcudf.column.Column.from_pylibcudf(

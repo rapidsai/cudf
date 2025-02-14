@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
 # Otherwise, we assume that the library was installed in a system path that ld can find.
@@ -36,7 +36,7 @@ from cudf.api.extensions import (
 from cudf.api.types import dtype
 from cudf.core.algorithms import factorize, unique
 from cudf.core.cut import cut
-from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
+from cudf.core.dataframe import DataFrame, from_pandas, merge
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 #include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <array>
+#include <numeric>
 #include <type_traits>
 
 namespace nvcomp = cudf::io::detail::nvcomp;
@@ -2068,6 +2069,7 @@ TEST_P(OrcCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
                         OrcCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));
@@ -2193,6 +2195,95 @@ TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
 
   EXPECT_NO_THROW(writer.close());
   EXPECT_EQ(out_buffer.size(), 0);
+}
+
+// Tests whether Y dimension of grid sizes depends on the number of row groups
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
+TEST_F(OrcReaderTest, DISABLED_Over65kRowGroups)
+{
+  auto constexpr row_group_size = 512;
+  constexpr auto num_rows       = (1 << 16) * row_group_size + 1;
+
+  auto vals_col = random_values<int32_t>(num_rows);
+  dec64_col col{vals_col.begin(), vals_col.end(), numeric::scale_type{2}};
+  table_view chunk_table({col});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, chunk_table)
+      .row_index_stride(row_group_size);
+
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options read_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(read_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
+}
+
+// Tests whether Y dimension of grid sizes depends on the number of stripes
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
+TEST_F(OrcReaderTest, DISABLED_Over65kStripes)
+{
+  auto constexpr stripe_size = 512;
+  constexpr auto num_rows    = (1 << 16) * stripe_size + 1;
+
+  auto vals_col = random_values<int32_t>(num_rows);
+  dec64_col col{vals_col.begin(), vals_col.end(), numeric::scale_type{2}};
+  table_view chunk_table({col});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, chunk_table)
+      .stripe_size_rows(stripe_size)
+      .compression(cudf::io::compression_type::NONE);
+
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options read_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(read_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
+}
+
+// Tests whether Y dimension of grid sizes depends on the number of columns
+// Disabled because of the high execution time (especially compared to the likelihood of regression)
+TEST_F(OrcWriterTest, DISABLED_Over65kColumns)
+{
+  auto vals_col = random_values<int32_t>(8);
+  dec64_col col{vals_col.begin(), vals_col.end(), numeric::scale_type{2}};
+  cudf::column_view col_view = col;
+  table_view expected(std::vector<cudf::column_view>{(1 << 16) + 1, col_view});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
+      .compression(cudf::io::compression_type::NONE);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
+{
+  std::vector<std::string> vals_col(8, "a");
+  str_col col{vals_col.begin(), vals_col.end()};
+  cudf::column_view col_view = col;
+  table_view expected(std::vector<cudf::column_view>{6400, col_view});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  // Write with compression on (default)
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

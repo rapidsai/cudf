@@ -220,11 +220,12 @@ ConfigureTest(
   REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
+  reductions/host_udf_example_tests.cu
+  reductions/list_rank_test.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
   GPUS 1
   PERCENT 70
@@ -306,25 +307,21 @@ ConfigureTest(
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(
-  FILE_IO_TEST io/file_io_test.cpp
-  GPUS 1
-  PERCENT 30
-)
-ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
   PERCENT 30
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -403,7 +400,6 @@ ConfigureTest(
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
-  utilities_tests/logger_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
@@ -696,6 +692,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
 endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COLUMN_VIEW_TEST streams/column_view_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
@@ -722,6 +719,7 @@ ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROUND_TEST streams/round_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SCALAR_TEST streams/scalar_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_STREAM_COMPACTION_TEST streams/stream_compaction_test.cpp STREAM_MODE testing)

@@ -1,15 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
 import contextlib
 import copy
+import cProfile
 import datetime
 import operator
 import os
 import pathlib
 import pickle
+import pstats
 import subprocess
 import tempfile
 import time
@@ -63,6 +65,10 @@ from pandas.tseries.holiday import (
     USPresidentsDay,
     USThanksgivingDay,
     get_calendar,
+)
+
+from cudf.pandas import (
+    is_proxy_instance,
 )
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
@@ -1217,25 +1223,6 @@ def test_intermediates_are_proxied():
     assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
 
 
-def test_from_dataframe():
-    cudf = pytest.importorskip("cudf")
-    from cudf.testing import assert_eq
-
-    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
-
-    cudf_pandas_df = xpd.DataFrame(data)
-    cudf_df = cudf.DataFrame(data)
-
-    # test construction of a cuDF DataFrame from an cudf_pandas DataFrame
-    assert_eq(cudf_df, cudf.DataFrame.from_pandas(cudf_pandas_df))
-    assert_eq(cudf_df, cudf.from_dataframe(cudf_pandas_df))
-
-    # ideally the below would work as well, but currently segfaults
-
-    # pd_df = pd.DataFrame(data)
-    # assert_eq(pd_df, pd.api.interchange.from_dataframe(cudf_pandas_df))
-
-
 def test_multiindex_values_returns_1d_tuples():
     mi = xpd.MultiIndex.from_tuples([(1, 2), (3, 4)])
     result = mi.values
@@ -1707,9 +1694,9 @@ def test_notebook_slow_repr():
         "tbody",
         "</table>",
     }:
-        assert (
-            string in html_result
-        ), f"Expected string {string} not found in the output"
+        assert string in html_result, (
+            f"Expected string {string} not found in the output"
+        )
 
 
 def test_numpy_ndarray_isinstancecheck(array):
@@ -1885,3 +1872,125 @@ def test_dataframe_setitem():
     new_df = df + 1
     df[df.columns] = new_df
     tm.assert_equal(df, new_df)
+
+
+def test_dataframe_get_fast_slow_methods():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    assert isinstance(df.as_gpu_object(), cudf.DataFrame)
+    assert isinstance(df.as_cpu_object(), pd.DataFrame)
+
+
+def test_is_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    index = xpd.Index([1, 2, 3])
+
+    assert is_proxy_instance(s, pd.Series)
+    assert is_proxy_instance(df, pd.DataFrame)
+    assert is_proxy_instance(index, pd.Index)
+    assert is_proxy_instance(index.values, np.ndarray)
+
+    for obj in [s, df, index, index.values]:
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Series)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Series)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.DataFrame)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.DataFrame)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Index)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Index)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, np.ndarray)
+        assert not is_proxy_instance(obj._fsproxy_fast, np.ndarray)
+
+
+def test_series_dtype_property():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = np.dtype(s)
+    actual = np.dtype(xs)
+    assert expected == actual
+
+
+def assert_functions_called(profiler, functions):
+    # Process profiling data
+    stream = StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+
+    # Get all called functions as (filename, lineno, func_name)
+    called_functions = {func[2] for func in stats.stats.keys()}
+    print(called_functions)
+    for func_str in functions:
+        assert func_str in called_functions
+
+
+def test_cudf_series_from_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+
+    with cProfile.Profile() as profiler:
+        gs = cudf.Series(s)
+
+    assert_functions_called(
+        profiler, ["as_gpu_object", "<method 'update' of 'dict' objects>"]
+    )
+
+    tm.assert_equal(s.as_gpu_object(), gs)
+
+
+def test_cudf_dataframe_from_cudf_pandas():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+
+    with cProfile.Profile() as profiler:
+        gdf = cudf.DataFrame(df)
+
+    assert_functions_called(
+        profiler, ["as_gpu_object", "<method 'update' of 'dict' objects>"]
+    )
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    gdf = cudf.DataFrame(
+        {"a": xpd.Series([1, 2, 3]), "b": xpd.Series([1, 2, 3])}
+    )
+
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+    df = xpd.DataFrame({0: [1, 2, 3], 1: [1, 2, 3]})
+    gdf = cudf.DataFrame(
+        [xpd.Series([1, 1]), xpd.Series([2, 2]), xpd.Series([3, 3])]
+    )
+
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+
+def test_cudf_index_from_cudf_pandas():
+    idx = xpd.Index([1, 2, 3])
+    with cProfile.Profile() as profiler:
+        gidx = cudf.Index(idx)
+    assert_functions_called(profiler, ["as_gpu_object"])
+
+    tm.assert_equal(idx.as_gpu_object(), gidx)
+
+
+def test_numpy_data_access():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = s.values.data
+    actual = xs.values.data
+
+    assert type(expected) is type(actual)
+
+
+def test_pickle_round_trip_proxy_numpy_array(array):
+    arr, proxy_arr = array
+    pickled_arr = BytesIO()
+    pickled_proxy_arr = BytesIO()
+    pickle.dump(arr, pickled_arr)
+    pickle.dump(proxy_arr, pickled_proxy_arr)
+
+    pickled_arr.seek(0)
+    pickled_proxy_arr.seek(0)
+
+    np.testing.assert_equal(
+        pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
+    )

@@ -21,8 +21,7 @@ import cudf
 import cudf.core.column.column as column
 from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core._internals import binaryop, unary
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
@@ -31,7 +30,12 @@ from cudf.core._internals.timezones import (
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    _get_base_dtype,
+    cudf_dtype_to_pa_type,
+)
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -182,7 +186,7 @@ def _resolve_mixed_dtypes(
     lhs_unit = units.index(lhs_time_unit)
     rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
     rhs_unit = units.index(rhs_time_unit)
-    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+    return np.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
 
 class DatetimeColumn(column.ColumnBase):
@@ -574,7 +578,7 @@ class DatetimeColumn(column.ColumnBase):
                 "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
                 "Use tz_localize instead."
             )
-        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
@@ -597,12 +601,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = column.column_empty(0, dtype="object")
+            names = column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -757,7 +761,7 @@ class DatetimeColumn(column.ColumnBase):
             }
             and other_is_datetime64
         ):
-            out_dtype = cudf.dtype(np.bool_)
+            out_dtype = np.dtype(np.bool_)
         elif op == "__add__" and other_is_timedelta:
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
@@ -778,7 +782,7 @@ class DatetimeColumn(column.ColumnBase):
             "NULL_EQUALS",
             "NULL_NOT_EQUALS",
         }:
-            out_dtype = cudf.dtype(np.bool_)
+            out_dtype = np.dtype(np.bool_)
             if isinstance(other, ColumnBase) and not isinstance(
                 other, DatetimeColumn
             ):
@@ -823,13 +827,14 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            max_int = np.iinfo(cudf.dtype("int64")).max
+            int64 = np.dtype(np.int64)
+            max_int = np.iinfo(int64).max
 
             max_dist = np.timedelta64(
-                self.max().astype(cudf.dtype("int64"), copy=False), self_res
+                self.max().astype(int64, copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(cudf.dtype("int64"), copy=False), self_res
+                self.min().astype(int64, copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
@@ -842,7 +847,7 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
+        elif to_dtype == np.dtype(np.int64) or to_dtype == CUDF_STRING_DTYPE:
             # can safely cast to representation, or string
             return True
         else:
@@ -950,7 +955,9 @@ class DatetimeColumn(column.ColumnBase):
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
-            cudf.Scalar(cudf.NaT, dtype=self.dtype),
+            pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
 
         transition_times, offsets = get_tz_data(tzname)
@@ -958,7 +965,7 @@ class DatetimeColumn(column.ColumnBase):
             localized.dtype
         )
         indices = (
-            search_sorted([transition_times_local], [localized], "right") - 1
+            transition_times_local.searchsorted(localized, side="right") - 1
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
@@ -974,6 +981,28 @@ class DatetimeColumn(column.ColumnBase):
         raise TypeError(
             "Cannot convert tz-naive timestamps, use tz_localize to localize"
         )
+
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+        else:
+            # Workaround for datetime types until the following issue is fixed:
+            # https://github.com/apache/arrow/issues/45341
+            return pd.Index(
+                pa_array.to_numpy(zero_copy_only=False, writable=True)
+            )
 
 
 class DatetimeTZColumn(DatetimeColumn):
@@ -1043,8 +1072,14 @@ class DatetimeTZColumn(DatetimeColumn):
     def _local_time(self):
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
-        transition_times = transition_times.astype(_get_base_dtype(self.dtype))
-        indices = search_sorted([transition_times], [self], "right") - 1
+        base_dtype = _get_base_dtype(self.dtype)
+        transition_times = transition_times.astype(base_dtype)
+        indices = (
+            transition_times.searchsorted(
+                self.astype(base_dtype), side="right"
+            )
+            - 1
+        )
         offsets_from_utc = offsets.take(indices, nullify=True)
         return self + offsets_from_utc
 
@@ -1082,9 +1117,7 @@ class DatetimeTZColumn(DatetimeColumn):
             pa.timestamp(self.dtype.unit, str(self.dtype.tz))
         )
         return (
-            f"{object.__repr__(self)}\n"
-            f"{arr.to_string()}\n"
-            f"dtype: {self.dtype}"
+            f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
         )
 
     def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):

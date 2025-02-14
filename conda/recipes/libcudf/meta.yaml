@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 {% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -37,7 +37,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     {% if cuda_major == "11" %}
-    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    - {{ compiler('cuda') }} ={{ cuda_version }}
     {% else %}
     - {{ compiler('cuda') }}
     {% endif %}
@@ -66,8 +66,8 @@ requirements:
     - nvcomp {{ nvcomp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
-    - fmt {{ fmt_version }}
     - flatbuffers {{ flatbuffers_version }}
+    - rapids-logger =0.1
     - zlib {{ zlib_version }}
 
 outputs:
@@ -80,11 +80,7 @@ outputs:
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
-        - {{ compiler('cuda11') }}
-        {% else %}
         - {{ compiler('cuda') }}
-        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -103,6 +99,7 @@ outputs:
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
+        - rapids-logger =0.1
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
@@ -120,11 +117,7 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
-        - {{ compiler('cuda11') }}
-        {% else %}
         - {{ compiler('cuda') }}
-        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -150,10 +143,8 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
-        - {{ compiler('cuda11') }}
-        {% else %}
         - {{ compiler('cuda') }}
+        {% if cuda_major != "11" %}
         - cuda-nvtx-dev
         {% endif %}
     requirements:
@@ -162,7 +153,7 @@ outputs:
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
         {% if cuda_major == "11" %}
-        - {{ compiler('cuda11') }} ={{ cuda_version }}
+        - {{ compiler('cuda') }} ={{ cuda_version }}
         {% else %}
         - {{ compiler('cuda') }}
         {% endif %}
@@ -196,10 +187,8 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
-        - {{ compiler('cuda11') }}
-        {% else %}
         - {{ compiler('cuda') }}
+        {% if cuda_major != "11" %}
         - libcurand-dev
         {% endif %}
     requirements:

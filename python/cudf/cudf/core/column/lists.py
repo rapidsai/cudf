@@ -21,6 +21,7 @@ from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
@@ -109,6 +110,13 @@ class ListColumn(ColumnBase):
                 current_base_child.size
             )
         return n
+
+    def element_indexing(self, index: int) -> list:
+        result = super().element_indexing(index)
+        if isinstance(result, list):
+            return self.dtype._recursively_replace_fields(result)
+        else:
+            return result
 
     def __setitem__(self, key, value):
         if isinstance(value, list):
@@ -285,7 +293,7 @@ class ListColumn(ColumnBase):
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(pa.scalar("None")),
+                pa_scalar_to_plc_scalar(pa.scalar("None")),
                 separators.to_pylibcudf(mode="read"),
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
@@ -395,7 +403,7 @@ class ListColumn(ColumnBase):
         return type(self).from_pylibcudf(
             plc.lists.contains(
                 self.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(search_key),
+                pa_scalar_to_plc_scalar(search_key),
             )
         )
 
@@ -404,7 +412,7 @@ class ListColumn(ColumnBase):
         return type(self).from_pylibcudf(
             plc.lists.index_of(
                 self.to_pylibcudf(mode="read"),
-                plc.interop.from_arrow(search_key),
+                pa_scalar_to_plc_scalar(search_key),
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
         )
@@ -537,7 +545,8 @@ class ListMethods(ColumnMethods):
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
                 out = out._scatter_by_column(
-                    out_of_bounds_mask, cudf.Scalar(default)
+                    out_of_bounds_mask,
+                    pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
         if out.dtype != self._column.dtype.element_type:
             # libcudf doesn't maintain struct labels so we must transfer over
@@ -706,7 +715,7 @@ class ListMethods(ColumnMethods):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
             raise ValueError(
-                "lists_indices and list column is of different " "size."
+                "lists_indices and list column is of different size."
             )
         if (
             not _is_non_decimal_numeric_dtype(

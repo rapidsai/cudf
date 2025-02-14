@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,15 +35,6 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
-/// Functor used by type dispatcher returning the size of the underlying C++ type
-struct size_of_functor {
-  template <typename T>
-  __device__ constexpr cudf::size_type operator()()
-  {
-    return sizeof(T);
-  }
-};
-
 /// Shared memory data alignment
 CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
 
@@ -108,7 +99,6 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
                                                   idx);
     }
   }
-  block.sync();
 }
 
 __device__ void compute_pre_aggregrations(cudf::size_type col_start,
@@ -183,7 +173,6 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                                   idx);
     }
   }
-  block.sync();
 }
 
 /* Takes the local_mapping_index and global_mapping_index to compute
@@ -222,6 +211,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
   block.sync();
 
   while (col_end < num_cols) {
+    block.sync();
     if (block.thread_rank() == 0) {
       calculate_columns_to_aggregate(col_start,
                                      col_end,
@@ -243,6 +233,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_mask_offsets,
                                   cardinality,
                                   d_agg_kinds);
+    block.sync();
 
     compute_pre_aggregrations(col_start,
                               col_end,
@@ -272,7 +263,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
-std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
+size_type get_available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -285,7 +276,7 @@ std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
 }
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
-                                std::size_t available_shmem_size,
+                                size_type available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
                                 bool skip_rows_with_nulls,

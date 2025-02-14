@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -483,73 +483,42 @@ TEST_F(ParquetWriterTest, DecimalWrite)
 
   auto table = table_view({col0, col1});
 
-  auto filepath = temp_env->get_temp_filepath("DecimalWrite.parquet");
-  cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table);
+  auto const test_decimal_write = [&](bool is_write_arrow_schema) {
+    auto filepath = temp_env->get_temp_filepath("DecimalWrite.parquet");
+    cudf::io::parquet_writer_options args =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+        .write_arrow_schema(is_write_arrow_schema);
 
-  cudf::io::table_input_metadata expected_metadata(table);
+    cudf::io::table_input_metadata expected_metadata(table);
 
-  // verify failure if too small a precision is given
-  expected_metadata.column_metadata[0].set_decimal_precision(7);
-  expected_metadata.column_metadata[1].set_decimal_precision(1);
-  args.set_metadata(expected_metadata);
-  EXPECT_THROW(cudf::io::write_parquet(args), cudf::logic_error);
+    // verify failure if too small a precision is given
+    expected_metadata.column_metadata[0].set_decimal_precision(7);
+    expected_metadata.column_metadata[1].set_decimal_precision(1);
+    args.set_metadata(expected_metadata);
+    EXPECT_THROW(cudf::io::write_parquet(args), cudf::logic_error);
 
-  // verify success if equal precision is given
-  expected_metadata.column_metadata[0].set_decimal_precision(7);
-  expected_metadata.column_metadata[1].set_decimal_precision(9);
-  args.set_metadata(std::move(expected_metadata));
-  cudf::io::write_parquet(args);
+    // verify success if equal precision is given
+    expected_metadata.column_metadata[0].set_decimal_precision(7);
+    expected_metadata.column_metadata[1].set_decimal_precision(9);
 
-  cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(read_opts);
+    // just plain encoding
+    expected_metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::PLAIN);
+    expected_metadata.column_metadata[1].set_encoding(cudf::io::column_encoding::PLAIN);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table);
-}
+    args.set_metadata(std::move(expected_metadata));
+    cudf::io::write_parquet(args);
 
-TEST_F(ParquetWriterTest, DecimalWriteWithArrowSchema)
-{
-  constexpr cudf::size_type num_rows = 500;
-  auto seq_col0                      = random_values<int32_t>(num_rows);
-  auto seq_col1                      = random_values<int64_t>(num_rows);
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .use_arrow_schema(true);
+    auto result = cudf::io::read_parquet(read_opts);
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table);
+  };
 
-  auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
-    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
-  auto col1 = cudf::test::fixed_point_column_wrapper<int64_t>{
-    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
-
-  auto table = table_view({col0, col1});
-
-  auto filepath = temp_env->get_temp_filepath("DecimalWriteWithArrowSchema.parquet");
-  cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
-      .write_arrow_schema(true);
-
-  cudf::io::table_input_metadata expected_metadata(table);
-  // verify success if equal precision is given
-  expected_metadata.column_metadata[0].set_decimal_precision(
-    cudf::io::parquet::detail::MAX_DECIMAL32_PRECISION);
-  expected_metadata.column_metadata[1].set_decimal_precision(
-    cudf::io::parquet::detail::MAX_DECIMAL64_PRECISION);
-  args.set_metadata(std::move(expected_metadata));
-  cudf::io::write_parquet(args);
-
-  auto expected_col0 = cudf::test::fixed_point_column_wrapper<__int128_t>{
-    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
-  auto expected_col1 = cudf::test::fixed_point_column_wrapper<__int128_t>{
-    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
-
-  auto expected_table = table_view({expected_col0, expected_col1});
-
-  cudf::io::parquet_reader_options read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(read_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected_table);
+  // Test decimal write with and without arrow schema
+  test_decimal_write(true);
+  test_decimal_write(false);
 }
 
 TEST_F(ParquetWriterTest, RowGroupSizeInvalid)

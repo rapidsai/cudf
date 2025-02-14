@@ -27,6 +27,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
+#include <limits>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -210,10 +211,24 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
+  // Create an empty device vector to store the initial str offset for large string columns from for
+  // string decoders.
+  auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
+
   pass.chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
-  if (has_strings) { chunk_nested_str_data.host_to_device_async(_stream); }
+  if (has_strings) {
+    // Host vector to initialize the initial string offsets
+    auto host_offsets_vector =
+      cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
+    std::fill(
+      host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
+    // Initialize the initial string offsets vector from the host vector
+    initial_str_offsets =
+      cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
+    chunk_nested_str_data.host_to_device_async(_stream);
+  }
 
   // create this before we fork streams
   kernel_error error_code(_stream);
@@ -231,19 +246,54 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    skip_rows,
                    level_type_size,
                    decoder_mask,
+                   initial_str_offsets,
                    error_code.data(),
                    streams[s_idx++]);
   };
 
-  // launch string decoder
+  // launch string decoder for plain encoded flat columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
-    DecodeStringPageData(subpass.pages,
-                         pass.chunks,
-                         num_rows,
-                         skip_rows,
-                         level_type_size,
-                         error_code.data(),
-                         streams[s_idx++]);
+    decode_data(decode_kernel_mask::STRING);
+  }
+
+  // launch string decoder for plain encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_NESTED);
+  }
+
+  // launch string decoder for plain encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_LIST);
+  }
+
+  // launch string decoder for dictionary encoded flat columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT);
+  }
+
+  // launch string decoder for dictionary encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT_NESTED);
+  }
+
+  // launch string decoder for dictionary encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_DICT_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_DICT_LIST);
+  }
+
+  // launch string decoder for byte-stream-split encoded flat columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT);
+  }
+
+  // launch string decoder for byte-stream-split encoded nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
+  }
+
+  // launch string decoder for byte-stream-split encoded list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
+    decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
   }
 
   // launch delta byte array decoder
@@ -253,6 +303,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
+                         initial_str_offsets,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -264,6 +315,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
+                               initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -368,6 +420,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
+  // Copy over initial string offsets from device
+  auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
+
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
@@ -405,6 +460,12 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
             static_cast<size_t>(strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
           final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
+        }
+        // Nested large strings column
+        else if (input_col.nesting_depth() > 0) {
+          CUDF_EXPECTS(h_initial_str_offsets[idx] != std::numeric_limits<size_t>::max(),
+                       "Encountered invalid initial offset for large string column");
+          out_buf.set_initial_string_offset(h_initial_str_offsets[idx]);
         }
       }
     }
@@ -548,6 +609,17 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
+
+  // Copy number of total input row groups and number of surviving row groups from predicate
+  // pushdown.
+  out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has value.
+  if (_expr_conv.get_converted_expr().has_value()) {
+    out_metadata.num_row_groups_after_stats_filter =
+      _file_itm_data.surviving_row_groups.after_stats_filter;
+    out_metadata.num_row_groups_after_bloom_filter =
+      _file_itm_data.surviving_row_groups.after_bloom_filter;
+  }
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -3200,7 +3200,7 @@ def generate_test_null_equals_columnops_data():
     "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
-    assert lcol.equals(rcol).all() == ans
+    assert lcol.equals(rcol) == ans
 
 
 def test_add_series_to_dataframe():
