@@ -100,7 +100,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     """
     if len(columns) == 0:
         return []
-    lengths: set[int] = {column.obj.size() for column in columns}
+    lengths: set[int] = {column.size for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
@@ -116,7 +116,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             )
     return [
         column
-        if column.obj.size() != 1
+        if column.size != 1
         else Column(
             plc.Column.from_scalar(column.obj_scalar, nrows),
             is_sorted=plc.types.Sorted.YES,
@@ -820,7 +820,7 @@ class Reduce(IR):
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
-        assert all(column.obj.size() == 1 for column in columns)
+        assert all(column.size == 1 for column in columns)
         return DataFrame(columns)
 
 

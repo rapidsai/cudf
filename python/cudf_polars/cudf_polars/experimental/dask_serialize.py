@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Dask serialization."""
@@ -12,7 +12,7 @@ from distributed.utils import log_errors
 import pylibcudf as plc
 import rmm
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import Column, DataFrame
 
 __all__ = ["register"]
 
@@ -20,8 +20,8 @@ __all__ = ["register"]
 def register() -> None:
     """Register dask serialization routines for DataFrames."""
 
-    @cuda_serialize.register(DataFrame)
-    def _(x: DataFrame):
+    @cuda_serialize.register((Column, DataFrame))
+    def _(x: DataFrame | Column):
         with log_errors():
             header, frames = x.serialize()
             return header, list(frames)  # Dask expect a list of frames
@@ -32,8 +32,14 @@ def register() -> None:
             assert len(frames) == 2
             return DataFrame.deserialize(header, tuple(frames))
 
-    @dask_serialize.register(DataFrame)
-    def _(x: DataFrame):
+    @cuda_deserialize.register(Column)
+    def _(header, frames):
+        with log_errors():
+            assert len(frames) == 2
+            return Column.deserialize(header, tuple(frames))
+
+    @dask_serialize.register((Column, DataFrame))
+    def _(x: DataFrame | Column):
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -57,3 +63,11 @@ def register() -> None:
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return DataFrame.deserialize(header, frames)
+
+    @dask_deserialize.register(Column)
+    def _(header, frames) -> Column:
+        with log_errors():
+            assert len(frames) == 2
+            # Copy the second frame (the gpudata in host memory) back to the gpu
+            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
+            return Column.deserialize(header, frames)
