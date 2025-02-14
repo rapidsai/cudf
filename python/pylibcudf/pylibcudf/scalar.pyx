@@ -111,6 +111,80 @@ cdef class Scalar:
         """
         return _from_py(py_val)
 
+    @classmethod
+    def from_numpy(cls, numpy_val):
+        """
+        Convert a NumPy scalar to a Scalar.
+
+        Parameters
+        ----------
+        numpy_val: numpy.bool_, numpy.(u)int(8/16/32/16), numpy.float(32/16),
+                   numpy.str_, numpy.datetime64, numpy.timedelta64
+            Value to convert to a pylibcudf.Scalar
+
+        Returns
+        -------
+        Scalar
+            New pylibcudf.Scalar
+        """
+        import numpy as np
+        if isinstance(numpy_val, np.bool_):
+            dtype = DataType(type_id.BOOL8)
+        if isinstance(numpy_val, np.str_):
+            dtype = DataType(type_id.STRING)
+        if isinstance(numpy_val, np.int8):
+            dtype = DataType(type_id.INT8)
+        elif isinstance(numpy_val, np.int16):
+            dtype = DataType(type_id.INT16)
+        elif isinstance(numpy_val, np.int32):
+            dtype = DataType(type_id.INT32)
+        elif isinstance(numpy_val, np.int64):
+            dtype = DataType(type_id.INT64)
+        elif isinstance(numpy_val, np.uint8):
+            dtype = DataType(type_id.UINT8)
+        elif isinstance(numpy_val, np.uint16):
+            dtype = DataType(type_id.UINT16)
+        elif isinstance(numpy_val, np.uint32):
+            dtype = DataType(type_id.UINT32)
+        elif isinstance(numpy_val, np.uint64):
+            dtype = DataType(type_id.UINT64)
+        elif isinstance(numpy_val, np.float32):
+            dtype = DataType(type_id.FLOAT32)
+        elif isinstance(numpy_val, np.float64):
+            dtype = DataType(type_id.FLOAT64)
+        elif isinstance(numpy_val, np.datetime64):
+            unit, _ = np.datetime_data(numpy_val)
+            if unit == "D":
+                dtype = DataType(type_id.TIMESTAMP_DAYS)
+            elif unit == "s":
+                dtype = DataType(type_id.TIMESTAMP_SECONDS)
+            elif unit == "ms":
+                dtype = DataType(type_id.TIMESTAMP_MILLISECONDS)
+            elif unit == "us":
+                dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+            elif unit == "us":
+                dtype = DataType(type_id.TIMESTAMP_NANOSECONDS)
+            else:
+                raise TypeError(f"{unit=} is not supported")
+            raise NotImplementedError("datetime64 is not yet supported")
+        elif isinstance(numpy_val, np.timedelta64):
+            unit, _ = np.datetime_data(numpy_val)
+            if unit == "D":
+                dtype = DataType(type_id.DURATION_DAYS)
+            elif unit == "s":
+                dtype = DataType(type_id.DURATION_SECONDS)
+            elif unit == "ms":
+                dtype = DataType(type_id.DURATION_MILLISECONDS)
+            elif unit == "us":
+                dtype = DataType(type_id.DURATION_MICROSECONDS)
+            elif unit == "us":
+                dtype = DataType(type_id.DURATION_NANOSECONDS)
+            else:
+                raise TypeError(f"{unit=} is not supported")
+            raise NotImplementedError("timedelta64 is not yet supported")
+        return _from_numpy(py_val)
+
+
 cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
     cdef Scalar s = Scalar.__new__(Scalar)
     s.c_obj.swap(c_obj)
