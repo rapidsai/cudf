@@ -27,7 +27,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -48,7 +47,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core import column, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
@@ -86,6 +85,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -779,7 +779,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
-                        k: column_empty(len(self), dtype="object")
+                        k: column_empty(len(self), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
                     level_names=tuple(columns.names)
@@ -985,7 +985,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column_empty(
-                        row_count=len(self), dtype=None
+                        row_count=len(self), dtype=np.dtype(np.float64)
                     )
             self._data._level_names = (
                 tuple(columns.names)
@@ -1036,7 +1036,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
-                data = [column_empty(row_count=0, dtype=None) for _ in columns]
+                data = [
+                    column_empty(row_count=0, dtype=np.dtype(np.float64))
+                    for _ in columns
+                ]
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
             self._data.rangeindex = True
@@ -3345,7 +3348,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dtype = value.dtype
                 value = value.item()
             if _is_null_host_scalar(value):
-                dtype = "str"
+                dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
@@ -5564,16 +5567,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
             return df
-        elif hasattr(dataframe, "__dataframe__"):
-            # TODO: Probably should be handled in the constructor as
-            # this isn't pandas specific
-            assert version.parse(cudf.__version__) < version.parse("25.04.00")
-            warnings.warn(
-                "Support for loading dataframes via the `__dataframe__` interchange "
-                "protocol is deprecated",
-                FutureWarning,
-            )
-            return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
                 f"Could not construct DataFrame from {type(dataframe)}"
@@ -7730,15 +7723,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             periods=periods, freq=freq, **kwargs
         )
 
-    def __dataframe__(
-        self, nan_as_null: bool = False, allow_copy: bool = True
-    ):
-        assert version.parse(cudf.__version__) < version.parse("25.04.00")
-        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
-        return df_protocol.__dataframe__(
-            self, nan_as_null=nan_as_null, allow_copy=allow_copy
-        )
-
     def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
         Count number of distinct elements in specified axis.
@@ -8181,29 +8165,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             index=metadata.get("index"),
         )
         return df
-
-
-def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
-    """
-    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
-
-    .. note::
-
-        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
-
-    Parameters
-    ----------
-    df : DataFrameXchg
-        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
-    allow_copy : bool, default: True
-        Whether to allow copying the memory to perform the conversion
-        (if false then zero-copy approach is requested).
-
-    Returns
-    -------
-    :class:`DataFrame`
-    """
-    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
 def make_binop_func(op, postprocess=None):

@@ -31,8 +31,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/count.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -357,7 +357,7 @@ std::size_t get_full_join_size(
     left_join_complement_size = thrust::count_if(rmm::exec_policy(stream),
                                                  invalid_index_map->begin(),
                                                  invalid_index_map->end(),
-                                                 thrust::identity());
+                                                 cuda::std::identity());
   }
   return join_size + left_join_complement_size;
 }
