@@ -3,19 +3,25 @@
 from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
 from libc.stdint cimport int64_t
+from libc.time cimport tm, mktime, time_t
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     numeric_scalar,
+    timestamp_scalar,
+    time_point,
+    system_clock,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
     make_string_scalar,
     make_numeric_scalar,
+    make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
+from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
 
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
@@ -26,6 +32,23 @@ from .types cimport DataType
 from functools import singledispatch
 
 __all__ = ["Scalar"]
+
+
+cdef time_point[system_clock] _datetime_to_time_point(datetime.datetime dt):
+    if dt.tzinfo is not None:
+        raise NotImplementedError("datetimes with timezones are not supported.")
+    if dt.microsecond != 0:
+        raise NotImplementedError("Non-zero mircoseconds are not supported.")
+    cdef tm time_struct
+    time_struct.tm_year = dt.year - 1900
+    time_struct.tm_mon = dt.month - 1
+    time_struct.tm_mday = dt.day
+    time_struct.tm_hour = dt.hour
+    time_struct.tm_min = dt.minute
+    time_struct.tm_sec = dt.second
+    cdef time_t time = mktime(&time_struct)
+    cdef time_point[system_clock] tp = system_clock.from_time_t(time)
+    return tp
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -164,5 +187,15 @@ def _(py_val):
 def _(py_val):
     cdef DataType dtype = DataType(type_id.STRING)
     cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
+    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+    return slr
+
+
+@_from_py.register(datetime.datetime)
+def _(py_val):
+    cdef DataType dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+    cdef time_point[system_clock] tp = _datetime_to_time_point(py_val)
+    cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(dtype.c_obj)
+    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp)
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)
     return slr
