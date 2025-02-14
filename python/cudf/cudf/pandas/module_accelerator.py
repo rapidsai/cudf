@@ -537,7 +537,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         The requested attribute (either real or wrapped)
         """
         use_real = (
-            loader._disable_count[threading.get_ident()] == 0
+            loader._disable_count[threading.get_ident()] > 0
             # If acceleration was disabled on the main thread, we should respect that.
             # This only works because we currently have no way to re-enable other than
             # exiting the disable context, so disabling on the parent thread means that
@@ -548,7 +548,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # disabled when the child was launched. That is a fairly rare pattern though
             # and we can document the limitations.
             # The main thread is always started, so the ident is always an int
-            or loader._disable_count[threading.main_thread().ident] == 0  # type: ignore
+            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore
         )
         if not use_real:
             # Only need to check the denylist if we're not turned off.
