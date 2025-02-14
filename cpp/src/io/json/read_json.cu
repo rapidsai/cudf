@@ -78,7 +78,7 @@ class compressed_host_buffer_source final : public datasource {
     }
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  std::size_t host_read(std::size_t offset, std::size_t size, uint8_t* dst) override
   {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
@@ -97,7 +97,7 @@ class compressed_host_buffer_source final : public datasource {
     return count;
   }
 
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(std::size_t offset, std::size_t size) override
   {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
@@ -114,10 +114,10 @@ class compressed_host_buffer_source final : public datasource {
     return std::make_unique<non_owning_buffer>(_decompressed_buffer.data() + offset, count);
   }
 
-  std::future<size_t> device_read_async(size_t offset,
-                                        size_t size,
-                                        uint8_t* dst,
-                                        rmm::cuda_stream_view stream) override
+  std::future<std::size_t> device_read_async(std::size_t offset,
+                                             std::size_t size,
+                                             uint8_t* dst,
+                                             rmm::cuda_stream_view stream) override
   {
     auto& thread_pool = pools::tpool();
     return thread_pool.submit_task([this, offset, size, dst, stream] {
@@ -131,12 +131,12 @@ class compressed_host_buffer_source final : public datasource {
 
   [[nodiscard]] bool supports_device_read() const override { return true; }
 
-  [[nodiscard]] size_t size() const override { return _decompressed_ch_buffer_size; }
+  [[nodiscard]] std::size_t size() const override { return _decompressed_ch_buffer_size; }
 
  private:
   std::unique_ptr<datasource::buffer> _dbuf_ptr;
   compression_type _comptype;
-  size_t _decompressed_ch_buffer_size;
+  std::size_t _decompressed_ch_buffer_size;
   std::vector<std::uint8_t> _decompressed_buffer;
 };
 
@@ -325,15 +325,16 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     }
 
     // If the size of the ingested buffer is less than the batch size, we can simply return the
-    // buffer as is, and set the optional second buffer to null. If the size of the ingested buffer
-    // exceed the batch size limits due to the reallocate-and-retry policy, we split the ingested
-    // buffer in two parts. The second part only contains the last record in the buffer, while the
-    // first part contains all the remaining lines.
+    // buffer as is, and set the optional second buffer to null.
+    // If the size of the ingested buffer exceed the batch size limits due to the
+    // reallocate-and-retry policy, we split the ingested buffer in two parts. The second part
+    // only contains the last record in the buffer, while the first part contains all the remaining
+    // lines.
     // As long as the size of no record exceeds the batch size limit placed, we are guaranteed that
     // the returned buffer(s) will be below the batch limit.
     auto const batch_size = getenv_or<std::size_t>(
-      "LIBCUDF_JSON_BATCH_SIZE", static_cast<size_t>(std::numeric_limits<int32_t>::max()));
-    if (static_cast<size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
+      "LIBCUDF_JSON_BATCH_SIZE", static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
+    if (static_cast<std::size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
         batch_size) {
       return std::make_pair(
         datasource::owning_buffer<rmm::device_buffer>(
@@ -353,11 +354,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
       next_delim_pos - requested_size +
-      static_cast<size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
+      static_cast<std::size_t>(thrust::distance(rev_it_begin, second_last_delimiter_it));
     CUDF_EXPECTS(last_line_size < batch_size,
                  "A single JSON line cannot be larger than the batch size limit");
 
-    rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<size_t>(thrust::distance(
+    rmm::device_buffer second_buffer(bufsubspan.data() + static_cast<std::size_t>(thrust::distance(
                                                            second_last_delimiter_it, rev_it_end)),
                                      last_line_size + 1,
                                      stream);
@@ -377,7 +378,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   // reading till the end of the last source i.e. should_load_till_last_source is true. Note that
   // the table generated from the JSONL input remains unchanged since empty lines are ignored by the
   // parser.
-  size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
+  std::size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
   if (num_chars) {
     insert_delimiter(bufspan.subspan(readbufspan.size(), 1));
     num_chars++;
@@ -654,7 +655,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
   // delimiter.
   auto constexpr num_delimiter_chars = 1;
-  std::vector<std::future<size_t>> thread_tasks;
+  std::vector<std::future<std::size_t>> thread_tasks;
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
   std::vector<std::size_t> prefsum_source_sizes(sources.size());
@@ -672,7 +673,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   auto const total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
 
-  size_t const num_streams =
+  std::size_t const num_streams =
     std::min<std::size_t>({sources.size() - start_source + 1,
                            cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
                            pools::tpool().get_thread_count()});
