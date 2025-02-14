@@ -55,7 +55,11 @@ files:
     output: none
     includes:
       - cuda_version
+      - depends_on_cudf
+      - depends_on_libcudf
+      - depends_on_pylibcudf
       - test_cpp
+      - test_cpp_cudf
   test_python_cudf_pandas:
     output: none
     includes:
@@ -98,11 +102,14 @@ files:
       - build_all
       - cuda
       - cuda_version
+      - depends_on_libcudf
       - test_java
   test_notebooks:
     output: none
     includes:
       - cuda_version
+      - depends_on_cudf
+      - depends_on_libcudf
       - notebooks
       - py_version
   checks:
@@ -125,6 +132,10 @@ files:
     includes:
       - cuda
       - cuda_version
+      - depends_on_cudf
+      - depends_on_dask_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
       - docs
       - py_version
   py_build_cudf:
@@ -835,6 +846,15 @@ dependencies:
               - cuda-sanitizer-api=11.8.86
           - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
+  # packages we want in the 'test_cpp' group in 'files', for CI, but which
+  # shouldn't be added to 'all' for building a development environment
+  test_cpp_cudf:
+    common:
+      - output_types: conda
+        packages:
+          - libcudf-example==25.4.*,>=0.0.0a0
+          - libcudf_kafka==25.4.*,>=0.0.0a0
+          - libcudf-tests==25.4.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
