@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,6 +169,24 @@ class datasource {
   virtual std::unique_ptr<datasource::buffer> host_read(size_t offset, size_t size) = 0;
 
   /**
+   * @brief Asynchronously reads a specified portion of data from the datasource.
+   *
+   * This function initiates an asynchronous read operation that reads `size` bytes of data
+   * starting from the given `offset` in the datasource. The read operation is deferred
+   * until the returned future is waited upon or queried.
+   *
+   * @param offset The starting position in the datasource from which to read.
+   * @param size The number of bytes to read from the datasource.
+   * @return A std::future that will hold a unique pointer to a datasource::buffer containing
+   *         the read data once the operation completes.
+   */
+  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                           size_t size)
+  {
+    return std::async(std::launch::deferred, [&] { return host_read(offset, size); });
+  }
+
+  /**
    * @brief Reads a selected range into a preallocated buffer.
    *
    * @param[in] offset Bytes from the start
@@ -178,6 +196,24 @@ class datasource {
    * @return The number of bytes read (can be smaller than size)
    */
   virtual size_t host_read(size_t offset, size_t size, uint8_t* dst) = 0;
+
+  /**
+   * @brief Asynchronously reads data from the source into the provided host memory buffer.
+   *
+   * This function initiates an asynchronous read operation from the data source starting at the
+   * specified offset and reads the specified number of bytes into the destination buffer. The
+   * read operation is deferred and will be executed when the returned future is waited upon.
+   *
+   * @param offset The starting position in the data source from which to read.
+   * @param size The number of bytes to read from the data source.
+   * @param dst Pointer to the destination buffer where the read data will be stored.
+   * @return A std::future object that will hold the number of bytes read once the operation
+   * completes.
+   */
+  virtual std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst)
+  {
+    return std::async(std::launch::deferred, [&] { return host_read(offset, size, dst); });
+  }
 
   /**
    * @brief Whether or not this source supports reading directly into device memory.
