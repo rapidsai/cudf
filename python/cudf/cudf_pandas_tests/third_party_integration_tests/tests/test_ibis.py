@@ -57,7 +57,7 @@ def ibis_table_num():
         rng.integers(0, 100, (N, K)), columns=[f"val{x}" for x in np.arange(K)]
     )
     df["key"] = rng.choice(np.arange(10), N)
-    table = ibis.memtable(df, name="t")
+    table = ibis.memtable(df, name="u")
     return table
 
 
@@ -76,6 +76,9 @@ def test_groupby_reductions(ibis_table_num_str, op):
 @pytest.mark.parametrize("op", ELEMENTWISE_UFUNCS)
 def test_mutate_ufunc(ibis_table_num_str, op):
     t = ibis_table_num_str
+    if op == "log":
+        # avoid duckdb log of 0 error
+        t = t.mutate(col1=t.col1+1)
     expr = getattr(t.col1, op)()
     return t.mutate(col1_sin=expr).to_pandas()
 
