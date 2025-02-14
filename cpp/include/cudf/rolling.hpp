@@ -42,8 +42,13 @@ namespace CUDF_EXPORT cudf {
  * The endpoints of this window are included.
  */
 struct bounded_closed {
-  cudf::scalar const& delta;  ///< Delta from the current row in the window. Must be valid,
-                              ///< behaviour is undefined if not.
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -52,8 +57,13 @@ struct bounded_closed {
  * The endpoints of this window are excluded.
  */
 struct bounded_open {
-  cudf::scalar const& delta;  ///< Delta from the current row in the window. Must be valid,
-                              ///< behaviour is undefined if not.
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -61,13 +71,25 @@ struct bounded_open {
  *
  * This window runs to the begin/end of the current row's group.
  */
-struct unbounded {};
+struct unbounded {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
 /**
  * @brief Strongly typed wrapper for current_row rolling windows.
  *
  * This window contains all rows that are equal to the current row.
  */
-struct current_row {};
+struct current_row {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
 
 /**
  * @brief The type of the range-based rolling window endpoint.

@@ -50,15 +50,6 @@ namespace detail {
 namespace rolling {
 
 /**
- * @brief Indicates behaviour of boundary of a rolling window.
- */
-enum class window_tag : std::int8_t {
-  BOUNDED_OPEN,    ///< Window is bounded by a value-based endpoint, endpoint is excluded.
-  BOUNDED_CLOSED,  ///< Window is bounded by a value-based endpoint, endpoint is included.
-  UNBOUNDED,       ///< Window runs to beginning (or end) of the group the row is in.
-  CURRENT_ROW,     ///< Window contains all rows that compare equal to the current row.
-};
-/**
  * @brief A group descriptor for an ungrouped rolling window with nulls
  *
  * @param nulls_at_start Are the nulls at the start or end?
@@ -209,24 +200,24 @@ struct greater_equal {
  * @tparam T The type being compared.
  * @tparam Tag The type of the window.
  */
-template <typename T, window_tag Tag>
+template <typename T, typename Tag>
 struct comparator_impl {
   using op     = void;
   using rev_op = void;
 };
 
 template <typename T>
-struct comparator_impl<T, window_tag::BOUNDED_CLOSED> {
+struct comparator_impl<T, bounded_closed> {
   using op     = less<T>;
   using rev_op = greater<T>;
 };
 template <typename T>
-struct comparator_impl<T, window_tag::BOUNDED_OPEN> {
+struct comparator_impl<T, bounded_open> {
   using op     = less_equal<T>;
   using rev_op = greater_equal<T>;
 };
 template <typename T>
-struct comparator_impl<T, window_tag::CURRENT_ROW> {
+struct comparator_impl<T, current_row> {
   using op     = less<T>;
   using rev_op = greater<T>;
 };
@@ -237,7 +228,7 @@ struct comparator_impl<T, window_tag::CURRENT_ROW> {
  * @tparam Tag The type of the window.
  * @tparam Order The sort order of the column used to define the windows.
  */
-template <typename T, window_tag Tag, order Order>
+template <typename T, typename Tag, order Order>
 using comparator_t = std::conditional_t<Order == order::ASCENDING,
                                         typename comparator_impl<T, Tag>::op,
                                         typename comparator_impl<T, Tag>::rev_op>;
@@ -420,8 +411,13 @@ template <typename T, typename V>
  * @tparam WindowTag The tag indicating the type of window being computed
  * @tparam Order The sort order of the orderby column defining the window.
  */
-template <direction Direction, window_tag WindowTag, cudf::order Order>
+template <direction Direction, typename WindowTag, cudf::order Order>
 struct range_window_clamper {
+  static_assert(cuda::std::is_same_v<WindowTag, unbounded> ||
+                  cuda::std::is_same_v<WindowTag, current_row> ||
+                  cuda::std::is_same_v<WindowTag, bounded_closed> ||
+                  cuda::std::is_same_v<WindowTag, bounded_open>,
+                "Invalid WindowTag descriptor");
   /**
    * @brief Functor to compute distance from a given row to the edge
    * of the window.
@@ -481,34 +477,33 @@ struct range_window_clamper {
       auto const [null_count, group_start, group_end, null_start, null_end, start, end] =
         groups.row_info(i);
       if constexpr (Direction == direction::PRECEDING) {
-        if constexpr (WindowTag == window_tag::UNBOUNDED) { return i - group_start + 1; }
+        if constexpr (cuda::std::is_same_v<WindowTag, unbounded>) { return i - group_start + 1; }
         // TODO: If the window is BOUNDED_OPEN, what does it mean for a row to fall in the null
         // group? Not that important because only spark allows nulls in the orderby column, and it
         // doesn't have BOUNDED_OPEN windows.
         if (Grouping::has_nulls && i >= null_start && i < null_end) { return i - null_start + 1; }
-        if constexpr (WindowTag == window_tag::CURRENT_ROW) {
+        if constexpr (cuda::std::is_same_v<WindowTag, current_row>) {
           return 1 + thrust::distance(
                        thrust::lower_bound(thrust::seq, begin + start, begin + i, begin[i], Comp{}),
                        begin + i);
-        } else if constexpr (WindowTag != window_tag::UNBOUNDED) {
+        } else if constexpr (!cuda::std::is_same_v<WindowTag, unbounded>) {
           // The preceding endpoint is computed via row_value - delta.
           // When delta is positive, this can only overflow towards -infinity.
           // If we did overflow towards -infinity, then the value
           // we're searching for is some min. But -infinity < min, so
-          // we must always use a `BOUNDED_CLOSED` window so that
+          // we must always use a `bounded_closed` window so that
           // orderby = [min, ...] with positive delta picks up that
           // row in the window.
           // Conversely, when delta is negative, we can only overflow
           // towards +infinity. If we did overflow towards +infinity
           // then the value we're searching for is some max. But
-          // +infinity > max, so we must use a `BOUNDED_OPEN` window
+          // +infinity > max, so we must use a `bounded_open` window
           // so that orderby = [..., max] with negative delta does not
           // pick up that row in the window.
           // When the orderby column is sorted in descending order the
           // above applies mutatis mutandis with a sign flip.
           OrderbyT value;
           bool did_overflow{false};
-          bool delta_positive{*row_delta > DeltaT{0}};
           if constexpr (Order == order::ASCENDING) {
             auto const result = saturating_sub(begin[i], *row_delta);
             value             = cuda::std::get<0>(result);
@@ -519,24 +514,22 @@ struct range_window_clamper {
             did_overflow      = cuda::std::get<1>(result);
           }
           if (did_overflow) {
-            if (delta_positive) {
+            if (*row_delta > DeltaT{0}) {
               return 1 + thrust::distance(
-                           thrust::lower_bound(
-                             thrust::seq,
-                             begin + start,
-                             begin + end,
-                             value,
-                             comparator_t<OrderbyT, window_tag::BOUNDED_CLOSED, Order>{}),
+                           thrust::lower_bound(thrust::seq,
+                                               begin + start,
+                                               begin + end,
+                                               value,
+                                               comparator_t<OrderbyT, bounded_closed, Order>{}),
                            begin + i);
             } else {
-              return 1 +
-                     thrust::distance(thrust::lower_bound(
-                                        thrust::seq,
-                                        begin + start,
-                                        begin + end,
-                                        value,
-                                        comparator_t<OrderbyT, window_tag::BOUNDED_OPEN, Order>{}),
-                                      begin + i);
+              return 1 + thrust::distance(
+                           thrust::lower_bound(thrust::seq,
+                                               begin + start,
+                                               begin + end,
+                                               value,
+                                               comparator_t<OrderbyT, bounded_open, Order>{}),
+                           begin + i);
             }
           } else {
             return 1 + thrust::distance(thrust::lower_bound(
@@ -547,32 +540,31 @@ struct range_window_clamper {
           CUDF_UNREACHABLE("Unexpected WindowTag");
         }
       } else {
-        if constexpr (WindowTag == window_tag::UNBOUNDED) { return group_end - i - 1; }
+        if constexpr (cuda::std::is_same_v<WindowTag, unbounded>) { return group_end - i - 1; }
         if (Grouping::has_nulls && i >= null_start && i < null_end) { return null_end - i - 1; }
-        if constexpr (WindowTag == window_tag::CURRENT_ROW) {
+        if constexpr (cuda::std::is_same_v<WindowTag, current_row>) {
           return thrust::distance(
                    begin + i,
                    thrust::upper_bound(thrust::seq, begin + i, begin + end, begin[i], Comp{})) -
                  1;
-        } else if constexpr (WindowTag != window_tag::UNBOUNDED) {
+        } else if constexpr (!cuda::std::is_same_v<WindowTag, unbounded>) {
           // The following endpoint is computed via row_value + delta.
           // When delta is positive, this can only overflow towards +infinity.
           // If we did overflow towards +infinity, then the value
           // we're searching for is some max. But +infinity > max, so
-          // we must always use a `BOUNDED_CLOSED` window so that
+          // we must always use a `bounded_closed` window so that
           // orderby = [..., max] with positive delta picks up that
           // row in the window.
           // Conversely, when delta is negative, we can only overflow
           // towards -infinity. If we did overflow towards -infinity
           // then the value we're searching for is some min. But
-          // -infinity < min, so we must use a `BOUNDED_OPEN` window
+          // -infinity < min, so we must use a `bounded_open` window
           // so that orderby = [min, ...] with negative delta does not
           // pick up that row in the window.
           // When the orderby column is sorted in descending order the
           // above applies mutatis mutandis with a sign flip.
           OrderbyT value;
           bool did_overflow{false};
-          bool delta_positive{*row_delta > DeltaT{0}};
           if constexpr (Order == order::ASCENDING) {
             auto const result = saturating_add(begin[i], *row_delta);
             value             = cuda::std::get<0>(result);
@@ -583,25 +575,23 @@ struct range_window_clamper {
             did_overflow      = cuda::std::get<1>(result);
           }
           if (did_overflow) {
-            if (delta_positive) {
+            if (*row_delta > DeltaT{0}) {
               return thrust::distance(
                        begin + i,
-                       thrust::upper_bound(
-                         thrust::seq,
-                         begin + start,
-                         begin + end,
-                         value,
-                         comparator_t<OrderbyT, window_tag::BOUNDED_CLOSED, Order>{})) -
+                       thrust::upper_bound(thrust::seq,
+                                           begin + start,
+                                           begin + end,
+                                           value,
+                                           comparator_t<OrderbyT, bounded_closed, Order>{})) -
                      1;
             } else {
               return thrust::distance(
                        begin + i,
-                       thrust::upper_bound(
-                         thrust::seq,
-                         begin + start,
-                         begin + end,
-                         value,
-                         comparator_t<OrderbyT, window_tag::BOUNDED_OPEN, Order>{})) -
+                       thrust::upper_bound(thrust::seq,
+                                           begin + start,
+                                           begin + end,
+                                           value,
+                                           comparator_t<OrderbyT, bounded_open, Order>{})) -
                      1;
             }
           } else {
@@ -648,34 +638,27 @@ struct range_window_clamper {
     auto d_begin            = d_orderby->begin<OrderbyT>();
     auto d_end              = d_orderby->end<OrderbyT>();
     auto const* d_row_delta = row_delta ? dynamic_cast<ScalarT const*>(row_delta)->data() : nullptr;
-    auto copy_n             = [&](auto&& kernel) {
+    auto copy_n             = [&](auto&& grouping) {
       thrust::copy_n(rmm::exec_policy_nosync(stream),
-                     cudf::detail::make_counting_transform_iterator(0, kernel),
+                     cudf::detail::make_counting_transform_iterator(
+                       0, distance_kernel{grouping, d_row_delta, d_begin, d_end}),
                      orderby.size(),
                      result->mutable_view().begin<size_type>());
     };
     if (grouping.has_value()) {
       if (orderby.has_nulls()) {
-        copy_n(distance_kernel{grouped_with_nulls{nulls_at_start,
-                                                  grouping->labels.data(),
-                                                  grouping->offsets.data(),
-                                                  grouping->nulls_per_group.data()},
-                               d_row_delta,
-                               d_begin,
-                               d_end});
+        copy_n(grouped_with_nulls{nulls_at_start,
+                                  grouping->labels.data(),
+                                  grouping->offsets.data(),
+                                  grouping->nulls_per_group.data()});
       } else {
-        copy_n(distance_kernel{
-          grouped{grouping->labels.data(), grouping->offsets.data()}, d_row_delta, d_begin, d_end});
+        copy_n(grouped{grouping->labels.data(), grouping->offsets.data()});
       }
     } else {
       if (orderby.has_nulls()) {
-        copy_n(distance_kernel{
-          ungrouped_with_nulls{nulls_at_start, orderby.size(), orderby.null_count()},
-          d_row_delta,
-          d_begin,
-          d_end});
+        copy_n(ungrouped_with_nulls{nulls_at_start, orderby.size(), orderby.null_count()});
       } else {
-        copy_n(distance_kernel{ungrouped{orderby.size()}, d_row_delta, d_begin, d_end});
+        copy_n(ungrouped{orderby.size()});
       }
     }
     return result;
@@ -690,7 +673,8 @@ struct range_window_clamper {
   static constexpr bool is_supported()
   {
     return (cuda::std::is_same_v<OrderbyT, cudf::string_view> &&
-            (WindowTag == window_tag::CURRENT_ROW || WindowTag == window_tag::UNBOUNDED)) ||
+            (cuda::std::is_same_v<WindowTag, current_row> ||
+             cuda::std::is_same_v<WindowTag, unbounded>)) ||
            cudf::is_numeric_not_bool<OrderbyT>() || cudf::is_timestamp<OrderbyT>() ||
            cudf::is_fixed_point<OrderbyT>();
   }
@@ -759,8 +743,8 @@ struct range_window_clamper {
 
   template <typename OrderbyT,
             CUDF_ENABLE_IF(cuda::std::is_same_v<OrderbyT, cudf::string_view> &&
-                           (WindowTag == window_tag::CURRENT_ROW ||
-                            WindowTag == window_tag::UNBOUNDED))>
+                           (cuda::std::is_same_v<WindowTag, current_row> ||
+                            cuda::std::is_same_v<WindowTag, unbounded>))>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
     std::optional<preprocessed_group_info> const& grouping,
@@ -787,15 +771,6 @@ struct range_window_clamper {
 };
 }  // namespace rolling
 
-namespace {
-template <class... Ts>
-struct match : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts>
-match(Ts...) -> match<Ts...>;
-}  // namespace
-
 template <rolling::direction Direction>
 [[nodiscard]] inline std::unique_ptr<column> make_range_window(
   column_view const& orderby,
@@ -810,57 +785,20 @@ template <rolling::direction Direction>
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
-  using tag_t   = rolling::window_tag;
   auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
     return type_dispatcher(
       orderby.type(), clamper, orderby, grouping, nulls_at_start, row_delta, stream, mr);
   };
   return std::visit(
-    match{
-      [&](bounded_closed win) {
-        if (order == order::ASCENDING) {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::ASCENDING>{},
-            &win.delta);
-        } else {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::BOUNDED_CLOSED, order::DESCENDING>{},
-            &win.delta);
-        }
-      },
-      [&](bounded_open win) {
-        if (order == order::ASCENDING) {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::ASCENDING>{},
-            &win.delta);
-        } else {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::BOUNDED_OPEN, order::DESCENDING>{},
-            &win.delta);
-        }
-      },
-      [&](unbounded) {
-        if (order == order::ASCENDING) {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::ASCENDING>{},
-            nullptr);
-        } else {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::UNBOUNDED, order::DESCENDING>{},
-            nullptr);
-        }
-      },
-      [&](current_row) {
-        if (order == order::ASCENDING) {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::ASCENDING>{},
-            nullptr);
-        } else {
-          return dispatch(
-            rolling::range_window_clamper<Direction, tag_t::CURRENT_ROW, order::DESCENDING>{},
-            nullptr);
-        }
-      },
+    [&](auto&& window) {
+      using WindowTag = cuda::std::decay_t<decltype(window)>;
+      if (order == order::ASCENDING) {
+        return dispatch(rolling::range_window_clamper<Direction, WindowTag, order::ASCENDING>{},
+                        window.delta());
+      } else {
+        return dispatch(rolling::range_window_clamper<Direction, WindowTag, order::DESCENDING>{},
+                        window.delta());
+      }
     },
     window);
 }
