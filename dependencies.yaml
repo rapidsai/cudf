@@ -73,6 +73,9 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - depends_on_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
   test_python_other:
     output: none
     includes:
@@ -81,6 +84,13 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - depends_on_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
+      - depends_on_dask_cudf
+      - depends_on_cudf_kafka
+      - depends_on_custreamz
+      - depends_on_cudf_polars
   test_java:
     output: none
     includes:
@@ -1174,3 +1184,18 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
+  depends_on_dask_cudf:
+    common:
+      - output_types: conda
+        packages:
+          - dask-cudf==25.4.*,>=0.0.0a0
+  depends_on_custreamz:
+    common:
+      - output_types: conda
+        packages:
+          - custreamz==25.4.*,>=0.0.0a0
+  depends_on_cudf_polars:
+    common:
+      - output_types: conda
+        packages:
+          - cudf-polars==25.4.*,>=0.0.0a0

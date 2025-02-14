@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.typing import ColumnHeader, ColumnOptions
+
 __all__: list[str] = ["Column"]
 
 
@@ -54,6 +56,65 @@ class Column:
         self.is_scalar = self.size == 1
         self.name = name
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
+
+    @classmethod
+    def deserialize(
+        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a Column from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        Column
+            The deserialized Column.
+        """
+        packed_metadata, packed_gpu_data = frames
+        (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        ).columns()
+        return cls(plc_column, **header["column_kwargs"])
+
+    def serialize(
+        self,
+    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the Column into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(plc.Table([self.obj]))
+        column_kwargs: ColumnOptions = {
+            "is_sorted": self.is_sorted,
+            "order": self.order,
+            "null_order": self.null_order,
+            "name": self.name,
+        }
+        header: ColumnHeader = {
+            "column_kwargs": column_kwargs,
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:

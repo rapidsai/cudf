@@ -66,12 +66,31 @@ class file_source : public datasource {
     return buffer::create(std::move(v));
   }
 
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
+  {
+    auto const read_size = std::min(size, this->size() - offset);
+    std::vector<uint8_t> v(read_size);
+    auto kvikio_fut = _kvikio_file.pread(v.data(), read_size, offset);
+    return std::async(std::launch::deferred,
+                      [v = std::move(v), kf = std::move(kvikio_fut)]() mutable {
+                        kf.get();
+                        return buffer::create(std::move(v));
+                      });
+  }
+
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     CUDF_EXPECTS(_kvikio_file.pread(dst, read_size, offset).get() == read_size, "read failed");
     return read_size;
+  }
+
+  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_file.pread(dst, read_size, offset);
   }
 
   ~file_source() override = default;

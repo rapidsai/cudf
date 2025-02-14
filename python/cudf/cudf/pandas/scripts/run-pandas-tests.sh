@@ -24,8 +24,7 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 # tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py \
---ignore=tests/io/test_pickle.py"
+--ignore=tests/io/test_clipboard.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -138,7 +137,7 @@ and not test_array_tz"
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current" \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current and not test_pickle_frame_v124_unpickle_130" \
     --import-mode=importlib \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)

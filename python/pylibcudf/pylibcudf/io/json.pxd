@@ -1,5 +1,7 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
+from libcpp.map cimport map
+from libcpp.vector cimport vector
 from pylibcudf.io.types cimport (
     SinkInfo,
     SourceInfo,
@@ -43,14 +45,27 @@ cdef class JsonReaderOptions:
 cdef class JsonReaderOptionsBuilder:
     cdef json_reader_options_builder c_obj
     cdef SourceInfo source
-    cpdef JsonReaderOptionsBuilder compression(self, compression_type compression)
-    cpdef JsonReaderOptionsBuilder lines(self, bool val)
-    cpdef JsonReaderOptionsBuilder keep_quotes(self, bool val)
     cpdef JsonReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset)
     cpdef JsonReaderOptionsBuilder byte_range_size(self, size_t byte_range_size)
+    cpdef JsonReaderOptionsBuilder compression(self, compression_type compression)
+    cpdef JsonReaderOptionsBuilder dayfirst(self, bool val)
+    cpdef JsonReaderOptionsBuilder delimiter(self, str delimiter)
+    cpdef JsonReaderOptionsBuilder dtypes(self, list types)
+    cpdef JsonReaderOptionsBuilder experimental(self, bool val)
+    cpdef JsonReaderOptionsBuilder keep_quotes(self, bool val)
+    cpdef JsonReaderOptionsBuilder lines(self, bool val)
+    cpdef JsonReaderOptionsBuilder mixed_types_as_string(self, bool val)
+    cpdef JsonReaderOptionsBuilder na_values(self, list vals)
+    cpdef JsonReaderOptionsBuilder nonnumeric_numbers(self, bool val)
+    cpdef JsonReaderOptionsBuilder normalize_single_quotes(self, bool val)
+    cpdef JsonReaderOptionsBuilder normalize_whitespace(self, bool val)
+    cpdef JsonReaderOptionsBuilder numeric_leading_zeros(self, bool val)
+    cpdef JsonReaderOptionsBuilder prune_columns(self, bool val)
     cpdef JsonReaderOptionsBuilder recovery_mode(
         self, json_recovery_mode_t recovery_mode
     )
+    cpdef JsonReaderOptionsBuilder strict_validation(self, bool val)
+    cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val)
     cpdef build(self)
 
 cpdef TableWithMetadata read_json(JsonReaderOptions options)
