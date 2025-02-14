@@ -162,7 +162,7 @@ cdef class Scalar:
                 dtype = DataType(type_id.TIMESTAMP_MILLISECONDS)
             elif unit == "us":
                 dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-            elif unit == "us":
+            elif unit == "ns":
                 dtype = DataType(type_id.TIMESTAMP_NANOSECONDS)
             else:
                 raise TypeError(f"{unit=} is not supported")
@@ -177,7 +177,7 @@ cdef class Scalar:
                 dtype = DataType(type_id.DURATION_MILLISECONDS)
             elif unit == "us":
                 dtype = DataType(type_id.DURATION_MICROSECONDS)
-            elif unit == "us":
+            elif unit == "ns":
                 dtype = DataType(type_id.DURATION_NANOSECONDS)
             else:
                 raise TypeError(f"{unit=} is not supported")
