@@ -49,7 +49,7 @@ cdef class JsonReaderOptionsBuilder:
     cpdef JsonReaderOptionsBuilder byte_range_size(self, size_t byte_range_size)
     cpdef JsonReaderOptionsBuilder compression(self, compression_type compression)
     cpdef JsonReaderOptionsBuilder dayfirst(self, bool val)
-    cpdef JsonReaderOptionsBuilder delimiter(self, char delimiter)
+    cpdef JsonReaderOptionsBuilder delimiter(self, str delimiter)
     cpdef JsonReaderOptionsBuilder dtypes(self, list types)
     cpdef JsonReaderOptionsBuilder experimental(self, bool val)
     cpdef JsonReaderOptionsBuilder keep_quotes(self, bool val)
