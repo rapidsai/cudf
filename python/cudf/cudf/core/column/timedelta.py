@@ -338,7 +338,7 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         else:
             with acquire_spill_lock():

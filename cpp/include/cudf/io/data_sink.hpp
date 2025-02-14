@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ class data_sink {
    *
    * In the case where the sink type is itself a memory buffered write, this ends up
    * being effectively a second memcpy.  So a useful optimization for a "smart"
-   * custom data_sink is to do it's own internal management of the movement
+   * custom data_sink is to do its own internal management of the movement
    * of data between cpu and gpu; turning the internals of the writer into simply
    *
    * sink->device_write(device_buffer, size)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -37,9 +37,6 @@ def test_numpy_dot(df):
     return np.dot(df, df.T)
 
 
-@pytest.mark.skip(
-    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
-)
 def test_numpy_fft(sr):
     fft = np.fft.fft(sr)
     return fft

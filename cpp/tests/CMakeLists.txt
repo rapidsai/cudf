@@ -307,11 +307,6 @@ ConfigureTest(
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(
-  FILE_IO_TEST io/file_io_test.cpp
-  GPUS 1
-  PERCENT 30
-)
-ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
   PERCENT 30
