@@ -55,9 +55,7 @@ files:
     output: none
     includes:
       - cuda_version
-      - depends_on_cudf
       - depends_on_libcudf
-      - depends_on_pylibcudf
       - test_cpp
       - test_cpp_cudf
   test_python_cudf_pandas:
