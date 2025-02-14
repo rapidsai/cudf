@@ -27,6 +27,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_multiset.cuh>
+#include <cuda/std/functional>
 
 #include <cstddef>
 #include <memory>
@@ -55,14 +56,34 @@ enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_AN
 template <typename Hasher>
 struct hash_join {
  public:
-  using map_type = cuco::static_multiset<
-    cuco::pair<cudf::hash_value_type, cudf::size_type>,
-    cuco::extent<std::size_t>,
-    cuda::thread_scope_device,
-    thrust::equal_to<cuco::pair<cudf::hash_value_type, cudf::size_type>>
-      cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<cudf::hash_value_type>, Hasher>,
-    cudf::detail::cuco_allocator<char>,
-    cuco::storage<2>>;
+  /**
+   * @brief A custom comparator used for the build table insertion
+   */
+  struct always_not_equal {
+    __device__ constexpr bool operator()(
+      cuco::pair<hash_value_type, size_type> const&,
+      cuco::pair<hash_value_type, size_type> const&) const noexcept
+    {
+      // multiset always insert
+      return false;
+    }
+  };
+
+  struct hasher1 {
+    __device__ constexpr hash_value_type operator()(
+      cuco::pair<hash_value_type, size_type> const& key) const noexcept
+    {
+      return key.first;
+    }
+  };
+
+  using hash_table_t = cuco::static_multiset<cuco::pair<cudf::hash_value_type, cudf::size_type>,
+                                             cuco::extent<std::size_t>,
+                                             cuda::thread_scope_device,
+                                             always_not_equal,
+                                             cuco::linear_probing<DEFAULT_JOIN_CG_SIZE, hasher1>,
+                                             cudf::detail::cuco_allocator<char>,
+                                             cuco::storage<2>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
@@ -77,8 +98,8 @@ struct hash_join {
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
+    _preprocessed_build;     ///< input table preprocssed for row operators
+  hash_table_t _hash_table;  ///< hash table built on `_build`
 
  public:
   /**

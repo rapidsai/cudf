@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-using multimap_type = cudf::hash_join::impl_type::map_type;
+using multimap_type = cudf::hash_join::impl_type::hash_table_t;
 
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
