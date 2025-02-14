@@ -1623,11 +1623,13 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
     )
 
     md_dict = json.loads(metadata[b"pandas"])
-    _post_process_dtypes(table, md_dict)
+    _update_pandas_metadata_types_inplace(table, md_dict)
     return json.dumps(md_dict)
 
 
-def _post_process_dtypes(df, md_dict):
+def _update_pandas_metadata_types_inplace(
+    df: cudf.DataFrame, md_dict: dict
+) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
         if (

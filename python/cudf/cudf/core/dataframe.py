@@ -5752,7 +5752,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
         md_dict = json.loads(metadata[b"pandas"])
 
-        cudf.utils.ioutils._post_process_dtypes(self, md_dict)
+        cudf.utils.ioutils._update_pandas_metadata_types_inplace(self, md_dict)
 
         return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
