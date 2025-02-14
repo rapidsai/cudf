@@ -61,6 +61,7 @@ from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
@@ -78,7 +79,7 @@ from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
 if TYPE_CHECKING:
     import builtins
 
-    from cudf._typing import ColumnLike, Dtype, ScalarLike
+    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
 
@@ -1756,7 +1757,7 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 
 def column_empty(
     row_count: int,
-    dtype: Dtype = "object",
+    dtype: DtypeObj = CUDF_STRING_DTYPE,
     for_numba: bool = False,
 ) -> ColumnBase:
     """
@@ -1776,7 +1777,6 @@ def column_empty(
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
     """
-    dtype = cudf.dtype(dtype)
     children: tuple[ColumnBase, ...] = ()
 
     if isinstance(dtype, StructDtype):
@@ -1824,7 +1824,7 @@ def column_empty(
 
 def build_column(
     data: Buffer | None,
-    dtype: Dtype,
+    dtype: DtypeObj,
     *,
     size: int | None = None,
     mask: Buffer | None = None,
@@ -1848,20 +1848,6 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = cudf.dtype(dtype)
-
-    if _is_non_decimal_numeric_dtype(dtype):
-        assert data is not None
-        col = cudf.core.column.NumericalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
-        return col
-
     if isinstance(dtype, CategoricalDtype):
         return cudf.core.column.CategoricalColumn(
             data=data,  # type: ignore[arg-type]
@@ -1872,15 +1858,6 @@ def build_column(
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
         )
-    elif dtype.type is np.datetime64:
-        return cudf.core.column.DatetimeColumn(
-            data=data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return cudf.core.column.datetime.DatetimeTZColumn(
             data=data,  # type: ignore[arg-type]
@@ -1890,7 +1867,16 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.type is np.timedelta64:
+    elif dtype.kind == "M":
+        return cudf.core.column.DatetimeColumn(
+            data=data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
+    elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
             data=data,  # type: ignore[arg-type]
             dtype=dtype,
@@ -1967,6 +1953,15 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
+        )
+    elif dtype.kind in "iufb":
+        return cudf.core.column.NumericalColumn(
+            data=data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
@@ -2560,8 +2555,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = np.dtype(np.float64)
-        return column_empty(0, dtype=dtype)
+        return column_empty(0, dtype=np.dtype(np.float64))
 
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.

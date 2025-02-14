@@ -85,6 +85,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -778,7 +779,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
-                        k: column_empty(len(self), dtype="object")
+                        k: column_empty(len(self), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
                     level_names=tuple(columns.names)
@@ -984,7 +985,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column_empty(
-                        row_count=len(self), dtype=None
+                        row_count=len(self), dtype=np.dtype(np.float64)
                     )
             self._data._level_names = (
                 tuple(columns.names)
@@ -1035,7 +1036,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
-                data = [column_empty(row_count=0, dtype=None) for _ in columns]
+                data = [
+                    column_empty(row_count=0, dtype=np.dtype(np.float64))
+                    for _ in columns
+                ]
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
             self._data.rangeindex = True
@@ -3344,7 +3348,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dtype = value.dtype
                 value = value.item()
             if _is_null_host_scalar(value):
-                dtype = "str"
+                dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
