@@ -5,12 +5,12 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-dependency-file-generator \
   --output conda \
