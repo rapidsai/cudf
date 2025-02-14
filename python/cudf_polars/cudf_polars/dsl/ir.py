@@ -743,9 +743,10 @@ class DataFrameScan(IR):
         projection: tuple[str, ...] | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        pdf = pl.DataFrame._from_pydf(df)
         if projection is not None:
-            df = df.select(projection)
-        df = DataFrame.from_polars(df)
+            pdf = pdf.select(projection)
+        df = DataFrame.from_polars(pdf)
         assert all(
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
