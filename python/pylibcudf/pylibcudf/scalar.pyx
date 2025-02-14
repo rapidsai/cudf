@@ -9,10 +9,12 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
+    mircoseconds,
     numeric_scalar,
     timestamp_scalar,
     time_point,
     system_clock,
+    time_point_cast,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
@@ -194,8 +196,10 @@ def _(py_val):
 @_from_py.register(datetime.datetime)
 def _(py_val):
     cdef DataType dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-    cdef time_point[system_clock] tp = _datetime_to_time_point(py_val)
     cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(dtype.c_obj)
-    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp)
+    cdef time_point[system_clock] tp = _datetime_to_time_point(py_val)
+    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(
+        time_point_cast[mircoseconds](tp)
+    )
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)
     return slr

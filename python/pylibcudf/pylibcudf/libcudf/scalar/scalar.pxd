@@ -11,11 +11,14 @@ from pylibcudf.libcudf.types cimport data_type
 
 
 cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
+    cdef cppclass mircoseconds[T]:
+        pass
     cdef cppclass time_point[T]:
         pass
     cdef cppclass system_clock:
         @staticmethod
         time_point[system_clock] from_time_t(time_t t) except +
+    cdef time_point[T] time_point_cast[T](time_point[T] tp) except +
 
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
