@@ -667,7 +667,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRangeCompleteRecord)
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
 
-  // Reading 0]\n[3000]\n[4000]\n[5000]\n
+  // Requesting 0]\n[3000]\n[4000]\n[5000]\n but reading 0]\n[3000]\n[4000]\n[5000]\n[6000]\n
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{fname})
       .lines(true)
@@ -677,12 +677,13 @@ TEST_F(JsonReaderTest, JsonLinesByteRangeCompleteRecord)
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->num_rows(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{3000, 4000, 5000, 6000}});
 }
 
 TEST_F(JsonReaderTest, JsonLinesByteRangeIncompleteRecord)

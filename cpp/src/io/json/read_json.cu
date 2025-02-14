@@ -266,23 +266,26 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto const first_delim_pos =
     chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, delimiter, stream);
-  // If the requested byte range ends with a delimiter, we do not need to add an extra delimiter at
-  // the end of the ingested buffer, nor do we need to continue reading any more of the input since
-  // the last position of the byte range coincides with the end of a record.
-  auto is_last_char_delimiter = [delimiter, readbufspan, stream]() {
-    char last_char;
-    cudf::detail::cuda_memcpy<char>(host_span<char>(&last_char, 1, false),
-                                    readbufspan.subspan(readbufspan.size() - 1, 1),
-                                    stream);
-    return last_char == delimiter;
-  }();
 
+  // If we read till the end of the last source, we cannot be sure
+  // if the last record read ends with a delimiter. In such cases, we add a delimiter
+  // nevertheless; even if the record terminates
+  // with a delimiter, adding a extra delimiter does not affect the table constructed since the
+  // parser ignores empty lines.
+  auto insert_delimiter = [delimiter, stream](device_span<char> subspan) {
+    auto last_char = delimiter;
+    cudf::detail::cuda_memcpy<char>(subspan, host_span<char const>(&last_char, 1, false), stream);
+  };
+
+  // If the requested byte range ends with a delimiter at the end of line n, we will still need to
+  // continue reading since the next batch begins at the start of the n+1^th record and skips the
+  // entire line until the first delimiter is encountered at the end of the line.
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_buffer(0, stream);
     return std::make_pair(datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf)),
                           std::nullopt);
-  } else if (!should_load_till_last_source && !is_last_char_delimiter) {
+  } else if (!should_load_till_last_source) {
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
@@ -306,6 +309,7 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
           // If we have reached the end of source list but the source does not terminate with a
           // delimiter character
           next_delim_pos = buffer_offset + readbufspan.size();
+          insert_delimiter(bufspan.subspan(next_delim_pos, 1));
         } else {
           // Reallocate-and-retry policy
           // Our buffer_size estimate is insufficient to read until the end of the line! We need to
@@ -370,17 +374,12 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
   }
 
   // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
-  // reading till the end of the last source i.e. should_load_till_last_source is true Note that the
-  // table generated from the JSONL input remains unchanged since empty lines are ignored by the
+  // reading till the end of the last source i.e. should_load_till_last_source is true. Note that
+  // the table generated from the JSONL input remains unchanged since empty lines are ignored by the
   // parser.
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
-  if (num_chars && !is_last_char_delimiter) {
-    auto last_char = delimiter;
-    cudf::detail::cuda_memcpy<char>(
-      device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size())
-        .subspan(readbufspan.size(), 1),
-      host_span<char const>(&last_char, 1, false),
-      stream);
+  if (num_chars) {
+    insert_delimiter(bufspan.subspan(readbufspan.size(), 1));
     num_chars++;
   }
 
