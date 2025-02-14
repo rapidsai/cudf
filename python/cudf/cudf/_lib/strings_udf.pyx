@@ -1,6 +1,14 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+from libc.stdint cimport uint8_t, uint16_t, uint64_t, uintptr_t
+
+from cudf._lib.cpp.strings_udf cimport (
+    get_character_cases_table as cpp_get_character_cases_table,
+    get_character_flags_table as cpp_get_character_flags_table,
+    get_special_case_mapping_table as cpp_get_special_case_mapping_table,
+    managed_udf_string,
+)
+
 from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
@@ -14,22 +22,16 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import as_buffer
 
-from pylibcudf.libcudf.column.column cimport column, column_view
-from pylibcudf.libcudf.strings_udf cimport (
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column, column_view
+from cudf._lib.cpp.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
     free_udf_string_array as cpp_free_udf_string_array,
-    get_cuda_build_version as cpp_get_cuda_build_version,
     to_string_view_array as cpp_to_string_view_array,
     udf_string,
 )
-from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-
-from pylibcudf cimport Column as plc_Column
-
-
-def get_cuda_build_version():
-    return cpp_get_cuda_build_version()
 
 
 def column_to_string_view_array(plc_Column strings_col):
@@ -54,6 +56,20 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
     return plc_Column.from_libcudf(move(c_result))
 
 
+def column_from_managed_udf_string_array(DeviceBuffer d_buffer, memsys):
+    cdef size_t size = int(d_buffer.c_size() / sizeof(managed_udf_string))
+    cdef managed_udf_string* data = <managed_udf_string*>d_buffer.c_data()
+    cdef unique_ptr[column] c_result
+    cdef uint64_t memsys_p = <uint64_t>memsys
+
+    with nogil:
+        c_result = move(cpp_column_from_managed_udf_string_array(data, size))
+        cpp_free_managed_udf_string_array(data, size, memsys_p)
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
 def get_character_flags_table_ptr():
     cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
     return np.uintp(<uintptr_t>tbl_ptr)
@@ -67,3 +83,8 @@ def get_character_cases_table_ptr():
 def get_special_case_mapping_table_ptr():
     cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
     return np.uintp(<uintptr_t>tbl_ptr)
+
+
+def NRT_MemSys_new():
+    cdef const void* memsys_ptr = cpp_NRT_MemSys_new()
+    return np.uintp(<uintptr_t>memsys_ptr)

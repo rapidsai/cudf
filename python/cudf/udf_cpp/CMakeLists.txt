@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -33,6 +33,9 @@ add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
   cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
 )
+target_include_directories(
+  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nrt>"
+)
 
 set_target_properties(
   cudf_strings_udf
@@ -52,11 +55,11 @@ target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
-target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
+target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf cuda cudart)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # Create the shim library for each architecture.
-set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -g -G)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
@@ -77,6 +80,8 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_include_directories(
     ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
   )
+  target_include_directories(${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nrt>")
+
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
