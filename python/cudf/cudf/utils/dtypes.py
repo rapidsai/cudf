@@ -169,7 +169,12 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         )
     elif isinstance(
         dtype,
-        (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
+        (
+            cudf.StructDtype,
+            cudf.IntervalDtype,
+            cudf.ListDtype,
+            cudf.core.dtypes.DecimalDtype,
+        ),
     ):
         return dtype.to_arrow()
     else:
