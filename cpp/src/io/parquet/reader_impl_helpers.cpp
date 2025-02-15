@@ -23,7 +23,6 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
-#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -286,27 +285,50 @@ void metadata::sanitize_schema()
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources)
 {
+  constexpr auto header_len = sizeof(file_header_s);
+  constexpr auto ender_len  = sizeof(file_ender_s);
+
+  std::vector<std::future<std::unique_ptr<datasource::buffer>>> header_reads;
+  header_reads.reserve(sources.size());
+  for (const auto& source : sources) {
+    header_reads.emplace_back(source->host_read_async(0, header_len));
+  }
+
+  std::vector<std::future<std::unique_ptr<datasource::buffer>>> ender_reads;
+  ender_reads.reserve(sources.size());
+  for (const auto& source : sources) {
+    auto const len = source->size();
+    ender_reads.emplace_back(source->host_read_async(len - ender_len, ender_len));
+  }
+
+  for (auto& hr : header_reads) {
+    auto const hdr_data   = hr.get();
+    auto const header_ptr = reinterpret_cast<file_header_s const*>(hdr_data->data());
+    CUDF_EXPECTS(header_ptr->magic == parquet_magic, "Corrupted header");  // src index?
+  }
+
+  std::vector<file_ender_s> enders(sources.size());
+  for (size_t i = 0; i < ender_reads.size(); ++i) {
+    auto const len = sources[i]->size();
+    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+
+    auto const ender_data = ender_reads[i].get();
+    std::memcpy(&enders[i], ender_data->data(), ender_len);
+    CUDF_EXPECTS(enders[i].magic == parquet_magic, "Corrupted footer");
+    CUDF_EXPECTS(
+      enders[i].footer_len != 0 && enders[i].footer_len <= (len - header_len - ender_len),
+      "Incorrect footer length");
+  }
   std::vector<metadata> metadatas(sources.size());
   for (size_t i = 0; i < sources.size(); ++i) {
-    constexpr auto header_len = sizeof(file_header_s);
-    constexpr auto ender_len  = sizeof(file_ender_s);
-
     auto source    = sources[i].get();
     auto& metadata = metadatas[i];
+    auto& ender    = enders[i];
 
-    auto const len           = source->size();
-    auto const header_buffer = source->host_read(0, header_len);
-    auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
-    auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
-    auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-    CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-                 "Corrupted header or footer");
-    CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-                 "Incorrect footer length");
+    auto const len = source->size();
 
-    auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-    CompactProtocolReader cp(buffer->data(), ender->footer_len);
+    auto const buffer = source->host_read(len - ender.footer_len - ender_len, ender.footer_len);
+    CompactProtocolReader cp(buffer->data(), ender.footer_len);
     cp.read(&metadata);
     CUDF_EXPECTS(cp.InitSchema(&metadata), "Cannot initialize schema");
 
