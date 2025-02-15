@@ -117,7 +117,7 @@ def test_notin(ibis_table_num_str):
 def test_window(ibis_table_num_str):
     t = ibis_table_num_str
     return (
-        t.group_by("key").mutate(demeaned=t.col1 - t.col1.mean()).to_pandas()
+        t.group_by("key").mutate(demeaned=t.col1 - t.col1.mean()).order_by("key").to_pandas()
     )
 
 
