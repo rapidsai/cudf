@@ -29,6 +29,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -388,9 +390,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
-aggregate_reader_metadata::filter_row_groups(
-  host_span<std::unique_ptr<datasource> const> sources,
+std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
   host_span<std::vector<size_type> const> input_row_group_indices,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
@@ -430,14 +430,33 @@ aggregate_reader_metadata::filter_row_groups(
                                               static_cast<size_type>(output_dtypes.size())};
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto const filtered_row_group_indices = collect_filtered_row_group_indices(
+  return collect_filtered_row_group_indices(
     stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
+}
+
+std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
+aggregate_reader_metadata::filter_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::reference_wrapper<ast::expression const> filter,
+  rmm::cuda_stream_view stream) const
+{
+  // Apply stats filtering on input row groups
+  auto const stats_filtered_row_groups = apply_stats_filters(input_row_group_indices,
+                                                             total_row_groups,
+                                                             output_dtypes,
+                                                             output_column_schemas,
+                                                             filter,
+                                                             stream);
 
   // Number of surviving row groups after applying stats filter
   auto const num_stats_filtered_row_groups =
-    filtered_row_group_indices.has_value()
-      ? std::accumulate(filtered_row_group_indices.value().cbegin(),
-                        filtered_row_group_indices.value().cend(),
+    stats_filtered_row_groups.has_value()
+      ? std::accumulate(stats_filtered_row_groups.value().cbegin(),
+                        stats_filtered_row_groups.value().cend(),
                         size_type{0},
                         [](auto& sum, auto const& per_file_row_groups) {
                           return sum + per_file_row_groups.size();
@@ -446,37 +465,75 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Span of row groups to apply bloom filtering on.
   auto const bloom_filter_input_row_groups =
-    filtered_row_group_indices.has_value()
-      ? host_span<std::vector<size_type> const>(filtered_row_group_indices.value())
+    stats_filtered_row_groups.has_value()
+      ? host_span<std::vector<size_type> const>(stats_filtered_row_groups.value())
       : input_row_group_indices;
 
-  // Apply bloom filtering on the bloom filter input row groups
-  auto const [bloom_filtered_row_groups, bloom_filters_exist] =
-    apply_bloom_filters(sources,
-                        bloom_filter_input_row_groups,
-                        num_stats_filtered_row_groups,
-                        output_dtypes,
-                        output_column_schemas,
-                        filter,
-                        stream);
+  // Collect equality literals for each input table column for bloom filtering
+  auto const equality_literals =
+    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals();
+
+  // Collect schema indices of columns with equality predicate(s)
+  std::vector<cudf::size_type> equality_col_schemas;
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  equality_literals.begin(),
+                  std::back_inserter(equality_col_schemas),
+                  [](auto& eq_literals) { return not eq_literals.empty(); });
+
+  // Return early if no column with equality predicate(s)
+  if (equality_col_schemas.empty()) {
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
+  }
+
+  // Aligned resource adaptor to allocate bloom filter buffers with
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
+                                                      get_bloom_filter_alignment());
+
+  // Read a vector of bloom filter bitset device buffers for all columns with equality
+  // predicate(s) across all row groups
+  auto bloom_filter_data = read_bloom_filters(sources,
+                                              bloom_filter_input_row_groups,
+                                              equality_col_schemas,
+                                              num_stats_filtered_row_groups,
+                                              stream,
+                                              aligned_mr);
+
+  // No bloom filter buffers, return early
+  if (bloom_filter_data.empty()) {
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
+  }
+
+  // Apply bloom filtering on the output row groups from stats filter
+  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
+                                                             bloom_filter_input_row_groups,
+                                                             equality_literals,
+                                                             num_stats_filtered_row_groups,
+                                                             output_dtypes,
+                                                             equality_col_schemas,
+                                                             filter,
+                                                             stream);
 
   // Number of surviving row groups after applying bloom filter
   auto const num_bloom_filtered_row_groups =
-    bloom_filters_exist
-      ? (bloom_filtered_row_groups.has_value()
-           ? std::make_optional(std::accumulate(bloom_filtered_row_groups.value().cbegin(),
-                                                bloom_filtered_row_groups.value().cend(),
-                                                size_type{0},
-                                                [](auto& sum, auto const& per_file_row_groups) {
-                                                  return sum + per_file_row_groups.size();
-                                                }))
-           : std::make_optional(num_stats_filtered_row_groups))
-      : std::nullopt;
+    bloom_filtered_row_groups.has_value()
+      ? std::accumulate(bloom_filtered_row_groups.value().cbegin(),
+                        bloom_filtered_row_groups.value().cend(),
+                        size_type{0},
+                        [](auto& sum, auto const& per_file_row_groups) {
+                          return sum + per_file_row_groups.size();
+                        })
+      : num_stats_filtered_row_groups;
 
   // Return bloom filtered row group indices iff collected
   return {
-    bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : filtered_row_group_indices,
-    {std::make_optional(num_stats_filtered_row_groups), num_bloom_filtered_row_groups}};
+    bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : stats_filtered_row_groups,
+    {std::make_optional(num_stats_filtered_row_groups),
+     std::make_optional(num_bloom_filtered_row_groups)}};
 }
 
 // convert column named expression to column index reference expression
