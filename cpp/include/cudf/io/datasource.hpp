@@ -183,7 +183,8 @@ class datasource {
   virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
                                                                            size_t size)
   {
-    return std::async(std::launch::deferred, [&] { return host_read(offset, size); });
+    return std::async(std::launch::deferred,
+                      [this, offset, size] { return host_read(offset, size); });
   }
 
   /**
@@ -212,7 +213,8 @@ class datasource {
    */
   virtual std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst)
   {
-    return std::async(std::launch::deferred, [&] { return host_read(offset, size, dst); });
+    return std::async(std::launch::deferred,
+                      [this, offset, size, dst] { return host_read(offset, size, dst); });
   }
 
   /**
