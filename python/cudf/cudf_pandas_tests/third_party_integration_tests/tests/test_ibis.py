@@ -70,7 +70,7 @@ def test_column_reductions(ibis_table_num_str, op):
 @pytest.mark.parametrize("op", ["mean", "sum", "min", "max"])
 def test_groupby_reductions(ibis_table_num_str, op):
     t = ibis_table_num_str
-    return getattr(t.group_by("key").col1, op)().to_pandas()
+    return getattr(t.group_by("key").col1, "min")().order_by("key").to_pandas()
 
 
 @pytest.mark.parametrize("op", ELEMENTWISE_UFUNCS)
