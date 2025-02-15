@@ -78,7 +78,7 @@ def test_mutate_ufunc(ibis_table_num_str, op):
     t = ibis_table_num_str
     if op == "log":
         # avoid duckdb log of 0 error
-        t = t.mutate(col1=t.col1+1)
+        t = t.mutate(col1=t.col1 + 1)
     expr = getattr(t.col1, op)()
     return t.mutate(col1_sin=expr).to_pandas()
 
