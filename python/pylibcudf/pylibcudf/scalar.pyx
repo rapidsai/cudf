@@ -2,7 +2,16 @@
 
 from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
-from libc.stdint cimport int64_t
+from libc.stdint cimport (
+    int8_t,
+    int16_t,
+    int32_t,
+    int64_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+)
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -127,62 +136,67 @@ cdef class Scalar:
         Scalar
             New pylibcudf.Scalar
         """
+        cdef DataType dtype
+        cdef unique_ptr[scalar] c_obj
+        cdef Scalar slr
+
         import numpy as np
+
         if isinstance(numpy_val, np.bool_):
             dtype = DataType(type_id.BOOL8)
-        if isinstance(numpy_val, np.str_):
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[cbool]*>c_obj.get()).set_value(numpy_val)
+        elif isinstance(numpy_val, np.str_):
             dtype = DataType(type_id.STRING)
-        if isinstance(numpy_val, np.int8):
+            c_obj = make_string_scalar(numpy_val.item().encode())
+        elif isinstance(numpy_val, np.int8):
             dtype = DataType(type_id.INT8)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[int8_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.int16):
             dtype = DataType(type_id.INT16)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[int16_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.int32):
             dtype = DataType(type_id.INT32)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[int32_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.int64):
             dtype = DataType(type_id.INT64)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[int64_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.uint8):
             dtype = DataType(type_id.UINT8)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.uint16):
             dtype = DataType(type_id.UINT16)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.uint32):
             dtype = DataType(type_id.UINT32)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.uint64):
             dtype = DataType(type_id.UINT64)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.float32):
             dtype = DataType(type_id.FLOAT32)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[float]*>c_obj.get()).set_value(numpy_val)
         elif isinstance(numpy_val, np.float64):
             dtype = DataType(type_id.FLOAT64)
-        elif isinstance(numpy_val, np.datetime64):
-            unit, _ = np.datetime_data(numpy_val)
-            if unit == "D":
-                dtype = DataType(type_id.TIMESTAMP_DAYS)
-            elif unit == "s":
-                dtype = DataType(type_id.TIMESTAMP_SECONDS)
-            elif unit == "ms":
-                dtype = DataType(type_id.TIMESTAMP_MILLISECONDS)
-            elif unit == "us":
-                dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-            elif unit == "ns":
-                dtype = DataType(type_id.TIMESTAMP_NANOSECONDS)
-            else:
-                raise TypeError(f"{unit=} is not supported")
-            raise NotImplementedError("datetime64 is not yet supported")
-        elif isinstance(numpy_val, np.timedelta64):
-            unit, _ = np.datetime_data(numpy_val)
-            if unit == "D":
-                dtype = DataType(type_id.DURATION_DAYS)
-            elif unit == "s":
-                dtype = DataType(type_id.DURATION_SECONDS)
-            elif unit == "ms":
-                dtype = DataType(type_id.DURATION_MILLISECONDS)
-            elif unit == "us":
-                dtype = DataType(type_id.DURATION_MICROSECONDS)
-            elif unit == "ns":
-                dtype = DataType(type_id.DURATION_NANOSECONDS)
-            else:
-                raise TypeError(f"{unit=} is not supported")
-            raise NotImplementedError("timedelta64 is not yet supported")
-        return _from_numpy(py_val)
+            c_obj = make_numeric_scalar(dtype.c_obj)
+            (<numeric_scalar[double]*>c_obj.get()).set_value(numpy_val)
+        elif isinstance(numpy_val, (np.datetime64, np.timedelta64)):
+            raise NotImplementedError(
+                f"{type(numpy_val).__name__} is currently not supported."
+            )
+        else:
+            raise TypeError(f"{type(numpy_val).__name__} is not supported.")
+        slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
 
 cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
