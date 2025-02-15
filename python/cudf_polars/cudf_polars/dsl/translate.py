@@ -301,9 +301,6 @@ def _(
     # input active.
     with set_node(translator.visitor, node.input_left):
         inp_left = translator.translate_ir(n=None)
-        # TODO: There's bug in the polars type coercion phase. Use
-        # translate_named_expr directly once it is resolved.
-        # Tracking issue: https://github.com/pola-rs/polars/issues/20935
         left_on = [translate_named_expr(translator, n=e) for e in node.left_on]
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
@@ -442,6 +439,21 @@ def _(
 
 @_translate_ir.register
 def _(
+    node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
+) -> ir.IR:
+    inp_left = translator.translate_ir(n=node.input_left)
+    inp_right = translator.translate_ir(n=node.input_right)
+    key = node.key
+    return ir.MergeSorted(
+        schema,
+        inp_left,
+        inp_right,
+        key,
+    )
+
+
+@_translate_ir.register
+def _(
     node: pl_ir.MapFunction, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
     name, *options = node.function
@@ -449,7 +461,6 @@ def _(
         schema,
         name,
         options,
-        # TODO: merge_sorted breaks this pattern
         translator.translate_ir(n=node.input),
     )
 
