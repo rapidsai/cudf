@@ -27,9 +27,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/cmath>
 #include <thrust/transform.h>
 
-#include <cmath>
 #include <type_traits>
 
 namespace cudf {
@@ -42,7 +42,7 @@ struct DeviceSin {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::sin(data);
+    return cuda::std::sin(data);
   }
 };
 
@@ -50,7 +50,7 @@ struct DeviceCos {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::cos(data);
+    return cuda::std::cos(data);
   }
 };
 
@@ -58,7 +58,7 @@ struct DeviceTan {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::tan(data);
+    return cuda::std::tan(data);
   }
 };
 
@@ -66,7 +66,7 @@ struct DeviceArcSin {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::asin(data);
+    return cuda::std::asin(data);
   }
 };
 
@@ -74,7 +74,7 @@ struct DeviceArcCos {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::acos(data);
+    return cuda::std::acos(data);
   }
 };
 
@@ -82,7 +82,7 @@ struct DeviceArcTan {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::atan(data);
+    return cuda::std::atan(data);
   }
 };
 
@@ -90,7 +90,7 @@ struct DeviceSinH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::sinh(data);
+    return cuda::std::sinh(data);
   }
 };
 
@@ -98,7 +98,7 @@ struct DeviceCosH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::cosh(data);
+    return cuda::std::cosh(data);
   }
 };
 
@@ -106,7 +106,7 @@ struct DeviceTanH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::tanh(data);
+    return cuda::std::tanh(data);
   }
 };
 
@@ -114,7 +114,7 @@ struct DeviceArcSinH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::asinh(data);
+    return cuda::std::asinh(data);
   }
 };
 
@@ -122,7 +122,7 @@ struct DeviceArcCosH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::acosh(data);
+    return cuda::std::acosh(data);
   }
 };
 
@@ -130,7 +130,7 @@ struct DeviceArcTanH {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::atanh(data);
+    return cuda::std::atanh(data);
   }
 };
 
@@ -140,7 +140,7 @@ struct DeviceExp {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::exp(data);
+    return cuda::std::exp(data);
   }
 };
 
@@ -148,7 +148,7 @@ struct DeviceLog {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::log(data);
+    return cuda::std::log(data);
   }
 };
 
@@ -156,7 +156,7 @@ struct DeviceSqrt {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::sqrt(data);
+    return cuda::std::sqrt(data);
   }
 };
 
@@ -164,7 +164,7 @@ struct DeviceCbrt {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::cbrt(data);
+    return cuda::std::cbrt(data);
   }
 };
 
@@ -174,7 +174,7 @@ struct DeviceCeil {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::ceil(data);
+    return cuda::std::ceil(data);
   }
 };
 
@@ -182,7 +182,7 @@ struct DeviceFloor {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::floor(data);
+    return cuda::std::floor(data);
   }
 };
 
@@ -190,7 +190,7 @@ struct DeviceAbs {
   template <typename T>
   std::enable_if_t<std::is_signed_v<T>, T> __device__ operator()(T data)
   {
-    return std::abs(data);
+    return cuda::std::abs(data);
   }
   template <typename T>
   std::enable_if_t<!std::is_signed_v<T>, T> __device__ operator()(T data)
@@ -205,7 +205,7 @@ struct DeviceRInt {
   template <typename T>
   __device__ T operator()(T data)
   {
-    return std::rint(data);
+    return cuda::std::rint(data);
   }
 };
 
@@ -233,7 +233,7 @@ struct DeviceNot {
 
 struct DeviceNegate {
   template <typename T>
-  T __device__ operator()(T data)
+  __device__ T operator()(T data)
   {
     return -data;
   }
