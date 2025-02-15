@@ -156,7 +156,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
