@@ -528,6 +528,15 @@ std::unique_ptr<column> round_datetimes(column_view const& column,
   return detail::round_general(detail::rounding_function::ROUND, freq, column, stream, mr);
 }
 
+std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
+                                                         datetime_component component,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_datetime_component(column, component, stream, mr);
+}
+
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
