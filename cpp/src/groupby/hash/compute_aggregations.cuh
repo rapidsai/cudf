@@ -61,16 +61,27 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
   auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
-  auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
+  std::cout << "\n########### agg_kinds: ";
+  for (auto const& it : agg_kinds) {
+    std::cout << int(it) << " ";
+  }
+  std::cout << "\n\n";
+  auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
   auto const grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
   auto const available_shmem_size = get_available_shared_memory_size(grid_size);
-  auto const offsets_buffer_size  = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
-  auto const data_buffer_size     = available_shmem_size - offsets_buffer_size;
+  std::cout << "###### available_shmem_size: " << available_shmem_size << "\n";
+  auto const offsets_buffer_size = compute_shmem_offsets_size(flattened_values.num_columns()) * 2;
+  std::cout << "###### offsets_buffer_size: " << offsets_buffer_size << "\n";
+  auto const data_buffer_size =
+    static_cast<size_type>(available_shmem_size) - static_cast<size_type>(offsets_buffer_size);
+  std::cout << "###### data_buffer_size: " << data_buffer_size << "\n";
   auto const is_shared_memory_compatible = std::all_of(
     requests.begin(), requests.end(), [&](cudf::groupby::aggregation_request const& request) {
+      std::cout << "*** data type: " << int(request.values.type().id()) << "\n";
+
       if (cudf::is_dictionary(request.values.type())) { return false; }
       // Ensure there is enough buffer space to store local aggregations up to the max cardinality
       // for shared memory aggregations
@@ -78,6 +89,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                                            size_of_functor{});
       return data_buffer_size >= (size * GROUPBY_CARDINALITY_THRESHOLD);
     });
+  std::cout << "###### is_shared_memory_compatible: " << is_shared_memory_compatible << "\n";
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns or when there is insufficient dynamic
@@ -139,6 +151,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                          global_set,
                                                          populated_keys,
                                                          stream);
+  stream.synchronize();
   // prepare to launch kernel to do the actual aggregation
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
@@ -155,6 +168,8 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              *d_sparse_table,
                              d_agg_kinds.data(),
                              stream);
+
+  stream.synchronize();
 
   // The shared memory groupby is designed so that each thread block can handle up to 128 unique
   // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
@@ -173,7 +188,9 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                                                  stride,
                                                  row_bitmask,
                                                  skip_rows_with_nulls});
+    stream.synchronize();
     extract_populated_keys(global_set, populated_keys, stream);
+    stream.synchronize();
   }
 
   // Add results back to sparse_results cache

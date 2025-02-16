@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,14 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 {
   // convert to int64_t to avoid potential overflow with large `keys`
   auto const num_keys = static_cast<int64_t>(keys.num_rows());
+
+  std::cout << "######### input num_cols: " << keys.num_columns()
+            << " num_rows: " << keys.num_rows() << "\n";
+  std::cout << "######### col types: ";
+  for (auto const& it : keys) {
+    std::cout << " " << int(it.type().id()) << " ";
+  }
+  std::cout << "\n";
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash set

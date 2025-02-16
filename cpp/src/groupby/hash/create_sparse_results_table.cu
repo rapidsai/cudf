@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,11 +81,13 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
   if (!direct_aggregations) {
     auto d_sparse_table = cudf::mutable_table_device_view::create(sparse_table, stream);
     extract_populated_keys(global_set, populated_keys, stream);
+    stream.synchronize();
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       populated_keys.size(),
       initialize_sparse_table{populated_keys.data(), *d_sparse_table, d_agg_kinds});
+    stream.synchronize();
   }
   // Else initialize the whole table
   else {
