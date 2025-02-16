@@ -166,9 +166,13 @@ def test_order_by(ibis_table_num_str):
 
 def test_aggregate_having(ibis_table_num_str):
     t = ibis_table_num_str
-    return t.aggregate(
-        by=["key"],
-        sum_c0=t.col0.sum(),
-        avg_c0=t.col0.mean(),
-        having=t.col1.mean() > 50,
-    ).to_pandas()
+    return (
+        t.aggregate(
+            by=["key"],
+            sum_c0=t.col0.sum(),
+            avg_c0=t.col0.mean(),
+            having=t.col1.mean() > 50,
+        )
+        .order_by("key")
+        .to_pandas()
+    )
