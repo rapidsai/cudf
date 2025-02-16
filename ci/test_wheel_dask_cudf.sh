@@ -16,6 +16,12 @@ rapids-logger "Install dask_cudf, cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 
+# latest-nightly builds are run against upstream *dev* versions of various packages:
+if [[ "${RAPIDS_DEPENDENCIES}" == "latest" ]] && [[ "${BUILD_TYPE}" == "nightly" ]]; then
+    echo "dask @ git+https://github.com/dask/dask" >> "./constraints.txt"
+    echo "distributed @ git+https://github.com/dask/distributed" >> "./constraints.txt"
+fi;
+
 # echo to expand wildcard before adding `[extra]` requires for pip
 rapids-pip-retry install \
   -v \
