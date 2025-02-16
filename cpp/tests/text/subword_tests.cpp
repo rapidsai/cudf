@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -437,4 +439,186 @@ TEST(TextSubwordTest, ZeroHashBinCoefficient)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
+TEST(TextSubwordTest, TokenizedToTensor)
+{
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  auto input = LCW({LCW{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 },
+                    LCW{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+                    LCW{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
+                    LCW{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }});
+  // clang-format on
+
+  auto const all_tokens  = 20;
+  auto const new_size    = 15;
+  auto const stride      = 10;
+  auto const do_truncate = true;
+
+  // all tokens with padding
+  auto results = nvtext::tokenized_to_tensor(input, all_tokens, stride, do_truncate);
+  EXPECT_EQ(results.nrows_tensor, 4);
+  EXPECT_EQ(results.sequence_length, all_tokens);
+  // clang-format off
+  auto expected_tokens = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,  0,  0,  0,  0,  0,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,  0,  0,  0}
+  );
+  auto expected_attn = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+  );
+  auto expected_metadata = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 0,0,19,
+      1,0,9,
+      2,0,14,
+      3,0,16 }
+  );
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), expected_metadata);
+
+  // without truncate should be the same result since all tokens fit within all_tokens
+  results = nvtext::tokenized_to_tensor(input, all_tokens, stride, !do_truncate);
+  EXPECT_EQ(results.nrows_tensor, 4);
+  EXPECT_EQ(results.sequence_length, all_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), expected_metadata);
+
+  // truncate with padding
+  results = nvtext::tokenized_to_tensor(input, new_size, stride, do_truncate);
+  EXPECT_EQ(results.nrows_tensor, 4);
+  EXPECT_EQ(results.sequence_length, new_size);
+  // clang-format off
+  expected_tokens = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10,  0,  0,  0,  0,  0,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+  );
+  expected_attn = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+  );
+  expected_metadata = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 0,0,14,
+      1,0,9,
+      2,0,14,
+      3,0,14 }
+  );
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), expected_metadata);
+
+  // no truncate with stride
+  results = nvtext::tokenized_to_tensor(input, new_size, stride, !do_truncate);
+  EXPECT_EQ(results.nrows_tensor, 6);
+  EXPECT_EQ(results.sequence_length, new_size);
+  // clang-format off
+  expected_tokens = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+     11, 12, 13, 14, 15, 16, 17, 18, 19, 20,  0,  0,  0,  0,  0,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10,  0,  0,  0,  0,  0,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+     11, 12, 13, 14, 15, 16, 17,  0,  0,  0,  0,  0,  0,  0,  0}
+  );
+  expected_attn = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0}
+  );
+  expected_metadata = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 0,0,12, 0,2,9,
+      1,0,9,
+      2,0,14,
+      3,0,12, 3,2,6}
+  );
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), expected_metadata);
+
+  // max_sequence_length == stride
+  results = nvtext::tokenized_to_tensor(input, new_size, new_size, !do_truncate);
+  EXPECT_EQ(results.nrows_tensor, 6);
+  EXPECT_EQ(results.sequence_length, new_size);
+  // clang-format off
+  expected_tokens = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+     16, 17, 18, 19, 20,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10,  0,  0,  0,  0,  0,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+      1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+     16, 17,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,}
+  );
+  expected_attn = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+     1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+  );
+  expected_metadata = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    { 0,0,14, 0,0,4,
+      1,0,9,
+      2,0,14,
+      3,0,14, 3,0,1}
+  );
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), expected_metadata);
+}
+
+TEST(TextSubwordTest, EmptyTokens)
+{
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+
+  auto const seq_length = 10;
+  auto results          = nvtext::tokenized_to_tensor(LCW{}, seq_length, seq_length, true);
+  EXPECT_EQ(results.nrows_tensor, 0);
+  EXPECT_EQ(results.sequence_length, seq_length);
+  EXPECT_EQ(results.tensor_token_ids->size(), 0);
+
+  results = nvtext::tokenized_to_tensor(LCW({LCW{}, LCW{}}), seq_length, seq_length, true);
+  EXPECT_EQ(results.nrows_tensor, 2);
+  EXPECT_EQ(results.sequence_length, seq_length);
+  auto expected = cudf::test::fixed_width_column_wrapper<uint32_t>(
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  auto metadata = cudf::test::fixed_width_column_wrapper<uint32_t>({0, 0, 0, 1, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_token_ids->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_attention_mask->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.tensor_metadata->view(), metadata);
+
+  auto input = LCW({LCW{}, LCW{}}, cudf::test::iterators::all_nulls());
+  results    = nvtext::tokenized_to_tensor(input, seq_length, seq_length, true);
+  EXPECT_EQ(results.nrows_tensor, 0);
+  EXPECT_EQ(results.sequence_length, seq_length);
+  EXPECT_EQ(results.tensor_token_ids->size(), 0);
+}
+
+TEST(TextSubwordTest, ErrorChecks)
+{
+  using LCW  = cudf::test::lists_column_wrapper<cudf::size_type>;
+  auto input = LCW({LCW{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, LCW{1, 2, 3, 4, 5}});
+
+  EXPECT_THROW(nvtext::tokenized_to_tensor(input, 10, 20, true), std::invalid_argument);
+  EXPECT_THROW(
+    nvtext::tokenized_to_tensor(input, std::numeric_limits<cudf::size_type>::max(), 20, true),
+    std::overflow_error);
 }
