@@ -615,10 +615,10 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
 
   // compute offsets to each group of input pages.
-  // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
-  //
-  // result:      0,          4,          8
-  rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
+  // page_keys:    1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  // page_counts:  4,          4,          4
+  // page_offsets: 0,          4,          8,       12 //End
+  rmm::device_uvector<size_type> page_counts(pass.pages.size(), stream);
   auto page_keys             = make_page_key_iterator(pass.pages);
   auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
                                                      page_keys,
@@ -629,9 +629,15 @@ void decode_page_headers(pass_intermediate_data& pass,
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
   pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream);
+  auto page_count_iter       = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [num_page_counts, page_counts = page_counts.begin()] __device__(size_type i) {
+        return i >= num_page_counts ? 0 : page_counts[i];
+      }));
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
-                         page_counts.begin(),
-                         page_counts.begin() + num_page_counts + 1,
+                         page_count_iter,
+                         page_count_iter + num_page_counts + 1,
                          pass.page_offsets.begin());
 
   // setup dict_page for each chunk if necessary
