@@ -487,6 +487,7 @@ add_library(
   src/io/csv/durations.cu
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
+  src/io/experimental/functions.cpp
   src/io/functions.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
@@ -516,6 +517,10 @@ add_library(
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
+  src/io/parquet/experimental/dictionary_page_filter.cu
+  src/io/parquet/experimental/hybrid_scan.cpp
+  src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu

@@ -1,0 +1,93 @@
+/*
+ * Copyright (c) 2025, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @file parquet.hpp
+ */
+
+#pragma once
+
+#include <cudf/io/parquet.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <memory>
+#include <utility>
+#include <vector>
+
+namespace cudf {
+namespace experimental::io {
+
+namespace parquet {
+// Forward declaration
+struct hybrid_scan_reader;
+}  // namespace parquet
+
+// To be defined
+struct hybrid_scan_metadata;
+
+// API # 1
+[[nodiscard]] std::unique_ptr<parquet::hybrid_scan_reader> make_hybrid_scan_reader(
+  cudf::host_span<uint8_t const> footer_bytes,
+  cudf::host_span<uint8_t const> page_index_bytes,
+  cudf::io::parquet_reader_options const& options);
+
+// API # 2
+[[nodiscard]] std::vector<size_type> get_valid_row_groups(
+  cudf::io::parquet_reader_options const& options);
+
+// API # 3
+[[nodiscard]] std::vector<size_type> filter_row_groups_with_stats(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
+
+// API # 4
+[[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                        std::vector<cudf::io::text::byte_range_info>>
+get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> reader,
+                      cudf::host_span<size_type const> row_group_indices,
+                      cudf::io::parquet_reader_options const& options);
+
+// API # 5
+[[nodiscard]] std::vector<size_type> filter_row_groups_with_dictionary_pages(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  std::vector<rmm::device_buffer>& dictionary_page_data,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
+
+// API # 6
+[[nodiscard]] std::vector<size_type> filter_row_groups_with_bloom_filters(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  std::vector<rmm::device_buffer>& bloom_filter_data,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
+
+// API # 7
+[[nodiscard]] std::vector<size_type> filter_data_pages_with_stats(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
+
+}  // namespace experimental::io
+}  // namespace cudf
