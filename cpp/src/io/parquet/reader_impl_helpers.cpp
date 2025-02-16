@@ -23,6 +23,7 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -91,7 +92,7 @@ type_id to_type_id(SchemaElement const& schema,
 
   // check if have set the type through arrow schema?
   if (arrow_type.has_value()) {
-    // is it duration type? i.e. phyical_type == INT64 and no logical/converted types
+    // is it duration type? i.e. physical_type == INT64 and no logical/converted types
     if (physical_type == Type::INT64 and not logical_type.has_value()) {
       return arrow_type.value();
     }
@@ -282,81 +283,81 @@ void metadata::sanitize_schema()
   process(0);
 }
 
-metadata::metadata(datasource* source)
+std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
+  host_span<std::unique_ptr<datasource> const> sources)
 {
-  constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
+  std::vector<metadata> metadatas(sources.size());
+  for (size_t i = 0; i < sources.size(); ++i) {
+    constexpr auto header_len = sizeof(file_header_s);
+    constexpr auto ender_len  = sizeof(file_ender_s);
 
-  auto const len           = source->size();
-  auto const header_buffer = source->host_read(0, header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
-  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
-  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
-  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-               "Incorrect footer length");
+    auto source    = sources[i].get();
+    auto& metadata = metadatas[i];
 
-  auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  CompactProtocolReader cp(buffer->data(), ender->footer_len);
-  cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+    auto const len           = source->size();
+    auto const header_buffer = source->host_read(0, header_len);
+    auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+    auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
+    auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
+    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+    CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
+                 "Corrupted header or footer");
+    CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
+                 "Incorrect footer length");
 
-  // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
-  // Currently the indexes are only used for the string size calculations.
-  // Could also just read indexes for string columns, but that would require changes elsewhere
-  // where we're trying to determine if we have the indexes or not.
-  // Note: This will have to be modified if there are other uses in the future (e.g. calculating
-  // chunk/pass boundaries).
-  auto const has_strings = std::any_of(
-    schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
+    auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+    CompactProtocolReader cp(buffer->data(), ender->footer_len);
+    cp.read(&metadata);
+    CUDF_EXPECTS(cp.InitSchema(&metadata), "Cannot initialize schema");
 
-  if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
-    // column index and offset index are encoded back to back.
-    // the first column of the first row group will have the first column index, the last
-    // column of the last row group will have the final offset index.
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
+    // Currently the indexes are only used for the string size calculations.
+    // Could also just read indexes for string columns, but that would require changes elsewhere
+    // where we're trying to determine if we have the indexes or not.
+    // Note: This will have to be modified if there are other uses in the future (e.g. calculating
+    // chunk/pass boundaries).
+    auto& schema           = metadata.schema;
+    auto const has_strings = std::any_of(
+      schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
 
-    if (max_offset > 0) {
-      int64_t const length = max_offset - min_offset;
-      auto const idx_buf   = source->host_read(min_offset, length);
+    auto& row_groups = metadata.row_groups;
+    if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+      // column index and offset index are encoded back to back.
+      // the first column of the first row group will have the first column index, the last
+      // column of the last row group will have the final offset index.
+      int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+      auto const& last_col     = row_groups.back().columns.back();
+      int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
 
-      // now loop over row groups
-      for (auto& rg : row_groups) {
-        for (auto& col : rg.columns) {
-          if (col.column_index_length > 0 && col.column_index_offset > 0) {
-            int64_t const offset = col.column_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.column_index_length);
-            ColumnIndex ci;
-            cp.read(&ci);
-            col.column_index = std::move(ci);
-          }
-          if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-            int64_t const offset = col.offset_index_offset - min_offset;
-            cp.init(idx_buf->data() + offset, col.offset_index_length);
-            OffsetIndex oi;
-            cp.read(&oi);
-            col.offset_index = std::move(oi);
+      if (max_offset > 0) {
+        int64_t const length = max_offset - min_offset;
+        auto const idx_buf   = source->host_read(min_offset, length);
+
+        // now loop over row groups
+        for (auto& rg : row_groups) {
+          for (auto& col : rg.columns) {
+            if (col.column_index_length > 0 && col.column_index_offset > 0) {
+              int64_t const offset = col.column_index_offset - min_offset;
+              cp.init(idx_buf->data() + offset, col.column_index_length);
+              ColumnIndex ci;
+              cp.read(&ci);
+              col.column_index = std::move(ci);
+            }
+            if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+              int64_t const offset = col.offset_index_offset - min_offset;
+              cp.init(idx_buf->data() + offset, col.offset_index_length);
+              OffsetIndex oi;
+              cp.read(&oi);
+              col.offset_index = std::move(oi);
+            }
           }
         }
       }
     }
+
+    metadata.sanitize_schema();
   }
 
-  sanitize_schema();
-}
-
-std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources)
-{
-  std::vector<metadata> metadatas;
-  std::transform(
-    sources.begin(), sources.end(), std::back_inserter(metadatas), [](auto const& source) {
-      return metadata(source.get());
-    });
   return metadatas;
 }
 
