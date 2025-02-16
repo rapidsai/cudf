@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.datetime cimport datetime_component, rounding_frequency
@@ -7,18 +7,6 @@ from pylibcudf.scalar cimport Scalar
 ctypedef fused ColumnOrScalar:
     Column
     Scalar
-
-cpdef Column extract_millisecond_fraction(
-    Column input
-)
-
-cpdef Column extract_microsecond_fraction(
-    Column input
-)
-
-cpdef Column extract_nanosecond_fraction(
-    Column input
-)
 
 cpdef Column extract_datetime_component(
     Column input,
