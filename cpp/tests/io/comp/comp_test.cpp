@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/comp/comp.hpp"
 #include "io/comp/gpuinflate.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -34,6 +36,12 @@ using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
 
+[[nodiscard]] std::vector<uint8_t> vector_from_string(std::string const& str)
+{
+  return {reinterpret_cast<uint8_t const*>(str.data()),
+          reinterpret_cast<uint8_t const*>(str.data() + str.size())};
+}
+
 /**
  * @brief Base test fixture for decompression
  *
@@ -42,12 +50,6 @@ namespace nvcomp = cudf::io::detail::nvcomp;
  */
 template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
-  [[nodiscard]] std::vector<uint8_t> vector_from_string(std::string const str) const
-  {
-    return {reinterpret_cast<uint8_t const*>(str.c_str()),
-            reinterpret_cast<uint8_t const*>(str.c_str()) + strlen(str.c_str())};
-  }
-
   void Decompress(std::vector<uint8_t>& decompressed,
                   uint8_t const* compressed,
                   size_t compressed_size)
@@ -74,6 +76,11 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_stat.device_to_host_sync(stream);
     ASSERT_EQ(inf_stat[0].status, compression_status::SUCCESS);
   }
+};
+
+struct HostCompressTest : public cudf::test::BaseFixture {
+  HostCompressTest() { setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1); }
+  ~HostCompressTest() override { unsetenv("LIBCUDF_HOST_COMPRESSION"); }
 };
 
 /**
@@ -220,6 +227,25 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {false, true}));
   // stable integrations enabled required
   EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {false, false}));
+}
+
+TEST_F(HostCompressTest, SnappyCompression)
+{
+  std::vector<uint8_t> expected;
+  expected.reserve(8 * (32 << 20));
+  for (size_t size = 1; size < 32 << 20; size *= 2) {
+    // Using number strings to generate data that is compressible, but not trivially so
+    for (size_t i = size / 2; i < size; ++i) {
+      auto const num_string = std::to_string(i);
+      // Keep adding to the test data
+      expected.insert(expected.end(), num_string.begin(), num_string.end());
+    }
+    auto const compressed = cudf::io::detail::compress(
+      cudf::io::compression_type::SNAPPY, expected, cudf::get_default_stream());
+    auto const decompressed =
+      cudf::io::detail::decompress(cudf::io::compression_type::SNAPPY, compressed);
+    EXPECT_EQ(expected, decompressed);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
