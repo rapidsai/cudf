@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -22,6 +22,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.table cimport Table
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "read_csv",
@@ -629,7 +630,8 @@ cdef class CsvReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_csv(
-    CsvReaderOptions options
+    CsvReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from CSV format.
@@ -643,10 +645,15 @@ cpdef TableWithMetadata read_csv(
     ----------
     options: CsvReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
     with nogil:
-        c_result = move(cpp_read_csv(options.c_obj))
+        if stream is not None:
+            c_result = move(cpp_read_csv(options.c_obj, stream.view()))
+        else:
+            c_result = move(cpp_read_csv(options.c_obj))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
     return tbl_meta
@@ -831,7 +838,8 @@ cdef class CsvWriterOptionsBuilder:
 
 
 cpdef void write_csv(
-    CsvWriterOptions options
+    CsvWriterOptions options,
+    Stream stream = None,
 ):
     """
     Write to CSV format.
@@ -845,7 +853,11 @@ cpdef void write_csv(
     ----------
     options: CsvWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
-
     with nogil:
-        cpp_write_csv(move(options.c_obj))
+        if stream is not None:
+            cpp_write_csv(move(options.c_obj), stream.view())
+        else:
+            cpp_write_csv(move(options.c_obj))

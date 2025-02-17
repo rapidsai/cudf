@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -35,6 +35,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
+from rmm.pylibrmm.stream cimport Stream
 
 __all__ = [
     "ChunkedParquetReader",
@@ -306,7 +307,7 @@ cdef class ChunkedParquetReader:
         return TableWithMetadata.from_libcudf(c_result)
 
 
-cpdef read_parquet(ParquetReaderOptions options):
+cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     """
     Read from Parquet format.
 
@@ -319,9 +320,14 @@ cpdef read_parquet(ParquetReaderOptions options):
     ----------
     options: ParquetReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj))
+        if stream is not None:
+            c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
+        else:
+            c_result = move(cpp_read_parquet(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -378,7 +384,7 @@ cdef class ParquetChunkedWriter:
             self.c_obj.get()[0].write(table.view(), partitions)
 
     @staticmethod
-    def from_options(ChunkedParquetWriterOptions options):
+    def from_options(ChunkedParquetWriterOptions options, Stream stream = None):
         """
         Creates a chunked Parquet writer from options
 
@@ -386,6 +392,8 @@ cdef class ParquetChunkedWriter:
         ----------
         options: ChunkedParquetWriterOptions
             Settings for controlling writing behavior
+        stream: Stream
+            CUDA stream used for device memory operations and kernel launches
 
         Returns
         -------
@@ -394,7 +402,14 @@ cdef class ParquetChunkedWriter:
         cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
             ParquetChunkedWriter
         )
-        parquet_writer.c_obj.reset(new cpp_parquet_chunked_writer(options.c_obj))
+        if stream is not None:
+            parquet_writer.c_obj.reset(
+                new cpp_parquet_chunked_writer(options.c_obj, stream.view())
+            )
+        else:
+            parquet_writer.c_obj.reset(
+                new cpp_parquet_chunked_writer(options.c_obj)
+            )
         return parquet_writer
 
 
@@ -916,7 +931,7 @@ cdef class ParquetWriterOptionsBuilder:
         return parquet_options
 
 
-cpdef memoryview write_parquet(ParquetWriterOptions options):
+cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = None):
     """
     Writes a set of columns to parquet format.
 
@@ -924,6 +939,8 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
     ----------
     options : ParquetWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -935,7 +952,10 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
     cdef unique_ptr[vector[uint8_t]] c_result
 
     with nogil:
-        c_result = cpp_write_parquet(move(options.c_obj))
+        if stream is not None:
+            c_result = cpp_write_parquet(move(options.c_obj), stream.view())
+        else:
+            c_result = cpp_write_parquet(move(options.c_obj))
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 
