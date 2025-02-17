@@ -33,10 +33,16 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
+        if how == "cross":
+            return join_func(
+                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
+                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+                # plc.types.NullEquality.EQUAL,
+            )
         left_rows, right_rows = join_func(
             plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
             plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-            plc.types.NullEquality.EQUAL,
+            # plc.types.NullEquality.EQUAL,
         )
         return libcudf.column.Column.from_pylibcudf(
             left_rows
@@ -299,9 +305,23 @@ class Merge:
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
 
-        left_rows, right_rows = self._gather_maps(
-            left_join_cols, right_join_cols
-        )
+        if self.how == "cross":
+            lib_table = self._joiner(
+                list(self.lhs._data.columns),
+                list(self.rhs._data.columns),
+                how=self.how,
+            )
+            all_columns = self.lhs._data.names + self.rhs._data.names
+            return cudf.DataFrame._from_data(
+                {
+                    col: libcudf.column.Column.from_pylibcudf(lib_col)
+                    for col, lib_col in zip(all_columns, lib_table.columns())
+                }
+            )
+        else:
+            left_rows, right_rows = self._gather_maps(
+                left_join_cols, right_join_cols
+            )
         gather_kwargs = {
             "keep_index": self._using_left_index or self._using_right_index,
         }
@@ -470,7 +490,14 @@ class Merge:
         # Error for various invalid combinations of merge input parameters
 
         # We must actually support the requested merge type
-        if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
+        if how not in {
+            "left",
+            "inner",
+            "outer",
+            "leftanti",
+            "leftsemi",
+            "cross",
+        }:
             raise NotImplementedError(f"{how} merge not supported yet")
 
         if on:
@@ -532,7 +559,7 @@ class Merge:
 
         # If nothing specified, must have common cols to use implicitly
         same_named_columns = set(lhs._data) & set(rhs._data)
-        if (
+        if how != "cross" and (
             not (left_index or right_index)
             and not (left_on or right_on)
             and len(same_named_columns) == 0
@@ -591,7 +618,7 @@ class MergeSemi(Merge):
             join_func(
                 plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
                 plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-                plc.types.NullEquality.EQUAL,
+                # plc.types.NullEquality.EQUAL,
             )
         ), None
 

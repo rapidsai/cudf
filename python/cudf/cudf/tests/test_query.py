@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 
 import datetime
@@ -79,7 +79,7 @@ def test_query_ref_env(data, fn):
     d = 1.2
     # udt
     expect_mask = expect_fn(aa, bb, c, d)
-    print(expect_mask)
+
     df2 = df.query(query_expr)
     # check
     assert len(df2) == np.count_nonzero(expect_mask)
