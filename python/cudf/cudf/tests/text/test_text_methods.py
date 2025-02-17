@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import random
 import string
@@ -378,11 +378,11 @@ def test_hash_character_ngrams():
             ),
         ]
     )
-    actual = strings.str.hash_character_ngrams(5, True)
+    actual = strings.str.hash_character_ngrams(n=5, as_list=True)
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
-    actual = strings.str.hash_character_ngrams(5)
+    actual = strings.str.hash_character_ngrams(n=5)
     expected = expected.explode()
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
