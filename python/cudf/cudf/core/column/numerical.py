@@ -214,7 +214,7 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
-                return self.astype(truediv_type)._binaryop(other, op)
+                return self.astype(np.dtype(truediv_type))._binaryop(other, op)
         elif op in {
             "__lt__",
             "__gt__",

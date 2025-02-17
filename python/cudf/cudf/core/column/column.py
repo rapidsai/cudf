@@ -191,7 +191,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype("str").fillna(self._PANDAS_NA_REPR)
+            return self.astype(CUDF_STRING_DTYPE).fillna(self._PANDAS_NA_REPR)
         return self
 
     def to_pandas(
@@ -1182,7 +1182,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif (
             isinstance(dtype, str)
             and dtype == "interval"
-            and isinstance(self.dtype, cudf.IntervalDtype)
+            and isinstance(self.dtype, IntervalDtype)
         ):
             # astype("interval") (the string only) should no-op
             result = self
@@ -1201,7 +1201,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         f"Casting {self.dtype} columns not currently supported"
                     )
                 result = self
-            elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+            elif isinstance(dtype, DecimalDtype):
                 result = self.as_decimal_column(dtype)
             elif dtype.kind == "M":
                 result = self.as_datetime_column(dtype)
@@ -1728,7 +1728,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
-            elif isinstance(col_dtype, cudf.IntervalDtype):
+            elif isinstance(col_dtype, IntervalDtype):
                 result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
                     result_col, closed=col_dtype.closed
                 )
@@ -2090,7 +2090,7 @@ def as_column(
             )
         elif dtype is None and pa.types.is_null(arbitrary.type):
             # default "empty" type
-            dtype = "str"
+            dtype = CUDF_STRING_DTYPE
         col = ColumnBase.from_arrow(arbitrary)
 
         if dtype is not None:
@@ -2156,7 +2156,7 @@ def as_column(
                     and dtype is None
                 ):
                     # Conversion to arrow converts IntervalDtype to StructDtype
-                    dtype = cudf.CategoricalDtype.from_pandas(arbitrary.dtype)
+                    dtype = CategoricalDtype.from_pandas(arbitrary.dtype)
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2355,7 +2355,7 @@ def as_column(
         raise NotImplementedError(
             "Use `tz_localize()` to construct timezone aware data."
         )
-    elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+    elif isinstance(dtype, DecimalDtype):
         # Arrow throws a type error if the input is of
         # mixed-precision and cannot fit into the provided
         # decimal type properly, see:
@@ -2366,11 +2366,11 @@ def as_column(
             arbitrary,
             type=pa.decimal128(precision=dtype.precision, scale=dtype.scale),
         )
-        if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+        if isinstance(dtype, cudf.Decimal128Dtype):
             return cudf.core.column.Decimal128Column.from_arrow(data)
-        elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(dtype, cudf.Decimal64Dtype):
             return cudf.core.column.Decimal64Column.from_arrow(data)
-        elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+        elif isinstance(dtype, cudf.Decimal32Dtype):
             return cudf.core.column.Decimal32Column.from_arrow(data)
         else:
             raise NotImplementedError(f"{dtype} not implemented")
@@ -2378,9 +2378,9 @@ def as_column(
         dtype,
         (
             pd.CategoricalDtype,
-            cudf.CategoricalDtype,
+            CategoricalDtype,
             pd.IntervalDtype,
-            cudf.IntervalDtype,
+            IntervalDtype,
         ),
     ) or dtype in {
         "category",
@@ -2391,7 +2391,7 @@ def as_column(
         object,
         np.dtype(object),
     }:
-        if isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)):
+        if isinstance(dtype, (CategoricalDtype, IntervalDtype)):
             dtype = dtype.to_pandas()
         elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
             # Unlike pandas, interpret object as "str" instead of "python object"
