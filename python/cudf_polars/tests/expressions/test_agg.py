@@ -150,7 +150,8 @@ def test_agg_singleton(op):
     assert_gpu_result_equal(q)
 
 
-def test_sum_empty_zero():
-    df = pl.LazyFrame({"a": pl.Series(values=[], dtype=pl.Int32())})
+@pytest.mark.parametrize("data", [[], [None], [None, 2, 3, None]])
+def test_sum_empty_zero(data):
+    df = pl.LazyFrame({"a": pl.Series(values=data, dtype=pl.Int32())})
     q = df.select(pl.col("a").sum())
     assert_gpu_result_equal(q)

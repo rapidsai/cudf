@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def test_mask_nans(typeid):
     values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype))
     column = Column(plc.interop.from_arrow(values))
     masked = column.mask_nans()
-    assert column.obj.null_count() == masked.obj.null_count()
+    assert column.null_count == masked.null_count
 
 
 def test_mask_nans_float():
