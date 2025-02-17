@@ -11,7 +11,6 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
@@ -978,7 +977,7 @@ def _merge_sorted(
     )
 
     result_columns = [
-        Column.from_pylibcudf(col) for col in plc_table.columns()
+        ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(

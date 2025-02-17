@@ -22,10 +22,9 @@ from pyarrow import dataset as ds
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import as_column, column_empty
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
@@ -39,8 +38,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from typing_extensions import Self
-
-    from cudf.core.column import ColumnBase
 
 
 BYTE_SIZES = {
@@ -1226,7 +1223,7 @@ def _read_parquet(
                     tbl._columns[i] = None
 
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(column_names, concatenated_columns)
             }
             df = cudf.DataFrame._from_data(data)
@@ -1270,7 +1267,7 @@ def _read_parquet(
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(
                     tbl_w_meta.column_names(include_children=False),
                     tbl_w_meta.columns,

@@ -1,11 +1,10 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
 
-from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
 
 if TYPE_CHECKING:
@@ -18,7 +17,7 @@ def drop_nulls(
     how: Literal["any", "all"] = "any",
     keys: list[int] | None = None,
     thresh: int | None = None,
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     """
     Drops null rows from cols depending on key columns.
 
@@ -53,13 +52,13 @@ def drop_nulls(
         keys,
         keep_threshold,
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return plc_table.columns()
 
 
 @acquire_spill_lock()
 def apply_boolean_mask(
     columns: list[ColumnBase], boolean_mask: ColumnBase
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     """
     Drops the rows which correspond to False in boolean_mask.
 
@@ -76,7 +75,7 @@ def apply_boolean_mask(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
         boolean_mask.to_pylibcudf(mode="read"),
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return plc_table.columns()
 
 
 @acquire_spill_lock()
@@ -85,7 +84,7 @@ def drop_duplicates(
     keys: list[int] | None = None,
     keep: Literal["first", "last", False] = "first",
     nulls_are_equal: bool = True,
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     """
     Drops rows in source_table as per duplicate rows in keys.
 
@@ -118,4 +117,4 @@ def drop_duplicates(
         else plc.types.NullEquality.UNEQUAL,
         plc.types.NanEquality.ALL_EQUAL,
     )
-    return [Column.from_pylibcudf(col) for col in plc_table.columns()]
+    return plc_table.columns()

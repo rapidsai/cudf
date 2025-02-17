@@ -5,13 +5,12 @@ from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
-    from cudf.core.column import ColumnBase
     from cudf.core.scalar import Scalar
 
 
@@ -46,13 +45,13 @@ def binaryop(
     op = op.upper()
     op = _op_map.get(op, op)
 
-    return Column.from_pylibcudf(
+    return ColumnBase.from_pylibcudf(
         plc.binaryop.binary_operation(
             lhs.to_pylibcudf(mode="read")
-            if isinstance(lhs, Column)
+            if isinstance(lhs, ColumnBase)
             else lhs.device_value,
             rhs.to_pylibcudf(mode="read")
-            if isinstance(rhs, Column)
+            if isinstance(rhs, ColumnBase)
             else rhs.device_value,
             plc.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),

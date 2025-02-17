@@ -1940,11 +1940,14 @@ class BaseIndex(Serializable):
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
         return self._from_columns_like_self(
-            stream_compaction.drop_duplicates(
-                list(self._columns),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_duplicates(
+                    list(self._columns),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                )
+            ],
             self._column_names,
         )
 
@@ -2027,10 +2030,13 @@ class BaseIndex(Serializable):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            stream_compaction.drop_nulls(
-                data_columns,
-                how=how,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_nulls(
+                    data_columns,
+                    how=how,
+                )
+            ],
             self._column_names,
         )
 
@@ -2049,7 +2055,12 @@ class BaseIndex(Serializable):
 
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
-            copying.gather(self._columns, gather_map, nullify=nullify),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in copying.gather(
+                    self._columns, gather_map, nullify=nullify
+                )
+            ],
             self._column_names,
         )
 
@@ -2098,9 +2109,12 @@ class BaseIndex(Serializable):
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(
-            stream_compaction.apply_boolean_mask(
-                list(self._columns), boolean_mask
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.apply_boolean_mask(
+                    list(self._columns), boolean_mask
+                )
+            ],
             column_names=self._column_names,
         )
 
