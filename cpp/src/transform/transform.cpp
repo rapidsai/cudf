@@ -37,25 +37,54 @@ namespace {
 
 using device_data_t = void*;
 
+using scale_repr = std::underlying_type_t<numeric::scale_type>;
+
+std::string repr_typename(cudf::data_type type)
+{
+  CUDF_EXPECTS(cudf::is_fixed_width(type),
+               "Requested representation type name of non-fixed-width type");
+
+  switch (type.id()) {
+    case cudf::type_id::DECIMAL32: return "int32_t";
+    case cudf::type_id::DECIMAL64: return "int64_t";
+    case cudf::type_id::DECIMAL128: return "__int128_t";
+    default: return cudf::type_to_name(type);
+  }
+}
+
+std::string scale_repr_typename()
+{
+  return cudf::type_to_name(cudf::data_type(cudf::type_to_id<scale_repr>()));
+}
+
 std::vector<std::string> build_jit_typenames(mutable_column_view output,
                                              std::vector<column_view> const& inputs)
 {
   static constexpr auto SCALAR_STRIDE = 0;
   static constexpr auto COLUMN_STRIDE = 1;
 
-  auto const column_type_name = [](data_type data_type, bool is_scalar) {
-    return jitify2::reflection::Template("cudf::transformation::jit::strided")
-      .instantiate(type_to_name(data_type), is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE);
-  };
-
   std::vector<std::string> typenames;
 
-  typenames.push_back(column_type_name(output.type(), false));
-  std::transform(
-    inputs.begin(), inputs.end(), std::back_inserter(typenames), [&](auto const& input) {
-      bool const is_scalar = input.size() != output.size();
-      return column_type_name(input.type(), is_scalar);
-    });
+  auto const add_column = [&](cudf::data_type data_type, bool is_scalar) {
+    auto const repr_type =
+      jitify2::reflection::Template("cudf::transformation::jit::strided")
+        .instantiate(repr_typename(data_type), is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE);
+
+    typenames.push_back(repr_type);
+
+    // add scale type
+    if (cudf::is_fixed_point(data_type)) {
+      auto const scale_type = jitify2::reflection::Template("cudf::transformation::jit::strided")
+                                .instantiate(scale_repr_typename(), SCALAR_STRIDE);
+      typenames.push_back(scale_type);
+    }
+  };
+
+  add_column(output.type(), false);
+  std::for_each(inputs.begin(), inputs.end(), [&](auto const& input) {
+    bool const is_scalar = input.size() != output.size();
+    add_column(input.type(), is_scalar);
+  });
 
   return typenames;
 }
@@ -67,8 +96,12 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   uint32_t index = 0;
 
   auto const add_column = [&](bool is_output, data_type type) {
-    auto const param_type = type_to_name(type);
-    params.emplace(index++, is_output ? (param_type + "*") : param_type);
+    auto const repr_type = repr_typename(type);
+
+    params.emplace(index++, is_output ? (repr_type + "*") : repr_type);
+
+    /// add scale argument
+    if (cudf::is_fixed_point(type)) { params.emplace(index++, scale_repr_typename()); }
   };
 
   add_column(true, output.type());
@@ -80,16 +113,51 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   return params;
 }
 
+rmm::device_uvector<scale_repr> build_scales(mutable_column_view output,
+                                             std::vector<column_view> const& inputs,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  std::vector<scale_repr> host_scales;
+
+  auto const add_column = [&](cudf::data_type type) {
+    if (cudf::is_fixed_point(type)) { host_scales.push_back(type.scale()); }
+  };
+
+  add_column(output.type());
+
+  for (auto const& input : inputs) {
+    add_column(input.type());
+  }
+
+  rmm::device_uvector<scale_repr> scales(host_scales.size(), stream, mr);
+
+  detail::cuda_memcpy_async(
+    cudf::device_span<scale_repr>{scales}, cudf::host_span<scale_repr const>{host_scales}, stream);
+
+  return scales;
+}
+
 std::vector<device_data_t> build_device_data(mutable_column_view output,
-                                             std::vector<column_view> const& inputs)
+                                             std::vector<column_view> const& inputs,
+                                             rmm::device_uvector<scale_repr> const& scales)
 {
   std::vector<device_data_t> data;
 
-  data.push_back(const_cast<device_data_t>(cudf::jit::get_data_ptr(output)));
+  auto scale_ptr = scales.data();
 
-  std::transform(inputs.begin(), inputs.end(), std::back_inserter(data), [](auto const& input) {
-    return const_cast<device_data_t>(cudf::jit::get_data_ptr(input));
-  });
+  auto add_column = [&](column_view const& col) {
+    data.push_back(const_cast<device_data_t>(cudf::jit::get_data_ptr(col)));
+
+    if (cudf::is_fixed_point(col.type())) {
+      void const* ptr = scale_ptr++;
+      data.push_back(const_cast<device_data_t>(ptr));
+    }
+  };
+
+  add_column(output);
+
+  std::for_each(inputs.begin(), inputs.end(), add_column);
 
   return data;
 }
@@ -124,7 +192,9 @@ void transform_operation(size_type base_column_size,
                udf, "GENERIC_TRANSFORM_OP", build_ptx_params(output, inputs))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto device_data = build_device_data(output, inputs);
+  auto const scales = build_scales(output, inputs, stream, mr);
+
+  auto device_data = build_device_data(output, inputs, scales);
 
   auto args = build_launch_args(base_column_size, device_data);
 
