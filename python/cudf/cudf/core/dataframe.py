@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import json
 import numbers
 import os
 import re
@@ -5749,8 +5750,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             preserve_index=preserve_index,
             types=out.schema.types,
         )
+        md_dict = json.loads(metadata[b"pandas"])
 
-        return out.replace_schema_metadata(metadata)
+        cudf.utils.ioutils._update_pandas_metadata_types_inplace(self, md_dict)
+
+        return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
     @_performance_tracking
     def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
