@@ -448,12 +448,11 @@ struct AgentDFA {
             typename SymbolMatcherT,
             typename CallbackOpT,
             int32_t IS_FULL_BLOCK>
-  __device__ __forceinline__ static void ThreadParse(
-    SymbolMatcherT const& symbol_matcher,
-    CharT const* chars,
-    SymbolIndexT const& max_num_chars,
-    CallbackOpT callback_op,
-    cuda::std::integral_constant<int, IS_FULL_BLOCK> /*IS_FULL_BLOCK*/)
+  __device__ __forceinline__ static void ThreadParse(SymbolMatcherT const& symbol_matcher,
+                                                     CharT const* chars,
+                                                     SymbolIndexT const& max_num_chars,
+                                                     CallbackOpT callback_op,
+                                                     cuda::std::bool_constant<IS_FULL_BLOCK>)
   {
     // Iterate over symbols
 #pragma unroll
@@ -469,30 +468,28 @@ struct AgentDFA {
             typename SymbolMatcherT,
             typename StateTransitionOpT,
             int32_t IS_FULL_BLOCK>
-  __device__ __forceinline__ void GetThreadStateTransitions(
-    SymbolMatcherT const& symbol_matcher,
-    CharT const* chars,
-    SymbolIndexT const& max_num_chars,
-    StateTransitionOpT& state_transition_op,
-    cuda::std::integral_constant<int, IS_FULL_BLOCK> /*IS_FULL_BLOCK*/)
+  __device__ __forceinline__ void GetThreadStateTransitions(SymbolMatcherT const& symbol_matcher,
+                                                            CharT const* chars,
+                                                            SymbolIndexT const& max_num_chars,
+                                                            StateTransitionOpT& state_transition_op,
+                                                            cuda::std::bool_constant<IS_FULL_BLOCK>)
   {
     ThreadParse<NUM_SYMBOLS>(symbol_matcher,
                              chars,
                              max_num_chars,
                              state_transition_op,
-                             cuda::std::integral_constant<int, IS_FULL_BLOCK>());
+                             cuda::std::bool_constant<IS_FULL_BLOCK>());
   }
 
   //---------------------------------------------------------------------
   // LOADING FULL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
   template <typename CharInItT>
-  __device__ __forceinline__ void LoadBlock(
-    CharInItT d_chars,
-    OffsetT const block_offset,
-    OffsetT const num_total_symbols,
-    cuda::std::integral_constant<int, true> /*IS_FULL_BLOCK*/,
-    cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
+                                            OffsetT const block_offset,
+                                            OffsetT const num_total_symbols,
+                                            cuda::std::true_type /*IS_FULL_BLOCK*/,
+                                            cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
   {
     CharT thread_chars[SYMBOLS_PER_THREAD];
 
@@ -509,12 +506,11 @@ struct AgentDFA {
   // LOADING PARTIAL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
   template <typename CharInItT>
-  __device__ __forceinline__ void LoadBlock(
-    CharInItT d_chars,
-    OffsetT const block_offset,
-    OffsetT const num_total_symbols,
-    cuda::std::integral_constant<int, false> /*IS_FULL_BLOCK*/,
-    cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
+                                            OffsetT const block_offset,
+                                            OffsetT const num_total_symbols,
+                                            cuda::std::false_type /*IS_FULL_BLOCK*/,
+                                            cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
   {
     CharT thread_chars[SYMBOLS_PER_THREAD];
 
@@ -540,7 +536,7 @@ struct AgentDFA {
     CharT const* d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
-    cuda::std::integral_constant<int, true> /*IS_FULL_BLOCK*/,
+    cuda::std::true_type /*IS_FULL_BLOCK*/,
     cuda::std::integral_constant<int, sizeof(AliasedLoadT)> /*ALIGNMENT*/)
   {
     AliasedLoadT thread_units[UINTS_PER_THREAD];
@@ -562,7 +558,7 @@ struct AgentDFA {
     CharT const* d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
-    cuda::std::integral_constant<int, false> /*IS_FULL_BLOCK*/,
+    cuda::std::false_type /*IS_FULL_BLOCK*/,
     cuda::std::integral_constant<int, sizeof(AliasedLoadT)> /*ALIGNMENT*/)
   {
     AliasedLoadT thread_units[UINTS_PER_THREAD];
@@ -597,13 +593,13 @@ struct AgentDFA {
         LoadBlock(d_chars,
                   block_offset,
                   num_total_symbols,
-                  cuda::std::integral_constant<int, true>(),
+                  cuda::std::true_type(),
                   cuda::std::integral_constant<int, 4>());
       } else {
         LoadBlock(d_chars,
                   block_offset,
                   num_total_symbols,
-                  cuda::std::integral_constant<int, false>(),
+                  cuda::std::false_type(),
                   cuda::std::integral_constant<int, 1>());
       }
     } else {
@@ -611,13 +607,13 @@ struct AgentDFA {
         LoadBlock(d_chars,
                   block_offset,
                   num_total_symbols,
-                  cuda::std::integral_constant<int, true>(),
+                  cuda::std::true_type(),
                   cuda::std::integral_constant<int, 1>());
       } else {
         LoadBlock(d_chars,
                   block_offset,
                   num_total_symbols,
-                  cuda::std::integral_constant<int, false>(),
+                  cuda::std::false_type(),
                   cuda::std::integral_constant<int, 1>());
       }
     }
@@ -633,13 +629,13 @@ struct AgentDFA {
       LoadBlock(d_chars,
                 block_offset,
                 num_total_symbols,
-                cuda::std::integral_constant<int, true>(),
+                cuda::std::true_type(),
                 cuda::std::integral_constant<int, 1>());
     } else {
       LoadBlock(d_chars,
                 block_offset,
                 num_total_symbols,
-                cuda::std::integral_constant<int, false>(),
+                cuda::std::false_type(),
                 cuda::std::integral_constant<int, 1>());
     }
   }
@@ -673,17 +669,11 @@ struct AgentDFA {
 
     // Parse thread's symbols and transition the state-vector
     if (is_full_block) {
-      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(symbol_matcher,
-                                                    t_chars,
-                                                    num_block_chars,
-                                                    transition_op,
-                                                    cuda::std::integral_constant<int, true>());
+      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::true_type());
     } else {
-      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(symbol_matcher,
-                                                    t_chars,
-                                                    num_block_chars,
-                                                    transition_op,
-                                                    cuda::std::integral_constant<int, false>());
+      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::false_type());
     }
   }
 
@@ -724,17 +714,11 @@ struct AgentDFA {
 
     // Parse thread's symbols and transition the state-vector
     if (is_full_block) {
-      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(symbol_matcher,
-                                                    t_chars,
-                                                    num_block_chars,
-                                                    transition_op,
-                                                    cuda::std::integral_constant<int, true>());
+      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::true_type());
     } else {
-      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(symbol_matcher,
-                                                    t_chars,
-                                                    num_block_chars,
-                                                    transition_op,
-                                                    cuda::std::integral_constant<int, false>());
+      GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::false_type());
     }
 
     callback_op.TearDown();
@@ -992,7 +976,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
                                         num_chars,
                                         t_start_state,
                                         write_translated_callback_op,
-                                        cuda::std::integral_constant<int, true>());
+                                        cuda::std::true_type());
   }
 }
 
