@@ -1650,6 +1650,16 @@ class Projection(IR):
         return DataFrame(columns)
 
 
+class MergeSorted(IR):
+    """Merge sorted operation."""
+
+    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
+        # libcudf merge is not stable wrt order of inputs, since
+        # it uses a priority queue to manage the tables it produces.
+        # See: https://github.com/rapidsai/cudf/issues/16010
+        raise NotImplementedError("MergeSorted not yet implemented")
+
+
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -1663,10 +1673,6 @@ class MapFunction(IR):
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
             "rechunk",
-            # libcudf merge is not stable wrt order of inputs, since
-            # it uses a priority queue to manage the tables it produces.
-            # See: https://github.com/rapidsai/cudf/issues/16010
-            # "merge_sorted",
             "rename",
             "explode",
             "unpivot",

@@ -803,7 +803,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.20,<1.22
+          - polars>=1.20,<1.23
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
