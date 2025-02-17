@@ -444,10 +444,7 @@ struct AgentDFA {
   {
   }
 
-  template <int32_t NUM_SYMBOLS,
-            typename SymbolMatcherT,
-            typename CallbackOpT,
-            int32_t IS_FULL_BLOCK>
+  template <int32_t NUM_SYMBOLS, typename SymbolMatcherT, typename CallbackOpT, bool IS_FULL_BLOCK>
   __device__ __forceinline__ static void ThreadParse(SymbolMatcherT const& symbol_matcher,
                                                      CharT const* chars,
                                                      SymbolIndexT const& max_num_chars,
@@ -467,7 +464,7 @@ struct AgentDFA {
   template <int32_t NUM_SYMBOLS,
             typename SymbolMatcherT,
             typename StateTransitionOpT,
-            int32_t IS_FULL_BLOCK>
+            bool IS_FULL_BLOCK>
   __device__ __forceinline__ void GetThreadStateTransitions(SymbolMatcherT const& symbol_matcher,
                                                             CharT const* chars,
                                                             SymbolIndexT const& max_num_chars,
@@ -677,7 +674,7 @@ struct AgentDFA {
     }
   }
 
-  template <int32_t BYPASS_LOAD,
+  template <bool BYPASS_LOAD,
             typename SymbolMatcherT,
             typename TransitionTableT,
             typename CallbackOpT>
@@ -689,7 +686,7 @@ struct AgentDFA {
     OffsetT const num_total_symbols,
     StateIndexT& state,
     CallbackOpT& callback_op,
-    cuda::std::integral_constant<int, BYPASS_LOAD>)
+    cuda::std::bool_constant<BYPASS_LOAD>)
   {
     using StateTransitionOpT = StateTransitionOp<CallbackOpT, TransitionTableT>;
 
@@ -915,7 +912,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
                                         num_chars,
                                         state,
                                         count_chars_callback_op,
-                                        cuda::std::integral_constant<int, IS_SINGLE_PASS>());
+                                        cuda::std::bool_constant<IS_SINGLE_PASS>());
 
     __syncthreads();
 
