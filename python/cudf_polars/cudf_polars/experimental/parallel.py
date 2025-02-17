@@ -141,7 +141,7 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
     _register_serialize()
 
-    try:
+    try:  # pragma: no cover; block depends on executor type and Distributed cluster
         client = get_client()
         client.run(_register_serialize)
         client.run_on_scheduler(_register_serialize)
