@@ -3575,3 +3575,15 @@ def test_replace_invalid_scalar_repl():
     ser = cudf.Series(["1"])
     with pytest.raises(TypeError):
         ser.str.replace("1", 2)
+
+
+def test_string_methods_setattr():
+    ser = cudf.Series(["ab", "cd", "ef"])
+    pser = ser.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=ser.str.__setattr__,
+        rfunc=pser.str.__setattr__,
+        lfunc_args_and_kwargs=(("a", "b"),),
+        rfunc_args_and_kwargs=(("a", "b"),),
+    )
