@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
@@ -124,6 +124,10 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 def _from_arrow_datatype(pyarrow_object):
     if isinstance(pyarrow_object, pa.Decimal128Type):
         return DataType(type_id.DECIMAL128, scale=-pyarrow_object.scale)
+    elif isinstance(pyarrow_object, pa.Decimal64Dtype):
+        return DataType(type_id.DECIMAL64, scale=-pyarrow_object.scale)
+    elif isinstance(pyarrow_object, pa.Decimal32Dtype):
+        return DataType(type_id.DECIMAL32, scale=-pyarrow_object.scale)
     elif isinstance(pyarrow_object, pa.StructType):
         return DataType(type_id.STRUCT)
     elif isinstance(pyarrow_object, pa.ListType):
@@ -223,12 +227,24 @@ def _to_arrow_datatype(cudf_object, **kwargs):
     - When translating a struct type, provide ``fields``
     - When translating a list type, provide the wrapped ``value_type``
     """
-    if cudf_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
-        if not (precision := kwargs.get("precision")):
+    precision = kwargs.get("precision")
+    if cudf_object.id() == type_id.DECIMAL32:
+        if not precision:
             raise ValueError(
                 "Precision must be provided for decimal types"
             )
-            # no pa.decimal32 or pa.decimal64
+        return pa.decimal32(precision, -cudf_object.scale())
+    elif cudf_object.id() == type_id.DECIMAL64:
+        if not precision:
+            raise ValueError(
+                "Precision must be provided for decimal types"
+            )
+        return pa.decimal64(precision, -cudf_object.scale())
+    elif cudf_object.id() == type_id.DECIMAL128:
+        if not precision:
+            raise ValueError(
+                "Precision must be provided for decimal types"
+            )
         return pa.decimal128(precision, -cudf_object.scale())
     elif cudf_object.id() == type_id.STRUCT:
         if not (fields := kwargs.get("fields")):

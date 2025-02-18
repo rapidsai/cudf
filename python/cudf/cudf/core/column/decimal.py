@@ -6,8 +6,6 @@ import warnings
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
-import cupy as cp
-import numpy as np
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -15,7 +13,7 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
@@ -26,12 +24,17 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
-from cudf.utils.utils import pa_mask_buffer_to_mask
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
     from cudf.core.buffer import Buffer
 
 
@@ -73,11 +76,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_decimal_column(
         self,
         dtype: Dtype,
-    ) -> "DecimalBaseColumn":
-        if (
-            isinstance(dtype, cudf.core.dtypes.DecimalDtype)
-            and dtype.scale < self.dtype.scale
-        ):
+    ) -> DecimalBaseColumn:
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -204,28 +204,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     other = other.astype(self.dtype)
             return other
         if isinstance(other, cudf.Scalar) and isinstance(
+            other.dtype, DecimalDtype
+        ):
             # TODO: Should it be possible to cast scalars of other numerical
             # types to decimal?
-            other.dtype,
-            cudf.core.dtypes.DecimalDtype,
-        ):
             if _same_precision_and_scale(self.dtype, other.dtype):
                 other = other.astype(self.dtype)
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            other = Decimal(other)
-            metadata = other.as_tuple()
-            precision = max(len(metadata.digits), metadata.exponent)
-            scale = -cast(int, metadata.exponent)
-            return cudf.Scalar(
-                other, dtype=self.dtype.__class__(precision, scale)
-            )
+            dtype = self.dtype._from_decimal(Decimal(other))
+            return cudf.Scalar(other, dtype=dtype)
         return NotImplemented
 
     def as_numerical_column(
         self, dtype: Dtype
     ) -> cudf.core.column.NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
+
+    def _with_type_metadata(self: Self, dtype: DtypeObj) -> Self:
+        if isinstance(dtype, type(self.dtype)):
+            self.dtype.precision = dtype.precision
+        return self
 
 
 class Decimal32Column(DecimalBaseColumn):
@@ -252,61 +251,12 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
-        dtype = Decimal32Dtype.from_arrow(data.type)
-        mask_buf = data.buffers()[0]
-        mask = (
-            mask_buf
-            if mask_buf is None
-            else pa_mask_buffer_to_mask(mask_buf, len(data))
-        )
-        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int32"))
-        data_32 = data_128[::4].copy()
-        return cls(
-            data=as_buffer(data_32.view("uint8")),
-            size=len(data),
-            dtype=dtype,
-            offset=data.offset,
-            mask=mask,
-        )
-
-    def to_arrow(self) -> pa.Array:
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
-
-        # use striding to set the first 32 bits of each 128-bit chunk:
-        data_buf_128[::4] = data_buf_32
-        # use striding again to set the remaining bits of each 128-bit chunk:
-        # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf_128[2::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf_128[3::4] = np.piecewise(
-            data_buf_32, [data_buf_32 < 0], [-1, 0]
-        )
-        data_buf = pa.py_buffer(data_buf_128)
-        mask_buf = (
-            self.base_mask
-            if self.base_mask is None
-            else pa.py_buffer(self.base_mask.memoryview())
-        )
-        return pa.Array.from_buffers(
-            type=self.dtype.to_arrow(),
-            offset=self._offset,
-            length=self.size,
-            buffers=[mask_buf, data_buf],
-        )
-
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal32Column", dtype: Dtype
-    ) -> "cudf.core.column.Decimal32Column":
-        if isinstance(dtype, Decimal32Dtype):
-            self.dtype.precision = dtype.precision
-
-        return self
+    def from_arrow(cls, data: pa.Decimal32Array) -> Self:
+        if not isinstance(data, pa.Decimal32Array):
+            raise ValueError(
+                f"Can only construct a {cls.__name__} from a pa.Decimal32Array."
+            )
+        return super().from_arrow(data)  # type: ignore[return-value]
 
 
 class Decimal128Column(DecimalBaseColumn):
@@ -333,21 +283,12 @@ class Decimal128Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
-        result = cast(Decimal128Dtype, super().from_arrow(data))
-        result.dtype.precision = data.type.precision
-        return result
-
-    def to_arrow(self) -> pa.Array:
-        return super().to_arrow().cast(self.dtype.to_arrow())
-
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal128Column", dtype: Dtype
-    ) -> "cudf.core.column.Decimal128Column":
-        if isinstance(dtype, Decimal128Dtype):
-            self.dtype.precision = dtype.precision
-
-        return self
+    def from_arrow(cls, data: pa.Decimal128Array) -> Self:
+        if not isinstance(data, pa.Decimal128Array):
+            raise ValueError(
+                f"Can only construct a {cls.__name__} from a pa.Decimal128Array."
+            )
+        return super().from_arrow(data)  # type: ignore[return-value]
 
 
 class Decimal64Column(DecimalBaseColumn):
@@ -373,61 +314,13 @@ class Decimal64Column(DecimalBaseColumn):
             children=children,
         )
 
-    def __setitem__(self, key, value):
-        if isinstance(value, np.integer):
-            value = int(value)
-        super().__setitem__(key, value)
-
     @classmethod
-    def from_arrow(cls, data: pa.Array):
-        dtype = Decimal64Dtype.from_arrow(data.type)
-        mask_buf = data.buffers()[0]
-        mask = (
-            mask_buf
-            if mask_buf is None
-            else pa_mask_buffer_to_mask(mask_buf, len(data))
-        )
-        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
-        data_64 = data_128[::2].copy()
-        return cls(
-            data=as_buffer(data_64.view("uint8")),
-            size=len(data),
-            dtype=dtype,
-            offset=data.offset,
-            mask=mask,
-        )
-
-    def to_arrow(self) -> pa.Array:
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
-        data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
-
-        # use striding to set the first 64 bits of each 128-bit chunk:
-        data_buf_128[::2] = data_buf_64
-        # use striding again to set the remaining bits of each 128-bit chunk:
-        # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::2] = np.piecewise(
-            data_buf_64, [data_buf_64 < 0], [-1, 0]
-        )
-        data_buf = pa.py_buffer(data_buf_128)
-        mask_buf = (
-            self.base_mask
-            if self.base_mask is None
-            else pa.py_buffer(self.base_mask.memoryview())
-        )
-        return pa.Array.from_buffers(
-            type=self.dtype.to_arrow(),
-            offset=self._offset,
-            length=self.size,
-            buffers=[mask_buf, data_buf],
-        )
-
-    def _with_type_metadata(
-        self: "cudf.core.column.Decimal64Column", dtype: Dtype
-    ) -> "cudf.core.column.Decimal64Column":
-        if isinstance(dtype, Decimal64Dtype):
-            self.dtype.precision = dtype.precision
-
-        return self
+    def from_arrow(cls, data: pa.Decimal64Array) -> Self:
+        if not isinstance(data, pa.Decimal64Array):
+            raise ValueError(
+                f"Can only construct a {cls.__name__} from a pa.Decimal64Array."
+            )
+        return super().from_arrow(data)  # type: ignore[return-value]
 
 
 def _get_decimal_type(

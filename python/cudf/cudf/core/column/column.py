@@ -2362,10 +2362,7 @@ def as_column(
         # https://github.com/apache/arrow/pull/9948
         # Hence we should let the exception propagate to
         # the user.
-        data = pa.array(
-            arbitrary,
-            type=pa.decimal128(precision=dtype.precision, scale=dtype.scale),
-        )
+        data = pa.array(arbitrary, type=dtype.to_arrow())
         if isinstance(dtype, cudf.Decimal128Dtype):
             return cudf.core.column.Decimal128Column.from_arrow(data)
         elif isinstance(dtype, cudf.Decimal64Dtype):
