@@ -966,7 +966,6 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        breakpoint()
         return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
 
     def to_pandas(self) -> pd.IntervalDtype:
