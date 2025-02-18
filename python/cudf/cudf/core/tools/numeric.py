@@ -127,8 +127,8 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.type
-        if _is_non_decimal_numeric_dtype(cat_dtype):
+        cat_dtype = col.dtype.categories.dtype
+        if cat_dtype.kind in "iufb":
             col = col.astype(cat_dtype)
         else:
             try:
@@ -187,7 +187,7 @@ def to_numeric(
     else:
         if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.
-            col = col.astype(float).fillna(np.nan)
+            col = col.astype(np.dtype(np.float64)).fillna(np.nan)
         return col.values
 
 
