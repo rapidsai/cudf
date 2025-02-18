@@ -58,9 +58,7 @@ static void BM_transform(nvbench::state& state)
                           Nullable ? std::optional<double>{0.5} : std::nullopt);
   auto table = source_table->view();
 
-  // Create expression trees
-
-  // Construct tree that chains additions like (((a + b) + c) + d)
+  // Construct expression that chains additions like (((a + b) + c) + d)
   std::string const op = "+";
   std::string expression;
   if (reuse_columns) {
@@ -83,7 +81,8 @@ static void BM_transform(nvbench::state& state)
                 thrust::make_counting_iterator(num_columns),
                 [&](int param) { params += ", " + type_name + " c" + std::to_string(param); });
 
-  std::string code = "void transform("  + type_name + "* out, " + params + " ) {  *out = " + expression + "; }";
+  std::string code =
+    "void transform(" + type_name + "* out, " + params + " ) {  *out = " + expression + "; }";
 
   std::vector<cudf::column_view> inputs;
 
