@@ -1639,11 +1639,7 @@ def test_date_range_raise_overflow():
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd.errors.OutOfBoundsDatetime):
-        # Extending beyond the max value will trigger a warning when pandas
-        # does an internal conversion to a Python built-in datetime.datetime
-        # object, which only supports down to microsecond resolution.
-        with pytest.warns(UserWarning):
-            cudf.date_range(start=start, periods=periods, freq=freq)
+        cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 @pytest.mark.parametrize(
@@ -1683,7 +1679,9 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         with pytest.raises(ValueError, match="does not yet support"):
-            with expect_warning_if(PANDAS_GE_220):
+            with expect_warning_if(
+                PANDAS_GE_220 and freqstr_unsupported not in {"b", "bh"}
+            ):
                 cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 

@@ -439,12 +439,12 @@ def _datetime_timedelta_find_and_replace(
         if replacement.can_cast_safely(original_column.dtype):
             replacement = replacement.astype(original_column.dtype)
     if isinstance(to_replace, original_col_class):
-        to_replace = to_replace.as_numerical_column(dtype=np.dtype("int64"))
+        to_replace = to_replace.astype(np.dtype(np.int64))
     if isinstance(replacement, original_col_class):
-        replacement = replacement.as_numerical_column(dtype=np.dtype("int64"))
+        replacement = replacement.astype(np.dtype(np.int64))
     try:
         result_col = (
-            original_column.as_numerical_column(dtype=np.dtype("int64"))
+            original_column.astype(np.dtype(np.int64))
             .find_and_replace(to_replace, replacement, all_nan)
             .astype(original_column.dtype)
         )
