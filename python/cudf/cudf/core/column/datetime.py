@@ -264,8 +264,8 @@ class DatetimeColumn(column.ColumnBase):
             return False
         elif ts.tzinfo is not None:
             ts = ts.tz_convert(None)
-        return ts.to_numpy().astype("int64") in cast(
-            "cudf.core.column.NumericalColumn", self.astype("int64")
+        return ts.to_numpy().astype(np.dtype(np.int64)) in cast(
+            "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
         )
 
     @functools.cached_property
@@ -505,7 +505,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def isocalendar(self) -> dict[str, ColumnBase]:
         return {
-            field: self.strftime(format=directive).astype("uint32")
+            field: self.strftime(format=directive).astype(np.dtype(np.uint32))
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"]
             )
@@ -558,7 +558,7 @@ class DatetimeColumn(column.ColumnBase):
                 )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype("timedelta64[s]")
+                other = other.astype(np.dtype("timedelta64[s]"))
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -600,12 +600,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = column.column_empty(0, dtype="object")
+            names = column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -655,7 +655,8 @@ class DatetimeColumn(column.ColumnBase):
     def mean(self, skipna=None, min_count: int = 0) -> ScalarLike:
         return pd.Timestamp(
             cast(
-                "cudf.core.column.NumericalColumn", self.astype("int64")
+                "cudf.core.column.NumericalColumn",
+                self.astype(np.dtype(np.int64)),
             ).mean(skipna=skipna, min_count=min_count),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
@@ -667,16 +668,18 @@ class DatetimeColumn(column.ColumnBase):
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            cast("cudf.core.column.NumericalColumn", self.astype("int64")).std(
-                skipna=skipna, min_count=min_count, ddof=ddof
-            )
+            cast(
+                "cudf.core.column.NumericalColumn",
+                self.astype(np.dtype(np.int64)),
+            ).std(skipna=skipna, min_count=min_count, ddof=ddof)
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
 
     def median(self, skipna: bool | None = None) -> pd.Timestamp:
         return pd.Timestamp(
             cast(
-                "cudf.core.column.NumericalColumn", self.astype("int64")
+                "cudf.core.column.NumericalColumn",
+                self.astype(np.dtype(np.int64)),
             ).median(skipna=skipna),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
@@ -687,8 +690,13 @@ class DatetimeColumn(column.ColumnBase):
                 f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
         return cast(
-            "cudf.core.column.NumericalColumn", self.astype("int64")
-        ).cov(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
+            "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
+        ).cov(
+            cast(
+                "cudf.core.column.NumericalColumn",
+                other.astype(np.dtype(np.int64)),
+            )
+        )
 
     def corr(self, other: DatetimeColumn) -> float:
         if not isinstance(other, DatetimeColumn):
@@ -696,8 +704,13 @@ class DatetimeColumn(column.ColumnBase):
                 f"cannot perform corr with types {self.dtype}, {other.dtype}"
             )
         return cast(
-            "cudf.core.column.NumericalColumn", self.astype("int64")
-        ).corr(cast("cudf.core.column.NumericalColumn", other.astype("int64")))
+            "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
+        ).corr(
+            cast(
+                "cudf.core.column.NumericalColumn",
+                other.astype(np.dtype(np.int64)),
+            )
+        )
 
     def quantile(
         self,
@@ -706,7 +719,7 @@ class DatetimeColumn(column.ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.astype("int64").quantile(
+        result = self.astype(np.dtype(np.int64)).quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -810,13 +823,16 @@ class DatetimeColumn(column.ColumnBase):
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
         value = (
-            pd.to_datetime(value).to_numpy().astype(self.dtype).astype("int64")
+            pd.to_datetime(value)
+            .to_numpy()
+            .astype(self.dtype)
+            .astype(np.dtype(np.int64))
         )
-        return self.astype("int64").indices_of(value)
+        return self.astype(np.dtype(np.int64)).indices_of(value)
 
     @property
     def is_unique(self) -> bool:
-        return self.astype("int64").is_unique
+        return self.astype(np.dtype(np.int64)).is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
@@ -879,7 +895,7 @@ class DatetimeColumn(column.ColumnBase):
         If no transitions occur, the tuple `(False, False)` is returned.
         """
         transition_times, offsets = get_tz_data(zone_name)
-        offsets = offsets.astype(f"timedelta64[{self.time_unit}]")  # type: ignore[assignment]
+        offsets = offsets.astype(np.dtype(f"timedelta64[{self.time_unit}]"))  # type: ignore[assignment]
 
         if len(offsets) == 1:  # no transitions
             return False, False

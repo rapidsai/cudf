@@ -297,8 +297,8 @@ class Merge:
                 and isinstance(lcol.dtype, cudf.CategoricalDtype)
                 and isinstance(rcol.dtype, cudf.CategoricalDtype)
             ):
-                lcol_casted = lcol_casted.astype("category")
-                rcol_casted = rcol_casted.astype("category")
+                lcol_casted = lcol_casted.astype(lcol.dtype)
+                rcol_casted = rcol_casted.astype(rcol.dtype)
 
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)

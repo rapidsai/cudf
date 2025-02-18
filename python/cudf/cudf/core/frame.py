@@ -27,6 +27,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
+    column_empty,
     deserialize_columns,
     serialize_columns,
 )
@@ -998,7 +999,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].astype("category")
+                result[name] = result[name].astype(
+                    cudf.CategoricalDtype(
+                        categories=column_empty(0, dtype=result[name].dtype)
+                    )
+                )
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"

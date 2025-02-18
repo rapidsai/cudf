@@ -18,6 +18,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
@@ -271,12 +272,16 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 closed=None,
                 step=None,
             )
-            start = as_column(start, dtype="int32")
-            end = as_column(end, dtype="int32")
+            start = as_column(start, dtype=SIZE_TYPE_DTYPE)
+            end = as_column(end, dtype=SIZE_TYPE_DTYPE)
 
             idx = as_column(range(len(start)))
-            preceding_window = (idx - start + np.int32(1)).astype("int32")
-            following_window = (end - idx - np.int32(1)).astype("int32")
+            preceding_window = (idx - start + np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
+            following_window = (end - idx - np.int32(1)).astype(
+                SIZE_TYPE_DTYPE
+            )
             window = None
         else:
             preceding_window = as_column(self.window)

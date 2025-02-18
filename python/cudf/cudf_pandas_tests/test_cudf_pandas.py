@@ -1095,6 +1095,7 @@ def test_np_array_of_timestamps():
         xpd.Series([1, 2, 3]),
         # Index (doesn't support nullary construction)
         xpd.Index([1, 2, 3]),
+        xpd.RangeIndex(0, 10),
         xpd.Index(["a", "b", "c"]),
         # Complex index
         xpd.to_datetime(
@@ -1104,6 +1105,8 @@ def test_np_array_of_timestamps():
                 datetime.datetime(2018, 1, 1),
             ]
         ),
+        xpd.TimedeltaIndex([100, 200, 300], dtype="timedelta64[ns]"),
+        xpd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
         # Objects where the underlying store is the slow type.
         xpd.Series(["a", 2, 3]),
         xpd.Index(["a", 2, 3]),
@@ -1115,18 +1118,13 @@ def test_np_array_of_timestamps():
         xpd.Timedelta(1, "D"),
     ],
 )
-def test_pickle(obj):
+@pytest.mark.parametrize("pickle_func", [pickle.dump, xpd.to_pickle])
+@pytest.mark.parametrize("read_pickle_func", [pickle.load, xpd.read_pickle])
+def test_pickle(obj, pickle_func, read_pickle_func):
     with tempfile.TemporaryFile() as f:
-        pickle.dump(obj, f)
+        pickle_func(obj, f)
         f.seek(0)
-        copy = pickle.load(f)
-
-    tm.assert_equal(obj, copy)
-
-    with tempfile.TemporaryFile() as f:
-        xpd.to_pickle(obj, f)
-        f.seek(0)
-        copy = xpd.read_pickle(f)
+        copy = read_pickle_func(f)
 
     tm.assert_equal(obj, copy)
 
@@ -1552,8 +1550,8 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
-def test_excelwriter_pathlike():
-    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+def test_excelwriter_pathlike(tmpdir):
+    assert isinstance(pd.ExcelWriter(tmpdir.join("foo.xlsx")), os.PathLike)
 
 
 def test_is_proxy_object():
@@ -1979,3 +1977,18 @@ def test_numpy_data_access():
     actual = xs.values.data
 
     assert type(expected) is type(actual)
+
+
+def test_pickle_round_trip_proxy_numpy_array(array):
+    arr, proxy_arr = array
+    pickled_arr = BytesIO()
+    pickled_proxy_arr = BytesIO()
+    pickle.dump(arr, pickled_arr)
+    pickle.dump(proxy_arr, pickled_proxy_arr)
+
+    pickled_arr.seek(0)
+    pickled_proxy_arr.seek(0)
+
+    np.testing.assert_equal(
+        pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
+    )

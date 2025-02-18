@@ -425,7 +425,7 @@ class IndexedFrame(Frame):
             if cast_to_int and result_col.dtype.kind in "uib":
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.int64)
+                result_col = result_col.astype(np.dtype(np.int64))
             results.append(getattr(result_col, op)())
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
@@ -2009,7 +2009,7 @@ class IndexedFrame(Frame):
                     FutureWarning,
                 )
             if col.nullable:
-                col = col.astype("float64").fillna(np.nan)
+                col = col.astype(np.dtype(np.float64)).fillna(np.nan)
 
             columns.append(
                 cudf.core.algorithms._interpolation(col, index=interp_index)
@@ -3904,7 +3904,7 @@ class IndexedFrame(Frame):
                 df._data[name].copy(deep=deep)
                 if name in df._data
                 else cudf.core.column.column.column_empty(
-                    dtype=dtypes.get(name, np.float64),
+                    dtype=dtypes.get(name, np.dtype(np.float64)),
                     row_count=len(index),
                 )
             )

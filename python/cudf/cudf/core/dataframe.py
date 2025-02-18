@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import json
 import numbers
 import os
 import re
@@ -19,7 +20,7 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numba
@@ -84,6 +85,8 @@ from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -777,7 +780,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
-                        k: column_empty(len(self), dtype="object")
+                        k: column_empty(len(self), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
                     level_names=tuple(columns.names)
@@ -983,7 +986,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column_empty(
-                        row_count=len(self), dtype=None
+                        row_count=len(self), dtype=np.dtype(np.float64)
                     )
             self._data._level_names = (
                 tuple(columns.names)
@@ -1034,7 +1037,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
-                data = [column_empty(row_count=0, dtype=None) for _ in columns]
+                data = [
+                    column_empty(row_count=0, dtype=np.dtype(np.float64))
+                    for _ in columns
+                ]
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
             self._data.rangeindex = True
@@ -2451,15 +2457,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Convert float to integer
         if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
+            map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            cat_index = cast(
-                cudf.core.column.CategoricalColumn,
-                map_index.astype("category"),
-            )
-            map_index = cat_index.codes
+            map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -3342,7 +3344,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dtype = value.dtype
                 value = value.item()
             if _is_null_host_scalar(value):
-                dtype = "str"
+                dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
@@ -5742,8 +5744,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             preserve_index=preserve_index,
             types=out.schema.types,
         )
+        md_dict = json.loads(metadata[b"pandas"])
 
-        return out.replace_schema_metadata(metadata)
+        cudf.utils.ioutils._update_pandas_metadata_types_inplace(self, md_dict)
+
+        return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
     @_performance_tracking
     def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
@@ -6360,7 +6365,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64", copy=False)
+            coerced = coerced.astype(np.dtype(np.int64), copy=False)
         return coerced, mask, common_dtype
 
     @_performance_tracking
@@ -8069,7 +8074,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dropna=dropna,
             )
             .size()
-            .astype("int64")
+            .astype(np.dtype(np.int64))
         )
         if sort:
             result = result.sort_values(ascending=ascending)
