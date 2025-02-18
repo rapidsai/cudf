@@ -158,7 +158,7 @@ struct character_normalizer {
   ~character_normalizer();
 
   struct character_normalizer_impl;
-  character_normalizer_impl* _impl{};
+  std::unique_ptr<character_normalizer_impl> _impl;
 };
 
 /**
