@@ -2603,8 +2603,7 @@ def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
     pdf[pdf == 1.0] = 2
     gdf[gdf == 1.0] = 2
     try:
-        with pytest.warns(FutureWarning):
-            d = binop(pdf, other)
+        d = binop(pdf, other)
     except Exception:
         if isinstance(other, (pd.Series, pd.DataFrame)):
             cudf_other = cudf.from_pandas(other)

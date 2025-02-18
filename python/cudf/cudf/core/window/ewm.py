@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -192,7 +192,9 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
-        to_libcudf_column = source_column.astype("float64").nans_to_nulls()
+        to_libcudf_column = source_column.astype(
+            np.dtype(np.float64)
+        ).nans_to_nulls()
         return to_libcudf_column.scan(
             agg_name, True, com=self.com, adjust=self.adjust
         )
