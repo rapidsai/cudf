@@ -22,6 +22,7 @@
 #include <cuda/std/cmath>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
 #include <cstring>
 
@@ -183,7 +184,7 @@ struct floating_converter {
    * @param integer_rep The bit-casted floating value to extract the exponent from
    * @return The stored base-2 exponent and significand, shifted for denormals
    */
-  CUDF_HOST_DEVICE inline static std::pair<IntegralType, int> get_significand_and_pow2(
+  CUDF_HOST_DEVICE inline static cuda::std::pair<IntegralType, int> get_significand_and_pow2(
     IntegralType integer_rep)
   {
     // Extract the significand
@@ -1008,7 +1009,7 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_pospow(DecimalRep decimal_rep, int 
   }
 
   // Our shifting_rep is now the integer mantissa, return it and the powers of 2
-  return std::pair{shifting_rep, pow2};
+  return cuda::std::pair{shifting_rep, pow2};
 }
 
 /**
@@ -1075,7 +1076,7 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negpow(DecimalRep decimal_rep, int 
   }
 
   // Our shifting_rep is now the integer mantissa, return it and the powers of 2
-  return std::pair{shifting_rep, pow2};
+  return cuda::std::pair{shifting_rep, pow2};
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,7 +189,9 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options, rmm::device_async_resource_ref mr)
+table_with_metadata read_avro(avro_reader_options const& options,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -199,7 +201,7 @@ table_with_metadata read_avro(avro_reader_options const& options, rmm::device_as
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
+  return avro::read_avro(std::move(datasources[0]), options, stream, mr);
 }
 
 table_with_metadata read_json(json_reader_options options,
@@ -766,6 +768,7 @@ void parquet_writer_options_base::set_stats_level(statistics_freq sf) { _stats_l
 void parquet_writer_options_base::set_compression(compression_type compression)
 {
   _compression = compression;
+  if (compression == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
 }
 
 void parquet_writer_options_base::enable_int96_timestamps(bool req)

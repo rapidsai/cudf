@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,10 +7,6 @@ import warnings
 import cupy as cp
 
 import pylibcudf as plc
-
-from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize_inmem_hash as cpp_subword_tokenize,
-)
 
 
 def _cast_to_appropriate_type(ar, cast_type):
@@ -191,8 +187,7 @@ class SubwordTokenizer:
 
         if padding != "max_length":
             error_msg = (
-                "Only padding to the provided max_length"
-                "is currently supported"
+                "Only padding to the provided max_lengthis currently supported"
             )
             raise NotImplementedError(error_msg)
 
@@ -210,8 +205,7 @@ class SubwordTokenizer:
         stride = max_length - stride
         # behavior varies from subword_tokenize but maps with huggingface
 
-        input_ids, attention_mask, metadata = cpp_subword_tokenize(
-            text._column,
+        input_ids, attention_mask, metadata = text._column.subword_tokenize(
             self.vocab_file,
             max_sequence_length=max_length,
             stride=stride,

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -8,9 +8,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
-from cudf.core._internals import unary
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
@@ -179,7 +177,7 @@ def to_numeric(
             downcast_dtype = cudf.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
-                    col = unary.cast(col, downcast_dtype)
+                    col = col.cast(downcast_dtype)
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
@@ -251,9 +249,9 @@ def _convert_str_col(
             return converted_col.astype(dtype=cudf.dtype("float64"))  # type: ignore[return-value]
     else:
         if errors == "coerce":
-            converted_col = libcudf.string_casting.stod(converted_col)
             non_numerics = is_float.unary_operator("not")
             converted_col[non_numerics] = None
+            converted_col = converted_col.astype(np.dtype(np.float64))  # type: ignore[assignment]
             return converted_col  # type: ignore[return-value]
         else:
             raise ValueError("Unable to convert some strings to numerics.")

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,10 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    column.pyx copying.pyx csv.pyx groupby.pyx interop.pyx parquet.pyx reduce.pyx scalar.pyx
-    sort.pyx stream_compaction.pyx string_casting.pyx strings_udf.pyx types.pyx utils.pyx
-)
+set(cython_sources column.pyx strings_udf.pyx)
 set(linked_libraries cudf::cudf)
 
 rapids_cython_create_modules(
@@ -25,11 +22,3 @@ rapids_cython_create_modules(
 )
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
-target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-
-include(${rapids-cmake-dir}/export/find_package_root.cmake)
-include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
-target_link_libraries(interop PUBLIC nanoarrow)
-
-add_subdirectory(io)
-add_subdirectory(nvtext)

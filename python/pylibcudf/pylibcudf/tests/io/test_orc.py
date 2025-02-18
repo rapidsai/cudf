@@ -37,12 +37,17 @@ def test_read_orc_basic(
         binary_source_or_sink, pa_table, **_COMMON_ORC_SOURCE_KWARGS
     )
 
-    res = plc.io.orc.read_orc(
-        plc.io.SourceInfo([source]),
-        nrows=nrows,
-        skip_rows=skiprows,
-        columns=columns,
-    )
+    options = plc.io.orc.OrcReaderOptions.builder(
+        plc.io.types.SourceInfo([source])
+    ).build()
+    if nrows >= 0:
+        options.set_num_rows(nrows)
+    if skiprows >= 0:
+        options.set_skip_rows(skiprows)
+    if columns is not None and len(columns) > 0:
+        options.set_columns(columns)
+
+    res = plc.io.orc.read_orc(options)
 
     if columns is not None:
         pa_table = pa_table.select(columns)

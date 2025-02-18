@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core._internals import binaryop, unary
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -84,7 +84,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         if dtype == self.dtype:
             return self
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
@@ -223,8 +223,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def as_numerical_column(
         self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        return unary.cast(self, dtype)  # type: ignore[return-value]
+    ) -> cudf.core.column.NumericalColumn:
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
 
 class Decimal32Column(DecimalBaseColumn):
@@ -269,8 +269,8 @@ class Decimal32Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
+    def to_arrow(self) -> pa.Array:
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -337,7 +337,7 @@ class Decimal128Column(DecimalBaseColumn):
         result.dtype.precision = data.type.precision
         return result
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return super().to_arrow().cast(self.dtype.to_arrow())
 
     def _with_type_metadata(
@@ -396,8 +396,8 @@ class Decimal64Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
+    def to_arrow(self) -> pa.Array:
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:

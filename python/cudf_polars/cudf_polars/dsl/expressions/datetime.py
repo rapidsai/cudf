@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -57,6 +57,7 @@ class TemporalFunction(Expr):
         OffsetBy = auto()
         OrdinalDay = auto()
         Quarter = auto()
+        Replace = auto()
         ReplaceTimeZone = auto()
         Round = auto()
         Second = auto()
@@ -114,6 +115,7 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self.is_pointwise = True
         if self.name not in self._COMPONENT_MAP:
             raise NotImplementedError(f"Temporal function {self.name}")
 

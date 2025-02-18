@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import array as arr
 import contextlib
@@ -1440,6 +1440,7 @@ def test_assign_callable(mapping):
         "sha256",
         "sha384",
         "sha512",
+        "xxhash32",
         "xxhash64",
     ],
 )
@@ -1447,6 +1448,7 @@ def test_assign_callable(mapping):
 def test_dataframe_hash_values(nrows, method, seed):
     warning_expected = seed is not None and method not in {
         "murmur3",
+        "xxhash32",
         "xxhash64",
     }
     potential_warning = (
@@ -1472,6 +1474,7 @@ def test_dataframe_hash_values(nrows, method, seed):
         "sha256": object,
         "sha384": object,
         "sha512": object,
+        "xxhash32": np.uint32,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
@@ -1486,7 +1489,7 @@ def test_dataframe_hash_values(nrows, method, seed):
         assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 
-@pytest.mark.parametrize("method", ["murmur3", "xxhash64"])
+@pytest.mark.parametrize("method", ["murmur3", "xxhash32", "xxhash64"])
 def test_dataframe_hash_values_seed(method):
     gdf = cudf.DataFrame()
     data = np.arange(10)
@@ -1498,6 +1501,34 @@ def test_dataframe_hash_values_seed(method):
     assert out_one.iloc[0] == out_one.iloc[-1]
     assert out_two.iloc[0] == out_two.iloc[-1]
     assert_neq(out_one, out_two)
+
+
+def test_dataframe_hash_values_xxhash32():
+    # xxhash32 has no built-in implementation in Python and we don't want to
+    # add a testing dependency, so we use regression tests against known good
+    # values.
+    gdf = cudf.DataFrame({"a": [0.0, 1.0, 2.0, np.inf, np.nan]})
+    gdf["b"] = -gdf["a"]
+    out_a = gdf["a"].hash_values(method="xxhash32", seed=0)
+    expected_a = cudf.Series(
+        [3736311059, 2307980487, 2906647130, 746578903, 4294967295],
+        dtype=np.uint32,
+    )
+    assert_eq(out_a, expected_a)
+
+    out_b = gdf["b"].hash_values(method="xxhash32", seed=42)
+    expected_b = cudf.Series(
+        [1076387279, 2261349915, 531498073, 650869264, 4294967295],
+        dtype=np.uint32,
+    )
+    assert_eq(out_b, expected_b)
+
+    out_df = gdf.hash_values(method="xxhash32", seed=0)
+    expected_df = cudf.Series(
+        [1223721700, 2885793241, 1920811472, 1146715602, 4294967295],
+        dtype=np.uint32,
+    )
+    assert_eq(out_df, expected_df)
 
 
 def test_dataframe_hash_values_xxhash64():
@@ -8780,7 +8811,9 @@ def test_dataframe_mode(df, numeric_only, dropna):
 
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
-
+    if len(actual.columns) == 0:
+        # pandas < 3.0 returns an Index[object] instead of RangeIndex
+        actual.columns = expected.columns
     assert_eq(expected, actual, check_dtype=False)
 
 
@@ -11193,3 +11226,46 @@ def test_dataframe_init_column():
     expect = cudf.DataFrame({"a": s})
     actual = cudf.DataFrame._from_arrays(s._column, columns=["a"])
     assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("name", [None, "foo", 1, 1.0])
+def test_dataframe_column_name(name):
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    pdf = df.to_pandas()
+
+    df.columns.name = name
+    pdf.columns.name = name
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.name, pdf.columns.name)
+
+
+@pytest.mark.parametrize("names", [["abc", "def"], [1, 2], ["abc", 10]])
+def test_dataframe_multiindex_column_names(names):
+    arrays = [["A", "A", "B", "B"], ["one", "two", "one", "two"]]
+    tuples = list(zip(*arrays))
+    index = pd.MultiIndex.from_tuples(tuples, names=["first", "second"])
+
+    pdf = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=index)
+    df = cudf.from_pandas(pdf)
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+    pdf.columns.names = names
+    df.columns.names = names
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+
+
+@pytest.mark.parametrize("pdf", _dataframe_na_data())
+def test_roundtrip_dataframe_plc_table(pdf):
+    expect = cudf.DataFrame.from_pandas(pdf)
+    actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("data", [None, {}])
+def test_empty_construction_rangeindex_columns(data):
+    result = cudf.DataFrame(data=data).columns
+    expected = pd.RangeIndex(0)
+    pd.testing.assert_index_equal(result, expected, exact=True)

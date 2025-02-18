@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ import numpy as np
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
@@ -139,17 +138,20 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             result = cast(
                 NumericalBaseColumn,
                 cudf.core.column.column_empty(
-                    row_count=len(q), dtype=self.dtype, masked=True
+                    row_count=len(q), dtype=self.dtype
                 ),
             )
         else:
+            no_nans = self.nans_to_nulls()
             # get sorted indices and exclude nulls
-            indices = libcudf.sort.order_by(
-                [self], [True], "first", stable=True
-            ).slice(self.null_count, len(self))
+            indices = (
+                no_nans.argsort(ascending=True, na_position="first")
+                .slice(no_nans.null_count, len(no_nans))
+                .astype(np.dtype(np.int32))
+            )
             with acquire_spill_lock():
                 plc_column = plc.quantiles.quantile(
-                    self.to_pylibcudf(mode="read"),
+                    no_nans.to_pylibcudf(mode="read"),
                     q,
                     plc.types.Interpolation[interpolation.upper()],
                     indices.to_pylibcudf(mode="read"),
@@ -263,6 +265,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
 
     def _scan(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(
-            op.replace("cum", ""), self, True
-        )._with_type_metadata(self.dtype)
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )

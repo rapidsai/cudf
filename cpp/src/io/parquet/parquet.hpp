@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include "parquet_common.hpp"
 
 #include <cudf/types.hpp>
+
+#include <cuda/std/optional>
 
 #include <cstdint>
 #include <optional>
@@ -92,10 +94,10 @@ struct LogicalType {
     BSON
   };
   Type type;
-  std::optional<DecimalType> decimal_type;
-  std::optional<TimeType> time_type;
-  std::optional<TimestampType> timestamp_type;
-  std::optional<IntType> int_type;
+  cuda::std::optional<DecimalType> decimal_type;
+  cuda::std::optional<TimeType> time_type;
+  cuda::std::optional<TimestampType> timestamp_type;
+  cuda::std::optional<IntType> int_type;
 
   LogicalType(Type tp = UNDEFINED) : type(tp) {}
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
@@ -103,36 +105,36 @@ struct LogicalType {
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
-  [[nodiscard]] constexpr bool is_time_millis() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_millis() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
   }
 
-  [[nodiscard]] constexpr bool is_time_micros() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_micros() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MICROS;
   }
 
-  [[nodiscard]] constexpr bool is_time_nanos() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_nanos() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::NANOS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_millis() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_millis() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_micros() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_micros() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
   }
 
-  [[nodiscard]] constexpr bool is_timestamp_nanos() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_nanos() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
   }
-  [[nodiscard]] constexpr int8_t bit_width() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int8_t bit_width() const
   {
     return type == INTEGER ? int_type->bitWidth : -1;
   }
@@ -144,7 +146,7 @@ struct LogicalType {
     return type == DECIMAL ? decimal_type->scale : -1;
   }
 
-  [[nodiscard]] constexpr int32_t precision() const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t precision() const
   {
     return type == DECIMAL ? decimal_type->precision : -1;
   }
@@ -382,10 +384,60 @@ struct ColumnChunkMetaData {
   // Set of all encodings used for pages in this column chunk. This information can be used to
   // determine if all data pages are dictionary encoded for example.
   std::optional<std::vector<PageEncodingStats>> encoding_stats;
+  // Byte offset from beginning of file to Bloom filter data.
+  std::optional<int64_t> bloom_filter_offset;
+  // Size of Bloom filter data including the serialized header, in bytes. Added in 2.10 so readers
+  // may not read this field from old files and it can be obtained after the BloomFilterHeader has
+  // been deserialized. Writers should write this field so readers can read the bloom filter in a
+  // single I/O.
+  std::optional<int32_t> bloom_filter_length;
   // Optional statistics to help estimate total memory when converted to in-memory representations.
   // The histograms contained in these statistics can also be useful in some cases for more
   // fine-grained nullability/list length filter pushdown.
   std::optional<SizeStatistics> size_statistics;
+};
+
+/**
+ * @brief The algorithm used in bloom filter
+ */
+struct BloomFilterAlgorithm {
+  // Block-based Bloom filter.
+  enum class Algorithm { UNDEFINED, SPLIT_BLOCK };
+  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
+};
+
+/**
+ * @brief The hash function used in Bloom filter
+ */
+struct BloomFilterHash {
+  // xxHash_64
+  enum class Hash { UNDEFINED, XXHASH };
+  Hash hash{Hash::XXHASH};
+};
+
+/**
+ * @brief The compression used in the bloom filter
+ */
+struct BloomFilterCompression {
+  enum class Compression { UNDEFINED, UNCOMPRESSED };
+  Compression compression{Compression::UNCOMPRESSED};
+};
+
+/**
+ * @brief Bloom filter header struct
+ *
+ * The bloom filter data of a column chunk stores this header at the beginning
+ * following by the filter bitset.
+ */
+struct BloomFilterHeader {
+  // The size of bitset in bytes
+  int32_t num_bytes;
+  // The algorithm for setting bits
+  BloomFilterAlgorithm algorithm;
+  // The hash function used for bloom filter
+  BloomFilterHash hash;
+  // The compression used in the bloom filter
+  BloomFilterCompression compression;
 };
 
 /**

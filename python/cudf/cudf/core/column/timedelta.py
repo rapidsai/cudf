@@ -1,20 +1,22 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import datetime
 import functools
+import math
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
 from cudf.api.types import is_scalar
-from cudf.core._internals import binaryop, unary
+from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -78,6 +80,8 @@ class TimeDeltaColumn(ColumnBase):
         "__rtruediv__",
         "__rfloordiv__",
     }
+
+    _PANDAS_NA_REPR = str(pd.NaT)
 
     def __init__(
         self,
@@ -262,7 +266,15 @@ class TimeDeltaColumn(ColumnBase):
         return np.datetime_data(self.dtype)[0]
 
     def total_seconds(self) -> ColumnBase:
-        raise NotImplementedError("total_seconds is currently not implemented")
+        conversion = _unit_to_nanoseconds_conversion[self.time_unit] / 1e9
+        # Typecast to decimal128 to avoid floating point precision issues
+        # https://github.com/rapidsai/cudf/issues/17664
+        return (
+            (self.astype("int64") * conversion)
+            .astype(cudf.Decimal128Dtype(38, 9))
+            .round(decimals=abs(int(math.log10(conversion))))
+            .astype("float64")
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")
@@ -294,12 +306,15 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         else:
-            return string._timedelta_to_str_typecast_functions[self.dtype](
-                self, format=format
-            )
+            with acquire_spill_lock():
+                return type(self).from_pylibcudf(  # type: ignore[return-value]
+                    plc.strings.convert.convert_durations.from_durations(
+                        self.to_pylibcudf(mode="read"), format
+                    )
+                )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")
@@ -307,7 +322,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
-        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def find_and_replace(
         self,

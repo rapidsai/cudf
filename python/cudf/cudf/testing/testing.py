@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from pandas import testing as tm
 
 import cudf
 from cudf.api.types import is_numeric_dtype, is_string_dtype
-from cudf.core._internals.unary import is_nan
 from cudf.core.missing import NA, NaT
 
 
@@ -250,7 +249,7 @@ def assert_column_equal(
                     left.dtype.kind == right.dtype.kind == "f"
                 ):
                     columns_equal = cp.all(
-                        is_nan(left).values == is_nan(right).values
+                        left.isnan().values == right.isnan().values
                     )
             else:
                 columns_equal = left.equals(right)
@@ -692,8 +691,8 @@ def assert_frame_equal(
     )
 
     pd.testing.assert_index_equal(
-        left._data.to_pandas_index(),
-        right._data.to_pandas_index(),
+        left._data.to_pandas_index,
+        right._data.to_pandas_index,
         exact=check_column_type,
         check_names=check_names,
         check_exact=check_exact,
