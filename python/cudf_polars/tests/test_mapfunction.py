@@ -103,4 +103,4 @@ def test_with_row_index_defaults():
         }
     )
     q = lf.with_row_index()
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
