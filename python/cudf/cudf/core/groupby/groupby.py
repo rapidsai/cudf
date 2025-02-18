@@ -735,7 +735,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if cudf.get_option("mode.pandas_compatible"):
             # pandas always returns floats:
-            return result.astype("float64")
+            return result.astype(np.dtype(np.float64))
 
         return result
 
@@ -1017,7 +1017,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype("int64")
+                    data[key] = col.astype(np.dtype(np.int64))
                 elif (
                     self.obj.empty
                     and (
@@ -1966,7 +1966,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         if self.obj.empty:
             if func in {"count", "size", "idxmin", "idxmax"}:
-                res = cudf.Series([], dtype="int64")
+                res = cudf.Series([], dtype=np.dtype(np.int64))
             else:
                 res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
@@ -1975,7 +1975,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # will need to result in `int64` type.
                 for name, col in res._column_labels_and_values:
                     if col.dtype.kind == "b":
-                        res._data[name] = col.astype("int")
+                        res._data[name] = col.astype(np.dtype(np.int64))
             return res
 
         if not callable(func):
@@ -3226,7 +3226,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             ]
             .count()
             .sort_index()
-            .astype(np.int64)
+            .astype(np.dtype(np.int64))
         )
 
         if normalize:
