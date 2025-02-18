@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -112,7 +112,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        return object.__new__(self._type)
+        return object.__new__(get_final_type_map().get(self._type, self._type))
 
 
 _DELETE = object()
@@ -204,6 +204,12 @@ def make_final_proxy_type(
             return fast_to_slow(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
+    def as_gpu_object(self):
+        return self._fsproxy_slow_to_fast()
+
+    def as_cpu_object(self):
+        return self._fsproxy_fast_to_slow()
+
     @property  # type: ignore
     def _fsproxy_state(self) -> _State:
         return (
@@ -221,6 +227,8 @@ def make_final_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
+        "as_gpu_object": as_gpu_object,
+        "as_cpu_object": as_cpu_object,
         "_fsproxy_state": _fsproxy_state,
     }
 
@@ -1325,6 +1333,10 @@ def _get_proxy_base_class(cls):
         if proxy_class in cls.__mro__:
             return proxy_class
     return object
+
+
+def is_proxy_instance(obj, type):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
 PROXY_BASE_CLASSES: set[type] = {

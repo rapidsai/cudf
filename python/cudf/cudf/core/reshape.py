@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -12,16 +12,15 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import min_unsigned_type
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
-    from cudf._typing import Dtype
+    from cudf._typing import DtypeObj
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -379,9 +378,9 @@ def concat(
         any_empty = any(obj.empty for obj in objs)
         if any_empty:
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -810,6 +809,8 @@ def get_dummies(
         )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
+
+    dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
@@ -1317,7 +1318,7 @@ def _one_hot_encode_column(
     categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
-    dtype: Dtype | None,
+    dtype: DtypeObj,
     drop_first: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
@@ -1333,10 +1334,10 @@ def _one_hot_encode_column(
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
-    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
+    if column.size * categories.size >= np.iinfo(SIZE_TYPE_DTYPE).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            f"np.iinfo({SIZE_TYPE_DTYPE}).max. Consider reducing "
             "size of category"
         )
     result_labels = (
@@ -1349,8 +1350,7 @@ def _one_hot_encode_column(
         data.pop(next(iter(data)))
     if prefix is not None and prefix_sep is not None:
         data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
-    if dtype:
-        data = {k: v.astype(dtype) for k, v in data.items()}
+    data = {k: v.astype(dtype) for k, v in data.items()}
     return data
 
 

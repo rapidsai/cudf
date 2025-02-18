@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,13 +40,12 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/std/limits>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
-
-#include <limits>
 
 namespace nvtext {
 namespace detail {
@@ -73,7 +72,7 @@ constexpr cudf::size_type blocks_per_string = 64;
  *
  * This kernel computes the hashes for each string using the seed and the specified
  * hash function. The width is used to compute rolling substrings to hash over.
- * The hashes are stored in d_hashes to be used in the minhash_permuted_kernel.
+ * The hashes are stored in d_hashes to be used in the minhash_kernel.
  *
  * This kernel also counts the number of strings above the wide_string_threshold
  * and proactively initializes the output values for those strings.
@@ -156,7 +155,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     // initialize the output -- only needed for wider strings
     auto d_output = d_results + (str_idx * param_count);
     for (auto i = lane_idx; i < param_count; i += tile_size) {
-      d_output[i] = std::numeric_limits<hash_value_type>::max();
+      d_output[i] = cuda::std::numeric_limits<hash_value_type>::max();
     }
   }
 }
@@ -226,7 +225,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       ? section_size
       : cuda::std::max(static_cast<cudf::size_type>(size_bytes > 0), section_size - width + 1);
 
-  auto const init     = size_bytes == 0 ? 0 : std::numeric_limits<hash_value_type>::max();
+  auto const init     = size_bytes == 0 ? 0 : cuda::std::numeric_limits<hash_value_type>::max();
   auto const lane_idx = block.thread_rank();
   auto const d_output = d_results + (str_idx * parameter_a.size());
 
@@ -235,7 +234,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
 
   // constants used in the permutation calculations
   constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
-  constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
+  constexpr hash_value_type hash_max = cuda::std::numeric_limits<hash_value_type>::max();
 
   // found to be an efficient shared memory size for both hash types
   __shared__ hash_value_type block_values[block_size * params_per_thread];
@@ -455,18 +454,6 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
   return detail::minhash(input, seed, parameter_a, parameter_b, width, stream, mr);
 }
 
-std::unique_ptr<cudf::column> minhash_permuted(cudf::strings_column_view const& input,
-                                               uint32_t seed,
-                                               cudf::device_span<uint32_t const> parameter_a,
-                                               cudf::device_span<uint32_t const> parameter_b,
-                                               cudf::size_type width,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::minhash(input, seed, parameter_a, parameter_b, width, stream, mr);
-}
-
 std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         uint64_t seed,
                                         cudf::device_span<uint64_t const> parameter_a,
@@ -474,18 +461,6 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::minhash64(input, seed, parameter_a, parameter_b, width, stream, mr);
-}
-
-std::unique_ptr<cudf::column> minhash64_permuted(cudf::strings_column_view const& input,
-                                                 uint64_t seed,
-                                                 cudf::device_span<uint64_t const> parameter_a,
-                                                 cudf::device_span<uint64_t const> parameter_b,
-                                                 cudf::size_type width,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash64(input, seed, parameter_a, parameter_b, width, stream, mr);

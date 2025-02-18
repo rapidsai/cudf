@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,14 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -257,10 +262,12 @@ void metadata_builder::clear() { return impl->clear(); }
 /**
  * @copydoc cudf::pack
  */
-packed_columns pack(cudf::table_view const& input, rmm::device_async_resource_ref mr)
+packed_columns pack(cudf::table_view const& input,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, cudf::get_default_stream(), mr);
+  return detail::pack(input, stream, mr);
 }
 
 /**

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import copying, search, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     as_column,
+    column_empty,
     deserialize_columns,
     serialize_columns,
 )
@@ -36,7 +36,7 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import find_common_type
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -779,9 +779,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if method:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
@@ -818,6 +818,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 )
             ),
             inplace=inplace,
+        )
+
+    def _pandas_repr_compatible(self) -> Self:
+        """Return Self but with columns prepared for a pandas-like repr."""
+        columns = (col._prep_pandas_compat_repr() for col in self._columns)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(columns, verify=False)
         )
 
     @_performance_tracking
@@ -861,7 +868,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 column_order,
                 null_precedence,
             )
-            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
+            columns = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
         return self._from_columns_like_self(
             columns,
             column_names=self._column_names,
@@ -991,7 +1000,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                result[name] = result[name].astype("category")
+                result[name] = result[name].astype(
+                    cudf.CategoricalDtype(
+                        categories=column_empty(0, dtype=result[name].dtype)
+                    )
+                )
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"
@@ -1000,7 +1013,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
                 # float column to str column.
-                result[name] = result[name].astype(cudf.dtype("str"))
+                result[name] = result[name].astype(CUDF_STRING_DTYPE)
             elif name in data.column_names and isinstance(
                 data[name].type,
                 (
@@ -1341,7 +1354,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search_sorted(
+        outcol = search.search_sorted(
             sources,
             values,
             side,
@@ -1636,7 +1649,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 (
                     col.unary_operator("not")
                     if col.dtype.kind == "b"
-                    else -1 * col
+                    else col.unary_operator("negate")
                     for col in self._columns
                 )
             )

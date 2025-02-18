@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,7 +156,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
@@ -167,7 +167,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   thrust::copy_n(rmm::exec_policy(stream), sizes_input_it, sizes.size(), offsets_begin);
 
   auto const n_elements = cudf::detail::sizes_to_offsets(
-    offsets_begin, offsets_begin + list_offsets->size(), offsets_begin, stream);
+    offsets_begin, offsets_begin + list_offsets->size(), offsets_begin, 0, stream);
   CUDF_EXPECTS(n_elements <= std::numeric_limits<size_type>::max(),
                "Size of output exceeds the column size limit",
                std::overflow_error);

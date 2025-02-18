@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/cmath>
+#include <cuda/std/limits>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
@@ -412,14 +414,16 @@ class corresponding_rows_not_equivalent {
         T const y = rhs.element<T>(rhs_index);
 
         // Must handle inf and nan separately
-        if (std::isinf(x) || std::isinf(y)) {
+        if (cuda::std::isinf(x) || cuda::std::isinf(y)) {
           return x != y;  // comparison of (inf==inf) returns true
-        } else if (std::isnan(x) || std::isnan(y)) {
-          return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
+        } else if (cuda::std::isnan(x) || cuda::std::isnan(y)) {
+          return cuda::std::isnan(x) !=
+                 cuda::std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
-          T const abs_x_minus_y = std::abs(x - y);
-          return abs_x_minus_y >= std::numeric_limits<T>::min() &&
-                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * fp_ulps;
+          T const abs_x_minus_y = cuda::std::abs(x - y);
+          return abs_x_minus_y >= cuda::std::numeric_limits<T>::min() &&
+                 abs_x_minus_y >
+                   cuda::std::numeric_limits<T>::epsilon() * cuda::std::abs(x + y) * fp_ulps;
         }
       } else {
         // if either is null, then the inequality was checked already
@@ -550,7 +554,7 @@ struct column_comparator_impl {
                                      input_iter + lhs_row_indices.size(),
                                      diff_map.begin(),
                                      differences.begin(),
-                                     thrust::identity<bool>{});
+                                     cuda::std::identity{});
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
                        cudf::test::get_default_stream());  // shrink back down

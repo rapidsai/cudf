@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
@@ -47,8 +48,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -1711,6 +1715,42 @@ public class TableTest extends CudfTestBase {
       }
       assertEquals(2, numChunks);
       assertEquals(40000, totalRows);
+    }
+  }
+
+  @Test
+  void testChunkedReadParquetHostBuffers() throws Exception {
+    long size = TEST_PARQUET_FILE_CHUNKED_READ.length();
+    java.nio.file.Path path = TEST_PARQUET_FILE_CHUNKED_READ.toPath();
+    try (HostMemoryBuffer buf1 = HostMemoryBuffer.allocate(size / 2);
+         HostMemoryBuffer buf2 = HostMemoryBuffer.allocate(size - buf1.getLength())) {
+      try (SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ)) {
+        ByteBuffer bb1 = buf1.asByteBuffer();
+        while (bb1.hasRemaining()) {
+          if (channel.read(bb1) == -1) {
+            throw new EOFException("error reading first buffer");
+          }
+        }
+        ByteBuffer bb2 = buf2.asByteBuffer();
+        while (bb2.hasRemaining()) {
+          if (channel.read(bb2) == -1) {
+            throw new EOFException("error reading second buffer");
+          }
+        }
+      }
+      ParquetOptions opts = ParquetOptions.DEFAULT;
+      try (ParquetChunkedReader reader = new ParquetChunkedReader(240000, 0, opts, buf1, buf2)) {
+        int numChunks = 0;
+        long totalRows = 0;
+        while(reader.hasNext()) {
+          ++numChunks;
+          try(Table chunk = reader.readChunk()) {
+            totalRows += chunk.getRowCount();
+          }
+        }
+        assertEquals(2, numChunks);
+        assertEquals(40000, totalRows);
+      }
     }
   }
 
@@ -9423,6 +9463,9 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled("arrow-java does not yet support Decimal32/Decimal64, so now that" +
+    "we don't automatically upcast to decimal128 on conversion to arrow, we have" +
+    "to wait until it supports those types, then upgrade")
   void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".arrow");
     String[] columnNames = WriteUtils.getNonNestedColumns(false);
@@ -9456,6 +9499,8 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled("arrow-java does not yet support Decimal32/Decimal64, " +
+    "this can be re-enabled once it does and we upgrade")
   void testArrowIPCWriteToBufferChunked() {
     String[] nonNestedCols = WriteUtils.getNonNestedColumns(false);
     List<String> columns = Lists.newArrayList(nonNestedCols);

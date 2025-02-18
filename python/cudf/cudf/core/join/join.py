@@ -1,13 +1,13 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.copy_types import GatherMap
@@ -17,6 +17,7 @@ from cudf.core.join._join_helpers import (
     _IndexIndexer,
     _match_join_keys,
 )
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 
 class Merge:
@@ -188,6 +189,23 @@ class Merge:
             self._using_right_index = any(
                 isinstance(idx, _IndexIndexer) for idx in self._right_keys
             )
+            if self.how in {"left", "right"} and not (
+                all(
+                    isinstance(idx, _IndexIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+                or all(
+                    isinstance(idx, _ColumnIndexer)
+                    for idx in itertools.chain(
+                        self._left_keys, self._right_keys
+                    )
+                )
+            ):
+                # For left/right merges, joining on an index and column should result in a RangeIndex
+                self._using_left_index = False
+                self._using_right_index = False
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
@@ -243,7 +261,7 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            cudf.core.column.as_column(range(n), dtype=size_type_dtype).take(
+            cudf.core.column.as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
                 map_, nullify=null, check_bounds=False
             )
             for map_, n, null in zip(maps, lengths, nullify)
@@ -275,8 +293,8 @@ class Merge:
                 and isinstance(lcol.dtype, cudf.CategoricalDtype)
                 and isinstance(rcol.dtype, cudf.CategoricalDtype)
             ):
-                lcol_casted = lcol_casted.astype("category")
-                rcol_casted = rcol_casted.astype("category")
+                lcol_casted = lcol_casted.astype(lcol.dtype)
+                rcol_casted = rcol_casted.astype(rcol.dtype)
 
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
@@ -354,7 +372,14 @@ class Merge:
         for name, col in right_result._column_labels_and_values:
             if name in common_names:
                 if name not in self._key_columns_with_same_name:
-                    data[f"{name}{self.rsuffix}"] = col
+                    r_label = f"{name}{self.rsuffix}"
+                    if r_label in data:
+                        raise NotImplementedError(
+                            f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
+                            f"duplicate column label, '{r_label}', which is "
+                            "not supported."
+                        )
+                    data[r_label] = col
             else:
                 data[name] = col
 

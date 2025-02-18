@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -2275,3 +2275,30 @@ def test_merge_timedelta_types(dtype1, dtype2):
         else True,
         check_dtype=len(actual) > 0,
     )
+
+
+def test_merge_index_on_opposite_how_column_reset_index():
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 3, 5, 7, 9])
+    ser = pd.Series([1, 2], index=pd.Index([1, 2], name="a"), name="b")
+    df_cudf = cudf.DataFrame.from_pandas(df)
+    ser_cudf = cudf.Series.from_pandas(ser)
+
+    expected = pd.merge(df, ser, on="a", how="left")
+    result = cudf.merge(df_cudf, ser_cudf, on="a", how="left")
+    assert_eq(result, expected)
+
+    expected = pd.merge(ser, df, on="a", how="right")
+    result = cudf.merge(ser_cudf, df_cudf, on="a", how="right")
+    assert_eq(result, expected)
+
+
+def test_merge_suffixes_duplicate_label_raises():
+    data = {"a": [1, 2, 3, 4, 5], "b": [6, 6, 6, 6, 6]}
+    df_cudf = cudf.DataFrame(data)
+    df_pd = pd.DataFrame(data)
+    result = df_cudf.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+    expected = df_pd.merge(df_pd, on=["a"], suffixes=("", "_right"))
+    assert_eq(result, expected)
+
+    with pytest.raises(NotImplementedError):
+        result.merge(df_cudf, on=["a"], suffixes=("", "_right"))

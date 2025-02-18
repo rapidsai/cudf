@@ -1,16 +1,16 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 from numba.np import numpy_support
 
 import pylibcudf as plc
 
-import cudf
-from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf.api.types import is_scalar
 from cudf.utils import cudautils
+from cudf.utils.dtypes import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -234,7 +234,7 @@ class Aggregation:
         nb_type = numpy_support.from_dtype(kwargs["dtype"])
         type_signature = (nb_type[:],)
         ptx_code, output_dtype = cudautils.compile_udf(op, type_signature)
-        output_np_dtype = cudf.dtype(output_dtype)
+        output_np_dtype = np.dtype(output_dtype)
         if output_np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(
                 f"Result of window function has unsupported dtype {op[1]}"

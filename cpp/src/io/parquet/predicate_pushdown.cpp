@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -387,43 +390,22 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
-  host_span<std::vector<size_type> const> row_group_indices,
+std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
   auto mr = cudf::get_current_device_resource_ref();
-  // Create row group indices.
-  std::vector<std::vector<size_type>> filtered_row_group_indices;
-  std::vector<std::vector<size_type>> all_row_group_indices;
-  host_span<std::vector<size_type> const> input_row_group_indices;
-  if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.cbegin(),
-                   per_file_metadata.cend(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto const& file_meta) {
-                     std::vector<size_type> rg_idx(file_meta.row_groups.size());
-                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                     return rg_idx;
-                   });
-    input_row_group_indices = host_span<std::vector<size_type> const>(all_row_group_indices);
-  } else {
-    input_row_group_indices = row_group_indices;
-  }
-  auto const total_row_groups = std::accumulate(input_row_group_indices.begin(),
-                                                input_row_group_indices.end(),
-                                                0,
-                                                [](size_type sum, auto const& per_file_row_groups) {
-                                                  return sum + per_file_row_groups.size();
-                                                });
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster const stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
+  stats_caster const stats_col{
+    static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
@@ -446,50 +428,112 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   stats_expression_converter const stats_expr{filter.get(),
                                               static_cast<size_type>(output_dtypes.size())};
-  auto stats_ast     = stats_expr.get_stats_expr();
-  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
-  auto predicate     = predicate_col->view();
-  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
-               "Filter expression must return a boolean column");
 
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(predicate.size());
-    if (predicate.nullable()) {
-      return cudf::detail::make_host_vector_sync(
-        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
-    } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
-      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
-      return bitmask;
-    }
-  }();
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  return collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
+}
 
-  auto validity_it = cudf::detail::make_counting_transform_iterator(
-    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
+aggregate_reader_metadata::filter_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  size_type total_row_groups,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::reference_wrapper<ast::expression const> filter,
+  rmm::cuda_stream_view stream) const
+{
+  // Apply stats filtering on input row groups
+  auto const stats_filtered_row_groups = apply_stats_filters(input_row_group_indices,
+                                                             total_row_groups,
+                                                             output_dtypes,
+                                                             output_column_schemas,
+                                                             filter,
+                                                             stream);
 
-  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+  // Number of surviving row groups after applying stats filter
+  auto const num_stats_filtered_row_groups =
+    stats_filtered_row_groups.has_value()
+      ? std::accumulate(stats_filtered_row_groups.value().cbegin(),
+                        stats_filtered_row_groups.value().cend(),
+                        size_type{0},
+                        [](auto& sum, auto const& per_file_row_groups) {
+                          return sum + per_file_row_groups.size();
+                        })
+      : total_row_groups;
 
-  // Return only filtered row groups based on predicate
-  // if all are required or all are nulls, return.
-  if (std::all_of(is_row_group_required.cbegin(),
-                  is_row_group_required.cend(),
-                  [](auto i) { return bool(i); }) or
-      predicate.null_count() == predicate.size()) {
-    return std::nullopt;
+  // Span of row groups to apply bloom filtering on.
+  auto const bloom_filter_input_row_groups =
+    stats_filtered_row_groups.has_value()
+      ? host_span<std::vector<size_type> const>(stats_filtered_row_groups.value())
+      : input_row_group_indices;
+
+  // Collect equality literals for each input table column for bloom filtering
+  auto const equality_literals =
+    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals();
+
+  // Collect schema indices of columns with equality predicate(s)
+  std::vector<cudf::size_type> equality_col_schemas;
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  equality_literals.begin(),
+                  std::back_inserter(equality_col_schemas),
+                  [](auto& eq_literals) { return not eq_literals.empty(); });
+
+  // Return early if no column with equality predicate(s)
+  if (equality_col_schemas.empty()) {
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
-  size_type is_required_idx = 0;
-  for (auto const& input_row_group_index : input_row_group_indices) {
-    std::vector<size_type> filtered_row_groups;
-    for (auto const rg_idx : input_row_group_index) {
-      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
-        filtered_row_groups.push_back(rg_idx);
-      }
-      ++is_required_idx;
-    }
-    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
+
+  // Aligned resource adaptor to allocate bloom filter buffers with
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
+                                                      get_bloom_filter_alignment());
+
+  // Read a vector of bloom filter bitset device buffers for all columns with equality
+  // predicate(s) across all row groups
+  auto bloom_filter_data = read_bloom_filters(sources,
+                                              bloom_filter_input_row_groups,
+                                              equality_col_schemas,
+                                              num_stats_filtered_row_groups,
+                                              stream,
+                                              aligned_mr);
+
+  // No bloom filter buffers, return early
+  if (bloom_filter_data.empty()) {
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
-  return {std::move(filtered_row_group_indices)};
+
+  // Apply bloom filtering on the output row groups from stats filter
+  auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
+                                                             bloom_filter_input_row_groups,
+                                                             equality_literals,
+                                                             num_stats_filtered_row_groups,
+                                                             output_dtypes,
+                                                             equality_col_schemas,
+                                                             filter,
+                                                             stream);
+
+  // Number of surviving row groups after applying bloom filter
+  auto const num_bloom_filtered_row_groups =
+    bloom_filtered_row_groups.has_value()
+      ? std::accumulate(bloom_filtered_row_groups.value().cbegin(),
+                        bloom_filtered_row_groups.value().cend(),
+                        size_type{0},
+                        [](auto& sum, auto const& per_file_row_groups) {
+                          return sum + per_file_row_groups.size();
+                        })
+      : num_stats_filtered_row_groups;
+
+  // Return bloom filtered row group indices iff collected
+  return {
+    bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups : stats_filtered_row_groups,
+    {std::make_optional(num_stats_filtered_row_groups),
+     std::make_optional(num_bloom_filtered_row_groups)}};
 }
 
 // convert column named expression to column index reference expression
@@ -510,14 +554,14 @@ named_to_reference_converter::named_to_reference_converter(
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::literal const& expr)
 {
-  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::column_reference const& expr)
 {
-  _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
@@ -531,7 +575,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   }
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
-  _stats_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
+  _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
 }
 
@@ -546,7 +590,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
     _operators.emplace_back(op, new_operands.front());
   }
-  _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+  _converted_expr = std::reference_wrapper<ast::expression const>(_operators.back());
   return std::reference_wrapper<ast::expression const>(_operators.back());
 }
 
@@ -638,6 +682,62 @@ class names_from_expression : public ast::detail::expression_transformer {
   std::vector<std::string> const& skip_names)
 {
   return names_from_expression(expr, skip_names).to_vector();
+}
+
+std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
+  cudf::table_view table,
+  std::reference_wrapper<ast::expression const> ast_expr,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  rmm::cuda_stream_view stream)
+{
+  // Filter the input table using AST expression
+  auto predicate_col = cudf::detail::compute_column(
+    table, ast_expr.get(), stream, cudf::get_current_device_resource_ref());
+  auto predicate = predicate_col->view();
+  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+               "Filter expression must return a boolean column");
+
+  auto const host_bitmask = [&] {
+    auto const num_bitmasks = num_bitmask_words(predicate.size());
+    if (predicate.nullable()) {
+      return cudf::detail::make_host_vector_sync(
+        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+    } else {
+      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
+      return bitmask;
+    }
+  }();
+
+  auto validity_it = cudf::detail::make_counting_transform_iterator(
+    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+
+  // Return only filtered row groups based on predicate
+  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
+    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+
+  // Return if all are required, or all are nulls.
+  if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
+                                                                is_row_group_required.cend(),
+                                                                [](auto i) { return bool(i); })) {
+    return std::nullopt;
+  }
+
+  // Collect indices of the filtered row groups
+  size_type is_required_idx = 0;
+  std::vector<std::vector<size_type>> filtered_row_group_indices;
+  for (auto const& input_row_group_index : input_row_group_indices) {
+    std::vector<size_type> filtered_row_groups;
+    for (auto const rg_idx : input_row_group_index) {
+      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
+        filtered_row_groups.push_back(rg_idx);
+      }
+      ++is_required_idx;
+    }
+    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
+  }
+
+  return {filtered_row_group_indices};
 }
 
 }  // namespace cudf::io::parquet::detail

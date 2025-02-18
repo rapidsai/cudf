@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/reduction.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -34,6 +32,9 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
+using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
+using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+
 namespace {
 /**
  * @brief A host-based UDF implementation for groupby.
@@ -41,42 +42,21 @@ namespace {
  * For each group of values, the aggregation computes
  * `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
  */
-struct host_udf_groupby_example : cudf::host_udf_base {
+struct host_udf_groupby_example : cudf::groupby_host_udf {
   host_udf_groupby_example() = default;
 
-  [[nodiscard]] data_attribute_set_t get_required_data() const override
-  {
-    // We need grouped values, group offsets, group labels, and also results from groups'
-    // MAX and SUM aggregations.
-    return {groupby_data_attribute::GROUPED_VALUES,
-            groupby_data_attribute::GROUP_OFFSETS,
-            groupby_data_attribute::GROUP_LABELS,
-            cudf::make_max_aggregation<cudf::groupby_aggregation>(),
-            cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
-  }
-
-  [[nodiscard]] output_t get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::column> get_empty_output(
+    rmm::cuda_stream_view, rmm::device_async_resource_ref) const override
   {
     return cudf::make_empty_column(
       cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
   }
 
-  [[nodiscard]] output_t operator()(input_map_t const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::column> operator()(
+    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const override
   {
-    auto const& values =
-      std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
-    return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override
-  {
-    // Just return the same hash for all instances of this class.
-    return std::size_t{12345};
+    auto const values = get_grouped_values();
+    return cudf::type_dispatcher(values.type(), groupby_fn{*this}, stream, mr);
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -92,37 +72,33 @@ struct host_udf_groupby_example : cudf::host_udf_base {
 
   struct groupby_fn {
     // Store pointer to the parent class so we can call its functions.
-    host_udf_groupby_example const* parent;
+    host_udf_groupby_example const& parent;
 
-    // For simplicity, this example only accepts double input and always produces double output.
+    // For simplicity, this example only accepts a single type input and output.
     using InputType  = double;
     using OutputType = double;
 
     template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
-    output_t operator()(Args...) const
+    std::unique_ptr<cudf::column> operator()(Args...) const
     {
       CUDF_FAIL("Unsupported input type.");
     }
 
     template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
-    output_t operator()(input_map_t const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr) const
+    std::unique_ptr<cudf::column> operator()(rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr) const
     {
-      auto const& values =
-        std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
-      if (values.size() == 0) { return parent->get_empty_output(std::nullopt, stream, mr); }
+      auto const values = parent.get_grouped_values();
+      if (values.size() == 0) { return parent.get_empty_output(stream, mr); }
 
-      auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(groupby_data_attribute::GROUP_OFFSETS));
+      auto const offsets = parent.get_group_offsets();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_groups    = static_cast<int>(offsets.size()) - 1;
-      auto const group_indices = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(groupby_data_attribute::GROUP_LABELS));
-      auto const group_max = std::get<cudf::column_view>(
-        input.at(cudf::make_max_aggregation<cudf::groupby_aggregation>()));
-      auto const group_sum = std::get<cudf::column_view>(
-        input.at(cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+      auto const group_indices = parent.get_group_labels();
+      auto const group_max =
+        parent.compute_aggregation(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+      auto const group_sum =
+        parent.compute_aggregation(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
@@ -190,9 +166,6 @@ struct host_udf_groupby_example : cudf::host_udf_base {
 };
 
 }  // namespace
-
-using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
-using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 struct HostUDFGroupbyExampleTest : cudf::test::BaseFixture {};
 

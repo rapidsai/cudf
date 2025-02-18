@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -31,11 +31,12 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
     from typing import Literal
+
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import Schema
 
@@ -99,7 +100,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     """
     if len(columns) == 0:
         return []
-    lengths: set[int] = {column.obj.size() for column in columns}
+    lengths: set[int] = {column.size for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
@@ -115,7 +116,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             )
     return [
         column
-        if column.obj.size() != 1
+        if column.size != 1
         else Column(
             plc.Column.from_scalar(column.obj_scalar, nrows),
             is_sorted=plc.types.Sorted.YES,
@@ -626,12 +627,7 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
-            if POLARS_VERSION_GT_112:
-                # If we sliced away some data from the start, that
-                # shifts the row index.
-                # But prior to 1.13, polars had this wrong, so we match behaviour
-                # https://github.com/pola-rs/polars/issues/19607
-                offset += skip_rows
+            offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
@@ -700,14 +696,12 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "predicate", "projection")
-    _non_child = ("schema", "df", "projection", "predicate", "config_options")
+    __slots__ = ("config_options", "df", "projection")
+    _non_child = ("schema", "df", "projection", "config_options")
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    predicate: expr.NamedExpr | None
-    """Mask to apply."""
     config_options: dict[str, Any]
     """GPU-specific configuration options"""
 
@@ -716,15 +710,17 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        predicate: expr.NamedExpr | None,
         config_options: dict[str, Any],
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
-        self.predicate = predicate
         self.config_options = config_options
-        self._non_child_args = (schema, df, self.projection, predicate)
+        self._non_child_args = (
+            schema,
+            pl.DataFrame._from_pydf(df),
+            self.projection,
+        )
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -740,7 +736,6 @@ class DataFrameScan(IR):
             schema_hash,
             id(self.df),
             self.projection,
-            self.predicate,
             json.dumps(self.config_options),
         )
 
@@ -750,22 +745,16 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: tuple[str, ...] | None,
-        predicate: expr.NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        pdf = pl.DataFrame._from_pydf(df)
         if projection is not None:
-            pdf = pdf.select(projection)
-        df = DataFrame.from_polars(pdf)
+            df = df.select(projection)
+        df = DataFrame.from_polars(df)
         assert all(
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
-        if predicate is not None:
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
-            return df.filter(mask)
-        else:
-            return df
+        return df
 
 
 class Select(IR):
@@ -834,12 +823,34 @@ class Reduce(IR):
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
-        assert all(column.obj.size() == 1 for column in columns)
+        assert all(column.size == 1 for column in columns)
         return DataFrame(columns)
 
 
 class GroupBy(IR):
     """Perform a groupby."""
+
+    class AggInfos:
+        """Serializable wrapper for GroupBy aggregation info."""
+
+        agg_requests: Sequence[expr.NamedExpr]
+        agg_infos: Sequence[expr.AggInfo]
+
+        def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
+            self.agg_requests = tuple(agg_requests)
+            self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
+
+        def __reduce__(self):
+            """Pickle an AggInfos object."""
+            return (type(self), (self.agg_requests,))
+
+    class GroupbyOptions:
+        """Serializable wrapper for polars GroupbyOptions."""
+
+        def __init__(self, polars_groupby_options: Any):
+            self.dynamic = polars_groupby_options.dynamic
+            self.rolling = polars_groupby_options.rolling
+            self.slice = polars_groupby_options.slice
 
     __slots__ = (
         "agg_infos",
@@ -855,7 +866,7 @@ class GroupBy(IR):
     """Aggregation expressions."""
     maintain_order: bool
     """Preserve order in groupby."""
-    options: Any
+    options: GroupbyOptions
     """Arbitrary options."""
 
     def __init__(
@@ -871,7 +882,7 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = options
+        self.options = self.GroupbyOptions(options)
         self.children = (df,)
         if self.options.rolling:
             raise NotImplementedError(
@@ -881,13 +892,12 @@ class GroupBy(IR):
             raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
-        self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            options,
-            self.agg_infos,
+            self.options,
+            self.AggInfos(self.agg_requests),
         )
 
     @staticmethod
@@ -924,8 +934,8 @@ class GroupBy(IR):
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: Any,
-        agg_infos: Sequence[expr.AggInfo],
+        options: GroupbyOptions,
+        agg_info_wrapper: AggInfos,
         df: DataFrame,
     ):
         """Evaluate and return a dataframe."""
@@ -945,7 +955,7 @@ class GroupBy(IR):
         # TODO: uniquify
         requests = []
         replacements: list[expr.Expr] = []
-        for info in agg_infos:
+        for info in agg_info_wrapper.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
                     # A count aggregation, doesn't touch the column,
@@ -1016,10 +1026,44 @@ class GroupBy(IR):
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
+    class Predicate:
+        """Serializable wrapper for a predicate expression."""
+
+        predicate: expr.Expr
+        ast: plc.expressions.Expression
+
+        def __init__(self, predicate: expr.Expr):
+            self.predicate = predicate
+            self.ast = to_ast(predicate)
+
+        def __reduce__(self):
+            """Pickle a Predicate object."""
+            return (type(self), (self.predicate,))
+
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
-    options: tuple
+    """Expression predicate to join on"""
+    options: tuple[
+        tuple[
+            str,
+            pl_expr.Operator | Iterable[pl_expr.Operator],
+        ],
+        bool,
+        tuple[int, int] | None,
+        str,
+        bool,
+        Literal["none", "left", "right", "left_right", "right_left"],
+    ]
+    """
+    tuple of options:
+    - predicates: tuple of ir join type (eg. ie_join) and (In)Equality conditions
+    - join_nulls: do nulls compare equal?
+    - slice: optional slice to perform after joining.
+    - suffix: string suffix for right columns if names match
+    - coalesce: should key columns be coalesced (only makes sense for outer joins)
+    - maintain_order: which DataFrame row order to preserve, if any
+    """
 
     def __init__(
         self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
@@ -1028,28 +1072,34 @@ class ConditionalJoin(IR):
         self.predicate = predicate
         self.options = options
         self.children = (left, right)
-        self.ast_predicate = to_ast(predicate)
-        _, join_nulls, zlice, suffix, coalesce = self.options
+        predicate_wrapper = self.Predicate(predicate)
+        _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not join_nulls
         assert not coalesce
-        if self.ast_predicate is None:
+        assert maintain_order == "none"
+        if predicate_wrapper.ast is None:
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (self.ast_predicate, zlice, suffix)
+        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
 
     @classmethod
     def do_evaluate(
         cls,
-        predicate: plc.expressions.Expression,
+        predicate_wrapper: Predicate,
         zlice: tuple[int, int] | None,
         suffix: str,
+        maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        lg, rg = plc.join.conditional_inner_join(left.table, right.table, predicate)
+        lg, rg = plc.join.conditional_inner_join(
+            left.table,
+            right.table,
+            predicate_wrapper.ast,
+        )
         left = DataFrame.from_table(
             plc.copying.gather(
                 left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
@@ -1083,11 +1133,12 @@ class Join(IR):
     right_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+        Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
         bool,
         tuple[int, int] | None,
         str,
         bool,
+        Literal["none", "left", "right", "left_right", "right_left"],
     ]
     """
     tuple of options:
@@ -1096,6 +1147,7 @@ class Join(IR):
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
+    - maintain_order: which DataFrame row order to preserve, if any
     """
 
     def __init__(
@@ -1113,50 +1165,48 @@ class Join(IR):
         self.options = options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
-        if any(
-            isinstance(e.value, expr.Literal)
-            for e in itertools.chain(self.left_on, self.right_on)
-        ):
-            raise NotImplementedError("Join with literal as join key.")
+        # TODO: Implement maintain_order
+        if options[5] != "none":
+            raise NotImplementedError("maintain_order not implemented yet")
 
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "right", "full", "semi", "anti"],
+        how: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
-        if how == "inner":
+        if how == "Inner":
             return (
                 plc.join.inner_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-        elif how == "left" or how == "right":
+        elif how == "Left" or how == "Right":
             return (
                 plc.join.left_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "full":
+        elif how == "Full":
             return (
                 plc.join.full_join,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "semi":
+        elif how == "Semi":
             return (
                 plc.join.left_semi_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        elif how == "anti":
+        elif how == "Anti":
             return (
                 plc.join.left_anti_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)
+        assert_never(how)  # pragma: no cover
 
     @staticmethod
     def _reorder_maps(
@@ -1217,18 +1267,19 @@ class Join(IR):
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
-            Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
+            Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
             tuple[int, int] | None,
             str,
             bool,
+            Literal["none", "left", "right", "left_right", "right_left"],
         ],
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, join_nulls, zlice, suffix, coalesce = options
-        if how == "cross":
+        how, join_nulls, zlice, suffix, coalesce, _ = options
+        if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
@@ -1265,25 +1316,32 @@ class Join(IR):
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
-            if how == "right":
+            if how == "Right":
                 # Right join is a left join with the tables swapped
                 left, right = right, left
                 left_on, right_on = right_on, left_on
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            if how == "left" or how == "right":
+            if how == "Left" or how == "Right":
                 # Order of left table is preserved
                 lg, rg = cls._reorder_maps(
                     left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
                 )
-            if coalesce and how == "inner":
-                right = right.discard_columns(right_on.column_names_set)
+            if coalesce:
+                if how == "Full":
+                    # In this case, keys must be column references,
+                    # possibly with dtype casting. We should use them in
+                    # preference to the columns from the original tables.
+                    left = left.with_columns(left_on.columns, replace_only=True)
+                    right = right.with_columns(right_on.columns, replace_only=True)
+                else:
+                    right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
             right = DataFrame.from_table(
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
-            if coalesce and how != "inner":
+            if coalesce and how == "Full":
                 left = left.with_columns(
                     (
                         Column(
@@ -1299,7 +1357,7 @@ class Join(IR):
                     replace_only=True,
                 )
                 right = right.discard_columns(right_on.column_names_set)
-            if how == "right":
+            if how == "Right":
                 # Undo the swap for right join before gluing together.
                 left, right = right, left
             right = right.rename_columns(
@@ -1344,7 +1402,9 @@ class HStack(IR):
         """Evaluate and return a dataframe."""
         columns = [c.evaluate(df) for c in exprs]
         if should_broadcast:
-            columns = broadcast(*columns, target_length=df.num_rows)
+            columns = broadcast(
+                *columns, target_length=df.num_rows if df.num_columns != 0 else None
+            )
         else:
             # Polars ensures this is true, but let's make sure nothing
             # went wrong. In this case, the parent node is a
@@ -1739,8 +1799,6 @@ class Union(IR):
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema
-        if not all(s.schema == schema for s in self.children[1:]):
-            raise NotImplementedError("Schema mismatch")
 
     @classmethod
     def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:

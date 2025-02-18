@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -69,7 +69,11 @@ class Agg(Expr):
             # TODO: handle nans
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
-            req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+            req = plc.aggregation.count(
+                null_handling=plc.types.NullPolicy.EXCLUDE
+                if not options
+                else plc.types.NullPolicy.INCLUDE
+            )
         elif name == "quantile":
             _, quantile = self.children
             if not isinstance(quantile, Literal):
@@ -87,7 +91,7 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name in {"count", "first", "last"}:
+        elif name in {"count", "sum", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -168,13 +172,25 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.interop.from_arrow(
                     pa.scalar(
-                        column.obj.size() - column.obj.null_count(),
+                        column.size - column.null_count,
                         type=plc.interop.to_arrow(self.dtype),
                     ),
                 ),
                 1,
             )
         )
+
+    def _sum(self, column: Column) -> Column:
+        if column.size == 0 or column.null_count == column.size:
+            return Column(
+                plc.Column.from_scalar(
+                    plc.interop.from_arrow(
+                        pa.scalar(0, type=plc.interop.to_arrow(self.dtype))
+                    ),
+                    1,
+                )
+            )
+        return self._reduce(column, request=plc.aggregation.sum())
 
     def _min(self, column: Column, *, propagate_nans: bool) -> Column:
         if propagate_nans and column.nan_count > 0:
@@ -208,7 +224,7 @@ class Agg(Expr):
         return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
-        n = column.obj.size()
+        n = column.size
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(

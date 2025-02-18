@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -19,6 +19,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, cudf_dtype_from_pa_type
 
 if PANDAS_GE_210:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
@@ -45,7 +46,7 @@ def dtype(arbitrary):
     dtype: the cuDF-supported dtype that best matches `arbitrary`
     """
     #  first, check if `arbitrary` is one of our extension types:
-    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+    if isinstance(arbitrary, (_BaseDtype, pd.DatetimeTZDtype)):
         return arbitrary
 
     # next, try interpreting arbitrary as a NumPy dtype that we support:
@@ -55,15 +56,13 @@ def dtype(arbitrary):
         pass
     else:
         if np_dtype.kind in set("OU"):
-            return np.dtype("object")
-        elif np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+            return CUDF_STRING_DTYPE
+        elif (
+            np_dtype
+            not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+        ):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
-
-    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
-        # read_csv only accepts "hex"
-        # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
-        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
@@ -75,7 +74,7 @@ def dtype(arbitrary):
                 "Nullable types not supported in pandas compatibility mode"
             )
         elif isinstance(pd_dtype, pd.StringDtype):
-            return np.dtype("object")
+            return CUDF_STRING_DTYPE
         else:
             return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
@@ -189,7 +188,7 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(0, dtype="object")
+            col = cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         else:
             col = self._categories
         return cudf.Index._from_column(col)
@@ -365,7 +364,7 @@ class ListDtype(_BaseDtype):
             self._typ = pa.list_(element_type._typ)
         else:
             element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
-                element_type
+                cudf.dtype(element_type)
             )
             self._typ = pa.list_(element_type)
 
@@ -396,7 +395,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
+            return cudf_dtype_from_pa_type(self._typ.value_type)
 
     @cached_property
     def leaf_type(self):
@@ -515,6 +514,28 @@ class ListDtype(_BaseDtype):
     def itemsize(self):
         return self.element_type.itemsize
 
+    def _recursively_replace_fields(self, result: list) -> list:
+        """
+        Return a new list result but with the keys of dict element by the keys in StructDtype.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        if isinstance(self.element_type, StructDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, dict)
+                else res
+                for res in result
+            ]
+        elif isinstance(self.element_type, ListDtype):
+            return [
+                self.element_type._recursively_replace_fields(res)
+                if isinstance(res, list)
+                else res
+                for res in result
+            ]
+        return result
+
 
 class StructDtype(_BaseDtype):
     """
@@ -554,7 +575,7 @@ class StructDtype(_BaseDtype):
 
     def __init__(self, fields):
         pa_fields = {
-            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(v)
+            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(cudf.dtype(v))
             for k, v in fields.items()
         }
         self._typ = pa.struct(pa_fields)
@@ -673,6 +694,26 @@ class StructDtype(_BaseDtype):
             cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
             for field in self._typ
         )
+
+    def _recursively_replace_fields(self, result: dict) -> dict:
+        """
+        Return a new dict result but with the keys replaced by the keys in self.fields.keys().
+
+        Intended when result comes from pylibcudf without preserved nested field names.
+        """
+        new_result = {}
+        for (new_field, field_dtype), result_value in zip(
+            self.fields.items(), result.values()
+        ):
+            if isinstance(field_dtype, StructDtype) and isinstance(
+                result_value, dict
+            ):
+                new_result[new_field] = (
+                    field_dtype._recursively_replace_fields(result_value)
+                )
+            else:
+                new_result[new_field] = result_value
+        return new_result
 
 
 decimal_dtype_template = textwrap.dedent(
@@ -991,21 +1032,13 @@ def _is_categorical_dtype(obj):
         return False
     if isinstance(obj, str) and obj == "category":
         return True
-    if isinstance(obj, cudf.core.index.BaseIndex):
-        return obj._is_categorical()
     if isinstance(
         obj,
-        (
-            cudf.Series,
-            cudf.core.column.ColumnBase,
-            pd.Index,
-            pd.Series,
-        ),
+        (cudf.core.index.BaseIndex, cudf.core.column.ColumnBase, cudf.Series),
     ):
-        try:
-            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
-        except TypeError:
-            return False
+        return isinstance(obj.dtype, cudf.CategoricalDtype)
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return isinstance(obj.dtype, pd.CategoricalDtype)
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True

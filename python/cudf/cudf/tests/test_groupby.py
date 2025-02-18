@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -2472,16 +2472,25 @@ def test_groupby_unique(by, data, dtype):
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
+    gdf = cudf.from_pandas(pdf)
+    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
     check_dtype = func not in _index_type_aggs
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -4076,6 +4085,13 @@ def test_get_group_list_like():
         df.groupby(["a"]).get_group([1])
 
 
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)
+
+
 def test_size_as_index_false():
     df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
     expected = df.groupby("a", as_index=False).size()
@@ -4087,4 +4103,32 @@ def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
+    assert_eq(result, expected)
+
+
+def test_agg_duplicate_aggs_pandas_compat_raises():
+    agg = {"b": ["mean", "mean"]}
+    dfgb = cudf.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6]}).groupby(["a"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            dfgb.agg(agg)
+
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
+    expected = cudf.DataFrame(
+        [4.5, 6.0],
+        index=cudf.Index([1, 2], name="a"),
+        columns=pd.MultiIndex.from_tuples([("b", "mean")]),
+    )
     assert_eq(result, expected)

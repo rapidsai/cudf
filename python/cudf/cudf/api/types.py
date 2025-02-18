@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -13,7 +13,10 @@ from typing import cast
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
+
+import pylibcudf as plc
 
 import cudf
 from cudf.core._compat import PANDAS_LT_300
@@ -31,6 +34,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 
 def is_numeric_dtype(obj):
@@ -110,7 +114,7 @@ def is_string_dtype(obj):
     return (
         (
             isinstance(obj, (cudf.Index, cudf.Series))
-            and obj.dtype == cudf.dtype("O")
+            and obj.dtype == CUDF_STRING_DTYPE
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
@@ -142,8 +146,9 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
-            cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            plc.Scalar,
+            pa.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)

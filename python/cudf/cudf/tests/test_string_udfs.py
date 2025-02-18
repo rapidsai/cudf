@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import numba
 import numpy as np
@@ -11,6 +11,7 @@ from numba.types import CPointer, void
 import rmm
 
 import cudf
+from cudf._lib.column import Column
 from cudf._lib.strings_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
@@ -87,27 +88,29 @@ def run_udf_test(data, func, dtype):
         )
 
     cudf_column = cudf.core.column.as_column(data)
-    str_views = column_to_string_view_array(cudf_column)
+    str_views = column_to_string_view_array(
+        cudf_column.to_pylibcudf(mode="read")
+    )
     sv_kernel, udf_str_kernel = get_kernels(func, dtype, len(data))
 
     expect = pd.Series(data).apply(func)
     with _CUDFNumbaConfig():
         sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = column_from_udf_string_array(output)
+        result = Column.from_pylibcudf(column_from_udf_string_array(output))
     else:
         result = output
 
-    got = cudf.Series._from_column(result.astype(dtype))
+    got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = column_from_udf_string_array(output)
+        result = Column.from_pylibcudf(column_from_udf_string_array(output))
     else:
         result = output
 
-    got = cudf.Series._from_column(result.astype(dtype))
+    got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
 
 

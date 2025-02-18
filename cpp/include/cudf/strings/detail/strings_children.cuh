@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,21 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
+template <typename Iter>
+struct string_offsets_fn {
+  Iter _begin;
+  size_type _strings_count;
+  constexpr string_offsets_fn(Iter begin, size_type strings_count)
+    : _begin{begin}, _strings_count{strings_count}
+  {
+  }
+
+  __device__ constexpr size_type operator()(size_type idx) const noexcept
+  {
+    return idx < _strings_count ? static_cast<size_type>(_begin[idx]) : size_type{0};
+  };
+};
 
 /**
  * @brief Gather characters to create a strings column using the given string-index pair iterator
@@ -133,14 +148,11 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   // using exclusive-scan technically requires strings_count+1 input values even though
   // the final input value is never used.
   // The input iterator is wrapped here to allow the 'last value' to be safely read.
-  auto map_fn = cuda::proclaim_return_type<size_type>(
-    [begin, strings_count] __device__(size_type idx) -> size_type {
-      return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
-    });
-  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  auto input_itr =
+    cudf::detail::make_counting_transform_iterator(0, string_offsets_fn{begin, strings_count});
   // Use the sizes-to-offsets iterator to compute the total number of elements
   auto const total_bytes =
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, 0, stream);
 
   auto const threshold = cudf::strings::get_offset64_threshold();
   CUDF_EXPECTS(cudf::strings::is_large_strings_enabled() || (total_bytes < threshold),
@@ -151,7 +163,8 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     offsets_column = make_numeric_column(
       data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
     auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
+    cudf::detail::sizes_to_offsets(
+      input_itr, input_itr + strings_count + 1, d_offsets64, 0, stream);
   }
 
   return std::pair(std::move(offsets_column), total_bytes);

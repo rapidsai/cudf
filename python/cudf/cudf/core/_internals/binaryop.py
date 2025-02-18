@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf.core.buffer import acquire_spill_lock
+from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
@@ -50,10 +50,10 @@ def binaryop(
         plc.binaryop.binary_operation(
             lhs.to_pylibcudf(mode="read")
             if isinstance(lhs, Column)
-            else lhs.device_value.c_value,
+            else lhs.device_value,
             rhs.to_pylibcudf(mode="read")
             if isinstance(rhs, Column)
-            else rhs.device_value.c_value,
+            else rhs.device_value,
             plc.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),
         )
