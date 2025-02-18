@@ -34,7 +34,6 @@ from dask.dataframe.dask_expr._reductions import (
 from dask.dataframe.dask_expr._util import (
     _convert_to_list,
     _raise_if_object_series,
-    is_scalar,
 )
 from dask.dataframe.dask_expr.io.io import (
     FusedIO,
@@ -45,6 +44,7 @@ from dask.dataframe.dask_expr.io.parquet import (
     ReadParquetFSSpec,
     ReadParquetPyarrowFS,
 )
+from dask.dataframe.utils import is_scalar
 
 __all__ = [
     "CumulativeBlockwise",
