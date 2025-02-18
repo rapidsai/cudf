@@ -4181,9 +4181,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * np.int32(
-            1000
-        )
+        extra = self.series._column.millisecond.astype(
+            np.dtype(np.int32)
+        ) * np.int32(1000)
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4443,7 +4443,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int8
         """
         return self._return_result_like_self(
-            self.series._column.quarter.astype(np.int8)
+            self.series._column.quarter.astype(np.dtype(np.int8))
         )
 
     @_performance_tracking
