@@ -1735,7 +1735,7 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 
 def column_empty(
     row_count: int,
-    dtype: Dtype = "object",
+    dtype: DtypeObj = CUDF_STRING_DTYPE,
     for_numba: bool = False,
 ) -> ColumnBase:
     """
@@ -1755,7 +1755,6 @@ def column_empty(
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
     """
-    dtype = cudf.dtype(dtype)
     children: tuple[ColumnBase, ...] = ()
 
     if isinstance(dtype, StructDtype):
@@ -1803,7 +1802,7 @@ def column_empty(
 
 def build_column(
     data: Buffer | None,
-    dtype: Dtype,
+    dtype: DtypeObj,
     *,
     size: int | None = None,
     mask: Buffer | None = None,
@@ -1827,20 +1826,6 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = cudf.dtype(dtype)
-
-    if _is_non_decimal_numeric_dtype(dtype):
-        assert data is not None
-        col = cudf.core.column.NumericalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
-        return col
-
     if isinstance(dtype, CategoricalDtype):
         return cudf.core.column.CategoricalColumn(
             data=data,  # type: ignore[arg-type]
@@ -1851,15 +1836,6 @@ def build_column(
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
         )
-    elif dtype.type is np.datetime64:
-        return cudf.core.column.DatetimeColumn(
-            data=data,  # type: ignore[arg-type]
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return cudf.core.column.datetime.DatetimeTZColumn(
             data=data,  # type: ignore[arg-type]
@@ -1869,7 +1845,16 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.type is np.timedelta64:
+    elif dtype.kind == "M":
+        return cudf.core.column.DatetimeColumn(
+            data=data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
+    elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
             data=data,  # type: ignore[arg-type]
             dtype=dtype,
@@ -1946,6 +1931,15 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
+        )
+    elif dtype.kind in "iufb":
+        return cudf.core.column.NumericalColumn(
+            data=data,  # type: ignore[arg-type]
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
@@ -2140,7 +2134,7 @@ def as_column(
                     and dtype is None
                 ):
                     # Conversion to arrow converts IntervalDtype to StructDtype
-                    dtype = cudf.CategoricalDtype.from_pandas(arbitrary.dtype)
+                    dtype = CategoricalDtype.from_pandas(arbitrary.dtype)
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2350,11 +2344,11 @@ def as_column(
             arbitrary,
             type=pa.decimal128(precision=dtype.precision, scale=dtype.scale),
         )
-        if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+        if isinstance(dtype, cudf.Decimal128Dtype):
             return cudf.core.column.Decimal128Column.from_arrow(data)
-        elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(dtype, cudf.Decimal64Dtype):
             return cudf.core.column.Decimal64Column.from_arrow(data)
-        elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+        elif isinstance(dtype, cudf.Decimal32Dtype):
             return cudf.core.column.Decimal32Column.from_arrow(data)
         else:
             raise NotImplementedError(f"{dtype} not implemented")
@@ -2362,7 +2356,7 @@ def as_column(
         dtype,
         (
             pd.CategoricalDtype,
-            cudf.CategoricalDtype,
+            CategoricalDtype,
             pd.IntervalDtype,
             IntervalDtype,
         ),
@@ -2375,7 +2369,7 @@ def as_column(
         object,
         np.dtype(object),
     }:
-        if isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)):
+        if isinstance(dtype, (CategoricalDtype, IntervalDtype)):
             dtype = dtype.to_pandas()
         elif dtype == object and not cudf.get_option("mode.pandas_compatible"):
             # Unlike pandas, interpret object as "str" instead of "python object"
@@ -2539,8 +2533,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = np.dtype(np.float64)
-        return column_empty(0, dtype=dtype)
+        return column_empty(0, dtype=np.dtype(np.float64))
 
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.

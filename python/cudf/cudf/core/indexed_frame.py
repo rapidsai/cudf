@@ -3900,7 +3900,7 @@ class IndexedFrame(Frame):
                 df._data[name].copy(deep=deep)
                 if name in df._data
                 else cudf.core.column.column.column_empty(
-                    dtype=dtypes.get(name, np.float64),
+                    dtype=dtypes.get(name, np.dtype(np.float64)),
                     row_count=len(index),
                 )
             )

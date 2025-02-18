@@ -19,7 +19,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
-from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, cudf_dtype_from_pa_type
 
 if PANDAS_GE_210:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
@@ -188,7 +188,7 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(0, dtype="object")
+            col = cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE)
         else:
             col = self._categories
         return cudf.Index._from_column(col)
@@ -395,7 +395,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
+            return cudf_dtype_from_pa_type(self._typ.value_type)
 
     @cached_property
     def leaf_type(self):

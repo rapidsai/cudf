@@ -1114,7 +1114,7 @@ def _parquet_to_frame(
                 codes = as_unsigned_codes(
                     len(partition_categories[name]), codes
                 )
-                dfs[-1][name] = CategoricalColumn(
+                col = CategoricalColumn(
                     data=None,
                     size=codes.size,
                     dtype=cudf.CategoricalDtype(
@@ -1126,22 +1126,13 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                _dtype = (
-                    partition_meta[name].dtype
-                    if partition_meta is not None
-                    else None
-                )
                 if pd.isna(value):
-                    dfs[-1][name] = column_empty(
-                        row_count=_len,
-                        dtype=_dtype,
-                    )
+                    col = column_empty(row_count=_len)
                 else:
-                    dfs[-1][name] = as_column(
-                        value,
-                        dtype=_dtype,
-                        length=_len,
-                    )
+                    col = as_column(value, length=_len)
+                if partition_meta is not None:
+                    col = col.astype(partition_meta[name].dtype)
+            dfs[-1][name] = col
 
     if len(dfs) > 1:
         # Concatenate dfs and return.

@@ -133,7 +133,7 @@ class TimeDeltaColumn(ColumnBase):
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item.view("int64") in cast(
+        return item.view(np.dtype(np.int64)) in cast(
             "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
         )
 
@@ -344,7 +344,7 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         else:
             with acquire_spill_lock():
@@ -622,7 +622,9 @@ class TimeDeltaColumn(ColumnBase):
         # of nanoseconds.
 
         if self.time_unit != "ns":
-            res_col = column.as_column(0, length=len(self), dtype="int64")
+            res_col = column.as_column(
+                0, length=len(self), dtype=np.dtype(np.int64)
+            )
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)
