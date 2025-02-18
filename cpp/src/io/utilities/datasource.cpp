@@ -47,6 +47,16 @@ namespace {
  * @brief Base class for file input. Only implements direct device reads.
  */
 class file_source : public datasource {
+ private:
+  std::pair<std::vector<uint8_t>, std::future<size_t>> clamped_read_to_vector(size_t offset,
+                                                                              size_t size)
+  {
+    // Clamp length to available data
+    auto const read_size = std::min(size, this->size() - offset);
+    std::vector<uint8_t> v(read_size);
+    return {std::move(v), _kvikio_file.pread(v.data(), read_size, offset)};
+  }
+
  public:
   explicit file_source(char const* filepath)
   {
@@ -59,36 +69,29 @@ class file_source : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    // Clamp length to available data
-    auto const read_size = std::min(size, this->size() - offset);
-    std::vector<uint8_t> v(read_size);
-    CUDF_EXPECTS(_kvikio_file.pread(v.data(), read_size, offset).get() == read_size, "read failed");
-    return buffer::create(std::move(v));
+    auto clamped_read = clamped_read_to_vector(offset, size);
+    clamped_read.second.get();
+    return buffer::create(std::move(clamped_read.first));
   }
 
   std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
                                                                    size_t size) override
   {
-    auto const read_size = std::min(size, this->size() - offset);
-    std::vector<uint8_t> v(read_size);
-    auto kvikio_fut = _kvikio_file.pread(v.data(), read_size, offset);
-    return std::async(std::launch::deferred,
-                      [v = std::move(v), kf = std::move(kvikio_fut)]() mutable {
-                        kf.get();
-                        return buffer::create(std::move(v));
-                      });
+    auto clamped_read = clamped_read_to_vector(offset, size);
+    return std::async(std::launch::deferred, [cr = std::move(clamped_read)]() mutable {
+      cr.second.get();
+      return buffer::create(std::move(cr.first));
+    });
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    // Clamp length to available data
-    auto const read_size = std::min(size, this->size() - offset);
-    CUDF_EXPECTS(_kvikio_file.pread(dst, read_size, offset).get() == read_size, "read failed");
-    return read_size;
+    return host_read_async(offset, size, dst).get();
   }
 
   std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
   {
+    // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     return _kvikio_file.pread(dst, read_size, offset);
   }
@@ -526,6 +529,19 @@ std::unique_ptr<datasource> datasource::create(datasource* source)
 {
   // instantiate a wrapper that forwards the calls to the user implementation
   return std::make_unique<user_datasource_wrapper>(source);
+}
+
+std::future<std::unique_ptr<datasource::buffer>> datasource::host_read_async(size_t offset,
+                                                                             size_t size)
+{
+  return std::async(std::launch::deferred,
+                    [this, offset, size] { return host_read(offset, size); });
+}
+
+std::future<size_t> datasource::host_read_async(size_t offset, size_t size, uint8_t* dst)
+{
+  return std::async(std::launch::deferred,
+                    [this, offset, size, dst] { return host_read(offset, size, dst); });
 }
 
 }  // namespace io

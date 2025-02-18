@@ -181,11 +181,7 @@ class datasource {
    *         the read data once the operation completes.
    */
   virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
-                                                                           size_t size)
-  {
-    return std::async(std::launch::deferred,
-                      [this, offset, size] { return host_read(offset, size); });
-  }
+                                                                           size_t size);
 
   /**
    * @brief Reads a selected range into a preallocated buffer.
@@ -211,11 +207,7 @@ class datasource {
    * @return A std::future object that will hold the number of bytes read once the operation
    * completes.
    */
-  virtual std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst)
-  {
-    return std::async(std::launch::deferred,
-                      [this, offset, size, dst] { return host_read(offset, size, dst); });
-  }
+  virtual std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst);
 
   /**
    * @brief Whether or not this source supports reading directly into device memory.
