@@ -169,7 +169,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         for code in codes:
             if not (is_list_like(code) or is_column_like(code)):
                 raise TypeError("Each code must be list-like")
-            new_code = column.as_column(code).astype("int64")
+            new_code = column.as_column(code, dtype=np.dtype(np.int64))
             if copy and new_code is code:
                 new_code = new_code.copy(deep=True)
             new_codes.append(new_code)
@@ -341,7 +341,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             codes = []
             for col in self._data.values():
                 code, cats = factorize(col)
-                codes.append(column.as_column(code.astype(np.int64)))
+                codes.append(column.as_column(code.astype(np.dtype(np.int64))))
                 levels.append(cats)
             self._levels = levels
             self._codes = codes
