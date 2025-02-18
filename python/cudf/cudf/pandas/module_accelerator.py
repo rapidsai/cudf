@@ -15,6 +15,7 @@ import sys
 import threading
 import warnings
 from abc import abstractmethod
+from collections import defaultdict
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
 from typing import Any, ContextManager, NamedTuple  # noqa: UP035
@@ -378,8 +379,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     """
 
     _denylist: tuple[str]
-    _use_fast_lib: bool
-    _use_fast_lib_lock: threading.RLock
+    _disable_count: defaultdict[int, int]
     _module_cache_prefix: str = "_slow_lib_"
 
     # TODO: Add possibility for either an explicit allow-list of
@@ -409,9 +409,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 del sys.modules[mod]
         self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
-        # Lock to manage temporarily disabling delivering wrapped attributes
-        self._use_fast_lib_lock = threading.RLock()
-        self._use_fast_lib = True
+        # This initialization does not need to be protected since a given instance is
+        # always being created on a given thread.
+        self._disable_count = defaultdict(int)
         return self
 
     def _populate_module(self, mod: ModuleType):
@@ -503,20 +503,11 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         Context manager for disabling things
         """
-        with self._use_fast_lib_lock:
-            # Have to hold the lock to modify this variable since
-            # another thread might be reading it.
-            # Modification has to happen with the lock held for the
-            # duration, so if someone else has modified things, then
-            # we block trying to acquire the lock (hence it is safe to
-            # release the lock after modifying this value)
-            saved = self._use_fast_lib
-            self._use_fast_lib = False
+        self._disable_count[threading.get_ident()] += 1
         try:
             yield
         finally:
-            with self._use_fast_lib_lock:
-                self._use_fast_lib = saved
+            self._disable_count[threading.get_ident()] -= 1
 
     @staticmethod
     def getattr_real_or_wrapped(
@@ -545,14 +536,20 @@ class ModuleAccelerator(ModuleAcceleratorBase):
         -------
         The requested attribute (either real or wrapped)
         """
-        with loader._use_fast_lib_lock:
-            # Have to hold the lock to read this variable since
-            # another thread might modify it.
-            # Modification has to happen with the lock held for the
-            # duration, so if someone else has modified things, then
-            # we block trying to acquire the lock (hence it is safe to
-            # release the lock after reading this value)
-            use_real = not loader._use_fast_lib
+        use_real = (
+            loader._disable_count[threading.get_ident()] > 0
+            # If acceleration was disabled on the main thread, we should respect that.
+            # This only works because we currently have no way to re-enable other than
+            # exiting the disable context, so disabling on the parent thread means that
+            # the inner threads will also typically be disabled. This logic breaks if
+            # the parent thread queues work on a thread and only then disables
+            # acceleration because in that case there is a potential race condition by
+            # which the child thread may wind up disabled even though the parent was not
+            # disabled when the child was launched. That is a fairly rare pattern though
+            # and we can document the limitations.
+            # The main thread is always started, so the ident is always an int
+            or loader._disable_count[threading.main_thread().ident] > 0  # type: ignore
+        )
         if not use_real:
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
@@ -616,6 +613,19 @@ class ModuleAccelerator(ModuleAcceleratorBase):
 def disable_module_accelerator() -> contextlib.ExitStack:
     """
     Temporarily disable any module acceleration.
+
+    This function only offers limited guarantees of thread safety.
+    Cases that will work:
+        - multiple threads are launched and each independently turns off acceleration
+        - a single thread turns off acceleration and then launches multiple threads
+          inside the context manager
+
+    Cases that trigger race conditions:
+        - a single thread launches multiple threads and then enters the context manager
+          while those threads are still running
+        - nested thread launching and acceleration disabling, i.e. if a thread launches
+          a thread that disables acceleration and then launches another thread, the
+          innermost thread will not have the accelerator disabled.
     """
     with ImportLock(), contextlib.ExitStack() as stack:
         for finder in sys.meta_path:

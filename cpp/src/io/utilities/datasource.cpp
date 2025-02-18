@@ -54,7 +54,7 @@ class file_source : public datasource {
     _kvikio_file = kvikio::FileHandle(filepath, "r");
     CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
-                  _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
+                  _kvikio_file.get_compat_mode_manager().is_compat_mode_preferred() ? "on" : "off");
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -255,19 +255,21 @@ class _ResampleGrouping(_Grouping):
         # 'datetime64[s]'.  libcudf requires the bin labels and key
         # column to have the same dtype, so we compute a `result_type`
         # and cast them both to that type.
-        try:
-            result_type = np.dtype(f"datetime64[{offset.rule_code}]")
-            # TODO: Ideally, we can avoid one cast by having `date_range`
-            # generate timestamps of a given dtype.  Currently, it can
-            # only generate timestamps with 'ns' precision
-            cast_key_column = key_column.astype(result_type)
-            cast_bin_labels = bin_labels.astype(result_type)
-        except TypeError:
+        if offset.rule_code.lower() in {"d", "h"}:
             # unsupported resolution (we don't support resolutions >s)
-            # fall back to using datetime64[s]
             result_type = np.dtype("datetime64[s]")
-            cast_key_column = key_column.astype(result_type)
-            cast_bin_labels = bin_labels.astype(result_type)
+        else:
+            try:
+                result_type = np.dtype(f"datetime64[{offset.rule_code}]")
+                # TODO: Ideally, we can avoid one cast by having `date_range`
+                # generate timestamps of a given dtype.  Currently, it can
+                # only generate timestamps with 'ns' precision
+            except TypeError:
+                # unsupported resolution (we don't support resolutions >s)
+                # fall back to using datetime64[s]
+                result_type = np.dtype("datetime64[s]")
+        cast_key_column = key_column.astype(result_type)
+        cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
         with acquire_spill_lock():

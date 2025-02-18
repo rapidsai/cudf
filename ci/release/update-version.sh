@@ -51,6 +51,9 @@ DEPENDENCIES=(
   dask-cudf
   kvikio
   libcudf
+  libcudf-example
+  libcudf_kafka
+  libcudf-tests
   libkvikio
   librmm
   pylibcudf
