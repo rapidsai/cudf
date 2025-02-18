@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from dask.distributed import Client, LocalCluster
 
 DISTRIBUTED_CLUSTER_KEY = pytest.StashKey[dict]()
 
@@ -48,6 +47,8 @@ def pytest_sessionstart(session):
         session.config.getoption("--dask-cluster")
         and session.config.getoption("--executor") == "dask-experimental"
     ):
+        from dask.distributed import Client, LocalCluster
+
         cluster = LocalCluster()
         client = Client(cluster)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
