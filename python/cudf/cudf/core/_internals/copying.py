@@ -10,7 +10,6 @@ from cudf.core.buffer import acquire_spill_lock
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    # ruff does not identify that there's a relative import in use
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
@@ -61,11 +60,11 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
-    from cudf.core import column
+    from cudf.core.column import ColumnBase
 
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
-        if isinstance(sources[0], column.ColumnBase)
+        if isinstance(sources[0], ColumnBase)
         else sources,  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
