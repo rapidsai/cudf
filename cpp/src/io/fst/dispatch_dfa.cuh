@@ -209,29 +209,25 @@ struct DispatchFSM : DeviceFSMPolicy {
                             FstScanTileStateT fst_tile_state)
 
   {
-    cudaError_t error = cudaSuccess;
-    cub::KernelConfig dfa_simulation_config;
-
     using PolicyT = typename ActivePolicyT::AgentDFAPolicy;
-    if (CubDebug(error = dfa_simulation_config.Init<PolicyT>(dfa_kernel))) return error;
 
     // Kernel invocation
     uint32_t grid_size = std::max(
       1u, CUB_QUOTIENT_CEILING(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
-    uint32_t block_threads = dfa_simulation_config.block_threads;
 
-    dfa_kernel<<<grid_size, block_threads, 0, stream>>>(dfa,
-                                                        d_chars_in,
-                                                        num_chars,
-                                                        seed_state,
-                                                        d_thread_state_transition,
-                                                        tile_state,
-                                                        fst_tile_state,
-                                                        transduced_out_it,
-                                                        transduced_out_idx_it,
-                                                        d_num_transduced_out_it);
+    dfa_kernel<<<grid_size, PolicyT::BLOCK_THREADS, 0, stream>>>(dfa,
+                                                                 d_chars_in,
+                                                                 num_chars,
+                                                                 seed_state,
+                                                                 d_thread_state_transition,
+                                                                 tile_state,
+                                                                 fst_tile_state,
+                                                                 transduced_out_it,
+                                                                 transduced_out_idx_it,
+                                                                 d_num_transduced_out_it);
 
     // Check for errors
+    cudaError_t error = cudaSuccess;
     if (CubDebug(error = cudaPeekAtLastError())) return error;
 
     return error;
