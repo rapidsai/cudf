@@ -261,15 +261,19 @@ void append_varint(std::vector<uint8_t>& output, size_t v)
   std::vector<uint8_t> dst;
   append_varint(dst, src.size());
   dst.reserve(dst.size() + max_compressed_size(compression_type::SNAPPY, src.size()));
-  hash_table table;  // reuse hash table across blocks
 
-  constexpr size_t block_size = 1 << 16;
-  for (size_t src_offset = 0; src_offset < src.size(); src_offset += block_size) {
+  hash_table table;  // reuse hash table across blocks
+  constexpr size_t block_size          = 1 << 16;
+  auto const block_max_compressed_size = max_compressed_size(compression_type::SNAPPY, block_size);
+  for (std::size_t src_offset = 0; src_offset < src.size(); src_offset += block_size) {
     // Compress data in blocks of limited size
     auto const block = src.subspan(src_offset, std::min(src.size() - src_offset, block_size));
 
     auto const previous_size = dst.size();
-    dst.resize(previous_size + max_compressed_size(compression_type::SNAPPY, block.size()));
+    auto const curr_block_max_comp_size =
+      (block.size() == block_size) ? block_max_compressed_size
+                                   : max_compressed_size(compression_type::SNAPPY, block.size());
+    dst.resize(previous_size + curr_block_max_comp_size);
     auto const block_dst =
       host_span<uint8_t>{dst.data() + previous_size, dst.size() - previous_size};
 
