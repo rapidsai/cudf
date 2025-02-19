@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -390,8 +390,13 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Alias the temporary allocations from the single storage blob (or compute the necessary size
     // of the blob)
-    error =
-      cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
+    // TODO (@miscco): remove this once rapids moves to CCCL 2.8
+#if CCCL_VERSION_MAJOR >= 3
+    error = cub::detail::AliasTemporaries(
+#else   // ^^^ CCCL 3.x ^^^ / vvv CCCL 2.x vvv
+    error = cub::AliasTemporaries(
+#endif  // CCCL 2.x
+      d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
     if (error != cudaSuccess) return error;
 
     // Return if the caller is simply requesting the size of the storage allocation
