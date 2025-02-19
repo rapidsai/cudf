@@ -296,6 +296,9 @@ ConfigureTest(
   nanoarrow
   ${ARROW_LIBRARIES}
 )
+set_target_properties(
+  INTEROP_TEST
+  PROPERTIES COMPILE_OPTIONS "-g;-O0")
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
