@@ -26,7 +26,9 @@
 namespace cudf::io::parquet::detail {
 
 /**
- * @brief Base class for `row_group_stats_caster` and `page_stats_caster` structs
+ * @brief Base utilities for converting and casting stats values. Derived
+ * classes handle row group or page-level statistics as needed.
+ *
  */
 class stats_caster_base {
  protected:
@@ -53,7 +55,7 @@ class stats_caster_base {
   static T convert(uint8_t const* stats_val, size_t stats_size, Type const type);
 
   /**
-   * @brief Local struct to hold host columns for stats filtering
+   * @brief Local struct to hold host columns during stats based filtering
    *
    * @tparam T Type of the column
    */

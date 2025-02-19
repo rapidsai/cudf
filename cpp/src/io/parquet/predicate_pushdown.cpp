@@ -43,8 +43,10 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
 /**
- * @brief Converts statistics in column chunks to 2 device columns - min, max values.
+ * @brief Converts column chunk statistics to 2 device columns - min, max values. Each column has
+ * number of rows equal to the total number of row groups.
  *
  */
 struct row_group_stats_caster : public stats_caster_base {
