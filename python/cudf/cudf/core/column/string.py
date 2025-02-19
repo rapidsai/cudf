@@ -5580,7 +5580,7 @@ class StringMethods(ColumnMethods):
             a._column.to_pylibcudf(mode="read"),
             b._column.to_pylibcudf(mode="read"),
         )
-        result = Column.from_pylibcudf(plc_column)
+        result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
     def minhash64_ngrams(
@@ -5637,7 +5637,7 @@ class StringMethods(ColumnMethods):
             a._column.to_pylibcudf(mode="read"),
             b._column.to_pylibcudf(mode="read"),
         )
-        result = Column.from_pylibcudf(plc_column)
+        result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
