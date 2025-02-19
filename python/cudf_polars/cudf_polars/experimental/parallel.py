@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 import operator
-from functools import reduce
+from functools import cache, reduce
 from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.io
@@ -127,33 +127,39 @@ def task_graph(
         return graph, (key_name, 0)
 
 
-def _register_serialize():
+def _register_serialize() -> None:
     """Register Dask/cudf-polars serializers in calling process."""
     from cudf_polars.experimental.dask_serialize import register
 
     register()
 
 
-def evaluate_dask(ir: IR) -> DataFrame:
-    """Evaluate an IR graph with Dask."""
-    from dask import get as _get
-    from distributed import get_client
-
+@cache
+def get_client():
+    """Get appropriate Dask client or scheduler."""
     _register_serialize()
 
     try:  # pragma: no cover; block depends on executor type and Distributed cluster
+        from distributed import get_client
+
         client = get_client()
+    except (ImportError, ValueError):
+        from dask import get
+
+        return get
+    else:
         client.run(_register_serialize)
         client.run_on_scheduler(_register_serialize)
 
-        get = client.get
-    except ValueError:
-        get = _get
+        return client.get
 
+
+def evaluate_dask(ir: IR) -> DataFrame:
+    """Evaluate an IR graph with Dask."""
     ir, partition_info = lower_ir_graph(ir)
 
     graph, key = task_graph(ir, partition_info)
-    return get(graph, key)
+    return get_client(graph, key)
 
 
 @generate_ir_tasks.register(IR)
