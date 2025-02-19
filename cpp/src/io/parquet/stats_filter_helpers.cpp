@@ -133,10 +133,11 @@ stats_expression_converter::visit_operands(
   cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
 {
   std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  for (auto const& operand : operands) {
-    auto const new_operand = operand.get().accept(*this);
-    transformed_operands.push_back(new_operand);
-  }
+  std::transform(operands.begin(),
+                 operands.end(),
+                 std::back_inserter(transformed_operands),
+                 [t = this](auto& operand) { return operand.get().accept(*t); });
+
   return transformed_operands;
 }
 
