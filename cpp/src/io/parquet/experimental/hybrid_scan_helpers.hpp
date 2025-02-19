@@ -98,6 +98,15 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
                         bool strings_to_categorical,
                         type_id timestamp_type_id);
 
+  [[nodiscard]] std::
+    tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
+    add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+                   int64_t row_start,
+                   std::optional<size_type> const& row_count,
+                   host_span<data_type const> output_dtypes,
+                   host_span<int const> output_column_schemas,
+                   std::optional<std::reference_wrapper<ast::expression const>> filter);
+
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
@@ -132,6 +141,21 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
     host_span<int const> output_column_schemas,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
+
+  [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
+  get_filter_columns_data_pages(cudf::column_view input_rows,
+                                cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                host_span<data_type const> output_dtypes,
+                                host_span<int const> output_column_schemas,
+                                rmm::cuda_stream_view stream) const;
 };
 
 /**

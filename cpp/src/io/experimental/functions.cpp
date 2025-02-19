@@ -92,4 +92,33 @@ std::vector<size_type> filter_row_groups_with_bloom_filters(
     bloom_filter_data, input_row_group_indices, options, stream, mr)[0];
 }
 
+// API # 7
+std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  cudf::host_span<size_type const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+  return reader->filter_data_pages_with_stats(input_row_group_indices, options, stream, mr);
+}
+
+// API # 8
+std::vector<std::vector<cudf::io::text::byte_range_info>> get_filter_columns_data_pages(
+  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  cudf::column_view input_rows,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  {
+    auto const input_row_group_indices =
+      std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+    return reader->get_filter_columns_data_pages(
+      input_rows, input_row_group_indices, options, stream);
+  }
+}
+
 }  // namespace cudf::experimental::io::parquet

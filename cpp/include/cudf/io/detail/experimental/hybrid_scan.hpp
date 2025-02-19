@@ -90,6 +90,18 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
+  [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::io::parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
+  get_filter_columns_data_pages(cudf::column_view input_rows,
+                                cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                cudf::io::parquet_reader_options const& options,
+                                rmm::cuda_stream_view stream) const;
+
  private:
   std::unique_ptr<detail::impl> _impl;
 };

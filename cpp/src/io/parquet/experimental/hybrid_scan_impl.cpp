@@ -16,15 +16,14 @@
 
 #include "hybrid_scan_impl.hpp"
 
-#include "cudf/utilities/error.hpp"
 #include "hybrid_scan_helpers.hpp"
 
 // #include "error.hpp"
-
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -195,6 +194,62 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
                                                          _output_column_schemas,
                                                          expr_conv.get_converted_expr(),
                                                          stream);
+}
+
+std::unique_ptr<cudf::column> impl::filter_data_pages_with_stats(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  if (_file_preprocessed) { prepare_row_groups(row_group_indices, options); }
+
+  // Make sure we haven't gone past the input passes
+  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
+
+  // Save the name to reference converter to extract output filter AST in
+  // `preprocess_file()` and `finalize_output()`
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+
+  std::vector<data_type> output_dtypes;
+  if (expr_conv.get_converted_expr().has_value()) {
+    std::transform(_output_buffers_template.cbegin(),
+                   _output_buffers_template.cend(),
+                   std::back_inserter(output_dtypes),
+                   [](auto const& col) { return col.type; });
+  }
+  return _metadata->filter_data_pages_with_stats(row_group_indices,
+                                                 output_dtypes,
+                                                 _output_column_schemas,
+                                                 expr_conv.get_converted_expr(),
+                                                 stream,
+                                                 mr);
+}
+
+std::vector<std::vector<cudf::io::text::byte_range_info>> impl::get_filter_columns_data_pages(
+  cudf::column_view input_rows,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  // Save the name to reference converter to extract output filter AST in
+  // `preprocess_file()` and `finalize_output()`
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+
+  std::vector<data_type> output_dtypes;
+  if (expr_conv.get_converted_expr().has_value()) {
+    std::transform(_output_buffers_template.cbegin(),
+                   _output_buffers_template.cend(),
+                   std::back_inserter(output_dtypes),
+                   [](auto const& col) { return col.type; });
+  }
+
+  return _metadata->get_filter_columns_data_pages(
+    input_rows, row_group_indices, output_dtypes, _output_column_schemas, stream);
 }
 
 void impl::populate_metadata(table_metadata& out_metadata) const

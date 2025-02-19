@@ -18,6 +18,7 @@
 
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
+#include "io/utilities/row_selection.hpp"
 
 #include <cudf/logger.hpp>
 
@@ -110,6 +111,51 @@ aggregate_reader_metadata::select_filter_columns(
   // Only extract filter columns
   return select_columns(
     filter_columns_names, std::nullopt, include_index, strings_to_categorical, timestamp_type_id);
+}
+std::tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
+aggregate_reader_metadata::add_row_groups(
+  host_span<std::vector<size_type> const> row_group_indices,
+  int64_t row_start,
+  std::optional<size_type> const& row_count,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::optional<std::reference_wrapper<ast::expression const>> filter)
+{
+  // Compute the number of rows to read and skip
+  auto [rows_to_skip, rows_to_read] = [&]() {
+    if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
+    auto const from_opts =
+      cudf::io::detail::skip_rows_num_rows_from_options(row_start, row_count, get_num_rows());
+    CUDF_EXPECTS(from_opts.second <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Number of reading rows exceeds cudf's column size limit.");
+    return std::pair{static_cast<int64_t>(from_opts.first),
+                     static_cast<size_type>(from_opts.second)};
+  }();
+
+  // Vector to hold the `row_group_info` of selected row groups
+  std::vector<cudf::io::parquet::detail::row_group_info> selection;
+  // Number of rows in each data source
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
+
+  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
+               "Must specify row groups for each source");
+
+  for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+    auto const& fmd = per_file_metadata[src_idx];
+    for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
+      CUDF_EXPECTS(
+        rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
+        "Invalid rowgroup index");
+      selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
+      // if page-level indexes are present, then collect extra chunk and page info.
+      column_info_for_row_group(selection.back(), 0);
+      auto const rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
+      rows_to_read += rows_this_rg;
+      num_rows_per_source[src_idx] += rows_this_rg;
+    }
+  }
+
+  return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
 std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
