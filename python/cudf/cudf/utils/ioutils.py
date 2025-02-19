@@ -1639,12 +1639,18 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
     )
 
     md_dict = json.loads(metadata[b"pandas"])
+    _update_pandas_metadata_types_inplace(table, md_dict)
+    return json.dumps(md_dict)
 
+
+def _update_pandas_metadata_types_inplace(
+    df: cudf.DataFrame, md_dict: dict
+) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
         if (
-            col_meta["name"] in table._column_names
-            and table._data[col_meta["name"]].nullable
+            col_meta["name"] in df._column_names
+            and df._data[col_meta["name"]].nullable
             and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
             and col_meta["pandas_type"] != "decimal"
         ):
@@ -1653,8 +1659,6 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             ]
         if col_meta["numpy_type"] in ("list", "struct"):
             col_meta["numpy_type"] = "object"
-
-    return json.dumps(md_dict)
 
 
 def is_url(url):
