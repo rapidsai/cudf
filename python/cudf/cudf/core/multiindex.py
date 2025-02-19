@@ -16,7 +16,6 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-import cudf._lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
@@ -24,6 +23,7 @@ from cudf.core._base_index import _return_get_indexer_result
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import (
@@ -169,7 +169,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         for code in codes:
             if not (is_list_like(code) or is_column_like(code)):
                 raise TypeError("Each code must be list-like")
-            new_code = column.as_column(code).astype("int64")
+            new_code = column.as_column(code, dtype=np.dtype(np.int64))
             if copy and new_code is code:
                 new_code = new_code.copy(deep=True)
             new_codes.append(new_code)
@@ -341,7 +341,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             codes = []
             for col in self._data.values():
                 code, cats = factorize(col)
-                codes.append(column.as_column(code.astype(np.int64)))
+                codes.append(column.as_column(code.astype(np.dtype(np.int64))))
                 levels.append(cats)
             self._levels = levels
             self._codes = codes
@@ -1962,8 +1962,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 plc_tables[1],
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
-            indices = libcudf.column.Column.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.from_pylibcudf(left_plc)
+            indices = ColumnBase.from_pylibcudf(right_plc)
         result_series = cudf.Series._from_column(
             result._scatter_by_column(scatter_map, indices)
         )
