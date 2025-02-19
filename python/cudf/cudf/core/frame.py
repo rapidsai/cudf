@@ -19,7 +19,6 @@ import cudf
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
-from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, search, sorting
@@ -967,9 +966,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for name, plc_codes in zip(
                 dict_indices_table.column_names, plc_indices.columns()
             ):
-                codes = libcudf.column.Column.from_pylibcudf(plc_codes)
+                codes = ColumnBase.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
-                codes = as_unsigned_codes(len(categories), codes)
+                codes = as_unsigned_codes(len(categories), codes)  # type: ignore[arg-type]
                 cudf_category_frame[name] = CategoricalColumn(
                     data=None,
                     size=codes.size,
@@ -983,7 +982,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
-            name: libcudf.column.Column.from_pylibcudf(plc_col)
+            name: ColumnBase.from_pylibcudf(plc_col)
             for name, plc_col in zip(
                 data.column_names, plc.interop.from_arrow(data).columns()
             )
@@ -1356,12 +1355,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search.search_sorted(
-            sources,
-            values,
-            side,
-            ascending=ascending,
-            na_position=na_position,
+        outcol = ColumnBase.from_pylibcudf(
+            search.search_sorted(
+                sources,
+                values,
+                side,
+                ascending=ascending,
+                na_position=na_position,
+            )
         )
 
         # Return result as cupy array if the values is non-scalar
@@ -1480,11 +1481,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             ascending_lst = list(ascending)
 
-        return sorting.order_by(
-            list(to_sort),
-            ascending_lst,
-            na_position,
-            stable=True,
+        return ColumnBase.from_pylibcudf(
+            sorting.order_by(
+                list(to_sort),
+                ascending_lst,
+                na_position,
+                stable=True,
+            )
         )
 
     @_performance_tracking
@@ -1493,7 +1496,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Frames of length `len(splits) + 1`.
         """
         return [
-            self._from_columns_like_self(split, self._column_names)
+            self._from_columns_like_self(
+                [ColumnBase.from_pylibcudf(col) for col in split],
+                self._column_names,
+            )
             for split in copying.columns_split(self._columns, splits)
         ]
 
@@ -1503,10 +1509,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
         )
         columns = [
-            libcudf.column.Column.from_pylibcudf(col)
-            for col in plc_table.columns()
+            ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
         ]
-        indices = libcudf.column.Column.from_pylibcudf(plc_column)
+        indices = ColumnBase.from_pylibcudf(plc_column)
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -1957,7 +1962,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if isinstance(repeats, ColumnBase):
                 repeats = repeats.to_pylibcudf(mode="read")
             return [
-                libcudf.column.Column.from_pylibcudf(col)
+                ColumnBase.from_pylibcudf(col)
                 for col in plc.filling.repeat(plc_table, repeats).columns()
             ]
 

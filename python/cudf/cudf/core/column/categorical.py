@@ -506,7 +506,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]
+    _children: tuple[NumericalColumn]  # type: ignore[assignment]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -1156,7 +1156,7 @@ class CategoricalColumn(column.ColumnBase):
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
     ) -> Self | None:
-        out = super()._mimic_inplace(other_col, inplace=inplace)
+        out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col.codes
         return out

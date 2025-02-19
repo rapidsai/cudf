@@ -18,7 +18,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -127,17 +126,21 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="left",
-        ascending=sort_vals.is_monotonic_increasing,
+    lower_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="left",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
-    upper_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="right",
-        ascending=sort_vals.is_monotonic_increasing,
+    upper_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="right",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -1368,8 +1371,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 plc.Table([rcol.to_pylibcudf(mode="read")]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
-            indices = libcudf.column.Column.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.from_pylibcudf(left_plc)
+            indices = ColumnBase.from_pylibcudf(right_plc)
         result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
@@ -3395,7 +3398,7 @@ def interval_range(
     pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
     with acquire_spill_lock():
-        bin_edges = libcudf.column.Column.from_pylibcudf(
+        bin_edges = ColumnBase.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
                 init=pa_scalar_to_plc_scalar(pa_start),
