@@ -93,53 +93,6 @@ struct arrow_column_container {
 };
 
 namespace {
-struct ArrowSchemaPrivateData {
-  std::shared_ptr<arrow_column_container> parent;
-  std::vector<std::unique_ptr<ArrowSchema>> children;
-  std::vector<ArrowSchema*> children_raw;
-};
-
-void SchemaReleaseCallback(ArrowSchema* schema)
-{
-  auto private_data = reinterpret_cast<ArrowSchemaPrivateData*>(schema->private_data);
-  for (auto& child : private_data->children) {
-    child->release(child.get());
-  }
-  delete private_data;
-  schema->release = nullptr;
-}
-
-void copy_schema(ArrowSchema* output,
-                 ArrowSchema const* input,
-                 std::shared_ptr<arrow_column_container> container)
-{
-  auto private_data = new ArrowSchemaPrivateData{container};
-  // TODO: Just deep copy these. They are small and we should not rely on the
-  // lifetime of the input schema (which is currently the case) . The spec
-  // doesn't say anything about moving schemas, so it's really only arrays
-  // where we have this support. For the lifetimes we can toss std:strings into
-  // private_data.
-  output->format     = input->format;
-  output->name       = input->name;
-  output->metadata   = input->metadata;
-  output->flags      = input->flags;
-  output->n_children = input->n_children;
-  if (input->n_children > 0) {
-    // TODO: Give each child its own private data.
-    private_data->children_raw.resize(input->n_children);
-    for (auto i = 0; i < input->n_children; ++i) {
-      private_data->children.push_back(std::make_unique<ArrowSchema>());
-      private_data->children_raw[i] = private_data->children.back().get();
-      copy_schema(private_data->children_raw[i], input->children[i], container);
-    }
-  }
-  output->children = private_data->children_raw.data();
-  // TODO: This is probably not quite right but we don't actually support
-  // dictionaries so not sure it's worth fixing.
-  output->dictionary   = input->dictionary;
-  output->release      = SchemaReleaseCallback;
-  output->private_data = private_data;
-}
 
 struct ArrowArrayPrivateData {
   std::shared_ptr<arrow_column_container> parent;
@@ -225,7 +178,7 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       // In this case, we have an ArrowDeviceArray with CUDA data as the
       // owner. We can simply move it into our container and safe it now. We
       // do need to copy the schema, though.
-      copy_schema(&container->schema, schema, container);
+      ArrowSchemaDeepCopy(schema, &container->schema);
       auto device_arr = container->owner;
       // This behavior is different than the old from_arrow_device function
       // because now we are not create a non-owning column_view but an
@@ -268,7 +221,7 @@ void arrow_column::to_arrow_schema(ArrowSchema* output,
                                    rmm::device_async_resource_ref mr)
 {
   auto& schema = container->schema;
-  copy_schema(output, &schema, container);
+  ArrowSchemaDeepCopy(&schema, output);
 }
 
 void arrow_column::to_arrow(ArrowDeviceArray* output,
