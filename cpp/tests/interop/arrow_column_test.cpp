@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
- #include <tests/interop/arrow_utils.hpp>
-
-#include <cudf/types.hpp>
-#include <cudf/interop.hpp>
-#include <cudf/filling.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-
 #include "nanoarrow/common/inline_types.h"
 #include "nanoarrow/nanoarrow.h"
 #include "nanoarrow/nanoarrow.hpp"
 #include "nanoarrow/nanoarrow_device.h"
 #include "tests/interop/nanoarrow_utils.hpp"
+
+#include <tests/interop/arrow_utils.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/filling.hpp>
+#include <cudf/interop.hpp>
+#include <cudf/types.hpp>
 
 // #include <cudf_test/column_utilities.hpp>
 // #include <cudf_test/column_wrapper.hpp>
@@ -182,21 +181,26 @@ struct ArrowColumnTest : public cudf::test::BaseFixture {};
 TEST_F(ArrowColumnTest, TwoWayConversion)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  auto col = cudf::column(int_col);
+  auto col             = cudf::column(int_col);
   auto arrow_from_cudf = cudf::arrow_column(std::move(col));
 
+  // Now we can extract an ArrowDeviceArray from the arrow_column
+  ArrowSchema schema;
+  arrow_from_cudf.to_arrow_schema(&schema);
+  ArrowDeviceArray arr;
+  arrow_from_cudf.to_arrow(&arr, ARROW_DEVICE_CUDA);
+
   //// Should be able to create an arrow_column from an ArrowDeviceArray.
-  //ArrowDeviceArray arr;
-  //auto tmp1 = cudf::arrow_column(&arr);
+  // auto tmp1 = cudf::arrow_column(&arr);
   //
   //// Should be able to create an arrow_column from cudf::column. It always takes ownership.
-  //cudf::column col;
+  // cudf::column col;
 
   //// Should be able to create an arrow_table from an ArrowDeviceArray.
-  //ArrowDeviceArray arr2;
-  //cudf::arrow_table(&arr2);
+  // ArrowDeviceArray arr2;
+  // cudf::arrow_table(&arr2);
   //
   //// Should be able to create an arrow_table from cudf::table. It always takes ownership.
-  //cudf::table tbl;
-  //cudf::arrow_table(std::move(tbl));
+  // cudf::table tbl;
+  // cudf::arrow_table(std::move(tbl));
 }

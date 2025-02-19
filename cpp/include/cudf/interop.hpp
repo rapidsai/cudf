@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "nanoarrow/nanoarrow_device.h"
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table.hpp>
@@ -39,6 +38,10 @@ struct ArrowSchema;
 struct ArrowArray;
 
 struct ArrowArrayStream;
+
+typedef int32_t ArrowDeviceType;
+
+#define ARROW_DEVICE_CUDA 2
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -125,21 +128,25 @@ struct arrow_column_container;
 
 class arrow_column {
  public:
-  arrow_column(ArrowSchema const* schema,
-               ArrowDeviceArray* input,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-  arrow_column(ArrowSchema const* schema,
-               ArrowArray* input,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  // arrow_column(ArrowSchema const* schema,
+  //              ArrowDeviceArray* input,
+  //              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  //              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  // arrow_column(ArrowSchema const* schema,
+  //              ArrowArray* input,
+  //              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  //              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   arrow_column(cudf::column&& input,
                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  void to_arrow_schema(ArrowSchema* output,
+                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   void to_arrow(ArrowDeviceArray* output,
-          ArrowDeviceType device_type = ARROW_DEVICE_CUDA,
-          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   // Using a shared_ptr allows re-export via to_arrow
