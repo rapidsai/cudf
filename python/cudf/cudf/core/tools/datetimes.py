@@ -15,7 +15,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
@@ -987,7 +986,7 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = libcudf.column.Column.from_pylibcudf(
+            res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
                     pa_scalar_to_plc_scalar(pa.scalar(start)),
