@@ -815,7 +815,7 @@ class CategoricalColumn(column.ColumnBase):
         signed_type = (
             min_signed_type(self.codes.max())
             if self.codes.size > 0
-            else np.int8
+            else np.dtype(np.int8)
         )
         codes = self.codes.astype(signed_type)
         categories = self.categories

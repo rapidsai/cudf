@@ -1605,7 +1605,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
-            result = column_empty(0, dtype=dtype)
+            if not copy:
+                result = self
+            else:
+                result = column_empty(0, dtype=dtype)
         else:
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
