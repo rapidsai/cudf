@@ -254,7 +254,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -268,7 +268,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
   // Test with a very large limit
   {
     auto const [result, num_chunks] = chunked_read(filepath, 2L << 40);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -372,7 +372,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
@@ -562,7 +562,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
@@ -641,7 +641,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -724,7 +724,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -816,7 +816,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
@@ -957,7 +957,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   // Test with zero limit: everything will be read in one chunk
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
