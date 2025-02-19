@@ -301,14 +301,14 @@ character_normalizer::character_normalizer(bool do_lower_case,
   auto tokens_view = cudf::strings::detail::create_string_vector_from_column(
     cudf::strings_column_view(sorted->view()), stream, cudf::get_current_device_resource_ref());
 
-  _impl = new character_normalizer_impl(std::move(cp_metadata),
-                                        std::move(aux_table),
-                                        do_lower_case,
-                                        std::move(sorted),
-                                        std::move(tokens_view));
+  _impl = std::make_unique<character_normalizer_impl>(std::move(cp_metadata),
+                                                      std::move(aux_table),
+                                                      do_lower_case,
+                                                      std::move(sorted),
+                                                      std::move(tokens_view));
 }
 
-character_normalizer::~character_normalizer() { delete _impl; }
+character_normalizer::~character_normalizer() {}
 
 std::unique_ptr<character_normalizer> create_character_normalizer(
   bool do_lower_case,
@@ -556,7 +556,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   cudf::detail::grid_1d grid{chars_size, block_size};
   auto const max_new_char_total = cudf::util::round_up_safe(chars_size, block_size) * MAX_NEW_CHARS;
 
-  auto const parameters = normalizer._impl;
+  auto const& parameters = normalizer._impl;
 
   auto d_normalized = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
   data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
