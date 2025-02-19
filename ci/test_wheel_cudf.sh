@@ -27,12 +27,22 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
+# Get the total GPU memory in MiB
+GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | awk '{print $1}')
+GPU_MEMORY_GB=$((GPU_MEMORY / 1024))
+
+# Set the NUM_PROCESSES based on GPU memory
+if [ "$GPU_MEMORY_GB" -lt 24 ]; then
+  NUM_PROCESSES=10
+else
+  NUM_PROCESSES=20
+fi
 
 rapids-logger "pytest pylibcudf"
 pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \
   --cache-clear \
-  --numprocesses=8 \
+  --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
   .
 popd
@@ -42,7 +52,7 @@ pushd python/cudf/cudf/tests
 python -m pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
-  --numprocesses=8 \
+  --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
   .
 popd

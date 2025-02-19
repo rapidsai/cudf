@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit;
 
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_other
@@ -14,10 +14,22 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+# Get the total GPU memory in MiB
+GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | awk '{print $1}')
+GPU_MEMORY_GB=$((GPU_MEMORY / 1024))
+
+# Set the NUM_PROCESSES based on GPU memory
+if [ "$GPU_MEMORY_GB" -lt 24 ]; then
+  NUM_PROCESSES=10
+else
+  NUM_PROCESSES=20
+fi
+
+
 rapids-logger "pytest dask_cudf"
 ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
-  --numprocesses=8 \
+  --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=dask_cudf \
@@ -31,7 +43,7 @@ rapids-logger "pytest cudf_kafka"
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
-  --numprocesses=8 \
+  --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=custreamz \
