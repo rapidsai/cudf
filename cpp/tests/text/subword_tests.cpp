@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column.hpp>
@@ -500,6 +499,40 @@ TEST(TextSubwordTest, WordPieceWithSubwords)
   expected = LCW({LCW{4, 6, 3, 5, 7, 8},
                   LCW{1, 1, 6, 3},
                   LCW{1, 1}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST(TextSubwordTest, WordPieceSliced)
+{
+  auto vocabulary = cudf::test::strings_column_wrapper(
+    {"ate", "brown", "cheese", "dog", "fox", "jumped", "lazy", "quick", "over", "the", "[UNK]"});
+  auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+
+  auto input = cudf::test::strings_column_wrapper(
+    {" ate the cheese dog quick over  lazy day ",
+     "the quick brown fox jumped over",
+     "the  lazy  brown  dog",
+     " ate brown cheese dog fox jumped lazy quick over the [UNK] ",
+     " ate the cheese dog quick over  lazy day "});
+
+  auto sliced  = cudf::slice(input, {1, 4});
+  auto sv      = cudf::strings_column_view(sliced.front());
+  auto results = nvtext::wordpiece_tokenize(sv, *vocab);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  auto expected = LCW({LCW{ 9, 7, 1, 4, 5, 8},
+                       LCW{ 9, 6, 1, 3},
+                       LCW{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = nvtext::wordpiece_tokenize(sv, *vocab, 5);
+  // clang-format off
+  expected = LCW({LCW{ 9, 7, 1, 4, 5},
+                  LCW{ 9, 6, 1, 3},
+                  LCW{ 0, 1, 2, 3, 4}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

@@ -52,7 +52,7 @@ struct wordpiece_vocabulary {
   ~wordpiece_vocabulary();
 
   struct wordpiece_vocabulary_impl;
-  wordpiece_vocabulary_impl* _impl{};
+  std::unique_ptr<wordpiece_vocabulary_impl> _impl;
 };
 
 /**

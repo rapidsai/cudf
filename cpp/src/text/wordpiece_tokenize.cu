@@ -281,14 +281,14 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   auto const id1    = unk_ids.back_element(stream);
   auto const unk_id = id0 >= 0 ? id0 : id1;
 
-  _impl = new wordpiece_vocabulary_impl(std::move(vocabulary),
-                                        std::move(d_vocabulary),
-                                        std::move(vocab_map),
-                                        std::move(vocab_sub_map),
-                                        unk_id);
+  _impl = std::make_unique<wordpiece_vocabulary_impl>(std::move(vocabulary),
+                                                      std::move(d_vocabulary),
+                                                      std::move(vocab_map),
+                                                      std::move(vocab_sub_map),
+                                                      unk_id);
 }
 
-wordpiece_vocabulary::~wordpiece_vocabulary() { delete _impl; }
+wordpiece_vocabulary::~wordpiece_vocabulary() {}
 
 std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
   cudf::strings_column_view const& input,
@@ -434,7 +434,7 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::string_view word,
 template <typename MapRefType, typename SubMapRefType>
 CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
                                      char const* d_chars,
-                                     int64_t offset,
+                                     // int64_t offset,
                                      MapRefType const d_map,
                                      SubMapRefType const d_sub_map,
                                      cudf::size_type unk_id,
@@ -447,8 +447,11 @@ CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
   auto const word_end = thrust::find(thrust::seq, begin, end, ' ');
   auto const size     = static_cast<cudf::size_type>(thrust::distance(begin, word_end));
   if (size == 0) { return; }
-  auto d_output = d_tokens + d_edges[idx] - offset;
-  if (size >= max_word_size) { *d_output = unk_id; }
+  auto d_output = d_tokens + d_edges[idx];  // - offset;
+  if (size >= max_word_size) {
+    *d_output = unk_id;
+    return;
+  }
   auto const word = cudf::string_view{begin, size};
   wp_tokenize_fn(word, d_map, d_sub_map, unk_id, d_output);
 }
@@ -480,29 +483,18 @@ rmm::device_uvector<cudf::size_type> count_tokens(cudf::size_type const* d_token
       return static_cast<cudf::size_type>(d_tokens[idx] != no_token);
     }));
 
+  auto const d_offsets = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<int64_t>([offsets, offset] __device__(auto idx) {
+      return offsets[idx] - offset;
+    }));
+
   auto temp  = std::size_t{0};
   auto d_out = d_counts.data();
-  if (offset == 0) {
-    cub::DeviceSegmentedReduce::Sum(
-      nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
-    auto d_temp = rmm::device_buffer{temp, stream};
-    cub::DeviceSegmentedReduce::Sum(
-      d_temp.data(), temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
-  } else {
-    // offsets need to be normalized for segmented-reduce to work efficiently
-    auto d_offsets = rmm::device_uvector<cudf::size_type>(size + 1, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      offsets,
-                      offsets + size + 1,
-                      d_offsets.begin(),
-                      [offset] __device__(auto o) { return o - offset; });
-    auto const offsets_itr = d_offsets.begin();
-    cub::DeviceSegmentedReduce::Sum(
-      nullptr, temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
-    auto d_temp = rmm::device_buffer{temp, stream};
-    cub::DeviceSegmentedReduce::Sum(
-      d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
-  }
+  cub::DeviceSegmentedReduce::Sum(
+    nullptr, temp, d_in, d_out, size, d_offsets, d_offsets + 1, stream.value());
+  auto d_temp = rmm::device_buffer{temp, stream};
+  cub::DeviceSegmentedReduce::Sum(
+    d_temp.data(), temp, d_in, d_out, size, d_offsets, d_offsets + 1, stream.value());
 
   return d_counts;
 }
@@ -520,43 +512,47 @@ rmm::device_uvector<cudf::size_type> count_tokens(cudf::size_type const* d_token
 rmm::device_uvector<cudf::size_type> compute_all_tokens(
   cudf::strings_column_view const& input,
   int64_t first_offset,
-  int64_t last_offset,
+  int64_t chars_size,
   wordpiece_vocabulary::wordpiece_vocabulary_impl const& vocabulary,
   rmm::cuda_stream_view stream)
 {
-  auto const chars_size    = last_offset - first_offset;
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
+
+  // find beginnings of words
+  auto d_edges = rmm::device_uvector<int64_t>(chars_size / 2L, stream);
+  // beginning of a word is a non-space preceded by a space
+  auto edges_end = cudf::detail::copy_if_safe(
+    thrust::counting_iterator<int64_t>(0),
+    thrust::counting_iterator<int64_t>(chars_size),
+    d_edges.begin(),
+    [d_input_chars] __device__(auto idx) {
+      if (idx == 0) { return d_input_chars[idx] == ' '; }
+      return (d_input_chars[idx] != ' ' && d_input_chars[idx - 1] == ' ');
+    },
+    stream);
+
+  auto const edges_count =
+    input.size() + 1 + static_cast<int64_t>(thrust::distance(d_edges.begin(), edges_end));
+  // thrust::merge has an int32 max limit currently
+  CUDF_EXPECTS(edges_count < std::numeric_limits<int32_t>::max(), "words exceed internal limit");
 
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
+  auto const d_offsets = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<int64_t>([input_offsets, first_offset] __device__(auto idx) {
+      return input_offsets[idx] - first_offset;
+    }));
 
-  // find beginnings of words
+  // merge in the input offsets to identify words starting each row
   auto d_all_edges = [&] {
-    auto d_edges = rmm::device_uvector<int64_t>(chars_size / 2, stream);
-    // beginning of a word is a non-space preceded by a space
-    auto edges_end = cudf::detail::copy_if_safe(
-      thrust::counting_iterator<int64_t>(first_offset),
-      thrust::counting_iterator<int64_t>(last_offset),
-      d_edges.begin(),
-      [d_input_chars, first_offset] __device__(auto idx) {
-        if (idx == first_offset) { return d_input_chars[idx] == ' '; }
-        return (d_input_chars[idx] != ' ' && d_input_chars[idx - 1] == ' ');
-      },
-      stream);
-
-    auto const edges_count =
-      input.size() + 1 + static_cast<int64_t>(thrust::distance(d_edges.begin(), edges_end));
-    // thrust::merge has an int32 max limit currently
-    CUDF_EXPECTS(edges_count < std::numeric_limits<int32_t>::max(), "words exceed internal limit");
-
-    // merge in the input offsets to identify words starting each row
     auto d_all_edges = rmm::device_uvector<int64_t>(edges_count, stream);
     thrust::merge(rmm::exec_policy_nosync(stream),
-                  input_offsets,
-                  input_offsets + input.size() + 1,
+                  d_offsets,
+                  d_offsets + input.size() + 1,
                   d_edges.begin(),
                   edges_end,
                   d_all_edges.begin());
+    d_edges.release();  // done with this
     return d_all_edges;
   }();
 
@@ -571,11 +567,13 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   cudf::detail::grid_1d grid{static_cast<cudf::size_type>(d_all_edges.size()), 512};
   tokenize_all_kernel<decltype(map_ref), decltype(sub_map_ref)>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      d_all_edges, d_input_chars, first_offset, map_ref, sub_map_ref, unk_id, d_tokens.data());
+      d_all_edges, d_input_chars, map_ref, sub_map_ref, unk_id, d_tokens.data());
 
   return d_tokens;
 }
-}  // namespace
+
+constexpr cudf::size_type no_word = cuda::std::numeric_limits<cudf::size_type>::max();
+constexpr int64_t no_word64       = cuda::std::numeric_limits<int64_t>::max();
 
 /**
  * @brief Find word boundaries kernel
@@ -615,15 +613,16 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
   constexpr auto words_size       = block_size * bytes_per_thread;
   __shared__ cudf::size_type s_start_words[words_size];
   __shared__ cudf::size_type s_end_words[words_size];
+  // compiler is not able to find this for some reason so defining it here as well
+  constexpr auto no_word = cuda::std::numeric_limits<cudf::size_type>::max();
 
   namespace cg     = cooperative_groups;
   auto const block = cg::this_thread_block();
   auto const tile  = cg::tiled_partition<tile_size>(block);
 
-  auto const lane_idx    = tile.thread_rank();
-  auto const warp_idx    = tile.meta_group_rank();
-  auto const warp_words  = words_size / tile.meta_group_size();
-  constexpr auto no_word = cuda::std::numeric_limits<cudf::size_type>::max();
+  auto const lane_idx   = tile.thread_rank();
+  auto const warp_idx   = tile.meta_group_rank();
+  auto const warp_words = words_size / tile.meta_group_size();
 
   cudf::size_type word_count = 0;
   cudf::size_type byte_count = 0;
@@ -697,12 +696,11 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
   auto out_starts = d_start_words + word_count;
   auto out_sizes  = d_word_sizes + word_count;
   for (auto k = lane_idx; k < (max_words - word_count); k += tile_size) {
-    out_starts[k] = cuda::std::numeric_limits<int64_t>::max();
+    out_starts[k] = no_word64;
     out_sizes[k]  = no_word;
   }
 }
 
-namespace {
 /**
  * @brief Limiting tokenizing kernel
  *
@@ -735,11 +733,14 @@ CUDF_KERNEL void tokenize_kernel(cudf::device_span<int64_t const> d_starts,
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= d_starts.size()) { return; }
   auto const size = d_sizes[idx];
-  if (size <= 0 || size == no_token) { return; }
+  if (size <= 0 || size == no_word) { return; }
   auto const start = d_starts[idx];
   auto const begin = d_chars + start;
   auto d_output    = d_tokens + start;
-  if (size >= max_word_size) { *d_output = unk_id; }
+  if (size >= max_word_size) {
+    *d_output = unk_id;
+    return;
+  }
   auto const word = cudf::string_view{begin, size};
   wp_tokenize_fn(word, d_map, d_sub_map, unk_id, d_output);
 }
@@ -758,12 +759,11 @@ CUDF_KERNEL void tokenize_kernel(cudf::device_span<int64_t const> d_starts,
 rmm::device_uvector<cudf::size_type> compute_some_tokens(
   cudf::strings_column_view const& input,
   int64_t first_offset,
-  int64_t last_offset,
+  int64_t chars_size,
   cudf::size_type max_words_per_row,
   wordpiece_vocabulary::wordpiece_vocabulary_impl const& vocabulary,
   rmm::cuda_stream_view stream)
 {
-  auto const chars_size    = last_offset - first_offset;
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   auto const d_strings  = cudf::column_device_view::create(input.parent(), stream);
@@ -796,14 +796,10 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
       *d_strings, d_input_chars, max_word_offsets.data(), start_words.data(), word_sizes.data());
 
   // remove the non-words
-  auto const end   = thrust::remove(rmm::exec_policy(stream),
-                                  start_words.begin(),
-                                  start_words.end(),
-                                  std::numeric_limits<int64_t>::max());
-  auto const check = thrust::remove(rmm::exec_policy(stream),
-                                    word_sizes.begin(),
-                                    word_sizes.end(),
-                                    std::numeric_limits<int32_t>::max());
+  auto const end =
+    thrust::remove(rmm::exec_policy(stream), start_words.begin(), start_words.end(), no_word64);
+  auto const check =
+    thrust::remove(rmm::exec_policy(stream), word_sizes.begin(), word_sizes.end(), no_word);
 
   auto const total_words = static_cast<int64_t>(thrust::distance(start_words.begin(), end));
   // this should only trigger if there is a bug in the code above
@@ -849,16 +845,15 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
   auto const first_offset = (input.offset() == 0) ? 0
                                                   : cudf::strings::detail::get_offset_value(
                                                       input.offsets(), input.offset(), stream);
-  auto const last_offset  = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                              ? input.chars_size(stream)
-                              : cudf::strings::detail::get_offset_value(
-                                 input.offsets(), input.size() + input.offset(), stream);
+  auto const last_offset =
+    cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
+  auto const chars_size = last_offset - first_offset;
 
   auto d_tokens =
     max_words_per_row == 0
-      ? compute_all_tokens(input, first_offset, last_offset, *(vocabulary._impl), stream)
+      ? compute_all_tokens(input, first_offset, chars_size, *(vocabulary._impl), stream)
       : compute_some_tokens(
-          input, first_offset, last_offset, max_words_per_row, *(vocabulary._impl), stream);
+          input, first_offset, chars_size, max_words_per_row, *(vocabulary._impl), stream);
 
   // compute token counts by doing a segmented reduce over valid d_tokens
   auto const input_offsets =
