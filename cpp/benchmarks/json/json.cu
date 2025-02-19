@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,10 +190,10 @@ static void bench_query(nvbench::state& state)
 {
   srand(5236);
 
-  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const desired_bytes = static_cast<cudf::size_type>(state.get_int64("bytes"));
-  auto const query         = state.get_int64("query");
-  auto const json_path     = queries[query];
+  auto const num_rows              = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const desired_bytes         = static_cast<cudf::size_type>(state.get_int64("bytes"));
+  auto const query                 = state.get_int64("query");
+  std::string_view const json_path = queries[query];
 
   auto const stream = cudf::get_default_stream();
   auto input        = build_json_string_column(desired_bytes, num_rows);
