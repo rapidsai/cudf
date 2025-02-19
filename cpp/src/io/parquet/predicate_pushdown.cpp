@@ -45,8 +45,9 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 /**
- * @brief Converts column chunk statistics to 2 device columns - min, max values. Each column has
- * number of rows equal to the total number of row groups.
+ * @brief Converts column chunk statistics to 2 device columns - min, max values.
+ *
+ * Each column's number of rows equals the total number of row groups.
  *
  */
 struct row_group_stats_caster : public stats_caster_base {
@@ -462,8 +463,88 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   return {filtered_row_group_indices};
 }
 
-// All required templates for stats filtering will be instantiated by the type_dispatcher in
-// row_group_stats_caster::operator()
+// All required templates for `stats_caster_base` and `stats_caster_base::host_column<T>`
+// will be instantiated here by the type_dispatcher in `row_group_stats_caster::operator()`.
+
+template <typename ToType, typename FromType>
+ToType stats_caster_base::targetType(FromType const value)
+{
+  if constexpr (cudf::is_timestamp<ToType>()) {
+    return static_cast<ToType>(typename ToType::duration{static_cast<typename ToType::rep>(value)});
+  } else if constexpr (std::is_same_v<ToType, string_view>) {
+    return ToType{nullptr, 0};
+  } else {
+    return static_cast<ToType>(value);
+  }
+}
+
+// uses storage type as T
+template <typename T, std::enable_if_t<(cudf::is_dictionary<T>() or cudf::is_nested<T>())>*>
+T stats_caster_base::convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+{
+  CUDF_FAIL("unsupported type for stats casting");
+}
+
+template <typename T, std::enable_if_t<(cudf::is_boolean<T>())>*>
+T stats_caster_base::convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+{
+  CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
+  return stats_caster_base::targetType<T>(*reinterpret_cast<bool const*>(stats_val));
+}
+
+// integral but not boolean, and fixed_point, and chrono.
+template <typename T,
+          std::enable_if_t<((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
+                            cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>*>
+T stats_caster_base::convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+{
+  switch (type) {
+    case INT32:
+      return stats_caster_base::targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
+    case INT64:
+      return stats_caster_base::targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
+    case INT96:  // Deprecated in parquet specification
+      return stats_caster_base::targetType<T>(
+        static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
+        reinterpret_cast<int32_t const*>(stats_val)[2]);
+    case BYTE_ARRAY: [[fallthrough]];
+    case FIXED_LEN_BYTE_ARRAY:
+      if (stats_size == sizeof(T)) {
+        // if type size == length of stats_val. then typecast and return.
+        if constexpr (cudf::is_chrono<T>()) {
+          return stats_caster_base::targetType<T>(
+            *reinterpret_cast<typename T::rep const*>(stats_val));
+        } else {
+          return stats_caster_base::targetType<T>(*reinterpret_cast<T const*>(stats_val));
+        }
+      }
+      // unsupported type
+    default: CUDF_FAIL("Invalid type and stats combination");
+  }
+}
+
+template <typename T, std::enable_if_t<(cudf::is_floating_point<T>())>*>
+T stats_caster_base::convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+{
+  switch (type) {
+    case FLOAT: return stats_caster_base::targetType<T>(*reinterpret_cast<float const*>(stats_val));
+    case DOUBLE:
+      return stats_caster_base::targetType<T>(*reinterpret_cast<double const*>(stats_val));
+    default: CUDF_FAIL("Invalid type and stats combination");
+  }
+}
+
+template <typename T, std::enable_if_t<(std::is_same_v<T, string_view>)>*>
+T stats_caster_base::convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+{
+  switch (type) {
+    case BYTE_ARRAY: [[fallthrough]];
+    case FIXED_LEN_BYTE_ARRAY:
+      return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
+    default: CUDF_FAIL("Invalid type and stats combination");
+  }
+}
+
 template <typename T>
 stats_caster_base::host_column<T>::host_column(size_type total_row_groups,
                                                rmm::cuda_stream_view stream)

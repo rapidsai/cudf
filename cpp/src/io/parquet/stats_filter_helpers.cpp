@@ -128,4 +128,17 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::get_st
   return _stats_expr.back();
 }
 
+std::vector<std::reference_wrapper<ast::expression const>>
+stats_expression_converter::visit_operands(
+  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+{
+  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
+  std::transform(operands.begin(),
+                 operands.end(),
+                 std::back_inserter(transformed_operands),
+                 [t = this](auto& operand) { return operand.get().accept(*t); });
+
+  return transformed_operands;
+}
+
 }  // namespace cudf::io::parquet::detail
