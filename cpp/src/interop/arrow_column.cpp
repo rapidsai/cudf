@@ -179,7 +179,7 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       // owner. We can simply move it into our container and safe it now. We
       // do need to copy the schema, though.
       ArrowSchemaDeepCopy(schema, &container->schema);
-      auto device_arr = container->owner;
+      auto& device_arr = container->owner;
       // This behavior is different than the old from_arrow_device function
       // because now we are not create a non-owning column_view but an
       // arrow_column that can manage lifetimes.
