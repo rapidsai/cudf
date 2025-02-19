@@ -42,7 +42,7 @@ class CudfEngine(ArrowDatasetEngine):
         kwargs = dataset_info.get("kwargs", {})
         set_object_dtypes_from_pa_schema(
             meta_cudf,
-            kwargs.get("dataset", {}).get("schema", None),
+            kwargs.get("schema", None),
         )
 
         return meta_cudf
