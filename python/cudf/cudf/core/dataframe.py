@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import json
 import numbers
 import os
 import re
@@ -19,7 +20,7 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numba
@@ -35,7 +36,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.common
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -86,6 +86,7 @@ from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -2456,15 +2457,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Convert float to integer
         if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
+            map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            cat_index = cast(
-                cudf.core.column.CategoricalColumn,
-                map_index.astype("category"),
-            )
-            map_index = cat_index.codes
+            map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -2510,8 +2507,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 map_size,
             )
             partitioned_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         partitioned = self._from_columns_like_self(
@@ -4134,7 +4130,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         )
         result_columns = [
-            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True)
             for col in result_table.columns()
         ]
 
@@ -5042,8 +5038,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nparts,
             )
             output_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         outdf = self._from_columns_like_self(
@@ -5749,8 +5744,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             preserve_index=preserve_index,
             types=out.schema.types,
         )
+        md_dict = json.loads(metadata[b"pandas"])
 
-        return out.replace_schema_metadata(metadata)
+        cudf.utils.ioutils._update_pandas_metadata_types_inplace(self, md_dict)
+
+        return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
     @_performance_tracking
     def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
@@ -6367,7 +6365,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64", copy=False)
+            coerced = coerced.astype(np.dtype(np.int64), copy=False)
         return coerced, mask, common_dtype
 
     @_performance_tracking
@@ -7255,8 +7253,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self.shape[0],
             )
             tiled_index = [
-                libcudf.column.Column.from_pylibcudf(plc)
-                for plc in plc_table.columns()
+                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
             ]
 
         # Assemble the final index
@@ -7335,7 +7332,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             with acquire_spill_lock():
-                interleaved_col = libcudf.column.Column.from_pylibcudf(
+                interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table(
                             [
@@ -7840,7 +7837,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
         with acquire_spill_lock():
-            result_col = libcudf.column.Column.from_pylibcudf(
+            result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [
@@ -7861,7 +7858,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ),
             plc.expressions.to_expression(expr, self._column_names),
         )
-        return libcudf.column.Column.from_pylibcudf(plc_column)
+        return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
@@ -8077,7 +8074,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dropna=dropna,
             )
             .size()
-            .astype("int64")
+            .astype(np.dtype(np.int64))
         )
         if sort:
             result = result.sort_values(ascending=ascending)

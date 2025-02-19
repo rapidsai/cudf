@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -9,10 +9,9 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import as_column
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
@@ -272,7 +271,7 @@ def cut(
             if right_inclusive
             else plc.labeling.Inclusive.NO,
         )
-        index_labels = Column.from_pylibcudf(plc_column)
+        index_labels = ColumnBase.from_pylibcudf(plc_column)
 
     if labels is False:
         # if labels is false we return the index labels, we return them

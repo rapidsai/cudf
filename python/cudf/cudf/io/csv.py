@@ -15,9 +15,9 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
@@ -276,7 +276,7 @@ def read_csv(
 
     table_w_meta = plc.io.csv.read_csv(options)
     data = {
-        name: Column.from_pylibcudf(col)
+        name: ColumnBase.from_pylibcudf(col)
         for name, col in zip(
             table_w_meta.column_names(include_children=False),
             table_w_meta.columns,

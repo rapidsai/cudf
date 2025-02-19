@@ -5,7 +5,7 @@ import os
 import warnings
 from collections import abc
 from io import BytesIO, StringIO
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -13,16 +13,13 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     dtype_to_pylibcudf_type,
 )
-
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
 
 
 def _get_cudf_schema_element_from_dtype(
@@ -180,7 +177,7 @@ def read_json(
                 )
             )
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(res_col_names, res_cols, strict=True)
             }
             df = cudf.DataFrame._from_data(data)
@@ -207,7 +204,7 @@ def read_json(
                 )
             )
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(
                     table_w_meta.column_names(include_children=False),
                     table_w_meta.columns,

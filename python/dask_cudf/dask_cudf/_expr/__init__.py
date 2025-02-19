@@ -1,5 +1,9 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+import importlib.metadata
+
+from packaging.version import Version
+
 import dask
 import dask.dataframe.dask_expr._shuffle as _shuffle_module
 from dask.dataframe import get_collection_type
@@ -34,7 +38,6 @@ from dask.dataframe.dask_expr._reductions import (
 from dask.dataframe.dask_expr._util import (
     _convert_to_list,
     _raise_if_object_series,
-    is_scalar,
 )
 from dask.dataframe.dask_expr.io.io import (
     FusedIO,
@@ -45,6 +48,18 @@ from dask.dataframe.dask_expr.io.parquet import (
     ReadParquetFSSpec,
     ReadParquetPyarrowFS,
 )
+
+_dask_version = importlib.metadata.version("dask")
+
+# TODO: change ">2025.2.0" to ">={next-version}" when released.
+DASK_2025_3_0 = Version(_dask_version) > Version("2025.2.0")
+
+
+if DASK_2025_3_0:
+    from dask.dataframe.utils import is_scalar
+else:
+    from dask.dataframe.dask_expr._util import is_scalar
+
 
 __all__ = [
     "CumulativeBlockwise",

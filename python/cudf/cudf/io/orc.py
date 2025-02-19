@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import itertools
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import pyarrow as pa
 
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
@@ -22,9 +22,6 @@ try:
     import ujson as json  # type: ignore[import-untyped]
 except ImportError:
     import json
-
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
 
 
 @ioutils.doc_read_orc_metadata()
@@ -331,14 +328,15 @@ def read_orc(
             if actual_index_names is None:
                 index = None
                 data = {
-                    name: Column.from_pylibcudf(col)
+                    name: ColumnBase.from_pylibcudf(col)
                     for name, col in zip(
                         result_col_names, tbl_w_meta.columns, strict=True
                     )
                 }
             else:
                 result_columns = [
-                    Column.from_pylibcudf(col) for col in tbl_w_meta.columns
+                    ColumnBase.from_pylibcudf(col)
+                    for col in tbl_w_meta.columns
                 ]
                 index = _index_from_data(
                     dict(

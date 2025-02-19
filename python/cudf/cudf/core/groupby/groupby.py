@@ -19,7 +19,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_list_like,
@@ -594,7 +593,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = stream_compaction.drop_duplicates(group_keys)
+        group_keys = [
+            ColumnBase.from_pylibcudf(col)
+            for col in stream_compaction.drop_duplicates(group_keys)
+        ]
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -735,7 +737,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if cudf.get_option("mode.pandas_compatible"):
             # pandas always returns floats:
-            return result.astype("float64")
+            return result.astype(np.dtype(np.float64))
 
         return result
 
@@ -1017,7 +1019,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype("int64")
+                    data[key] = col.astype(np.dtype(np.int64))
                 elif (
                     self.obj.empty
                     and (
@@ -1073,24 +1075,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                         plc_tables[1],
                         plc.types.NullEquality.EQUAL,
                     )
-                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
-                    right_order = libcudf.column.Column.from_pylibcudf(
-                        right_plc
-                    )
+                    left_order = ColumnBase.from_pylibcudf(left_plc)
+                    right_order = ColumnBase.from_pylibcudf(right_plc)
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sorting.sort_by_key(
+                right_order = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
                     ["first"],
                     stable=False,
-                )
+                )[0]
                 result = result._gather(
                     GatherMap.from_column_unchecked(
-                        right_order, len(result), nullify=False
+                        ColumnBase.from_pylibcudf(right_order),
+                        len(result),
+                        nullify=False,
                     )
                 )
 
@@ -1966,7 +1968,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         if self.obj.empty:
             if func in {"count", "size", "idxmin", "idxmax"}:
-                res = cudf.Series([], dtype="int64")
+                res = cudf.Series([], dtype=np.dtype(np.int64))
             else:
                 res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
@@ -1975,7 +1977,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # will need to result in `int64` type.
                 for name, col in res._column_labels_and_values:
                     if col.dtype.kind == "b":
-                        res._data[name] = col.astype("int")
+                        res._data[name] = col.astype(np.dtype(np.int64))
             return res
 
         if not callable(func):
@@ -2523,7 +2525,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return libcudf.column.Column.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [c.to_pylibcudf(mode="read") for c in source_columns]
@@ -3226,7 +3228,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             ]
             .count()
             .sort_index()
-            .astype(np.int64)
+            .astype(np.dtype(np.int64))
         )
 
         if normalize:
