@@ -77,13 +77,27 @@ struct hash_join {
     }
   };
 
-  using hash_table_t = cuco::static_multiset<cuco::pair<cudf::hash_value_type, cudf::size_type>,
-                                             cuco::extent<std::size_t>,
-                                             cuda::thread_scope_device,
-                                             always_not_equal,
-                                             cuco::linear_probing<DEFAULT_JOIN_CG_SIZE, hasher1>,
-                                             cudf::detail::cuco_allocator<char>,
-                                             cuco::storage<2>>;
+  struct hasher2 {
+    hasher2(hash_value_type seed) : _hash{seed} {}
+
+    __device__ constexpr hash_value_type operator()(
+      cuco::pair<hash_value_type, size_type> const& key) const noexcept
+    {
+      return _hash(key.first);
+    }
+
+   private:
+    Hasher _hash;
+  };
+
+  using hash_table_t =
+    cuco::static_multiset<cuco::pair<cudf::hash_value_type, cudf::size_type>,
+                          cuco::extent<std::size_t>,
+                          cuda::thread_scope_device,
+                          always_not_equal,
+                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hasher1, hasher2>,
+                          cudf::detail::cuco_allocator<char>,
+                          cuco::storage<2>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
