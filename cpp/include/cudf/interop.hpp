@@ -124,6 +124,65 @@ struct column_metadata {
   column_metadata() = default;
 };
 
+/**
+ * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
+ *
+ */
+using unique_schema_t = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
+
+/**
+ * @brief typedef for a unique_ptr to an ArrowDeviceArray with a custom deleter
+ *
+ */
+using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDeviceArray*)>;
+
+/**
+ * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
+ *
+ */
+using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
+
+/**
+ * @brief functor for a custom deleter to a unique_ptr of table_view
+ *
+ * When converting from an ArrowDeviceArray, there are cases where data can't
+ * be zero-copy (i.e. bools or non-UINT32 dictionary indices). This custom deleter
+ * is used to maintain ownership over the data allocated since a `cudf::table_view`
+ * doesn't hold ownership.
+ */
+template <typename ViewType>
+struct custom_view_deleter {
+  /**
+   * @brief Construct a new custom view deleter object
+   *
+   * @param owned Vector of owning columns
+   */
+  explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
+
+  /**
+   * @brief operator to delete the unique_ptr
+   *
+   * @param ptr Pointer to the object to be deleted
+   */
+  void operator()(ViewType* ptr) const { delete ptr; }
+
+  owned_columns_t owned_mem_;  ///< Owned columns that must be deleted.
+};
+
+/**
+ * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
+ *
+ */
+using unique_table_view_t =
+  std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
+
+/**
+ * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
+ *
+ */
+using unique_column_view_t =
+  std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
+
 struct arrow_column_container;
 
 class arrow_column {
@@ -148,6 +207,10 @@ class arrow_column {
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+  unique_column_view_t view(
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
  private:
   // Using a shared_ptr allows re-export via to_arrow
   std::shared_ptr<arrow_column_container> container;
@@ -168,18 +231,6 @@ class arrow_column {
 //   // Using a shared_ptr allows re-export via to_arrow
 //   std::shared_ptr<arrow_array_container> container;
 // };
-
-/**
- * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
- *
- */
-using unique_schema_t = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
-
-/**
- * @brief typedef for a unique_ptr to an ArrowDeviceArray with a custom deleter
- *
- */
-using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDeviceArray*)>;
 
 /**
  * @brief Create ArrowSchema from cudf table and metadata
@@ -477,46 +528,6 @@ std::unique_ptr<column> from_arrow_host_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
- *
- */
-using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
-
-/**
- * @brief functor for a custom deleter to a unique_ptr of table_view
- *
- * When converting from an ArrowDeviceArray, there are cases where data can't
- * be zero-copy (i.e. bools or non-UINT32 dictionary indices). This custom deleter
- * is used to maintain ownership over the data allocated since a `cudf::table_view`
- * doesn't hold ownership.
- */
-template <typename ViewType>
-struct custom_view_deleter {
-  /**
-   * @brief Construct a new custom view deleter object
-   *
-   * @param owned Vector of owning columns
-   */
-  explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
-
-  /**
-   * @brief operator to delete the unique_ptr
-   *
-   * @param ptr Pointer to the object to be deleted
-   */
-  void operator()(ViewType* ptr) const { delete ptr; }
-
-  owned_columns_t owned_mem_;  ///< Owned columns that must be deleted.
-};
-
-/**
- * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
- *
- */
-using unique_table_view_t =
-  std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
-
-/**
  * @brief Create `cudf::table_view` from given `ArrowDeviceArray` and `ArrowSchema`
  *
  * Constructs a non-owning `cudf::table_view` using `ArrowDeviceArray` and `ArrowSchema`,
@@ -556,13 +567,6 @@ unique_table_view_t from_arrow_device(
   ArrowDeviceArray const* input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
- *
- */
-using unique_column_view_t =
-  std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
 
 /**
  * @brief Create `cudf::column_view` from given `ArrowDeviceArray` and `ArrowSchema`

@@ -249,6 +249,12 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
   }
 }
 
+unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
+{
+  return from_arrow_device_column(&container->schema, &container->owner, stream, mr);
+}
+
 // arrow_table::arrow_table(ArrowSchema const* schema,ArrowDeviceArray* input,
 //          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
 //          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {

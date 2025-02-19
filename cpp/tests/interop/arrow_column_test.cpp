@@ -195,6 +195,8 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
     cudf::arrow_column(&arrow_schema_from_cudf_column, &arrow_array_from_arrow_column);
 
   // Now do some assertions
+  auto view = arrow_column_from_arrow_array.view();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_cudf_column.view());
 
   //// Should be able to create an arrow_column from an ArrowDeviceArray.
   // auto tmp1 = cudf::arrow_column(&arr);
