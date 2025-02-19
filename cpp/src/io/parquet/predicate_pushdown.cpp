@@ -479,7 +479,8 @@ void stats_caster_base::host_column<T>::set_index(
   size_type index, std::optional<std::vector<uint8_t>> const& binary_value, Type const type)
 {
   if (binary_value.has_value()) {
-    val[index] = convert<T>(binary_value.value().data(), binary_value.value().size(), type);
+    val[index] =
+      stats_caster_base::convert<T>(binary_value.value().data(), binary_value.value().size(), type);
   }
   if (not binary_value.has_value()) {
     clear_bit_unsafe(null_mask.data(), index);
