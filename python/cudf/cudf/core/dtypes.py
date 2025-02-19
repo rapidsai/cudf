@@ -815,7 +815,7 @@ class DecimalDtype(_BaseDtype):
         """
         Return the equivalent ``pyarrow`` dtype.
         """
-        return getattr(pa, self.name)(self.precision, self.scalae)
+        return getattr(pa, self.name)(self.precision, self.scale)
 
     @classmethod
     def from_arrow(
