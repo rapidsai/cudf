@@ -84,10 +84,10 @@ class stats_caster_base {
 
 /**
  * @brief Converts AST expression to StatsAST for comparing with column statistics
+ *
  * This is used in row group filtering based on predicate.
  * statistics min value of a column is referenced by column_index*2
  * statistics max value of a column is referenced by column_index*2+1
- *
  */
 class stats_expression_converter : public ast::detail::expression_transformer {
  public:
