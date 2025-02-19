@@ -128,10 +128,10 @@ struct arrow_column_container;
 
 class arrow_column {
  public:
-  // arrow_column(ArrowSchema const* schema,
-  //              ArrowDeviceArray* input,
-  //              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  //              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  arrow_column(ArrowSchema const* schema,
+               ArrowDeviceArray* input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   // arrow_column(ArrowSchema const* schema,
   //              ArrowArray* input,
   //              rmm::cuda_stream_view stream      = cudf::get_default_stream(),

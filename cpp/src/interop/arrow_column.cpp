@@ -19,8 +19,6 @@
 //// #include <cudf/column/column_view.hpp>
 //// #include <cudf/copying.hpp>
 //// #include <cudf/detail/get_value.cuh>
-#include "io/parquet/ipc/Schema_generated.h"
-#include "nanoarrow/common/inline_types.h"
 
 #include <cudf/interop.hpp>
 //// #include <cudf/detail/null_mask.hpp>
@@ -76,69 +74,6 @@
  */
 namespace cudf {
 
-// arrow_column::arrow_column(
-//   ArrowSchema const* schema,
-//   ArrowDeviceArray* input,
-//   rmm::cuda_stream_view stream,
-//   rmm::device_async_resource_ref mr)
-//{
-//   //switch (input->device_type) {
-//   //    case ARROW_DEVICE_CUDA:
-//   //    case ARROW_DEVICE_CUDA_HOST:
-//   //    case ARROW_DEVICE_CUDA_MANAGED: {
-//   //      // In this case, we have an ArrowDeviceArray with CUDA data as the
-//   //      // owner. When converting we may generate some owning cudf::column
-//   //      // objects for the Arrow data types that we support in a way that is
-//   //      // not zero-copy (e.g. bytes to bits). We need to own both the new
-//   //      // columns and the original ArrowDeviceArray, and we may as well cache
-//   //      // the column_view since we're generating it up front.
-//   //      auto view    = from_arrow_device_column(schema, input, stream, mr);
-//   //      auto deleter = view.get_deleter();
-//   //      // TODO: We shouldn't have to reach into the deleter to get the owned
-//   //      // columns, but we can clean that up by refactoring the internals of
-//   //      // the existing from_arrow* implementations later.
-//   //      std::pair<ArrowDeviceArray, owned_columns_t> owner{};
-//   //      ArrowDeviceArrayMove(input, &owner.first);
-//   //      owner.second = std::move(deleter.owned_mem_);
-//   //      container->arr  = &owner.first;
-//   //      container->owner = std::move(owner);
-//   //      // This is copy-constructing
-//   //      container->view = *view.get();
-//   //      // We take ownership of the provided array so that we can share control
-//   //      // of the lifetime of the source data.
-//   //      // We rely on the deleter of the unique_column_view_t to delete the
-//   //      // column_view, and since we've already moved the owned_mem_ out from
-//   //      // underneath the deleter that memory will stay alive for us.
-//   //    }
-//   //    case ARROW_DEVICE_CPU: {
-//   //      auto col = from_arrow_host_column(schema, input, stream, mr);
-//   //      container->owner = std::shared_ptr<cudf::column>(col.release());
-//   //    }
-//   //    default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
-//   //  }
-// }
-// arrow_column::arrow_column(
-//   ArrowSchema const* schema,
-//   ArrowArray* input,
-//   rmm::cuda_stream_view stream,
-//   rmm::device_async_resource_ref mr)
-//{
-//   //// The copy initialization of .array means that the release callback will be
-//   //// called on that object, so we don't need to call it on the `input` in this
-//   //// function.
-//   //ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
-//   //// TODO: Merge with the ARROW_DEVICE_CPU case above with a helper function.
-//   //auto col = from_arrow_host_column(schema, &arr, stream, mr);
-//   //container->owner = std::shared_ptr<cudf::column>(col.release());
-// }
-
-struct arrow_column_container_deleter {
-  void operator()(std::pair<ArrowDeviceArray, owned_columns_t> data)
-  {
-    data.first.array.release(&data.first.array);
-  }
-};
-
 // Class to manage lifetime semantics and allow re-export.
 struct arrow_column_container {
   //// Also need a member that holds column views (and one for mutable?)
@@ -157,23 +92,7 @@ struct arrow_column_container {
   }
 };
 
-arrow_column::arrow_column(cudf::column&& input,
-                           rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
-  : container{std::make_shared<arrow_column_container>()}
-{
-  // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
-  // TODO: metadata should be provided by the user
-  auto meta       = cudf::column_metadata{};
-  auto table_meta = std::vector{meta};
-  auto tv         = cudf::table_view{{input.view()}};
-  auto schema     = cudf::to_arrow_schema(tv, table_meta);
-  // ArrowSchema test_schema;
-  ArrowSchemaMove(schema.get(), &(container->schema));
-  auto output = cudf::to_arrow_device(std::move(input));
-  ArrowDeviceArrayMove(output.get(), &container->owner);
-}
-
+namespace {
 struct ArrowSchemaPrivateData {
   std::shared_ptr<arrow_column_container> parent;
   std::vector<std::unique_ptr<ArrowSchema>> children;
@@ -191,10 +110,15 @@ void SchemaReleaseCallback(ArrowSchema* schema)
 }
 
 void copy_schema(ArrowSchema* output,
-                 ArrowSchema* input,
+                 ArrowSchema const* input,
                  std::shared_ptr<arrow_column_container> container)
 {
-  auto private_data  = new ArrowSchemaPrivateData{container};
+  auto private_data = new ArrowSchemaPrivateData{container};
+  // TODO: Just deep copy these. They are small and we should not rely on the
+  // lifetime of the input schema (which is currently the case) . The spec
+  // doesn't say anything about moving schemas, so it's really only arrays
+  // where we have this support. For the lifetimes we can toss std:strings into
+  // private_data.
   output->format     = input->format;
   output->name       = input->name;
   output->metadata   = input->metadata;
@@ -217,14 +141,6 @@ void copy_schema(ArrowSchema* output,
   output->private_data = private_data;
 }
 
-void arrow_column::to_arrow_schema(ArrowSchema* output,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
-{
-  auto& schema = container->schema;
-  copy_schema(output, &schema, container);
-}
-
 struct ArrowArrayPrivateData {
   std::shared_ptr<arrow_column_container> parent;
   std::vector<std::unique_ptr<ArrowArray>> children;
@@ -242,7 +158,7 @@ void ArrayReleaseCallback(ArrowArray* array)
 }
 
 void copy_array(ArrowArray* output,
-                ArrowArray* input,
+                ArrowArray const* input,
                 std::shared_ptr<arrow_column_container> container)
 {
   auto private_data  = new ArrowArrayPrivateData{container};
@@ -268,6 +184,93 @@ void copy_array(ArrowArray* output,
   output->private_data = private_data;
 }
 
+struct arrow_column_container_deleter {
+  void operator()(std::pair<ArrowDeviceArray, owned_columns_t> data)
+  {
+    data.first.array.release(&data.first.array);
+  }
+};
+
+}  // namespace
+
+arrow_column::arrow_column(cudf::column&& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+  : container{std::make_shared<arrow_column_container>()}
+{
+  // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
+  // TODO: metadata should be provided by the user
+  auto meta       = cudf::column_metadata{};
+  auto table_meta = std::vector{meta};
+  auto tv         = cudf::table_view{{input.view()}};
+  auto schema     = cudf::to_arrow_schema(tv, table_meta);
+  // ArrowSchema test_schema;
+  ArrowSchemaMove(schema.get(), &(container->schema));
+  auto output = cudf::to_arrow_device(std::move(input));
+  ArrowDeviceArrayMove(output.get(), &container->owner);
+}
+
+// IMPORTANT: This constructor will move the input array if it is device data.
+// Probably won't for host data, though... is that asymmetry okay?
+arrow_column::arrow_column(ArrowSchema const* schema,
+                           ArrowDeviceArray* input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+  : container{std::make_shared<arrow_column_container>()}
+{
+  switch (input->device_type) {
+    case ARROW_DEVICE_CUDA:
+    case ARROW_DEVICE_CUDA_HOST:
+    case ARROW_DEVICE_CUDA_MANAGED: {
+      // In this case, we have an ArrowDeviceArray with CUDA data as the
+      // owner. We can simply move it into our container and safe it now. We
+      // do need to copy the schema, though.
+      copy_schema(&container->schema, schema, container);
+      auto device_arr = container->owner;
+      // This behavior is different than the old from_arrow_device function
+      // because now we are not create a non-owning column_view but an
+      // arrow_column that can manage lifetimes.
+      ArrowArrayMove(&input->array, &device_arr.array);
+      device_arr.device_type = input->device_type;
+      // Pointing to the existing sync event is safe assuming that the
+      // underlying event is managed by the private data and the release
+      // callback.
+      device_arr.sync_event = input->sync_event;
+      device_arr.device_id  = input->device_id;
+      break;
+    }
+    case ARROW_DEVICE_CPU: {
+      throw std::runtime_error("ArrowDeviceArray with CPU data not supported");
+      // auto col = from_arrow_host_column(schema, input, stream, mr);
+      // container->owner = std::shared_ptr<cudf::column>(col.release());
+      // break;
+    }
+    default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
+  }
+}
+// arrow_column::arrow_column(
+//   ArrowSchema const* schema,
+//   ArrowArray* input,
+//   rmm::cuda_stream_view stream,
+//   rmm::device_async_resource_ref mr)
+//{
+//   //// The copy initialization of .array means that the release callback will be
+//   //// called on that object, so we don't need to call it on the `input` in this
+//   //// function.
+//   //ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+//   //// TODO: Merge with the ARROW_DEVICE_CPU case above with a helper function.
+//   //auto col = from_arrow_host_column(schema, &arr, stream, mr);
+//   //container->owner = std::shared_ptr<cudf::column>(col.release());
+// }
+
+void arrow_column::to_arrow_schema(ArrowSchema* output,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
+{
+  auto& schema = container->schema;
+  copy_schema(output, &schema, container);
+}
+
 void arrow_column::to_arrow(ArrowDeviceArray* output,
                             ArrowDeviceType device_type,
                             rmm::cuda_stream_view stream,
@@ -285,6 +288,7 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
       // the underlying ArrowDeviceArray of this column.
       output->sync_event  = device_arr.sync_event;
       output->device_type = device_type;
+      break;
     }
       // case ARROW_DEVICE_CPU: {
       //     auto out = cudf::to_arrow_host(container->view, output, stream, mr);

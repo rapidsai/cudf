@@ -181,14 +181,20 @@ struct ArrowColumnTest : public cudf::test::BaseFixture {};
 TEST_F(ArrowColumnTest, TwoWayConversion)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  auto col             = cudf::column(int_col);
-  auto arrow_from_cudf = cudf::arrow_column(std::move(col));
+  auto col                           = cudf::column(int_col);
+  auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
 
   // Now we can extract an ArrowDeviceArray from the arrow_column
-  ArrowSchema schema;
-  arrow_from_cudf.to_arrow_schema(&schema);
-  ArrowDeviceArray arr;
-  arrow_from_cudf.to_arrow(&arr, ARROW_DEVICE_CUDA);
+  ArrowSchema arrow_schema_from_cudf_column;
+  arrow_column_from_cudf_column.to_arrow_schema(&arrow_schema_from_cudf_column);
+  ArrowDeviceArray arrow_array_from_arrow_column;
+  arrow_column_from_cudf_column.to_arrow(&arrow_array_from_arrow_column, ARROW_DEVICE_CUDA);
+
+  // Now let's convert it back to an arrow_column
+  auto arrow_column_from_arrow_array =
+    cudf::arrow_column(&arrow_schema_from_cudf_column, &arrow_array_from_arrow_column);
+
+  // Now do some assertions
 
   //// Should be able to create an arrow_column from an ArrowDeviceArray.
   // auto tmp1 = cudf::arrow_column(&arr);
