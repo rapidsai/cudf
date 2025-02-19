@@ -124,9 +124,9 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 def _from_arrow_datatype(pyarrow_object):
     if isinstance(pyarrow_object, pa.Decimal128Type):
         return DataType(type_id.DECIMAL128, scale=-pyarrow_object.scale)
-    elif isinstance(pyarrow_object, pa.Decimal64Dtype):
+    elif isinstance(pyarrow_object, pa.Decimal64Type):
         return DataType(type_id.DECIMAL64, scale=-pyarrow_object.scale)
-    elif isinstance(pyarrow_object, pa.Decimal32Dtype):
+    elif isinstance(pyarrow_object, pa.Decimal32Type):
         return DataType(type_id.DECIMAL32, scale=-pyarrow_object.scale)
     elif isinstance(pyarrow_object, pa.StructType):
         return DataType(type_id.STRUCT)
