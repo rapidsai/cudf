@@ -377,39 +377,39 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 0);
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
   }
 
   // Test with a very small limit: 1 byte
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1);
-    // EXPECT_EQ(num_chunks, 3);
+    EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1);
-    // EXPECT_EQ(num_chunks, 3);
+    EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 1);
-    // EXPECT_EQ(num_chunks, 3);
+    EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
   }
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 1);
-    // EXPECT_EQ(num_chunks, 3);
+    EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
   }
 
