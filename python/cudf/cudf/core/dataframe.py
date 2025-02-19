@@ -36,7 +36,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.common
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -2508,8 +2507,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 map_size,
             )
             partitioned_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         partitioned = self._from_columns_like_self(
@@ -4132,7 +4130,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         )
         result_columns = [
-            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True)
             for col in result_table.columns()
         ]
 
@@ -5040,8 +5038,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nparts,
             )
             output_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         outdf = self._from_columns_like_self(
@@ -7256,8 +7253,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self.shape[0],
             )
             tiled_index = [
-                libcudf.column.Column.from_pylibcudf(plc)
-                for plc in plc_table.columns()
+                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
             ]
 
         # Assemble the final index
@@ -7336,7 +7332,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             with acquire_spill_lock():
-                interleaved_col = libcudf.column.Column.from_pylibcudf(
+                interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table(
                             [
@@ -7841,7 +7837,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
         with acquire_spill_lock():
-            result_col = libcudf.column.Column.from_pylibcudf(
+            result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [
@@ -7862,7 +7858,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ),
             plc.expressions.to_expression(expr, self._column_names),
         )
-        return libcudf.column.Column.from_pylibcudf(plc_column)
+        return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
