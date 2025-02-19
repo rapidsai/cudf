@@ -28,7 +28,7 @@ namespace {
  * present.
  */
 template <typename T>
-T getenv_or(std::string_view env_var_name, T const& default_val)
+T getenv_or(std::string_view env_var_name, T default_val)
 {
   auto const env_val = std::getenv(env_var_name.data());
   if (env_val != nullptr) {
@@ -45,7 +45,7 @@ T getenv_or(std::string_view env_var_name, T const& default_val)
                   ss.str());
   }
 
-  if (env_val == nullptr) { return default_val; }
+  if (env_val == nullptr) { return std::move(default_val); }
 
   std::stringstream sstream(env_val);
   T converted_val;
