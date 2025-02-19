@@ -93,7 +93,7 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> reader,
 [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
 get_filter_columns_data_pages(std::unique_ptr<parquet::hybrid_scan_reader> reader,
                               cudf::column_view input_rows,
-                              cudf::host_span<std::vector<size_type> const> row_group_indices,
+                              cudf::host_span<size_type const> row_group_indices,
                               cudf::io::parquet_reader_options const& options,
                               rmm::cuda_stream_view stream);
 
