@@ -28,8 +28,9 @@
 namespace cudf::io::parquet::detail {
 
 /**
- * @brief Base utilities for converting and casting stats values. Derived
- * classes handle row group or page-level statistics as needed.
+ * @brief Base utilities for converting and casting stats values
+ *
+ * Derived classes handle row group or page-level statistics as needed.
  *
  */
 class stats_caster_base {
