@@ -85,81 +85,8 @@ struct page_stats_caster : cudf::io::parquet::detail::stats_caster_base {
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
-      // Local struct to hold host columns
-      struct host_column {
-        // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
-        cudf::detail::host_vector<T> val;
-        std::vector<bitmask_type> null_mask;
-        cudf::size_type null_count = 0;
-        host_column(size_type total_rows, rmm::cuda_stream_view stream)
-          : val{cudf::detail::make_host_vector<T>(total_rows, stream)},
-            null_mask(cudf::util::div_rounding_up_safe<cudf::size_type>(
-                        cudf::bitmask_allocation_size_bytes(total_rows), sizeof(bitmask_type)),
-                      ~bitmask_type{0})
-        {
-        }
-
-        void set_index(size_type index,
-                       std::optional<std::vector<uint8_t>> const& binary_value,
-                       Type const type)
-        {
-          if (binary_value.has_value()) {
-            val[index] = convert<T>(binary_value.value().data(), binary_value.value().size(), type);
-          }
-          if (not binary_value.has_value()) {
-            clear_bit_unsafe(null_mask.data(), index);
-            null_count++;
-          }
-        }
-
-        static auto make_strings_children(host_span<string_view> host_strings,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-        {
-          auto const total_char_count = std::accumulate(
-            host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
-              return sum + str.size_bytes();
-            });
-          auto chars = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
-          auto offsets =
-            cudf::detail::make_empty_host_vector<cudf::size_type>(host_strings.size() + 1, stream);
-          offsets.push_back(0);
-          for (auto const& str : host_strings) {
-            auto tmp =
-              str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
-            chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-            offsets.push_back(offsets.back() + tmp.length());
-          }
-          auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-          auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
-          return std::tuple{std::move(d_chars), std::move(d_offsets)};
-        }
-
-        auto to_device(cudf::data_type dtype,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr)
-        {
-          if constexpr (std::is_same_v<T, string_view>) {
-            auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
-            return cudf::make_strings_column(
-              val.size(),
-              std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
-              d_chars.release(),
-              null_count,
-              rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr});
-          }
-          return std::make_unique<column>(
-            dtype,
-            val.size(),
-            cudf::detail::make_device_uvector_async(val, stream, mr).release(),
-            rmm::device_buffer{
-              null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
-            null_count);
-        }
-      };  // local struct host_column
-      host_column min(total_rows, stream);
-      host_column max(total_rows, stream);
+      host_column<T> min(total_rows, stream);
+      host_column<T> max(total_rows, stream);
       size_type stats_idx = 0;
 
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
