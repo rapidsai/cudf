@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
@@ -9,9 +9,6 @@ from pylibcudf.libcudf.datetime cimport (
     day_of_year as cpp_day_of_year,
     days_in_month as cpp_days_in_month,
     extract_datetime_component as cpp_extract_datetime_component,
-    extract_microsecond_fraction as cpp_extract_microsecond_fraction,
-    extract_millisecond_fraction as cpp_extract_millisecond_fraction,
-    extract_nanosecond_fraction as cpp_extract_nanosecond_fraction,
     extract_quarter as cpp_extract_quarter,
     floor_datetimes as cpp_floor_datetimes,
     is_leap_year as cpp_is_leap_year,
@@ -37,87 +34,12 @@ __all__ = [
     "day_of_year",
     "days_in_month",
     "extract_datetime_component",
-    "extract_microsecond_fraction",
-    "extract_millisecond_fraction",
-    "extract_nanosecond_fraction",
     "extract_quarter",
     "floor_datetimes",
     "is_leap_year",
     "last_day_of_month",
     "round_datetimes",
 ]
-
-cpdef Column extract_millisecond_fraction(
-    Column input
-):
-    """
-    Extract the millisecond from a datetime column.
-
-    For details, see :cpp:func:`extract_millisecond_fraction`.
-
-    Parameters
-    ----------
-    input : Column
-        The column to extract the millisecond from.
-
-    Returns
-    -------
-    Column
-        Column with the extracted milliseconds.
-    """
-    cdef unique_ptr[column] result
-
-    with nogil:
-        result = cpp_extract_millisecond_fraction(input.view())
-    return Column.from_libcudf(move(result))
-
-cpdef Column extract_microsecond_fraction(
-    Column input
-):
-    """
-    Extract the microsecond fraction from a datetime column.
-
-    For details, see :cpp:func:`extract_microsecond_fraction`.
-
-    Parameters
-    ----------
-    input : Column
-        The column to extract the microsecond fraction from.
-
-    Returns
-    -------
-    Column
-        Column with the extracted microsecond fractions.
-    """
-    cdef unique_ptr[column] result
-
-    with nogil:
-        result = cpp_extract_microsecond_fraction(input.view())
-    return Column.from_libcudf(move(result))
-
-cpdef Column extract_nanosecond_fraction(
-    Column input
-):
-    """
-    Extract the nanosecond fraction from a datetime column.
-
-    For details, see :cpp:func:`extract_nanosecond_fraction`.
-
-    Parameters
-    ----------
-    input : Column
-        The column to extract the nanosecond fraction from.
-
-    Returns
-    -------
-    Column
-        Column with the extracted nanosecond fractions.
-    """
-    cdef unique_ptr[column] result
-
-    with nogil:
-        result = cpp_extract_nanosecond_fraction(input.view())
-    return Column.from_libcudf(move(result))
 
 cpdef Column extract_datetime_component(
     Column input,
