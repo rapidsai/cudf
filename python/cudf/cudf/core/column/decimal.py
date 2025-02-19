@@ -6,6 +6,7 @@ import warnings
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
+import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -225,6 +226,27 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if isinstance(dtype, type(self.dtype)):
             self.dtype.precision = dtype.precision
         return self
+
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
+        """Convert object to pandas type.
+
+        The default implementation falls back to PyArrow for the conversion.
+        """
+        # TODO: Can remove override once pyarrow>=20 is the minimum version
+        # https://github.com/apache/arrow/pull/45571
+        if not (arrow_type and nullable):
+            return pd.Index(
+                self.to_arrow()
+                .cast(pa.decimal128(self.dtype.precision, self.dtype.scale))
+                .to_pandas()
+            )
+        else:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
 
 class Decimal32Column(DecimalBaseColumn):
