@@ -5238,7 +5238,7 @@ def test_empty_df_astype(dtype):
 )
 def test_series_astype_error_handling(errors):
     sr = cudf.Series(["random", "words"])
-    got = sr.astype("datetime64", errors=errors)
+    got = sr.astype("datetime64[ns]", errors=errors)
     assert_eq(sr, got)
 
 
