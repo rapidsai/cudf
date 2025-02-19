@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Typing utilities for cudf_polars."""
@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -145,3 +145,32 @@ ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
 
 IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
 """Protocol for transformation of IR nodes."""
+
+
+class ColumnOptions(TypedDict):
+    """
+    Column constructor options.
+
+    Notes
+    -----
+    Used to serialize Column and DataFrame containers.
+    """
+
+    is_sorted: plc.types.Sorted
+    order: plc.types.Order
+    null_order: plc.types.NullOrder
+    name: str | None
+
+
+class ColumnHeader(TypedDict):
+    """Column serialization header."""
+
+    column_kwargs: ColumnOptions
+    frame_count: int
+
+
+class DataFrameHeader(TypedDict):
+    """DataFrame serialization header."""
+
+    columns_kwargs: list[ColumnOptions]
+    frame_count: int

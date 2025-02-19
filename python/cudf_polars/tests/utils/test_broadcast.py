@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def test_broadcast_all_scalar(target):
     expected = 1 if target is None else target
 
     assert [c.name for c in result] == [f"col{i}" for i in range(3)]
-    assert all(column.obj.size() == expected for column in result)
+    assert all(column.size == expected for column in result)
 
 
 def test_invalid_target_length():
@@ -73,4 +73,4 @@ def test_broadcast_with_scalars(nrows):
 
     result = broadcast(*columns)
     assert [c.name for c in result] == [f"col{i}" for i in range(3)]
-    assert all(column.obj.size() == nrows for column in result)
+    assert all(column.size == nrows for column in result)
