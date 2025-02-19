@@ -3133,7 +3133,7 @@ class CategoricalIndex(Index):
             data = column.as_column(data)
         else:
             data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
+                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
             )
             # dtype has already been taken care
             dtype = None

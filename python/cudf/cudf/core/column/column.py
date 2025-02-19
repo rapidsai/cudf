@@ -1174,7 +1174,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif len(self) == 0:
             result = column_empty(0, dtype=dtype)
         else:
-            was_object = dtype == object or dtype == np.dtype(object)
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
             elif isinstance(dtype, IntervalDtype):
@@ -1192,11 +1191,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             elif dtype.kind == "m":
                 result = self.as_timedelta_column(dtype)
             elif dtype.kind == "O":
-                if cudf.get_option("mode.pandas_compatible") and was_object:
-                    raise ValueError(
-                        f"Casting to {dtype} is not supported, use "
-                        "`.astype('str')` instead."
-                    )
                 result = self.as_string_column()
             else:
                 result = self.as_numerical_column(dtype)
