@@ -40,8 +40,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
-#include <asm-generic/errno.h>
-
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -59,7 +57,7 @@ using Type = cudf::io::parquet::detail::Type;
  *        number of rows equal to the total rows in all row groups.
  *
  */
-struct page_stats_caster : cudf::io::parquet::detail::stats_caster_base {
+struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
   size_type total_rows;
   std::vector<cudf::io::parquet::detail::metadata> const& per_file_metadata;
   host_span<std::vector<size_type> const> row_group_indices;
