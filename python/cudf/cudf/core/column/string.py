@@ -4679,8 +4679,7 @@ class StringMethods(ColumnMethods):
         r"""
         Normalizes strings characters for tokenizing.
 
-        This uses the normalizer that is built into the
-        subword_tokenize function which includes:
+        The normalizer function includes:
 
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
