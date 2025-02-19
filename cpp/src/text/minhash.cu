@@ -235,7 +235,7 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
       hv = hasher(hash_str);
     } else {
-      hv = thrust::get<0>(hasher(hash_str));
+      hv = cuda::std::get<0>(hasher(hash_str));
     }
     // disallowing hash to zero case
     *seed_hashes = cuda::std::max(hv, hash_value_type{1});
