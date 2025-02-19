@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "io/parquet/parquet_common.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
