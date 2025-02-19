@@ -1492,7 +1492,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
     auto const [result, num_chunks]     = read_chunks_with_while_loop(reader);
     auto const out_of_bound_table_chunk = reader.read_chunk().tbl;
 
-    // EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_chunks, 1);
     EXPECT_EQ(reader.has_next(), false);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*out_of_bound_table_chunk, *empty_table);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
@@ -1877,7 +1877,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_empty->view(), result->view());
 
-  // EXPECT_EQ(num_chunks, 1);
+  EXPECT_EQ(num_chunks, 1);
   EXPECT_EQ(num_rows_per_source.size(), nsources);
   EXPECT_TRUE(
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
