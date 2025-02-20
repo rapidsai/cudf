@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel.MapMode;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 /**
@@ -43,6 +44,7 @@ import java.nio.channels.FileChannel.MapMode;
 public class HostMemoryBuffer extends MemoryBuffer {
   static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
+  private static final boolean ALLOC_DEBUG = Boolean.getBoolean("ai.rapids.hostmemory.debug");
 
   static {
     boolean preferPinned = true;
@@ -52,6 +54,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
     defaultPreferPinned = preferPinned;
   }
+
+  public static AtomicLong totalAllocated = new AtomicLong(0);
+  public static double lastPrintedGB = 0;
 
   private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
@@ -68,6 +73,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
       long origAddress = address;
       if (address != 0) {
         try {
+          if (ALLOC_DEBUG) {
+            totalAllocated.addAndGet(-length);
+          }
           UnsafeMemoryAccessor.free(address);
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
@@ -156,6 +164,14 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @return the newly created buffer
    */
   public static HostMemoryBuffer allocateRaw(long bytes) {
+    if (ALLOC_DEBUG) {
+      totalAllocated.addAndGet(bytes);
+      double gb = totalAllocated.get() / (double) (1 << 30);
+      if (gb >= lastPrintedGB + 1 || gb <= lastPrintedGB - 1) {
+        lastPrintedGB = gb;
+        log.error("HostMemoryBuffer allocation reaches: " + gb + "GB, stacktrace being: ", new Exception());
+      }
+    }
     return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
   }
 
