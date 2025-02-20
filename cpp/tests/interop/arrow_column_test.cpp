@@ -14,20 +14,28 @@
  * limitations under the License.
  */
 
-#include <tests/interop/arrow_utils.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 
-#include <cudf/filling.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/types.hpp>
 
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
 
+#include <memory>
+#include <utility>
+
 struct ArrowColumnTest : public cudf::test::BaseFixture {};
+
+auto export_to_arrow(cudf::arrow_column& col)
+{
+  // Now we can extract an ArrowDeviceArray from the arrow_column
+  auto schema = std::make_unique<ArrowSchema>();
+  col.to_arrow_schema(schema.get());
+  auto array = std::make_unique<ArrowDeviceArray>();
+  col.to_arrow(array.get(), ARROW_DEVICE_CUDA);
+  return std::make_pair(std::move(schema), std::move(array));
+}
 
 TEST_F(ArrowColumnTest, TwoWayConversion)
 {
@@ -42,13 +50,33 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column.view());
 
   // Now we can extract an ArrowDeviceArray from the arrow_column
-  ArrowSchema arrow_schema_from_cudf_column;
-  arrow_column_from_cudf_column.to_arrow_schema(&arrow_schema_from_cudf_column);
-  ArrowDeviceArray arrow_array_from_arrow_column;
-  arrow_column_from_cudf_column.to_arrow(&arrow_array_from_arrow_column, ARROW_DEVICE_CUDA);
+  auto [arrow_schema_from_cudf_column, arrow_array_from_arrow_column] =
+    export_to_arrow(arrow_column_from_cudf_column);
+  arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_cudf_column.get());
+  arrow_column_from_cudf_column.to_arrow(arrow_array_from_arrow_column.get(), ARROW_DEVICE_CUDA);
 
   // Now let's convert it back to an arrow_column
   auto arrow_column_from_arrow_array =
-    cudf::arrow_column(&arrow_schema_from_cudf_column, &arrow_array_from_arrow_column);
+    cudf::arrow_column(arrow_schema_from_cudf_column.get(), arrow_array_from_arrow_column.get());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
+}
+
+TEST_F(ArrowColumnTest, LifetimeManagement)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+  auto col                           = std::make_unique<cudf::column>(int_col);
+  auto arrow_column_from_cudf_column = std::make_unique<cudf::arrow_column>(std::move(*col));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column->view());
+
+  auto [schema1, array1] = export_to_arrow(*arrow_column_from_cudf_column);
+  auto [schema2, array2] = export_to_arrow(*arrow_column_from_cudf_column);
+
+  // Delete the original owner of the data, then reimport and ensure that we
+  // are still referencing the same valid original data.
+  arrow_column_from_cudf_column.reset();
+  auto col1 = std::make_unique<cudf::arrow_column>(schema1.get(), array1.get());
+  auto col2 = std::make_unique<cudf::arrow_column>(schema2.get(), array2.get());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *col1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col1->view(), *col2->view());
 }

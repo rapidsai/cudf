@@ -248,6 +248,11 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
   }
 }
 
+// TODO: Consider just doing this work on construction of the container and
+// storing the unique_column_view_t in the container. Then the container can
+// safely return copies of the view ad infinitum without needing this call, and
+// this call can be stream- and mr-free, matching the cudf::column::view
+// method.
 unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
