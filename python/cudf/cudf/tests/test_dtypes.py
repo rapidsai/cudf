@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -142,13 +142,17 @@ def test_struct_dtype_fields(fields):
 
 
 @pytest.mark.parametrize(
-    "decimal_type",
-    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+    "decimal_type, pa_type",
+    [
+        [cudf.Decimal32Dtype, pa.decimal32],
+        [cudf.Decimal64Dtype, pa.decimal64],
+        [cudf.Decimal128Dtype, pa.decimal128],
+    ],
 )
-def test_decimal_dtype_arrow_roundtrip(decimal_type):
+def test_decimal_dtype_arrow_roundtrip(decimal_type, pa_type):
     dt = decimal_type(4, 2)
-    assert dt.to_arrow() == pa.decimal128(4, 2)
-    assert dt == decimal_type.from_arrow(pa.decimal128(4, 2))
+    assert dt.to_arrow() == pa_type(4, 2)
+    assert dt == decimal_type.from_arrow(pa_type(4, 2))
 
 
 @pytest.mark.parametrize(
