@@ -37,9 +37,10 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
-template <cudf::size_type block_size, bool has_nulls>
+template <cudf::size_type block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  mixed_join(table_device_view left_table,
+  mixed_join(bool has_nulls,
+             table_device_view left_table,
              table_device_view right_table,
              table_device_view probe,
              table_device_view build,
@@ -58,10 +59,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
@@ -69,8 +69,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -80,8 +80,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     cg::thread_block_tile<1> this_thread = cg::this_thread();
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
-    auto equality   = pair_expression_equality<has_nulls>{
-      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+    auto equality =
+      pair_expression_equality{evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
     auto probe_key_begin       = thrust::make_discard_iterator();
     auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]
@@ -110,8 +110,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
+void launch_mixed_join(bool has_nulls,
+                       table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
@@ -128,8 +128,9 @@ void launch_mixed_join(table_device_view left_table,
                        int64_t shmem_size_per_block,
                        rmm::cuda_stream_view stream)
 {
-  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  mixed_join<DEFAULT_JOIN_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
       left_table,
       right_table,
       probe,

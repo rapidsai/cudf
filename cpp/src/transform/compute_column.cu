@@ -54,9 +54,10 @@ namespace detail {
  * expression.
  * @param output_column The destination for the results of evaluating the expression.
  */
-template <cudf::size_type max_block_size, bool has_nulls>
+template <cudf::size_type max_block_size>
 __launch_bounds__(max_block_size) CUDF_KERNEL
-  void compute_column_kernel(table_device_view const table,
+  void compute_column_kernel(bool has_nulls,
+                             table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
                              mutable_column_device_view output_column)
 {
@@ -65,18 +66,17 @@ __launch_bounds__(max_block_size) CUDF_KERNEL
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
-
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
+
   auto start_idx    = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
   auto evaluator =
-    cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
+    cudf::ast::detail::expression_evaluator(table, device_expression_data, has_nulls);
 
   for (thread_index_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
-    auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
+    auto output_dest = ast::detail::mutable_column_expression_result(output_column);
     evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
   }
 }
@@ -119,15 +119,10 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
   // Execute the kernel
   auto table_device = table_device_view::create(table, stream);
-  if (has_nulls) {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-        *table_device, device_expression_data, *mutable_output_device);
-  } else {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-        *table_device, device_expression_data, *mutable_output_device);
-  }
+  cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+      has_nulls, *table_device, device_expression_data, *mutable_output_device);
+
   CUDF_CHECK_CUDA(stream.value());
   output_column->set_null_count(
     cudf::detail::null_count(mutable_output_device->null_mask(), 0, output_column->size(), stream));

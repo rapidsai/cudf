@@ -151,8 +151,9 @@ __device__ void flush_output_cache(unsigned int const activemask,
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  * @param[out] output_size The resulting output size
  */
-template <int block_size, bool has_nulls>
+template <int block_size>
 CUDF_KERNEL void compute_conditional_join_output_size(
+  bool has_nulls,
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
@@ -165,10 +166,9 @@ CUDF_KERNEL void compute_conditional_join_output_size(
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   std::size_t thread_counter{0};
   auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
@@ -179,15 +179,15 @@ CUDF_KERNEL void compute_conditional_join_output_size(
   auto const outer_num_rows                    = (swap_tables ? right_num_rows : left_num_rows);
   auto const inner_num_rows                    = (swap_tables ? left_num_rows : right_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   for (cudf::thread_index_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index = 0; inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto output_dest                      = cudf::ast::detail::value_expression_result<bool>();
       cudf::size_type const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       cudf::size_type const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
@@ -241,8 +241,9 @@ CUDF_KERNEL void compute_conditional_join_output_size(
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
-template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
-CUDF_KERNEL void conditional_join(table_device_view left_table,
+template <cudf::size_type block_size, cudf::size_type output_cache_size>
+CUDF_KERNEL void conditional_join(bool has_nulls,
+                                  table_device_view left_table,
                                   table_device_view right_table,
                                   join_kind join_type,
                                   cudf::size_type* join_output_l,
@@ -262,10 +263,9 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   int const warp_id                            = threadIdx.x / detail::warp_size;
   int const lane_id                            = threadIdx.x % detail::warp_size;
@@ -282,14 +282,14 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto evaluator =
+    cudf::ast::detail::expression_evaluator(left_table, right_table, device_expression_data, has_nulls);
 
   if (outer_row_index < outer_num_rows) {
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto output_dest           = cudf::ast::detail::value_expression_result<bool>();
       auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
@@ -375,8 +375,9 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
   }
 }
 
-template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
+template <cudf::size_type block_size, cudf::size_type output_cache_size>
 CUDF_KERNEL void conditional_join_anti_semi(
+  bool has_nulls,
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
@@ -390,10 +391,9 @@ CUDF_KERNEL void conditional_join_anti_semi(
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
 
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   int const warp_id                            = threadIdx.x / detail::warp_size;
   int const lane_id                            = threadIdx.x % detail::warp_size;
@@ -408,15 +408,15 @@ CUDF_KERNEL void conditional_join_anti_semi(
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, start_idx < outer_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   for (cudf::thread_index_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto output_dest = cudf::ast::detail::value_expression_result<bool>();
 
       evaluator.evaluate(
         output_dest, outer_row_index, inner_row_index, 0, thread_intermediate_storage);

@@ -302,9 +302,8 @@ class expression_parser {
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
-    shmem_per_thread                         = static_cast<int>(
-      (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
-      device_expression_data.num_intermediates);
+    shmem_per_thread                         = static_cast<int>(sizeof(IntermediateDataType<true>) *
+                                        device_expression_data.num_intermediates);
   }
 
   /**

@@ -34,9 +34,10 @@ namespace cudf {
 namespace detail {
 namespace cg = cooperative_groups;
 
-template <int block_size, bool has_nulls>
+template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  compute_mixed_join_output_size(table_device_view left_table,
+  compute_mixed_join_output_size(bool has_nulls,
+                                 table_device_view left_table,
                                  table_device_view right_table,
                                  table_device_view probe,
                                  table_device_view build,
@@ -54,10 +55,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   std::size_t thread_counter{0};
   auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
@@ -66,8 +66,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -75,8 +75,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Figure out the number of elements for this key.
   cg::thread_block_tile<1> this_thread = cg::this_thread();
   // TODO: Address asymmetry in operator.
-  auto count_equality = pair_expression_equality<has_nulls>{
-    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  auto count_equality =
+    pair_expression_equality{evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
@@ -102,8 +102,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
+  bool has_nulls,
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
@@ -123,8 +123,9 @@ std::size_t launch_compute_mixed_join_output_size(
   // Allocate storage for the counter used to get the size of the join output
   cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
 
-  compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
       left_table,
       right_table,
       probe,

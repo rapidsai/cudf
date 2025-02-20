@@ -85,15 +85,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   } else {
     // Allocate storage for the counter used to get the size of the join output
     cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
-    if (has_nulls) {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
-    } else {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
-    }
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        has_nulls,
+        *left_table,
+        *right_table,
+        join_type,
+        parser.device_expression_data,
+        false,
+        size.data());
     join_size = size.value(stream);
   }
 
@@ -103,27 +103,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
 
   auto const& join_output_l = left_indices->data();
 
-  if (has_nulls) {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        join_type,
-        join_output_l,
-        write_index.data(),
-        parser.device_expression_data,
-        join_size);
-  } else {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        join_type,
-        join_output_l,
-        write_index.data(),
-        parser.device_expression_data,
-        join_size);
-  }
+  conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
+      *left_table,
+      *right_table,
+      join_type,
+      join_output_l,
+      write_index.data(),
+      parser.device_expression_data,
+      join_size);
   return left_indices;
 }
 
@@ -202,25 +191,15 @@ conditional_join(table_view const& left,
   } else {
     // Allocate storage for the counter used to get the size of the join output
     cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
-    if (has_nulls) {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table,
-          *right_table,
-          kernel_join_type,
-          parser.device_expression_data,
-          swap_tables,
-          size.data());
-    } else {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table,
-          *right_table,
-          kernel_join_type,
-          parser.device_expression_data,
-          swap_tables,
-          size.data());
-    }
+    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        has_nulls,
+        *left_table,
+        *right_table,
+        kernel_join_type,
+        parser.device_expression_data,
+        swap_tables,
+        size.data());
     join_size = size.value(stream);
   }
 
@@ -243,31 +222,18 @@ conditional_join(table_view const& left,
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
 
-  if (has_nulls) {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        kernel_join_type,
-        join_output_l,
-        join_output_r,
-        write_index.data(),
-        parser.device_expression_data,
-        join_size,
-        swap_tables);
-  } else {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        kernel_join_type,
-        join_output_l,
-        join_output_r,
-        write_index.data(),
-        parser.device_expression_data,
-        join_size,
-        swap_tables);
-  }
+  conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
+      *left_table,
+      *right_table,
+      kernel_join_type,
+      join_output_l,
+      join_output_r,
+      write_index.data(),
+      parser.device_expression_data,
+      join_size,
+      swap_tables);
 
   auto join_indices = std::pair(std::move(left_indices), std::move(right_indices));
 
@@ -351,25 +317,15 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  if (has_nulls) {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        join_type,
-        parser.device_expression_data,
-        swap_tables,
-        size.data());
-  } else {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table,
-        *right_table,
-        join_type,
-        parser.device_expression_data,
-        swap_tables,
-        size.data());
-  }
+  compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
+      *left_table,
+      *right_table,
+      join_type,
+      parser.device_expression_data,
+      swap_tables,
+      size.data());
   return size.value(stream);
 }
 
