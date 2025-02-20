@@ -1712,35 +1712,16 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
     )
 
 
-# timestamps and timedeltas are not proxied, but non-proxied
-# pandas types are currently not picklable. Thus, we define
-# custom reducer/unpicker functions for these types:
-def _reduce_obj(obj):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        # args can contain objects that are unpicklable
-        # when the module accelerator is disabled
-        # (freq is of a proxy type):
-        pickled_args = pickle.dumps(obj.__reduce__())
-
-    return _unpickle_obj, (pickled_args,)
-
-
-def _unpickle_obj(pickled_args):
-    from cudf.pandas.module_accelerator import disable_module_accelerator
-
-    with disable_module_accelerator():
-        unpickler, args = pickle.loads(pickled_args)
-    obj = unpickler(*args)
-    return obj
-
-
 # Save the original __init__ methods
 _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
 _original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
+_original_from_pandas = cudf.from_pandas
+_original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
+_original_Series_from_pandas = cudf.Series.from_pandas
+_original_Index_from_pandas = cudf.BaseIndex.from_pandas
+_original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
 def wrap_init(original_init):
@@ -1776,8 +1757,69 @@ def wrap_call(original_call):
     return wrapped_call
 
 
+def wrap_from_pandas(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas(obj, *args, **kwargs):
+        if is_proxy_object(obj):
+            obj = obj.as_gpu_object()
+            return obj
+        return original_call(obj, *args, **kwargs)
+
+    return wrapped_from_pandas
+
+
+def wrap_from_pandas_dataframe(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_dataframe(dataframe, *args, **kwargs):
+        if is_proxy_object(dataframe):
+            dataframe = dataframe.as_gpu_object()
+            if isinstance(dataframe, cudf.DataFrame):
+                return dataframe
+        return original_call(dataframe, *args, **kwargs)
+
+    return wrapped_from_pandas_dataframe
+
+
+def wrap_from_pandas_series(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_series(s, *args, **kwargs):
+        if is_proxy_object(s):
+            s = s.as_gpu_object()
+            if isinstance(s, cudf.Series):
+                return s
+        return original_call(s, *args, **kwargs)
+
+    return wrapped_from_pandas_series
+
+
+def wrap_from_pandas_index(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_index(index, *args, **kwargs):
+        if is_proxy_object(index):
+            index = index.as_gpu_object()
+            if isinstance(index, cudf.core.index.BaseIndex):
+                return index
+        return original_call(index, *args, **kwargs)
+
+    return wrapped_from_pandas_index
+
+
+def wrap_from_pandas_multiindex(original_call):
+    @functools.wraps(original_call)
+    def wrapped_from_pandas_multiindex(multiindex, *args, **kwargs):
+        if is_proxy_object(multiindex):
+            multiindex = multiindex.as_gpu_object()
+            if isinstance(multiindex, cudf.MultiIndex):
+                return multiindex
+        return original_call(multiindex, *args, **kwargs)
+
+    return wrapped_from_pandas_multiindex
+
+
 @functools.wraps(_original_DataFrame_init)
-def DataFrame_init_(self, data, index=None, columns=None, *args, **kwargs):
+def DataFrame_init_(
+    self, data=None, index=None, columns=None, *args, **kwargs
+):
     data_is_proxy = is_proxy_object(data)
 
     if data_is_proxy:
@@ -1811,10 +1853,122 @@ def initial_setup():
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
     cudf.core.index.IndexMeta.__call__ = wrap_call(_original_IndexMeta_call)
-
+    cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
+    cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
+        _original_DataFrame_from_pandas
+    )
+    cudf.Series.from_pandas = wrap_from_pandas_series(
+        _original_Series_from_pandas
+    )
+    cudf.BaseIndex.from_pandas = wrap_from_pandas_index(
+        _original_Index_from_pandas
+    )
+    cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(
+        _original_MultiIndex_from_pandas
+    )
     cudf.set_option("mode.pandas_compatible", True)
+
+
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickler, args = pickle.loads(pickled_args)
+    obj = unpickler(*args)
+    return obj
+
+
+def _generic_reduce_obj(obj, unpickle_func):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return unpickle_func, (pickled_args,)
+
+
+def _frame_unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickled_intermediate = pickle.loads(pickled_args)
+        reconstructor_func = unpickled_intermediate[0]
+        obj = reconstructor_func(*unpickled_intermediate[1])
+        obj.__setstate__(unpickled_intermediate[2])
+    return obj
+
+
+def _index_unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickled_intermediate = pickle.loads(pickled_args)
+        reconstructor_func = unpickled_intermediate[0]
+        obj = reconstructor_func(*unpickled_intermediate[1])
+
+    return obj
+
+
+def _reduce_offset_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_args = pickle.dumps(obj.__getstate__())
+
+    return _unpickle_offset_obj, (pickled_args,)
+
+
+def _unpickle_offset_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        data = pickle.loads(pickled_args)
+        data.pop("_offset")
+        data.pop("_use_relativedelta")
+    obj = pd._libs.tslibs.offsets.DateOffset(**data)
+    return obj
 
 
 copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
+
+# TODO: Need to find a way to unpickle cross-version(old) pickled objects.
+# Register custom reducer/unpickler functions for pandas objects
+# so that they can be pickled/unpickled correctly:
+copyreg.dispatch_table[pd.Series] = lambda obj: _generic_reduce_obj(
+    obj, _frame_unpickle_obj
+)
+copyreg.dispatch_table[pd.DataFrame] = lambda obj: _generic_reduce_obj(
+    obj, _frame_unpickle_obj
+)
+
+copyreg.dispatch_table[pd.Index] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.RangeIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.DatetimeIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.TimedeltaIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.CategoricalIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
+    obj, _index_unpickle_obj
+)
+
+copyreg.dispatch_table[pd._libs.tslibs.offsets.DateOffset] = _reduce_offset_obj

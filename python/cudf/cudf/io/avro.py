@@ -3,7 +3,7 @@
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
+from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 
@@ -48,7 +48,7 @@ def read_avro(
 
     plc_result = plc.io.avro.read_avro(options)
     data = {
-        name: Column.from_pylibcudf(col)
+        name: ColumnBase.from_pylibcudf(col)
         for name, col in zip(
             plc_result.column_names(include_children=False),
             plc_result.columns,
