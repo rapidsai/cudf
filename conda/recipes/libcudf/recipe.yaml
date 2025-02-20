@@ -186,7 +186,7 @@ outputs:
         from_package:
           - if: cuda_major != "11"
             then:
-              - cuda-nvtx-dev
+              - cuda-nvtx
         by_name:
           - cuda-version
     about:
