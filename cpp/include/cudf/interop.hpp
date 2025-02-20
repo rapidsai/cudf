@@ -233,6 +233,14 @@ class arrow_table {
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+  void to_arrow_schema(ArrowSchema* output,
+                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  void to_arrow(ArrowDeviceArray* output,
+                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
  private:
   // Using a shared_ptr allows re-export via to_arrow
   std::shared_ptr<arrow_array_container> container;

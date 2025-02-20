@@ -285,11 +285,41 @@ unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
   return from_arrow_device(&container->schema, &container->owner, stream, mr);
 }
 
-// Create Array whose private_data contains a shared_ptr to this->container
-// The output should be consumer-allocated, see
-// https://arrow.apache.org/docs/format/CDataInterface.html#member-allocation
-// Note: May need stream/mr depending on where we put what logic.
-// void to_arrow(ArrowDeviceArray* output);
+void arrow_table::to_arrow_schema(ArrowSchema* output,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
+{
+  auto& schema = container->schema;
+  ArrowSchemaDeepCopy(&schema, output);
+}
+
+// TODO: Based on the similarity of a lot of this functionality, we can
+// probably define it in the arrow_array_container class and then just call it
+// from here. Only a few things really need column vs table specializations.
+void arrow_table::to_arrow(ArrowDeviceArray* output,
+                           ArrowDeviceType device_type,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  switch (device_type) {
+    case ARROW_DEVICE_CUDA:
+    case ARROW_DEVICE_CUDA_HOST:
+    case ARROW_DEVICE_CUDA_MANAGED: {
+      auto device_arr = container->owner;
+      copy_array(&output->array, &device_arr.array, container);
+      output->device_id = device_arr.device_id;
+      // We can reuse the sync event by reference from the input. The
+      // destruction of that event is managed by the destruction of
+      // the underlying ArrowDeviceArray of this table.
+      output->sync_event  = device_arr.sync_event;
+      output->device_type = device_type;
+      break;
+    }
+      // case ARROW_DEVICE_CPU: {
+      //     auto out = cudf::to_arrow_host(container->view, output, stream, mr);
+      //     }
+  }
+}
 
 // class arrow_table {
 //  public:
