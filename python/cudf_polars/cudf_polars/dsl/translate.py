@@ -691,6 +691,18 @@ def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr
 
 
 @_translate_expr.register
+def _(node: pl_expr.Slice, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    offset = translator.translate_expr(n=node.offset)
+    length = translator.translate_expr(n=node.length)
+    return expr.Slice(
+        dtype,
+        offset.value.as_py(),  # type: ignore[attr-defined]
+        length.value.as_py(),  # type: ignore[attr-defined]
+        translator.translate_expr(n=node.input),
+    )
+
+
+@_translate_expr.register
 def _(node: pl_expr.Gather, translator: Translator, dtype: plc.DataType) -> expr.Expr:
     return expr.Gather(
         dtype,
