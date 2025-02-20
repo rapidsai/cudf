@@ -1659,6 +1659,15 @@ def _update_pandas_metadata_types_inplace(
             ]
         if col_meta["numpy_type"] in ("list", "struct"):
             col_meta["numpy_type"] = "object"
+        elif col_meta["numpy_type"] in {"decimal32", "decimal64"}:
+            # TODO: Can remove after pyarrow>=20 is the minimum version
+            # https://github.com/apache/arrow/pull/45583
+            col_meta["pandas_type"] = "decimal"
+            dtype = df._data[col_meta["name"]].dtype
+            col_meta["metadata"] = {
+                "precision": dtype.precision,
+                "scale": dtype.scale,
+            }
 
 
 def is_url(url):
