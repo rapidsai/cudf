@@ -362,13 +362,17 @@ jobs:
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.04
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: ci/test_narwhals.sh
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      continue-on-error: true
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
