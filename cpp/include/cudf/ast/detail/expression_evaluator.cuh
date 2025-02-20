@@ -36,49 +36,6 @@ namespace ast {
 namespace detail {
 
 /**
- * @brief A container for capturing the output of an evaluated expression.
- *
- * This class is designed to be passed by reference as the first argument to
- * expression_evaluator::evaluate. The API is designed such that template
- * specializations for specific output types will be able to customize setting
- * behavior if necessary. The class leverages CRTP to define a suitable interface
- * for the `expression_evaluator` at compile-time and enforce this API on its
- * subclasses to get around the lack of device-side polymorphism.
- *
- * @tparam Subclass The subclass to dispatch methods to.
- * @tparam T The underlying data type.
- * @tparam has_nulls Whether or not the result data is nullable.
- */
-template <typename Subclass, typename T, bool has_nulls>
-struct expression_result {
-  /**
-   * Helper function to get the subclass type to dispatch methods to.
-   */
-  __device__ inline Subclass& subclass() { return static_cast<Subclass&>(*this); }
-  __device__ inline Subclass const& subclass() const { return static_cast<Subclass const&>(*this); }
-
-  // TODO: The index is ignored by the value subclass, but is included in this
-  // signature because it is required by the implementation in the template
-  // specialization for column views. It would be nice to clean this up, see
-  // the related TODO below. Note that storing the index in the class on
-  // construction (which would result in a cleaner delineation of the API for
-  // the derived types) results in a significant performance penalty because
-  // the index is pushed down the memory hierarchy by the time it needs to be
-  // used, whereas passing it as a parameter keeps it in registers for fast
-  // access at the point where indexing occurs.
-  template <typename Element>
-  __device__ inline void set_value(cudf::size_type index,
-                                   possibly_null_value_t<Element, has_nulls> const& result)
-  {
-    subclass().template set_value<Element>(index, result);
-  }
-
-  [[nodiscard]] __device__ inline bool is_valid() const { return subclass().is_valid(); }
-
-  __device__ inline T value() const { return subclass().value(); }
-};
-
-/**
  * @brief A container for capturing the output of an evaluated expression in a scalar.
  *
  * This subclass of `expression_result` functions as an owning container of a
@@ -88,30 +45,26 @@ struct expression_result {
  * @tparam T The underlying data type.
  * @tparam has_nulls Whether or not the result data is nullable.
  */
-template <typename T, bool has_nulls>
-struct value_expression_result
-  : public expression_result<value_expression_result<T, has_nulls>, T, has_nulls> {
+template <typename T>
+struct value_expression_result {
   __device__ inline value_expression_result() {}
 
   template <typename Element>
-  __device__ inline void set_value(cudf::size_type index,
-                                   possibly_null_value_t<Element, has_nulls> const& result)
+  __device__ inline void set_value(cudf::size_type index, Element const& result)
   {
-    if constexpr (std::is_same_v<Element, T>) {
-      _obj = result;
-    } else {
-      CUDF_UNREACHABLE("Output type does not match container type.");
-    }
+    _obj = result;
+  }
+
+  template <typename Element>
+  __device__ inline void set_null(cudf::size_type index)
+  {
+    _obj = thrust::nullopt;
   }
 
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  [[nodiscard]] __device__ inline bool is_valid() const
-  {
-    if constexpr (has_nulls) { return _obj.has_value(); }
-    return true;
-  }
+  [[nodiscard]] __device__ inline bool is_valid() const { return _obj.has_value(); }
 
   /**
    * @brief Returns the underlying data.
@@ -119,17 +72,9 @@ struct value_expression_result
    * If the underlying data is not valid, behavior is undefined. Callers should
    * use is_valid to check for validity before accessing the value.
    */
-  __device__ inline T value() const
-  {
-    // Using two separate constexprs silences compiler warnings, whereas an
-    // if/else does not. An unconditional return is not ignored by the compiler
-    // when has_nulls is true and therefore raises a compiler error.
-    if constexpr (has_nulls) { return *_obj; }
-    if constexpr (!has_nulls) { return _obj; }
-  }
+  __device__ inline T value() const { return *_obj; }
 
-  possibly_null_value_t<T, has_nulls>
-    _obj;  ///< The underlying data value, or a nullable version of it.
+  thrust::optional<T> _obj;  ///< The underlying data value, or a nullable version of it.
 };
 
 // TODO: The below implementation significantly differs from the default
@@ -145,27 +90,20 @@ struct value_expression_result
  *
  * @tparam has_nulls Whether or not the result data is nullable.
  */
-template <bool has_nulls>
-struct mutable_column_expression_result
-  : public expression_result<mutable_column_expression_result<has_nulls>,
-                             mutable_column_device_view,
-                             has_nulls> {
+struct mutable_column_expression_result {
   __device__ inline mutable_column_expression_result(mutable_column_device_view& obj) : _obj(obj) {}
 
   template <typename Element>
-  __device__ inline void set_value(cudf::size_type index,
-                                   possibly_null_value_t<Element, has_nulls> const& result)
+  __device__ inline void set_value(cudf::size_type index, Element const& result)
   {
-    if constexpr (has_nulls) {
-      if (result.has_value()) {
-        _obj.template element<Element>(index) = *result;
-        _obj.set_valid(index);
-      } else {
-        _obj.set_null(index);
-      }
-    } else {
-      _obj.template element<Element>(index) = result;
-    }
+    _obj.template element<Element>(index) = result;
+    if (_obj.nullable()) { _obj.set_valid(index); }
+  }
+
+  template <typename Element>
+  __device__ inline void set_null(cudf::size_type index)
+  {
+    if (_obj.nullable()) { _obj.set_null(index); }
   }
 
   /**
@@ -224,7 +162,6 @@ struct single_dispatch_binary_operator {
  * This class is designed for n-ary transform evaluation. It operates on two
  * tables.
  */
-template <bool has_nulls>
 struct expression_evaluator {
  public:
   /**
@@ -239,8 +176,9 @@ struct expression_evaluator {
    */
   __device__ inline expression_evaluator(table_device_view const& left,
                                          table_device_view const& right,
-                                         expression_device_view const& plan)
-    : left(left), right(right), plan(plan)
+                                         expression_device_view const& plan,
+                                         bool has_nulls)
+    : left(left), right(right), plan(plan), has_nulls(has_nulls)
   {
   }
 
@@ -253,8 +191,9 @@ struct expression_evaluator {
    * storing intermediates.
    */
   __device__ inline expression_evaluator(table_device_view const& table,
-                                         expression_device_view const& plan)
-    : expression_evaluator(table, table, plan)
+                                         expression_device_view const& plan,
+                                         bool has_nulls)
+    : expression_evaluator(table, table, plan, has_nulls)
   {
   }
 
@@ -271,10 +210,13 @@ struct expression_evaluator {
    * @param row_index Row index of data column.
    * @return Element The type- and null-resolved data.
    */
-  template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
+
+  template <typename Element,
+            bool has_nulls,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference const& input_reference,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    char* thread_intermediate_storage,
     cudf::size_type left_row_index,
     cudf::size_type right_row_index = {}) const
   {
@@ -322,10 +264,11 @@ struct expression_evaluator {
   }
 
   template <typename Element,
+            bool has_nulls,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference const& device_data_reference,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    char* thread_intermediate_storage,
     cudf::size_type left_row_index,
     cudf::size_type right_row_index = {}) const
   {
@@ -345,25 +288,37 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename Input, typename ResultSubclass, typename T, bool result_has_nulls>
-  __device__ inline void operator()(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const input_row_index,
-    detail::device_data_reference const& input,
-    detail::device_data_reference const& output,
-    cudf::size_type const output_row_index,
-    ast_operator const op,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  template <typename Input, typename ExpressionResult>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const input_row_index,
+                                    detail::device_data_reference const& input,
+                                    detail::device_data_reference const& output,
+                                    cudf::size_type const output_row_index,
+                                    ast_operator const op,
+                                    char* thread_intermediate_storage) const
   {
-    auto const typed_input =
-      resolve_input<Input>(input, thread_intermediate_storage, input_row_index);
-    ast_operator_dispatcher(op,
-                            unary_expression_output_handler<Input>{},
-                            output_object,
-                            output_row_index,
-                            typed_input,
-                            output,
-                            thread_intermediate_storage);
+    if (has_nulls) {
+      auto const typed_input =
+        resolve_input<Input, true>(input, thread_intermediate_storage, input_row_index);
+      ast_operator_dispatcher(op,
+                              unary_expression_output_handler<Input>{},
+                              output_object,
+                              output_row_index,
+                              typed_input,
+                              output,
+                              thread_intermediate_storage);
+
+    } else {
+      auto const typed_input =
+        resolve_input<Input, false>(input, thread_intermediate_storage, input_row_index);
+      ast_operator_dispatcher(op,
+                              unary_expression_output_handler<Input>{},
+                              output_object,
+                              output_row_index,
+                              typed_input,
+                              output,
+                              thread_intermediate_storage);
+    }
   }
 
   /**
@@ -382,30 +337,44 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename LHS, typename RHS, typename ResultSubclass, typename T, bool result_has_nulls>
-  __device__ inline void operator()(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const left_row_index,
-    cudf::size_type const right_row_index,
-    detail::device_data_reference const& lhs,
-    detail::device_data_reference const& rhs,
-    detail::device_data_reference const& output,
-    cudf::size_type const output_row_index,
-    ast_operator const op,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  template <typename LHS, typename RHS, typename ExpressionResult>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const left_row_index,
+                                    cudf::size_type const right_row_index,
+                                    detail::device_data_reference const& lhs,
+                                    detail::device_data_reference const& rhs,
+                                    detail::device_data_reference const& output,
+                                    cudf::size_type const output_row_index,
+                                    ast_operator const op,
+                                    char* thread_intermediate_storage) const
   {
-    auto const typed_lhs =
-      resolve_input<LHS>(lhs, thread_intermediate_storage, left_row_index, right_row_index);
-    auto const typed_rhs =
-      resolve_input<RHS>(rhs, thread_intermediate_storage, left_row_index, right_row_index);
-    ast_operator_dispatcher(op,
-                            binary_expression_output_handler<LHS, RHS>{},
-                            output_object,
-                            output_row_index,
-                            typed_lhs,
-                            typed_rhs,
-                            output,
-                            thread_intermediate_storage);
+    if (has_nulls) {
+      auto const typed_lhs =
+        resolve_input<LHS, true>(lhs, thread_intermediate_storage, left_row_index, right_row_index);
+      auto const typed_rhs =
+        resolve_input<RHS, true>(rhs, thread_intermediate_storage, left_row_index, right_row_index);
+      ast_operator_dispatcher(op,
+                              binary_expression_output_handler<LHS, RHS>{},
+                              output_object,
+                              output_row_index,
+                              typed_lhs,
+                              typed_rhs,
+                              output,
+                              thread_intermediate_storage);
+    } else {
+      auto const typed_lhs = resolve_input<LHS, false>(
+        lhs, thread_intermediate_storage, left_row_index, right_row_index);
+      auto const typed_rhs = resolve_input<RHS, false>(
+        rhs, thread_intermediate_storage, left_row_index, right_row_index);
+      ast_operator_dispatcher(op,
+                              binary_expression_output_handler<LHS, RHS>{},
+                              output_object,
+                              output_row_index,
+                              typed_lhs,
+                              typed_rhs,
+                              output,
+                              thread_intermediate_storage);
+    }
   }
 
   /**
@@ -418,11 +387,10 @@ struct expression_evaluator {
    * @param output_object The container that data will be inserted into.
    * @param row_index Row index of all input and output data column(s).
    */
-  template <typename ResultSubclass, typename T, bool result_has_nulls>
-  __device__ __forceinline__ void evaluate(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  template <typename ExpressionResult>
+  __device__ __forceinline__ void evaluate(ExpressionResult& output_object,
+                                           cudf::size_type const row_index,
+                                           char* thread_intermediate_storage) const
   {
     evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
   }
@@ -439,17 +407,17 @@ struct expression_evaluator {
    * @param right_row_index The row to pull the data from the right table.
    * @param output_row_index The row in the output to insert the result.
    */
-  template <typename ResultSubclass, typename T, bool result_has_nulls>
-  __device__ __forceinline__ void evaluate(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const left_row_index,
-    cudf::size_type const right_row_index,
-    cudf::size_type const output_row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  template <typename ExpressionResult>
+  __device__ __forceinline__ void evaluate(ExpressionResult& output_object,
+                                           cudf::size_type const left_row_index,
+                                           cudf::size_type const right_row_index,
+                                           cudf::size_type const output_row_index,
+                                           char* thread_intermediate_storage) const
   {
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
          ++operator_index) {
+      // TODO(lamarrr): dispatch on has_nulls
       // Execute operator
       auto const op    = plan.operators[operator_index];
       auto const arity = plan.operator_arities[operator_index];
@@ -525,15 +493,14 @@ struct expression_evaluator {
      * @param result Value to assign to output.
      */
     template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
+              typename ExpressionResult,
+              bool has_nulls,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ inline void resolve_output(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+      ExpressionResult& output_object,
       detail::device_data_reference const& device_data_reference,
       cudf::size_type const row_index,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage,
+      char* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
       if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
@@ -549,15 +516,14 @@ struct expression_evaluator {
     }
 
     template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
+              typename ExpressionResult,
+              bool has_nulls,
               CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
     __device__ inline void resolve_output(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+      ExpressionResult& output_object,
       detail::device_data_reference const& device_data_reference,
       cudf::size_type const row_index,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage,
+      char* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
       CUDF_UNREACHABLE("Invalid type in resolve_output.");
@@ -586,18 +552,15 @@ struct expression_evaluator {
      * @param output Output data reference.
      */
     template <ast_operator op,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
+              typename ExpressionResult,
               std::enable_if_t<
                 detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      cudf::size_type const output_row_index,
-      possibly_null_value_t<Input, has_nulls> const& input,
-      detail::device_data_reference const& output,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+    __device__ inline void operator()(ExpressionResult& output_object,
+                                      cudf::size_type const output_row_index,
+                                      possibly_null_value_t<Input, has_nulls> const& input,
+                                      detail::device_data_reference const& output,
+                                      char* thread_intermediate_storage) const
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
@@ -610,18 +573,15 @@ struct expression_evaluator {
     }
 
     template <ast_operator op,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
+              typename ExpressionResult,
               std::enable_if_t<
                 !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
                                            possibly_null_value_t<Input, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      cudf::size_type const output_row_index,
-      possibly_null_value_t<Input, has_nulls> const& input,
-      detail::device_data_reference const& output,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+    __device__ inline void operator()(ExpressionResult& output_object,
+                                      cudf::size_type const output_row_index,
+                                      possibly_null_value_t<Input, has_nulls> const& input,
+                                      detail::device_data_reference const& output,
+                                      char* thread_intermediate_storage) const
     {
       CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
     }
@@ -652,18 +612,16 @@ struct expression_evaluator {
     template <ast_operator op,
               typename ResultSubclass,
               typename T,
-              bool result_has_nulls,
               std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
                                                           possibly_null_value_t<LHS, has_nulls>,
                                                           possibly_null_value_t<RHS, has_nulls>>>* =
                 nullptr>
-    __device__ inline void operator()(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      cudf::size_type const output_row_index,
-      possibly_null_value_t<LHS, has_nulls> const& lhs,
-      possibly_null_value_t<RHS, has_nulls> const& rhs,
-      detail::device_data_reference const& output,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+    __device__ inline void operator()(expression_result<ResultSubclass, T>& output_object,
+                                      cudf::size_type const output_row_index,
+                                      possibly_null_value_t<LHS, has_nulls> const& lhs,
+                                      possibly_null_value_t<RHS, has_nulls> const& rhs,
+                                      detail::device_data_reference const& output,
+                                      char* thread_intermediate_storage) const
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
@@ -678,18 +636,16 @@ struct expression_evaluator {
     template <ast_operator op,
               typename ResultSubclass,
               typename T,
-              bool result_has_nulls,
               std::enable_if_t<
                 !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
                                             possibly_null_value_t<LHS, has_nulls>,
                                             possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(
-      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-      cudf::size_type const output_row_index,
-      possibly_null_value_t<LHS, has_nulls> const& lhs,
-      possibly_null_value_t<RHS, has_nulls> const& rhs,
-      detail::device_data_reference const& output,
-      IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+    __device__ inline void operator()(expression_result<ResultSubclass, T>& output_object,
+                                      cudf::size_type const output_row_index,
+                                      possibly_null_value_t<LHS, has_nulls> const& lhs,
+                                      possibly_null_value_t<RHS, has_nulls> const& rhs,
+                                      detail::device_data_reference const& output,
+                                      char* thread_intermediate_storage) const
     {
       CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");
     }
@@ -699,6 +655,7 @@ struct expression_evaluator {
   table_device_view const& right;  ///< The right table to operate on.
   expression_device_view const&
     plan;  ///< The container of device data representing the expression to evaluate.
+  bool has_nulls;
 };
 
 }  // namespace detail

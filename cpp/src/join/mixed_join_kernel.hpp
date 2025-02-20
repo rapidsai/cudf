@@ -57,8 +57,9 @@ namespace detail {
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
-template <bool has_nulls>
-void launch_mixed_join(table_device_view left_table,
+void launch_mixed_join(
+    bool has_nulls,
+    table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
