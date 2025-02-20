@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_cpp.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../../../ || exit;
 
 source ./ci/cpp/test/test_cpp_common.sh
 
