@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -78,20 +78,20 @@ def test_decimal128_roundtrip():
 
 
 @pytest.mark.parametrize(
-    "data_type",
+    "data_type, pa_type",
     [
-        plc.types.DataType(plc.types.TypeId.DECIMAL32),
-        plc.types.DataType(plc.types.TypeId.DECIMAL64),
+        (plc.types.DataType(plc.types.TypeId.DECIMAL32), pa.decimal32),
+        (plc.types.DataType(plc.types.TypeId.DECIMAL64), pa.decimal64),
     ],
 )
-def test_decimal_other(data_type):
+def test_decimal_other(data_type, pa_type):
     precision = 3
 
     with pytest.raises(ValueError):
         plc.interop.to_arrow(data_type)
 
     arrow_type = plc.interop.to_arrow(data_type, precision=precision)
-    assert arrow_type == pa.decimal128(precision, 0)
+    assert arrow_type == pa_type(precision, 0)
 
 
 def test_round_trip_dlpack_plc_table():
