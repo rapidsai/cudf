@@ -369,9 +369,9 @@ def _process_col(
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
-                col = col.astype(dtype="int64")
+                col = col.astype(np.dtype(np.int64))
             except ValueError:
-                col = col.astype(dtype="float64")
+                col = col.astype(np.dtype(np.float64))
             return _process_col(
                 col=col,
                 unit=unit,

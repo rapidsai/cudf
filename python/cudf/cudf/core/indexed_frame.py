@@ -6517,7 +6517,7 @@ class IndexedFrame(Frame):
             for col in self._columns:
                 if col.dtype.kind == "f":
                     col = col.fillna(0)
-                    as_int = col.astype("int64")
+                    as_int = col.astype(np.dtype(np.int64))
                     if cp.allclose(col, as_int):
                         cols.append(as_int)
                         continue

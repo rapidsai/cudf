@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
@@ -400,6 +400,14 @@ cdef class TableWithMetadata:
         for each file being read in.
         """
         return self.metadata.per_file_user_data
+
+    @property
+    def num_rows_per_source(self):
+        """
+        Returns a list containing the number
+        of rows for each file being read in.
+        """
+        return self.metadata.num_rows_per_source
 
 
 cdef class SourceInfo:

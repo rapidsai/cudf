@@ -1629,7 +1629,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif isinstance(dtype, IntervalDtype):
                 result = self.as_interval_column(dtype)
             elif isinstance(dtype, (ListDtype, StructDtype)):
-                if not self.dtype == dtype:
+                if self.dtype != dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"
                     )

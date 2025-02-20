@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -114,7 +114,8 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-
+    elif common_type is None:
+        common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 
 
