@@ -174,6 +174,7 @@ class SplitScan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: NamedExpr | None,
     ):
         """Evaluate and return a dataframe."""
@@ -233,6 +234,7 @@ class SplitScan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
 
@@ -289,6 +291,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 slices.extend(
@@ -312,6 +315,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 for i in range(0, len(paths), plan.factor)

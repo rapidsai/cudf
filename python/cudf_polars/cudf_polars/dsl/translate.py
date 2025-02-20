@@ -228,6 +228,7 @@ def _(
         skip_rows, n_rows = n_rows
 
     row_index = file_options.row_index
+    include_file_paths = file_options.include_file_paths
     return ir.Scan(
         schema,
         typ,
@@ -239,6 +240,7 @@ def _(
         skip_rows,
         n_rows,
         row_index,
+        include_file_paths,
         translate_named_expr(translator, n=node.predicate)
         if node.predicate is not None
         else None,
