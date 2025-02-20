@@ -157,8 +157,7 @@ arrow_column::arrow_column(cudf::column&& input,
   auto table_meta = std::vector{meta};
   auto tv         = cudf::table_view{{input.view()}};
   auto schema     = cudf::to_arrow_schema(tv, table_meta);
-  // ArrowSchema test_schema;
-  ArrowSchemaMove(schema.get(), &(container->schema));
+  ArrowSchemaMove(schema->children[0], &(container->schema));
   auto output = cudf::to_arrow_device(std::move(input));
   ArrowDeviceArrayMove(output.get(), &container->owner);
 }
