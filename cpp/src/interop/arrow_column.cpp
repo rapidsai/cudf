@@ -57,14 +57,9 @@
  */
 namespace cudf {
 
-// Class to manage lifetime semantics and allow re-export.
 struct arrow_array_container {
-  //// Also need a member that holds column views (and one for mutable?)
-  // cudf::column_view view;
-
-  // TODO: Generalize to other possible owned data
-  ArrowDeviceArray owner;
-  ArrowSchema schema;
+  ArrowDeviceArray owner;  //< ArrowDeviceArray that owns the data
+  ArrowSchema schema;      //< ArrowSchema that describes the data
 
   // Question: When the input data was host data, we could presumably release
   // immediately. Do we care? If so, how should we implement that?
@@ -77,12 +72,25 @@ struct arrow_array_container {
 
 namespace {
 
+/**
+ * @brief Private data for an ArrowArray that contains a struct array.
+ *
+ * This struct is used to manage the lifetimes of the children of a struct array.
+ */
 struct ArrowArrayPrivateData {
   std::shared_ptr<arrow_array_container> parent;
   std::vector<std::unique_ptr<ArrowArray>> children;
   std::vector<ArrowArray*> children_raw;
 };
 
+/**
+ * @brief Release callback for an ArrowArray that contains a struct array.
+ *
+ * This function is called when the ArrowArray is released. It releases all of the children of the
+ * struct array.
+ *
+ * @param array The ArrowArray to release
+ */
 void ArrayReleaseCallback(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowArrayPrivateData*>(array->private_data);
@@ -93,6 +101,16 @@ void ArrayReleaseCallback(ArrowArray* array)
   array->release = nullptr;
 }
 
+/**
+ * @brief Copy an ArrowArray.
+ *
+ * This function copies an ArrowArray and all of its children. It is used to
+ * export cudf arrow objects to user-provided ArrowDeviceArrays.
+ *
+ * @param output The ArrowArray to copy to
+ * @param input The ArrowArray to copy from
+ * @param container The container that owns the data
+ */
 void copy_array(ArrowArray* output,
                 ArrowArray const* input,
                 std::shared_ptr<arrow_array_container> container)
