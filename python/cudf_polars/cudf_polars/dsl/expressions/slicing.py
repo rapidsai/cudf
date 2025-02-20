@@ -38,6 +38,7 @@ class Slice(Expr):
         self.dtype = dtype
         self.offset = offset
         self.length = length
+        self.children = (column,)
 
     def do_evaluate(
         self,
