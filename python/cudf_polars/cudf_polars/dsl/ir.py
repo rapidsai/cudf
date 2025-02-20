@@ -219,7 +219,6 @@ class IR(Node["IR"]):
             translation phase should fail earlier.
         """
         if node_timer:
-            # TODO: fix naming (make class instance value)
             return node_timer.record(
                 self.profile_name,
                 self.do_evaluate,
