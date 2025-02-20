@@ -3,8 +3,6 @@
 
 set -euo pipefail
 
-rapids-configure-conda-channels
-
 source rapids-configure-sccache
 
 source rapids-date-string
@@ -21,51 +19,82 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 sccache --zero-stats
 
-# TODO: Remove `--no-test` flag once importing on a CPU
+# TODO: Remove `--test skip` flag once importing on a CPU
 # node works correctly
 # With boa installed conda build forwards to the boa builder
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  conda/recipes/pylibcudf
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
+export RAPIDS_PACKAGE_VERSION
+
+# populates `RATTLER_CHANNELS` array
+source rapids-rattler-channel-string
+
+# --no-build-id allows for caching with `sccache`
+# more info is available at
+# https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
+rattler-build build --recipe conda/recipes/pylibcudf \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
 sccache --zero-stats
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/cudf
+rattler-build build --recipe conda/recipes/cudf \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
 sccache --zero-stats
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/dask-cudf
+rattler-build build --recipe conda/recipes/dask-cudf \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/cudf_kafka
+rattler-build build --recipe conda/recipes/cudf_kafka \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/custreamz
+rattler-build build --recipe conda/recipes/custreamz \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/cudf-polars
+rattler-build build --recipe conda/recipes/cudf-polars \
+                    --experimental \
+                    --no-build-id \
+                    --channel-priority disabled \
+                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    --test skip \
+                    -c "${CPP_CHANNEL}" \
+                    "${RATTLER_CHANNELS[@]}"
+
+# remove build_cache directory
+rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
 
 rapids-upload-conda-to-s3 python
