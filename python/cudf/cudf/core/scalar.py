@@ -175,7 +175,8 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar for cudf.Scalar._device_value
     """
     if cudf.utils.utils.is_na_like(value):
         value = None
@@ -225,7 +226,8 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar to use in pylibcudf APIs
     """
     return plc.interop.from_arrow(pa_scalar)
 
