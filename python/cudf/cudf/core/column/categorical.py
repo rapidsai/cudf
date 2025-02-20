@@ -506,7 +506,7 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: CategoricalDtype
-    _children: tuple[NumericalColumn]
+    _children: tuple[NumericalColumn]  # type: ignore[assignment]
     _VALID_REDUCTIONS = {
         "max",
         "min",
@@ -811,21 +811,15 @@ class CategoricalColumn(column.ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array."""
-        # arrow doesn't support unsigned codes
+        # pyarrow.Table doesn't support unsigned codes
         signed_type = (
             min_signed_type(self.codes.max())
             if self.codes.size > 0
-            else np.int8
+            else np.dtype(np.int8)
         )
-        codes = self.codes.astype(signed_type)
-        categories = self.categories
-
-        out_indices = codes.to_arrow()
-        out_dictionary = categories.to_arrow()
-
         return pa.DictionaryArray.from_arrays(
-            out_indices,
-            out_dictionary,
+            self.codes.astype(signed_type).to_arrow(),
+            self.categories.to_arrow(),
             ordered=self.ordered,
         )
 
@@ -1169,7 +1163,7 @@ class CategoricalColumn(column.ColumnBase):
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
     ) -> Self | None:
-        out = super()._mimic_inplace(other_col, inplace=inplace)
+        out = super()._mimic_inplace(other_col, inplace=inplace)  # type: ignore[arg-type]
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col.codes
         return out
