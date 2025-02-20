@@ -47,14 +47,34 @@ struct metadata : private cudf::io::parquet::detail::metadata {
 
 class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_reader_metadata {
  private:
-  /**
-   * @brief Filters the row groups using dictionary pages
+ 
+   /**
+   * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
    *
    * @param dictionary_page_data Dictionary page data device buffers for each input row group
    * @param input_row_group_indices Lists of input row groups, one per source
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Datatypes of output columns
+   * @param dictionary_col_schemas schema indices of dictionary columns only
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A flattened list of `cuco::static_set_ref` device buffers for each predicate column
+   * across row groups
+   */
+   [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
+    cudf::host_span<rmm::device_buffer> dictionary_page_data,
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> dictionary_col_schemas,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filters the row groups using dictionary pages
+   *
+   * @param dictionaries `cuco::static_set_ref` device buffers for column chunk dictionary
+   * @param input_row_group_indices Lists of input row groups, one per source
    * @param literals Lists of literals, one per input column
    * @param operators Lists of operators, one per input column
-   * @param dictionary_operators
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param dictionary_col_schemas schema indices of dictionary columns only
@@ -64,7 +84,7 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
    * @return A pair of filtered row group indices if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_dictionary_filter(
-    std::vector<rmm::device_buffer>& dictionary_page_data,
+    cudf::host_span<rmm::device_buffer> dictionaries,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<std::vector<ast::literal*> const> literals,
     host_span<std::vector<ast::ast_operator> const> operators,

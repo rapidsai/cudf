@@ -405,11 +405,11 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
                  });
 
   // Number of surviving row groups after applying stats filter
-  // auto const total_row_groups = std::accumulate(
-  //   row_group_indices.begin(),
-  //   row_group_indices.end(),
-  //   size_type{0},
-  //   [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    size_type{0},
+    [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect literals and operators for dictionary page filtering for each input table column
   auto const [literals, operators] =
@@ -430,18 +430,22 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   if (dictionary_col_schemas.empty()) { return all_row_group_indices; }
 
   // TODO: Decode dictionary pages and filter row groups based on dictionary pages
-  // auto const dictionary_filtered_row_groups = apply_dictionary_filter(dictionary_page_data,
-  //                                                                     row_group_indices,
-  //                                                                     literals,
-  //                                                                     operators,
-  //                                                                     total_row_groups,
-  //                                                                     output_dtypes,
-  //                                                                     dictionary_col_schemas,
-  //                                                                     filter.value(),
-  //                                                                     stream);
+  auto dictionaries = materialize_dictionaries(
+    dictionary_page_data, row_group_indices, output_dtypes, dictionary_col_schemas, stream);
+
+  // TODO: Probe the dictionaries to get surviving row groups
+  auto const dictionary_filtered_row_groups = apply_dictionary_filter(dictionaries,
+                                                                      row_group_indices,
+                                                                      literals,
+                                                                      operators,
+                                                                      total_row_groups,
+                                                                      output_dtypes,
+                                                                      dictionary_col_schemas,
+                                                                      filter.value(),
+                                                                      stream);
 
   // return dictionary_filtered_row_groups.value_or(all_row_group_indices);
-  return all_row_group_indices;
+  return dictionary_filtered_row_groups.value_or(all_row_group_indices);
 }
 
 std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
