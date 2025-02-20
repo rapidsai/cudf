@@ -264,7 +264,7 @@ class CategoricalDtype(_BaseDtype):
             getattr(categories, "dtype", None),
             (cudf.IntervalDtype, pd.IntervalDtype),
         ):
-            dtype = "object"  # type: Any
+            dtype = CUDF_STRING_DTYPE
         else:
             dtype = None
 
