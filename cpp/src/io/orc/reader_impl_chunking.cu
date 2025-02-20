@@ -523,15 +523,12 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     }
   }
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
-  for (auto& task : host_read_tasks) {  // if there were host reads
-    host_read_buffers.emplace_back(std::get<0>(task).get());
+  for (auto& [fut, expected_size, dev_dst] : host_read_tasks) {  // if there were host reads
+    host_read_buffers.emplace_back(fut.get());
     auto* host_buffer = host_read_buffers.back().get();
-    CUDF_EXPECTS(host_buffer->size() == std::get<1>(task), "Unexpected discrepancy in bytes read.");
-    CUDF_CUDA_TRY(cudaMemcpyAsync(std::get<2>(task),
-                                  host_buffer->data(),
-                                  host_buffer->size(),
-                                  cudaMemcpyDefault,
-                                  _stream.value()));
+    CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
   }
 
   for (auto& task : device_read_tasks) {  // if there were device reads

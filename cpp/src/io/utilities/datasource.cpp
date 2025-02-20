@@ -66,9 +66,9 @@ class kvikio_source : public datasource {
   kvikio_source(HandleT&& h) : _kvikio_handle(std::move(h)) {}
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto clamped_read = clamped_read_to_vector(offset, size);
-    clamped_read.second.get();
-    return buffer::create(std::move(clamped_read.first));
+    auto [v, fut] = clamped_read_to_vector(offset, size);
+    fut.get();
+    return buffer::create(std::move(v));
   }
 
   std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
