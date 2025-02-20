@@ -2,7 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
 
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_narwhals
@@ -16,8 +16,8 @@ set +e
 
 rapids-logger "pytest narwhals"
 git clone https://github.com/narwhals-dev/narwhals --depth=1
-pushd narwhals || exit
-pip install -U -e ".[dev]"
+pushd narwhals || exit 1
+rapids-pip-retry install -U -e ".[dev]"
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
@@ -38,7 +38,7 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --dist=worksteal \
     --constructors=polars[lazy]
 
-popd || exit
+popd || exit 1
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
