@@ -20,9 +20,8 @@ from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 import rmm
 
 from cudf._lib import strings_udf
-from cudf._lib.column import Column
 from cudf.api.types import is_scalar
-from cudf.core.column.column import as_column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
@@ -333,7 +332,7 @@ def _return_arr_from_dtype(dtype, size):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return Column.from_pylibcudf(
+        return ColumnBase.from_pylibcudf(
             strings_udf.column_from_udf_string_array(col)
         )
     return as_column(col, retty)

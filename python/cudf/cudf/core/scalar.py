@@ -175,7 +175,8 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar for cudf.Scalar._device_value
     """
     if cudf.utils.utils.is_na_like(value):
         value = None
@@ -225,7 +226,8 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar to use in pylibcudf APIs
     """
     return plc.interop.from_arrow(pa_scalar)
 
@@ -476,16 +478,16 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         # https://github.com/numpy/numpy/issues/17552
         return f"{self.__class__.__name__}({self.value!s}, dtype={self.dtype})"
 
-    def _binop_result_dtype_or_error(self, other, op):
+    def _binop_result_dtype_or_error(self, other, op) -> np.dtype:
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
-            return np.bool_
+            return np.dtype(np.bool_)
 
         out_dtype = get_allowed_combinations_for_operator(
             self.dtype, other.dtype, op
         )
 
         # datetime handling
-        if out_dtype in {"M", "m"}:
+        if out_dtype.kind in {"M", "m"}:
             if self.dtype.char in {"M", "m"} and other.dtype.char not in {
                 "M",
                 "m",
@@ -505,7 +507,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                     return np.dtype(f"m8[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
-        return cudf.dtype(out_dtype)
+        return out_dtype
 
     def _binaryop(self, other, op: str):
         if is_scalar(other):

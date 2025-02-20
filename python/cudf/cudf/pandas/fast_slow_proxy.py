@@ -112,7 +112,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        return object.__new__(self._type)
+        return object.__new__(get_final_type_map().get(self._type, self._type))
 
 
 _DELETE = object()
