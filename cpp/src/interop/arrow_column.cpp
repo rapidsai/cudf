@@ -75,7 +75,7 @@
 namespace cudf {
 
 // Class to manage lifetime semantics and allow re-export.
-struct arrow_column_container {
+struct arrow_array_container {
   //// Also need a member that holds column views (and one for mutable?)
   // cudf::column_view view;
 
@@ -85,7 +85,7 @@ struct arrow_column_container {
 
   // Question: When the input data was host data, we could presumably release
   // immediately. Do we care? If so, how should we implement that?
-  ~arrow_column_container()
+  ~arrow_array_container()
   {
     // TODO: Do we have to sync before releasing?
     ArrowArrayRelease(&owner.array);
@@ -95,7 +95,7 @@ struct arrow_column_container {
 namespace {
 
 struct ArrowArrayPrivateData {
-  std::shared_ptr<arrow_column_container> parent;
+  std::shared_ptr<arrow_array_container> parent;
   std::vector<std::unique_ptr<ArrowArray>> children;
   std::vector<ArrowArray*> children_raw;
 };
@@ -112,7 +112,7 @@ void ArrayReleaseCallback(ArrowArray* array)
 
 void copy_array(ArrowArray* output,
                 ArrowArray const* input,
-                std::shared_ptr<arrow_column_container> container)
+                std::shared_ptr<arrow_array_container> container)
 {
   auto private_data  = new ArrowArrayPrivateData{container};
   output->length     = input->length;
@@ -137,19 +137,12 @@ void copy_array(ArrowArray* output,
   output->private_data = private_data;
 }
 
-struct arrow_column_container_deleter {
-  void operator()(std::pair<ArrowDeviceArray, owned_columns_t> data)
-  {
-    data.first.array.release(&data.first.array);
-  }
-};
-
 }  // namespace
 
 arrow_column::arrow_column(cudf::column&& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
-  : container{std::make_shared<arrow_column_container>()}
+  : container{std::make_shared<arrow_array_container>()}
 {
   // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
   // TODO: metadata should be provided by the user
@@ -168,7 +161,7 @@ arrow_column::arrow_column(ArrowSchema const* schema,
                            ArrowDeviceArray* input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
-  : container{std::make_shared<arrow_column_container>()}
+  : container{std::make_shared<arrow_array_container>()}
 {
   switch (input->device_type) {
     case ARROW_DEVICE_CUDA:
@@ -259,10 +252,6 @@ unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
   return from_arrow_device_column(&container->schema, &container->owner, stream, mr);
 }
 
-// arrow_table::arrow_table(ArrowSchema const* schema,ArrowDeviceArray* input,
-//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-//          ArrowArrayMove(input, container->arr); }
 // arrow_table::arrow_table(ArrowArray* input) {
 //     ArrowDeviceArray arr{
 //         .array = *input,
@@ -275,8 +264,26 @@ unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
 //     ArrowArrayMove(output.get(), container->arr);
 // }
 
-// cudf::column_view view();
-// cudf::mutable_column_view mutable_view();
+arrow_table::arrow_table(cudf::table&& input,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+  : container{std::make_shared<arrow_array_container>()}
+{
+  // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
+  // TODO: metadata should be provided by the user
+  auto meta       = cudf::column_metadata{};
+  auto table_meta = std::vector{meta};
+  auto schema     = cudf::to_arrow_schema(input.view(), table_meta);
+  ArrowSchemaMove(schema.get(), &(container->schema));
+  auto output = cudf::to_arrow_device(std::move(input));
+  ArrowDeviceArrayMove(output.get(), &container->owner);
+}
+
+unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  return from_arrow_device(&container->schema, &container->owner, stream, mr);
+}
 
 // Create Array whose private_data contains a shared_ptr to this->container
 // The output should be consumer-allocated, see

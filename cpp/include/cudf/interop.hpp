@@ -183,7 +183,7 @@ using unique_table_view_t =
 using unique_column_view_t =
   std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
 
-struct arrow_column_container;
+struct arrow_array_container;
 
 class arrow_column {
  public:
@@ -213,24 +213,30 @@ class arrow_column {
 
  private:
   // Using a shared_ptr allows re-export via to_arrow
-  std::shared_ptr<arrow_column_container> container;
+  std::shared_ptr<arrow_array_container> container;
 };
 
-// class arrow_table {
-//  public:
-//   arrow_table(ArrowSchema const* schema,ArrowDeviceArray* input,
-//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-//   arrow_table(ArrowSchema const* schema,ArrowArray* input,
-//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-//   arrow_table(ArrowSchema const* schema,cudf::table&& input,
-//          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-//          rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-//  private:
-//   // Using a shared_ptr allows re-export via to_arrow
-//   std::shared_ptr<arrow_array_container> container;
-// };
+class arrow_table {
+ public:
+  // arrow_table(ArrowSchema const* schema,
+  //        ArrowDeviceArray* input,
+  //        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  //        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  // arrow_table(ArrowSchema const* schema,
+  //        ArrowArray* input,
+  //        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  //        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  arrow_table(cudf::table&& input,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  unique_table_view_t view(
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+ private:
+  // Using a shared_ptr allows re-export via to_arrow
+  std::shared_ptr<arrow_array_container> container;
+};
 
 /**
  * @brief Create ArrowSchema from cudf table and metadata

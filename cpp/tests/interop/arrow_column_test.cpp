@@ -15,7 +15,9 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <cudf/interop.hpp>
 
@@ -40,22 +42,15 @@ auto export_to_arrow(cudf::arrow_column& col)
 TEST_F(ArrowColumnTest, TwoWayConversion)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  // This column will be moved into the arrow_column, making it invalid to
-  // access, but the original int_col stays valid for the remainder of the test
-  // scope for comparison.
-  auto col = cudf::column(int_col);
-
+  auto col                           = cudf::column(int_col);
   auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column.view());
 
-  // Now we can extract an ArrowDeviceArray from the arrow_column
   auto [arrow_schema_from_cudf_column, arrow_array_from_arrow_column] =
     export_to_arrow(arrow_column_from_cudf_column);
   arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_cudf_column.get());
   arrow_column_from_cudf_column.to_arrow(arrow_array_from_arrow_column.get(), ARROW_DEVICE_CUDA);
 
-  // Now let's convert it back to an arrow_column
   auto arrow_column_from_arrow_array =
     cudf::arrow_column(arrow_schema_from_cudf_column.get(), arrow_array_from_arrow_column.get());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
@@ -79,4 +74,31 @@ TEST_F(ArrowColumnTest, LifetimeManagement)
   auto col2 = std::make_unique<cudf::arrow_column>(schema2.get(), array2.get());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *col1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col1->view(), *col2->view());
+}
+
+struct ArrowTableTest : public cudf::test::BaseFixture {};
+
+TEST_F(ArrowTableTest, TwoWayConversion)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+  cudf::test::fixed_width_column_wrapper<float> float_col{
+    {1., 2., 3., 4., 5., 6., 7., 8., 9., 10.}};
+  auto original_view = cudf::table_view{{int_col, float_col}};
+  cudf::table table{cudf::table_view{{int_col, float_col}}};
+  auto arrow_table_from_cudf_table = cudf::arrow_table(std::move(table));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_cudf_table.view());
+
+  //  // Now we can extract an ArrowDeviceArray from the arrow_column
+  //  auto [arrow_schema_from_cudf_column, arrow_array_from_arrow_column] =
+  //    export_to_arrow(arrow_column_from_cudf_column);
+  //  arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_cudf_column.get());
+  //  arrow_column_from_cudf_column.to_arrow(arrow_array_from_arrow_column.get(),
+  //  ARROW_DEVICE_CUDA);
+  //
+  //  // Now let's convert it back to an arrow_column
+  //  auto arrow_column_from_arrow_array =
+  //    cudf::arrow_column(arrow_schema_from_cudf_column.get(),
+  //    arrow_array_from_arrow_column.get());
+  //  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
 }
