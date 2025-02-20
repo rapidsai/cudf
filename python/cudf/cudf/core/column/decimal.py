@@ -227,19 +227,19 @@ class DecimalBaseColumn(NumericalBaseColumn):
             self.dtype.precision = dtype.precision
         return self
 
+    def to_arrow(self) -> pa.Array:
+        # Preserve the self.dtype.precision in the pyarrow result
+        return super().to_arrow().cast(self.dtype.to_arrow())
+
     def to_pandas(
         self,
         *,
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        """Convert object to pandas type.
-
-        The default implementation falls back to PyArrow for the conversion.
-        """
         # TODO: Can remove override once pyarrow>=20 is the minimum version
         # https://github.com/apache/arrow/pull/45571
-        if not (arrow_type and nullable):
+        if not arrow_type and not nullable:
             return pd.Index(
                 self.to_arrow()
                 .cast(pa.decimal128(self.dtype.precision, self.dtype.scale))
