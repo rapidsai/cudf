@@ -4344,7 +4344,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=np.dtype("float32")
+        cudf.Series([], dtype="float64"), dtype=np.dtype(np.float32)
     )
     assert_eq(col.dtype, np.dtype("float32"))
     gds = cudf.Series._from_column(col)
@@ -4362,7 +4362,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=cudf.dtype("object")
+        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
     )
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
@@ -4372,7 +4372,7 @@ def test_as_column_types():
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(np.array([1, 2, 3]), dtype=np.dtype("float32"))
+        column.as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
@@ -4396,7 +4396,7 @@ def test_as_column_types():
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
     gds = cudf.Series._from_column(
         column.as_column(
-            cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype("float32")
+            cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32)
         )
     )
 
