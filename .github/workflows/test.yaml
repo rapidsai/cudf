@@ -45,7 +45,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_cpp_memcheck.sh"
+      run_script: "ci/cpp/test/test_cpp_memcheck.sh"
   static-configure:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
@@ -57,7 +57,7 @@ jobs:
       # Use the wheel container so we can skip conda solves and since our
       # primary static consumers (Spark) are not in conda anyway.
       container_image: "rapidsai/ci-wheel:latest"
-      run_script: "ci/configure_cpp_static.sh"
+      run_script: "ci/cpp/build/configure_cpp_static.sh"
   cpp-linters:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
@@ -66,7 +66,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      run_script: "ci/cpp_linters.sh"
+      run_script: "ci/cpp/test/cpp_linters.sh"
       file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
     secrets: inherit
@@ -76,7 +76,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_python_cudf.sh"
+      script: "ci/python/test/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -86,7 +86,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_python_other.sh"
+      script: "ci/python/test/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
@@ -98,7 +98,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_java.sh"
+      run_script: "ci/java/test/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
@@ -110,7 +110,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_notebooks.sh"
+      run_script: "ci/python/test/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.04
@@ -119,7 +119,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: ci/test_wheel_cudf.sh
+      script: ci/python/test/test_wheel_cudf.sh
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.04
@@ -128,7 +128,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: ci/test_wheel_dask_cudf.sh
+      script: ci/python/test/test_wheel_dask_cudf.sh
   unit-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.04
@@ -158,7 +158,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_wheel_cudf_polars.sh"
+      script: "ci/python/test/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.04
@@ -167,4 +167,4 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_cudf_polars_polars_tests.sh"
+      script: "ci/python/test/test_cudf_polars_polars_tests.sh"

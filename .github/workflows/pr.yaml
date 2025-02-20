@@ -85,6 +85,9 @@ jobs:
           - '!java/**'
           - '!notebooks/**'
           - '!python/**'
+          - '!ci/python/**'
+          - '!ci/java/**'
+          - '!ci/docs/**'
         test_cudf_pandas:
           - '**'
           - '!.devcontainer/**'
@@ -104,6 +107,8 @@ jobs:
           - '!img/**'
           - '!notebooks/**'
           - '!python/**'
+          - '!ci/python/**'
+          - '!ci/docs/**'
         test_notebooks:
           - '**'
           - '!.devcontainer/**'
@@ -121,6 +126,8 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
+          - '!ci/java/**'
+          - '!ci/docs/**'
   checks:
     secrets: inherit
     needs: telemetry-setup
@@ -141,7 +148,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
     with:
       build_type: pull-request
-      run_script: "ci/cpp_linters.sh"
+      run_script: "ci/cpp/test/cpp_linters.sh"
       node_type: "cpu16"
   conda-cpp-checks:
     needs: conda-cpp-build
@@ -170,7 +177,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
-      script: "ci/test_python_cudf.sh"
+      script: "ci/python/test/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build, changed-files]
@@ -179,7 +186,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
-      script: "ci/test_python_other.sh"
+      script: "ci/python/test/test_python_other.sh"
   conda-java-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
@@ -190,7 +197,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_java.sh"
+      run_script: "ci/java/test/test_java.sh"
   static-configure:
     needs: checks
     secrets: inherit
@@ -200,7 +207,7 @@ jobs:
       # Use the wheel container so we can skip conda solves and since our
       # primary static consumers (Spark) are not in conda anyway.
       container_image: "rapidsai/ci-wheel:latest"
-      run_script: "ci/configure_cpp_static.sh"
+      run_script: "ci/cpp/build/configure_cpp_static.sh"
   conda-notebook-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
@@ -211,7 +218,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_notebooks.sh"
+      run_script: "ci/python/test/test_notebooks.sh"
   docs-build:
     needs: conda-python-build
     secrets: inherit
@@ -221,7 +228,7 @@ jobs:
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/build_docs.sh"
+      run_script: "ci/docs/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
     secrets: inherit
@@ -231,21 +238,21 @@ jobs:
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
       node_type: "cpu16"
-      script: "ci/build_wheel_libcudf.sh"
+      script: "ci/python/build/build_wheel_libcudf.sh"
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.04
     with:
       build_type: pull-request
-      script: "ci/build_wheel_pylibcudf.sh"
+      script: "ci/python/build/build_wheel_pylibcudf.sh"
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.04
     with:
       build_type: pull-request
-      script: "ci/build_wheel_cudf.sh"
+      script: "ci/python/build/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
@@ -253,7 +260,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
-      script: ci/test_wheel_cudf.sh
+      script: ci/python/test/test_wheel_cudf.sh
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -262,7 +269,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/build_wheel_cudf_polars.sh"
+      script: "ci/python/build/build_wheel_cudf_polars.sh"
   wheel-tests-cudf-polars:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -272,7 +279,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/test_wheel_cudf_polars.sh"
+      script: "ci/python/test/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     needs: wheel-build-cudf-polars
     secrets: inherit
@@ -281,7 +288,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/test_cudf_polars_polars_tests.sh"
+      script: "ci/python/test/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -290,7 +297,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/build_wheel_dask_cudf.sh"
+      script: "ci/python/build/build_wheel_dask_cudf.sh"
   wheel-tests-dask-cudf:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
@@ -300,7 +307,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: ci/test_wheel_dask_cudf.sh
+      script: ci/python/test/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
     needs: telemetry-setup

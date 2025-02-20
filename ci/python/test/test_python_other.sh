@@ -5,7 +5,7 @@
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit;
 
 # Common setup steps shared by Python test jobs
-source ./ci/test_python_common.sh test_python_other
+source ./ci/python/test/test_python_common.sh test_python_other
 
 rapids-logger "Check GPU usage"
 nvidia-smi
@@ -27,7 +27,7 @@ fi
 
 
 rapids-logger "pytest dask_cudf"
-./ci/run_dask_cudf_pytests.sh \
+./ci/python/test/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
@@ -37,11 +37,11 @@ rapids-logger "pytest dask_cudf"
   --cov-report=term
 
 rapids-logger "pytest cudf_kafka"
-./ci/run_cudf_kafka_pytests.sh \
+./ci/python/test/run_cudf_kafka_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
 
 rapids-logger "pytest custreamz"
-./ci/run_custreamz_pytests.sh \
+./ci/python/test/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=${NUM_PROCESSES} \
   --dist=worksteal \
@@ -55,7 +55,7 @@ rapids-logger "pytest custreamz"
 # we keep --numprocesses=1 for now. This should be resolved by
 # https://github.com/rapidsai/cudf/issues/16723.
 rapids-logger "pytest cudf-polars"
-./ci/run_cudf_polars_pytests.sh \
+./ci/python/test/run_cudf_polars_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=1 \
   --dist=worksteal \

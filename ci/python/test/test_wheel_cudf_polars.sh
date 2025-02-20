@@ -36,7 +36,7 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-./ci/run_cudf_polars_pytests.sh \
+./ci/python/test/run_cudf_polars_pytests.sh \
        --cov cudf_polars \
        --cov-fail-under=100 \
        --cov-config=./pyproject.toml \

@@ -38,7 +38,7 @@ function sed_runner() {
 echo "${NEXT_FULL_TAG}" > VERSION
 
 # Wheel testing script
-sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
+sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/python/test/test_wheel_dask_cudf.sh
 
 DEPENDENCIES=(
   cudf
@@ -83,8 +83,8 @@ for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
   sed_runner "/shared-workflows/ s/@.*/@branch-${NEXT_SHORT_TAG}/g" "${FILE}"
   sed_runner "s/dask-cuda.git@branch-[^\"\s]\+/dask-cuda.git@branch-${NEXT_SHORT_TAG}/g" "${FILE}"
 done
-sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_cudf_polars.sh
-sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/test_cudf_polars_polars_tests.sh
+sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/python/test/test_wheel_cudf_polars.sh
+sed_runner "s/branch-[0-9]\+\.[0-9]\+/branch-${NEXT_SHORT_TAG}/g" ci/python/test/test_cudf_polars_polars_tests.sh
 
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
