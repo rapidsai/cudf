@@ -40,6 +40,7 @@ jobs:
       - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
+      - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
     secrets: inherit
@@ -358,6 +359,16 @@ jobs:
         node_type: "cpu4"
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+  narwhals-tests:
+    needs: [conda-python-build, changed-files]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.04
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
