@@ -95,8 +95,7 @@ TEST_F(ArrowTableTest, TwoWayConversion)
   arrow_table_from_cudf_table.to_arrow_schema(arrow_schema_from_cudf_table.get());
   arrow_table_from_cudf_table.to_arrow(arrow_array_from_arrow_table.get(), ARROW_DEVICE_CUDA);
 
-  // auto arrow_table_from_arrow_array =
-  //     cudf::arrow_table(arrow_schema_from_cudf_table.get(),
-  //             arrow_array_from_arrow_table.get());
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_table_from_arrow_array.view());
+  auto arrow_table_from_arrow_array =
+    cudf::arrow_table(arrow_schema_from_cudf_table.get(), arrow_array_from_arrow_table.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
 }

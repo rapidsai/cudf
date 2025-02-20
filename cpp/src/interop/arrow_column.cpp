@@ -321,19 +321,42 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
   }
 }
 
-// class arrow_table {
-//  public:
-//   arrow_table(std::vector < std::shared_ptr<arrow_column> columns) : columns{columns} {}
-//   cudf::table_view view();
-//   cudf::mutable_table_view mutable_view();
-//   // Create Array whose private_data contains shared_ptrs to all the underlying
-//   // arrow_array_containers
-//   void to_arrow(ArrowDeviceArray* output);
-//
-//  private:
-//   // Would allow arrow_columns being in multiple arrow_tables
-//   std::vector < std::shared_ptr<arrow_column> columns;
-// };
+arrow_table::arrow_table(ArrowSchema const* schema,
+                         ArrowDeviceArray* input,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+  : container{std::make_shared<arrow_array_container>()}
+{
+  switch (input->device_type) {
+    case ARROW_DEVICE_CUDA:
+    case ARROW_DEVICE_CUDA_HOST:
+    case ARROW_DEVICE_CUDA_MANAGED: {
+      // In this case, we have an ArrowDeviceArray with CUDA data as the
+      // owner. We can simply move it into our container and safe it now. We
+      // do need to copy the schema, though.
+      ArrowSchemaDeepCopy(schema, &container->schema);
+      auto& device_arr = container->owner;
+      // This behavior is different than the old from_arrow_device function
+      // because now we are not create a non-owning table_view but an
+      // arrow_table that can manage lifetimes.
+      ArrowArrayMove(&input->array, &device_arr.array);
+      device_arr.device_type = input->device_type;
+      // Pointing to the existing sync event is safe assuming that the
+      // underlying event is managed by the private data and the release
+      // callback.
+      device_arr.sync_event = input->sync_event;
+      device_arr.device_id  = input->device_id;
+      break;
+    }
+    case ARROW_DEVICE_CPU: {
+      throw std::runtime_error("ArrowDeviceArray with CPU data not supported");
+      // auto col = from_arrow_host_table(schema, input, stream, mr);
+      // container->owner = std::shared_ptr<cudf::table>(col.release());
+      // break;
+    }
+    default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
+  }
+}
 
 //// ArrowArrayStream and ArrowArray overloads (they can be overloads now instead
 //// of separate functions) are trivial wrappers around this function. Also need versions
