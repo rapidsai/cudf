@@ -67,7 +67,7 @@ class datasource {
     /**
      * @brief Base class destructor
      */
-    virtual ~buffer() {}
+    virtual ~buffer() = default;
 
     /**
      * @brief Factory to construct a datasource buffer object from a container.
@@ -156,7 +156,7 @@ class datasource {
   /**
    * @brief Base class destructor
    */
-  virtual ~datasource(){};
+  virtual ~datasource() = default;
 
   /**
    * @brief Returns a buffer with a subset of data from the source.
@@ -326,7 +326,7 @@ class datasource {
    */
   class non_owning_buffer : public buffer {
    public:
-    non_owning_buffer() {}
+    non_owning_buffer() = default;
 
     /**
      * @brief Construct a new non owning buffer object
