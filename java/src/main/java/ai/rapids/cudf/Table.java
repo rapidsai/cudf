@@ -475,7 +475,7 @@ public final class Table implements AutoCloseable {
                                                int compression,
                                                int[] precisions,
                                                boolean[] isMapValues,
-                                               int stripe_size_rows,
+                                               int stripeSizeRows,
                                                String filename) throws CudfException;
 
   /**
