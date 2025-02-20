@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 import operator
-from functools import cache, reduce
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.io
@@ -134,7 +134,6 @@ def _register_serialize() -> None:
     register()
 
 
-@cache
 def get_client():
     """Get appropriate Dask client or scheduler."""
     _register_serialize()
@@ -158,8 +157,10 @@ def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     ir, partition_info = lower_ir_graph(ir)
 
+    get = get_client()
+
     graph, key = task_graph(ir, partition_info)
-    return get_client(graph, key)
+    return get(graph, key)
 
 
 @generate_ir_tasks.register(IR)
