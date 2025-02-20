@@ -535,11 +535,6 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
-  if (host_read_buffers.size() > 0) {
-    _stream.synchronize();
-    host_read_buffers.clear();  // data was copied to device memory after stream sync
-  }
-
   // Compute number of rows in the loading stripes.
   auto const num_loading_rows = std::accumulate(
     _file_itm_data.selected_stripes.begin() + stripe_start,
