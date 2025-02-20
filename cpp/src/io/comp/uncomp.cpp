@@ -439,6 +439,7 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return decompressed_bytes;
 }
 
+#if 0
 unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 {
   unsigned long long totalDstSize = 0;
@@ -476,6 +477,7 @@ unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 
   return totalDstSize;
 }
+#endif
 
 struct source_properties {
   compression_type compression = compression_type::NONE;
@@ -584,10 +586,17 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      uncomp_len                   = 0;
-      comp_data                    = raw;
-      comp_len                     = src.size();
+      uncomp_len = 0;
+      comp_data  = raw;
+      comp_len   = src.size();
+      /*
+      // TODO: debug
       unsigned long long const ret = ZSTD_findDecompressedSize(
+        reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
+      */
+      // This function only gets the size of first frame so works great with single pass functions
+      // like ZSTD_compress
+      unsigned long long const ret = ZSTD_getFrameContentSize(
         reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN, "Decompressed ZSTD size cannot be determined");
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
@@ -645,7 +654,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   }
   if (compression == compression_type::ZSTD) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
-    decompress_zstd(src, dst);
+    auto const decompressed_bytes = decompress_zstd(src, dst);
+    dst.resize(decompressed_bytes);
     return dst;
   }
   if (compression == compression_type::ZIP) {
