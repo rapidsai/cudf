@@ -172,8 +172,8 @@ class datasource {
    * @brief Asynchronously reads a specified portion of data from the datasource.
    *
    * This function initiates an asynchronous read operation that reads `size` bytes of data
-   * starting from the given `offset` in the datasource. The read operation is deferred
-   * until the returned future is waited upon or queried.
+   * starting from the given `offset` in the datasource. Depending on the concrete datasource
+   * implementaiton, the read operation may be deferred until the returned future is waited upon.
    *
    * @param offset The starting position in the datasource from which to read.
    * @param size The number of bytes to read from the datasource.
@@ -198,8 +198,9 @@ class datasource {
    * @brief Asynchronously reads data from the source into the provided host memory buffer.
    *
    * This function initiates an asynchronous read operation from the data source starting at the
-   * specified offset and reads the specified number of bytes into the destination buffer. The
-   * read operation is deferred and will be executed when the returned future is waited upon.
+   * specified offset and reads the specified number of bytes into the destination buffer. Depending
+   * on the concrete datasource implementaiton, the read operation may be deferred and will be
+   * executed when the returned future is waited upon.
    *
    * @param offset The starting position in the data source from which to read.
    * @param size The number of bytes to read from the data source.
