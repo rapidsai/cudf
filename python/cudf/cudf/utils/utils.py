@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -409,7 +409,7 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
         result_mask = None
 
     result_col = column.as_column(
-        bool_fill_value, dtype=cudf.dtype(np.bool_), length=len(lhs)
+        bool_fill_value, dtype=np.dtype(np.bool_), length=len(lhs)
     )
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
@@ -439,12 +439,12 @@ def _datetime_timedelta_find_and_replace(
         if replacement.can_cast_safely(original_column.dtype):
             replacement = replacement.astype(original_column.dtype)
     if isinstance(to_replace, original_col_class):
-        to_replace = to_replace.as_numerical_column(dtype=np.dtype("int64"))
+        to_replace = to_replace.astype(np.dtype(np.int64))
     if isinstance(replacement, original_col_class):
-        replacement = replacement.as_numerical_column(dtype=np.dtype("int64"))
+        replacement = replacement.astype(np.dtype(np.int64))
     try:
         result_col = (
-            original_column.as_numerical_column(dtype=np.dtype("int64"))
+            original_column.astype(np.dtype(np.int64))
             .find_and_replace(to_replace, replacement, all_nan)
             .astype(original_column.dtype)
         )

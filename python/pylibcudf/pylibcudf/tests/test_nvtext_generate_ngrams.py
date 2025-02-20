@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -40,10 +40,10 @@ def test_generate_character_ngrams(input_col, ngram):
 
 
 @pytest.mark.parametrize("ngram", [2, 3])
-def test_hash_character_ngrams(input_col, ngram):
+@pytest.mark.parametrize("seed", [0, 3])
+def test_hash_character_ngrams(input_col, ngram, seed):
     result = plc.nvtext.generate_ngrams.hash_character_ngrams(
-        plc.interop.from_arrow(input_col),
-        ngram,
+        plc.interop.from_arrow(input_col), ngram, seed
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(

@@ -7,9 +7,9 @@ from typing import Any
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
@@ -24,10 +24,10 @@ class Merge:
     @staticmethod
     @acquire_spill_lock()
     def _joiner(
-        lhs: list[libcudf.column.Column],
-        rhs: list[libcudf.column.Column],
+        lhs: list[ColumnBase],
+        rhs: list[ColumnBase],
         how: str,
-    ) -> tuple[libcudf.column.Column, libcudf.column.Column]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         if how == "outer":
             how = "full"
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
@@ -38,9 +38,10 @@ class Merge:
             plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
             plc.types.NullEquality.EQUAL,
         )
-        return libcudf.column.Column.from_pylibcudf(
-            left_rows
-        ), libcudf.column.Column.from_pylibcudf(right_rows)
+        return (
+            ColumnBase.from_pylibcudf(left_rows),
+            ColumnBase.from_pylibcudf(right_rows),
+        )
 
     def __init__(
         self,
@@ -266,14 +267,17 @@ class Merge:
             )
             for map_, n, null in zip(maps, lengths, nullify)
         ]
-        return sorting.sort_by_key(
-            list(maps),
-            # If how is right, right map is primary sort key.
-            key_order[:: -1 if self.how == "right" else 1],
-            [True] * len(key_order),
-            ["last"] * len(key_order),
-            stable=True,
-        )
+        return [
+            ColumnBase.from_pylibcudf(col)
+            for col in sorting.sort_by_key(
+                list(maps),
+                # If how is right, right map is primary sort key.
+                key_order[:: -1 if self.how == "right" else 1],
+                [True] * len(key_order),
+                ["last"] * len(key_order),
+                stable=True,
+            )
+        ]
 
     def perform_merge(self) -> cudf.DataFrame:
         left_join_cols = []
@@ -293,8 +297,8 @@ class Merge:
                 and isinstance(lcol.dtype, cudf.CategoricalDtype)
                 and isinstance(rcol.dtype, cudf.CategoricalDtype)
             ):
-                lcol_casted = lcol_casted.astype("category")
-                rcol_casted = rcol_casted.astype("category")
+                lcol_casted = lcol_casted.astype(lcol.dtype)
+                rcol_casted = rcol_casted.astype(rcol.dtype)
 
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
@@ -372,7 +376,14 @@ class Merge:
         for name, col in right_result._column_labels_and_values:
             if name in common_names:
                 if name not in self._key_columns_with_same_name:
-                    data[f"{name}{self.rsuffix}"] = col
+                    r_label = f"{name}{self.rsuffix}"
+                    if r_label in data:
+                        raise NotImplementedError(
+                            f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
+                            f"duplicate column label, '{r_label}', which is "
+                            "not supported."
+                        )
+                    data[r_label] = col
             else:
                 data[name] = col
 
@@ -444,7 +455,9 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                result_columns, result._column_names, index_names
+                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                result._column_names,
+                index_names,
             )
         return result
 
@@ -568,11 +581,11 @@ class Merge:
 class MergeSemi(Merge):
     @staticmethod
     @acquire_spill_lock()
-    def _joiner(
-        lhs: list[libcudf.column.Column],
-        rhs: list[libcudf.column.Column],
+    def _joiner(  # type: ignore[override]
+        lhs: list[ColumnBase],
+        rhs: list[ColumnBase],
         how: str,
-    ) -> tuple[libcudf.column.Column, None]:
+    ) -> tuple[ColumnBase, None]:
         if (
             join_func := getattr(
                 plc.join, f"{how.replace('left', 'left_')}_join", None
@@ -580,7 +593,7 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        return libcudf.column.Column.from_pylibcudf(
+        return ColumnBase.from_pylibcudf(
             join_func(
                 plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
                 plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),

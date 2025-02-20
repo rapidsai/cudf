@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import itertools
+import json
 import numbers
 import os
 import re
@@ -19,7 +20,7 @@ from collections.abc import (
     MutableMapping,
     Sequence,
 )
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numba
@@ -27,7 +28,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from packaging import version
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -36,7 +36,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.common
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -48,7 +47,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core import column, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
@@ -86,6 +85,8 @@ from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -779,7 +780,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
-                        k: column_empty(len(self), dtype="object")
+                        k: column_empty(len(self), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
                     level_names=tuple(columns.names)
@@ -985,7 +986,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column_empty(
-                        row_count=len(self), dtype=None
+                        row_count=len(self), dtype=np.dtype(np.float64)
                     )
             self._data._level_names = (
                 tuple(columns.names)
@@ -1036,7 +1037,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
-                data = [column_empty(row_count=0, dtype=None) for _ in columns]
+                data = [
+                    column_empty(row_count=0, dtype=np.dtype(np.float64))
+                    for _ in columns
+                ]
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
             self._data.rangeindex = True
@@ -2453,15 +2457,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         # Convert float to integer
         if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
+            map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            cat_index = cast(
-                cudf.core.column.CategoricalColumn,
-                map_index.astype("category"),
-            )
-            map_index = cat_index.codes
+            map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -2507,8 +2507,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 map_size,
             )
             partitioned_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         partitioned = self._from_columns_like_self(
@@ -3345,7 +3344,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dtype = value.dtype
                 value = value.item()
             if _is_null_host_scalar(value):
-                dtype = "str"
+                dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
@@ -4131,7 +4130,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         )
         result_columns = [
-            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True)
             for col in result_table.columns()
         ]
 
@@ -5039,8 +5038,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nparts,
             )
             output_columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
             ]
 
         outdf = self._from_columns_like_self(
@@ -5564,16 +5562,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
             return df
-        elif hasattr(dataframe, "__dataframe__"):
-            # TODO: Probably should be handled in the constructor as
-            # this isn't pandas specific
-            assert version.parse(cudf.__version__) < version.parse("25.04.00")
-            warnings.warn(
-                "Support for loading dataframes via the `__dataframe__` interchange "
-                "protocol is deprecated",
-                FutureWarning,
-            )
-            return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
                 f"Could not construct DataFrame from {type(dataframe)}"
@@ -5756,8 +5744,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             preserve_index=preserve_index,
             types=out.schema.types,
         )
+        md_dict = json.loads(metadata[b"pandas"])
 
-        return out.replace_schema_metadata(metadata)
+        cudf.utils.ioutils._update_pandas_metadata_types_inplace(self, md_dict)
+
+        return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
     @_performance_tracking
     def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
@@ -6374,7 +6365,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64", copy=False)
+            coerced = coerced.astype(np.dtype(np.int64), copy=False)
         return coerced, mask, common_dtype
 
     @_performance_tracking
@@ -6728,7 +6719,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             prepared._data[col]
                         )
                         if common_dtype.kind != "M"
-                        else cudf.dtype("float64")
+                        else np.dtype(np.float64)
                     )
                     .fillna(np.nan)
                 )
@@ -7262,8 +7253,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 self.shape[0],
             )
             tiled_index = [
-                libcudf.column.Column.from_pylibcudf(plc)
-                for plc in plc_table.columns()
+                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
             ]
 
         # Assemble the final index
@@ -7342,7 +7332,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             with acquire_spill_lock():
-                interleaved_col = libcudf.column.Column.from_pylibcudf(
+                interleaved_col = ColumnBase.from_pylibcudf(
                     plc.reshape.interleave_columns(
                         plc.Table(
                             [
@@ -7730,15 +7720,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             periods=periods, freq=freq, **kwargs
         )
 
-    def __dataframe__(
-        self, nan_as_null: bool = False, allow_copy: bool = True
-    ):
-        assert version.parse(cudf.__version__) < version.parse("25.04.00")
-        warnings.warn("Using `__dataframe__` is deprecated", FutureWarning)
-        return df_protocol.__dataframe__(
-            self, nan_as_null=nan_as_null, allow_copy=allow_copy
-        )
-
     def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
         Count number of distinct elements in specified axis.
@@ -7856,7 +7837,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
         with acquire_spill_lock():
-            result_col = libcudf.column.Column.from_pylibcudf(
+            result_col = ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [
@@ -7877,7 +7858,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ),
             plc.expressions.to_expression(expr, self._column_names),
         )
-        return libcudf.column.Column.from_pylibcudf(plc_column)
+        return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
@@ -8093,7 +8074,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 dropna=dropna,
             )
             .size()
-            .astype("int64")
+            .astype(np.dtype(np.int64))
         )
         if sort:
             result = result.sort_values(ascending=ascending)
@@ -8181,29 +8162,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             index=metadata.get("index"),
         )
         return df
-
-
-def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
-    """
-    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
-
-    .. note::
-
-        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
-
-    Parameters
-    ----------
-    df : DataFrameXchg
-        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
-    allow_copy : bool, default: True
-        Whether to allow copying the memory to perform the conversion
-        (if false then zero-copy approach is requested).
-
-    Returns
-    -------
-    :class:`DataFrame`
-    """
-    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
 def make_binop_func(op, postprocess=None):

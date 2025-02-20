@@ -3,6 +3,7 @@
 import itertools
 import operator
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -134,3 +135,9 @@ def test_series_bool_neg():
     sr = Series([True, False, True, None, False, None, True, True])
     psr = sr.to_pandas(nullable=True)
     assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)
+
+
+def test_series_decimal_neg():
+    sr = Series([Decimal("0.0"), Decimal("1.23"), Decimal("4.567")])
+    psr = sr.to_pandas()
+    assert_eq((-sr).to_pandas(), -psr, check_dtype=True)

@@ -1,5 +1,5 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
-
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+import numpy as np
 import pytest
 
 import cudf
@@ -13,7 +13,7 @@ def _kernel_multiply(a, b, out):
         out[i] = x * y
 
 
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
+@pytest.mark.parametrize("dtype", [np.dtype("float32"), np.dtype("float64")])
 @pytest.mark.parametrize("has_nulls", [False, True])
 @pytest.mark.parametrize("pessimistic", [False, True])
 def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):

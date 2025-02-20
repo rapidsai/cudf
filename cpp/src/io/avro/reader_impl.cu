@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,7 +303,7 @@ rmm::device_buffer decompress_data(datasource& source,
     size_t const max_uncomp_block_size = std::reduce(
       uncompressed_data_sizes.begin(), uncompressed_data_sizes.end(), 0, thrust::maximum<size_t>());
 
-    size_t temp_size;
+    size_t temp_size = 0;
     status =
       nvcompBatchedSnappyDecompressGetTempSize(num_blocks, max_uncomp_block_size, &temp_size);
     CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,

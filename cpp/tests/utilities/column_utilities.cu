@@ -554,7 +554,7 @@ struct column_comparator_impl {
                                      input_iter + lhs_row_indices.size(),
                                      diff_map.begin(),
                                      differences.begin(),
-                                     thrust::identity<bool>{});
+                                     cuda::std::identity{});
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
                        cudf::test::get_default_stream());  // shrink back down

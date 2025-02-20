@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
 
   auto const last_initial_first = cudf::table_view({last_initial->view(), first});
 
-  auto result = cudf::strings::concatenate(last_initial_first, std::string(" "));
+  auto result = cudf::strings::concatenate(last_initial_first, std::string_view(" "));
 
   cudaStreamSynchronize(0);
 

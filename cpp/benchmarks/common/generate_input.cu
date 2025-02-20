@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -511,7 +510,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   auto [result_bitmask, null_count] =
     cudf::detail::valid_if(null_mask.begin(),
                            null_mask.end(),
-                           thrust::identity<bool>{},
+                           cuda::std::identity{},
                            cudf::get_default_stream(),
                            cudf::get_current_device_resource_ref());
 
@@ -600,7 +599,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
       ? cudf::detail::valid_if(
-          null_mask.begin(), null_mask.end() - 1, thrust::identity<bool>{}, stream, mr)
+          null_mask.begin(), null_mask.end() - 1, cuda::std::identity{}, stream, mr)
       : std::pair{rmm::device_buffer{}, 0};
 
   return cudf::make_strings_column(
@@ -693,7 +692,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
           auto valids = valid_dist(engine, num_rows);
           return cudf::detail::valid_if(valids.begin(),
                                         valids.end(),
-                                        thrust::identity<bool>{},
+                                        cuda::std::identity{},
                                         cudf::get_default_stream(),
                                         cudf::get_current_device_resource_ref());
         }
@@ -787,7 +786,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
     auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
                                                           valids.end(),
-                                                          thrust::identity<bool>{},
+                                                          cuda::std::identity{},
                                                           cudf::get_default_stream(),
                                                           cudf::get_current_device_resource_ref());
     list_column                  = cudf::make_lists_column(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,10 @@
 
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <algorithm>
+#include <numeric>
 #include <set>
 #include <string>
 #include <utility>
@@ -101,21 +104,15 @@ std::string ptx_parser::register_type_to_cpp_type(std::string const& register_ty
 {
   if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
     return "char";
-  else if (register_type == ".u16")
-    return "short int";
-  else if (register_type == ".s16")
+  else if (register_type == ".b16" || register_type == ".s16" || register_type == ".u16")
     return "short int";
   else if (register_type == ".f16")
     return "half";
-  else if (register_type == ".u32")
-    return "int";
-  else if (register_type == ".s32")
+  else if (register_type == ".b32" || register_type == ".s32" || register_type == ".u32")
     return "int";
   else if (register_type == ".f16x2")
     return "half2";
-  else if (register_type == ".u64")
-    return "long int";
-  else if (register_type == ".s64")
+  else if (register_type == ".b64" || register_type == ".s64" || register_type == ".u64")
     return "long int";
   else if (register_type == ".f32")
     return "float";
@@ -228,8 +225,6 @@ std::string ptx_parser::parse_instruction(std::string const& src)
         } else {
           suffix = ": : \"" + constraint + "\"(" + remove_nonalphanumeric(piece) + ")";
         }
-        // Here we get to see the actual type of the input arguments.
-        input_arg_list[remove_nonalphanumeric(piece)] = register_type_to_cpp_type(register_type);
       } else if (is_pragma_instruction) {
         // quote any string
         std::string transformed_piece;
@@ -271,56 +266,47 @@ std::vector<std::string> ptx_parser::parse_function_body(std::string const& src)
   return statements;
 }
 
-std::string ptx_parser::parse_param(std::string const& src)
+ptx_param ptx_parser::parse_param(std::string const& src)
 {
   auto i = 0;
   auto f = src.cbegin();
 
+  ptx_param param;
+
+  // i.e: .param .b32 _ZNparam
   while (f < src.cend() && i <= 3) {
     f      = std::find_if_not(f, src.cend(), [](auto c) { return is_white(c); });
     auto l = std::find_if(f, src.cend(), [](auto c) { return is_white(c); });
-    if (++i == 3) return remove_nonalphanumeric(std::string(f, l));
+
+    auto token = std::string(f, l);
+
+    if (i == 1) {
+      param.register_type = token;
+    } else if (i == 2) {
+      param.identifier = remove_nonalphanumeric(token);
+    }
+
+    i++;
     f = l;
   }
-  return "";
+
+  return param;
 }
 
-std::string ptx_parser::parse_param_list(std::string const& src)
+std::vector<ptx_param> ptx_parser::parse_param_list(std::string const& src)
 {
   auto f = src.begin();
 
-  auto item_count = 0;
-  std::string output{};
+  std::vector<ptx_param> params{};
 
   while (f < src.end()) {
     auto l = std::find(f, src.end(), ',');
-
-    output += [&, name = parse_param(std::string(f, l))] {
-      if (pointer_arg_list.find(item_count) != pointer_arg_list.end()) {
-        if (item_count == 0) {
-          return output_arg_type + "* " + name;
-        } else {
-          // On a 64-bit machine inside the PTX function body a pointer is
-          // literally just a uint_64 so here is doesn't make sense to
-          // have the type of the pointer. Thus we will just use void* here.
-          return ",\n  const void* " + name;
-        }
-      } else {
-        if (input_arg_list.count(name)) {
-          return ", \n  " + input_arg_list[name] + " " + name;
-        } else {
-          // This parameter isn't used in the function body so we just pretend
-          // it's an int. After being inlined they are gone anyway.
-          return ", \n  int " + name;
-        }
-      }
-    }();
+    params.push_back(parse_param(std::string(f, l)));
 
     f = ++l;
-    item_count++;
   }
 
-  return "\n  " + output + "\n";
+  return params;
 }
 
 std::string ptx_parser::parse_function_header(std::string const& src)
@@ -339,8 +325,39 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   auto l = std::find(f, src.cend(), ')');
 
-  auto const input_arg = parse_param_list(std::string(f, l));
-  return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
+  auto const ptx_params = parse_param_list(std::string(f, l));
+
+  CUDF_EXPECTS(std::all_of(param_types.begin(),
+                           param_types.end(),
+                           [&](auto const& entry) { return entry.first < ptx_params.size(); }),
+               "Argument index exceeds the number of parameters found in the PTX");
+
+  std::vector<std::string> param_decls;
+
+  std::transform(thrust::make_counting_iterator(size_t{0}),
+                 thrust::make_counting_iterator(ptx_params.size()),
+                 std::back_inserter(param_decls),
+                 [&](size_t param_index) {
+                   auto const& param = ptx_params[param_index];
+
+                   if (auto const it = param_types.find(param_index); it != param_types.end()) {
+                     return it->second + " " + param.identifier;
+                   } else {
+                     return std::string{register_type_to_cpp_type(param.register_type)} + " " +
+                            param.identifier;
+                   }
+                 });
+
+  std::string const param_list =
+    param_decls.empty() ? ""
+                        : std::accumulate(std::next(param_decls.begin()),
+                                          param_decls.end(),
+                                          param_decls.front(),
+                                          [](std::string const& p0, std::string const& p1) {
+                                            return p0 + ",\n " + p1;
+                                          });
+
+  return "\n__device__ __inline__ void " + function_name + "(" + param_list + "){" + "\n";
 }
 
 // The interface
@@ -348,7 +365,6 @@ std::string ptx_parser::parse()
 {
   std::string const no_comments = remove_comments(ptx);
 
-  input_arg_list.clear();
   auto const _func = std::string(".func");  // Go directly to the .func mark
   auto f = std::search(no_comments.cbegin(), no_comments.cend(), _func.cbegin(), _func.cend()) +
            _func.size();
@@ -375,21 +391,33 @@ std::string ptx_parser::parse()
 
   // Don't use std::accumulate until C++20 when rvalue references are supported
   auto final_output = fn_header_output + "\n asm volatile (\"{\");";
-  for (auto const& line : fn_body_output)
-    final_output += line.find("ret;") != std::string::npos ? "  asm volatile (\"bra RETTGT;\");\n"
-                                                           : "  " + line + "\n";
+  for (auto const& line : fn_body_output) {
+    std::string output{line};
+    std::string_view const ret_instruction = "ret;";
+    if (auto start = output.find(ret_instruction); start != std::string::npos) {
+      output.replace(start, ret_instruction.size(), "bra RETTGT;");
+    }
+    final_output += "  " + output + "\n";
+  }
   return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
 ptx_parser::ptx_parser(std::string ptx_,
                        std::string function_name_,
-                       std::string output_arg_type_,
-                       std::set<int> const& pointer_arg_list_)
+                       std::map<unsigned int, std::string> param_types_)
   : ptx(std::move(ptx_)),
     function_name(std::move(function_name_)),
-    output_arg_type(std::move(output_arg_type_)),
-    pointer_arg_list(pointer_arg_list_)
+    param_types(std::move(param_types_))
 {
+}
+
+std::string parse_single_function_ptx(std::string const& src,
+                                      std::string const& function_name,
+                                      std::map<unsigned int, std::string> param_types)
+{
+  ptx_parser instance(src, function_name, param_types);
+
+  return instance.parse();
 }
 
 // The interface

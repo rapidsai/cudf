@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,20 +79,6 @@ std::unique_ptr<cudf::column> minhash(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @copydoc nvtext::minhash
- *
- * @deprecated Use nvtext::minhash()
- */
-[[deprecated]] std::unique_ptr<cudf::column> minhash_permuted(
-  cudf::strings_column_view const& input,
-  uint32_t seed,
-  cudf::device_span<uint32_t const> parameter_a,
-  cudf::device_span<uint32_t const> parameter_b,
-  cudf::size_type width,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
  * @brief Returns the minhash values for each string
  *
  * This function uses MurmurHash3_x64_128 for the hash algorithm.
@@ -131,20 +117,6 @@ std::unique_ptr<cudf::column> minhash(
  * @return List column of minhash values for each string per seed
  */
 std::unique_ptr<cudf::column> minhash64(
-  cudf::strings_column_view const& input,
-  uint64_t seed,
-  cudf::device_span<uint64_t const> parameter_a,
-  cudf::device_span<uint64_t const> parameter_b,
-  cudf::size_type width,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @copydoc nvtext::minhash64
- *
- * @deprecated Use nvtext::minhash64()
- */
-[[deprecated]] std::unique_ptr<cudf::column> minhash64_permuted(
   cudf::strings_column_view const& input,
   uint64_t seed,
   cudf::device_span<uint64_t const> parameter_a,

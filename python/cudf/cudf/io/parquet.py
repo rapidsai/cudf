@@ -22,10 +22,9 @@ from pyarrow import dataset as ds
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import as_column, column_empty
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
@@ -39,8 +38,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from typing_extensions import Self
-
-    from cudf.core.column import ColumnBase
 
 
 BYTE_SIZES = {
@@ -527,7 +524,7 @@ def write_to_dataset(
     return metadata
 
 
-def _parse_metadata(meta) -> tuple[bool, Any, Any]:
+def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
     file_is_range_index = False
     file_index_cols = None
     file_column_dtype = None
@@ -541,7 +538,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, Any]:
         ):
             file_is_range_index = True
     if "column_indexes" in meta and len(meta["column_indexes"]) == 1:
-        file_column_dtype = meta["column_indexes"][0]["numpy_type"]
+        file_column_dtype = np.dtype(meta["column_indexes"][0]["numpy_type"])
     return file_is_range_index, file_index_cols, file_column_dtype
 
 
@@ -1114,7 +1111,7 @@ def _parquet_to_frame(
                 codes = as_unsigned_codes(
                     len(partition_categories[name]), codes
                 )
-                dfs[-1][name] = CategoricalColumn(
+                col = CategoricalColumn(
                     data=None,
                     size=codes.size,
                     dtype=cudf.CategoricalDtype(
@@ -1126,22 +1123,13 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                _dtype = (
-                    partition_meta[name].dtype
-                    if partition_meta is not None
-                    else None
-                )
                 if pd.isna(value):
-                    dfs[-1][name] = column_empty(
-                        row_count=_len,
-                        dtype=_dtype,
-                    )
+                    col = column_empty(row_count=_len)
                 else:
-                    dfs[-1][name] = as_column(
-                        value,
-                        dtype=_dtype,
-                        length=_len,
-                    )
+                    col = as_column(value, length=_len)
+                if partition_meta is not None:
+                    col = col.astype(partition_meta[name].dtype)
+            dfs[-1][name] = col
 
     if len(dfs) > 1:
         # Concatenate dfs and return.
@@ -1235,7 +1223,7 @@ def _read_parquet(
                     tbl._columns[i] = None
 
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(column_names, concatenated_columns)
             }
             df = cudf.DataFrame._from_data(data)
@@ -1279,7 +1267,7 @@ def _read_parquet(
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
             data = {
-                name: Column.from_pylibcudf(col)
+                name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(
                     tbl_w_meta.column_names(include_children=False),
                     tbl_w_meta.columns,
@@ -2368,6 +2356,6 @@ def _process_metadata(
                 df.index.names = index_col
 
     if df._num_columns == 0 and column_index_type is not None:
-        df._data.label_dtype = cudf.dtype(column_index_type)
+        df._data.label_dtype = column_index_type
 
     return df

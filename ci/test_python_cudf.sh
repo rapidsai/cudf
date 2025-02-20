@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
@@ -15,12 +15,14 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest pylibcudf"
-pushd python/pylibcudf/pylibcudf/tests
-python -m pytest \
-  --cache-clear \
+./ci/run_pylibcudf_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-pylibcudf.xml" \
+  --numprocesses=8 \
   --dist=worksteal \
-  .
-popd
+  --cov-config=../.coveragerc \
+  --cov=pylibcudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
+  --cov-report=term
 
 rapids-logger "pytest cudf"
 ./ci/run_cudf_pytests.sh \

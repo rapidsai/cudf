@@ -4166,11 +4166,15 @@ def test_parquet_reader_with_mismatched_schemas_error():
 def test_parquet_roundtrip_zero_rows_no_column_mask():
     expected = cudf.DataFrame._from_data(
         {
-            "int": cudf.core.column.column_empty(0, "int64"),
-            "float": cudf.core.column.column_empty(0, "float64"),
-            "datetime": cudf.core.column.column_empty(0, "datetime64[ns]"),
-            "timedelta": cudf.core.column.column_empty(0, "timedelta64[ns]"),
-            "bool": cudf.core.column.column_empty(0, "bool"),
+            "int": cudf.core.column.column_empty(0, np.dtype(np.int64)),
+            "float": cudf.core.column.column_empty(0, np.dtype(np.float64)),
+            "datetime": cudf.core.column.column_empty(
+                0, np.dtype("datetime64[ns]")
+            ),
+            "timedelta": cudf.core.column.column_empty(
+                0, np.dtype("timedelta64[ns]")
+            ),
+            "bool": cudf.core.column.column_empty(0, np.dtype(np.bool_)),
             "decimal": cudf.core.column.column_empty(
                 0, cudf.Decimal64Dtype(1)
             ),

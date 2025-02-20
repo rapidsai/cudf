@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import functools
 from typing import Any
 
 import cupy as cp
+import numpy as np
 from numba import cuda
 from numba.core.utils import pysignature
 
@@ -159,7 +160,7 @@ class ApplyKernelCompilerBase:
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
-                len(df), dt, False
+                len(df), np.dtype(dt), False
             ).data_array_view(mode="write")
         # Bind argument
         args = {}

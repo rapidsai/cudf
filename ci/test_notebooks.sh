@@ -5,7 +5,9 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
-RAPIDS_VERSION="$(rapids-version)"
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
 rapids-logger "Generate notebook testing dependencies"
 
@@ -14,6 +16,8 @@ ENV_YAML_DIR="$(mktemp -d)"
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_notebooks \
+  --prepend-channel "${CPP_CHANNEL}" \
+  --prepend-channel "${PYTHON_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
@@ -24,16 +28,6 @@ conda activate test
 set -u
 
 rapids-print-env
-
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
-  "cudf=${RAPIDS_VERSION}" \
-  "libcudf=${RAPIDS_VERSION}"
 
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks

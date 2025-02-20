@@ -64,7 +64,7 @@ jobs:
       build_type: ${{ inputs.build_type || 'branch' }}
       container_image: "rapidsai/ci-conda:latest"
       date: ${{ inputs.date }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1"
       run_script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:

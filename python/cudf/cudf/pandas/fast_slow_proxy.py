@@ -112,7 +112,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        return object.__new__(self._type)
+        return object.__new__(get_final_type_map().get(self._type, self._type))
 
 
 _DELETE = object()
@@ -1333,6 +1333,10 @@ def _get_proxy_base_class(cls):
         if proxy_class in cls.__mro__:
             return proxy_class
     return object
+
+
+def is_proxy_instance(obj, type):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
 PROXY_BASE_CLASSES: set[type] = {

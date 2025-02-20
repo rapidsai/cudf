@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -33,8 +34,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] transform(
-        column_view input,
-        string unary_udf,
+        const vector[column_view] & inputs,
+        const string & transform_udf,
         data_type output_type,
         bool is_ptx
     ) except +libcudf_exception_handler

@@ -278,7 +278,11 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    * @param idx the index of the element to access
    * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
    */
-  constexpr typename base::reference operator[](size_type idx) const { return this->_data[idx]; }
+  constexpr typename base::reference operator[](typename base::size_type idx) const
+  {
+    static_assert(sizeof(idx) >= sizeof(size_t), "index type must not be smaller than size_t");
+    return this->_data[idx];
+  }
 
   // not noexcept due to undefined behavior when size = 0
   /**
@@ -402,8 +406,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
    * @param idx the index of the element to access
    * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
    */
-  __device__ constexpr typename base::reference operator[](size_type idx) const
+  __device__ constexpr typename base::reference operator[](typename base::size_type idx) const
   {
+    static_assert(sizeof(idx) >= sizeof(size_t), "index type must not be smaller than size_t");
     return this->_data[idx];
   }
 
@@ -512,7 +517,7 @@ class base_2dspan {
    * @param row the index of the element to access
    * @return A reference to the row-th element of the sequence, i.e., `data()[row]`
    */
-  CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> operator[](size_t row) const
+  CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> operator[](std::size_t row) const
   {
     return _flat.subspan(row * _size.second, _size.second);
   }

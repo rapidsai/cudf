@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ static void bench_like(nvbench::state& state)
   auto input = cudf::strings_column_view(col->view());
 
   // This pattern forces reading the entire target string (when matched expected)
-  auto pattern = std::string("% 5W4_");  // regex equivalent: ".* 5W4.$"
+  auto pattern = std::string_view("% 5W4_");  // regex equivalent: ".* 5W4.$"
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well

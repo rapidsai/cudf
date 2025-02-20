@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,18 +23,16 @@
 /**
  * @file orc_field_writer.hpp
  * @brief Struct to encapsulate common functionality required to implement
- * `ProtobufWriter::write(...)` functions
+ * `protobuf_writer::write(...)` functions
  */
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
-struct ProtobufWriter::ProtobufFieldWriter {
+struct protobuf_writer::protobuf_field_writer {
   int struct_size{0};
-  ProtobufWriter* p;
+  protobuf_writer* p;
 
-  ProtobufFieldWriter(ProtobufWriter* pbw) : p(pbw) {}
+  protobuf_field_writer(protobuf_writer* pbw) : p(pbw) {}
 
   /**
    * @brief Function to write a unsigned integer to the internal buffer
@@ -129,6 +127,4 @@ struct ProtobufWriter::ProtobufFieldWriter {
   size_t value() { return struct_size; }
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

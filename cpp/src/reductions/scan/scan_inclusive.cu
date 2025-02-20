@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/find.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
@@ -57,7 +57,7 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
   auto first_null_position = [&] {
     size_type const first_null =
       thrust::find_if_not(
-        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), thrust::identity{}) -
+        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), cuda::std::identity{}) -
       valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);

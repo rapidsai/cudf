@@ -172,7 +172,7 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.interop.from_arrow(
                     pa.scalar(
-                        column.obj.size() - column.obj.null_count(),
+                        column.size - column.null_count,
                         type=plc.interop.to_arrow(self.dtype),
                     ),
                 ),
@@ -181,7 +181,7 @@ class Agg(Expr):
         )
 
     def _sum(self, column: Column) -> Column:
-        if column.obj.size() == 0:
+        if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
                     plc.interop.from_arrow(
@@ -224,7 +224,7 @@ class Agg(Expr):
         return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
-        n = column.obj.size()
+        n = column.size
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(

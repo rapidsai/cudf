@@ -2290,3 +2290,15 @@ def test_merge_index_on_opposite_how_column_reset_index():
     expected = pd.merge(ser, df, on="a", how="right")
     result = cudf.merge(ser_cudf, df_cudf, on="a", how="right")
     assert_eq(result, expected)
+
+
+def test_merge_suffixes_duplicate_label_raises():
+    data = {"a": [1, 2, 3, 4, 5], "b": [6, 6, 6, 6, 6]}
+    df_cudf = cudf.DataFrame(data)
+    df_pd = pd.DataFrame(data)
+    result = df_cudf.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+    expected = df_pd.merge(df_pd, on=["a"], suffixes=("", "_right"))
+    assert_eq(result, expected)
+
+    with pytest.raises(NotImplementedError):
+        result.merge(df_cudf, on=["a"], suffixes=("", "_right"))

@@ -408,10 +408,16 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
-  return std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
+  auto const total_row_groups = std::accumulate(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
+
+  return static_cast<size_type>(total_row_groups);
 }
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
@@ -1029,7 +1035,12 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+std::tuple<int64_t,
+           size_type,
+           std::vector<row_group_info>,
+           std::vector<size_t>,
+           size_type,
+           surviving_row_group_metrics>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
@@ -1040,17 +1051,63 @@ aggregate_reader_metadata::select_row_groups(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
+  // Compute total number of input row groups
+  size_type total_row_groups = [&]() {
+    if (not row_group_indices.empty()) {
+      size_t const total_row_groups =
+        std::accumulate(row_group_indices.begin(),
+                        row_group_indices.end(),
+                        size_t{0},
+                        [](size_t& sum, auto const& pfm) { return sum + pfm.size(); });
+
+      // Check if we have less than 2B total row groups.
+      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+                   "Total number of row groups exceed the size_type's limit");
+      return static_cast<size_type>(total_row_groups);
+    } else {
+      return num_row_groups;
+    }
+  }();
+
+  // Pair to store the number of row groups after stats and bloom filtering respectively. Initialize
+  // to total_row_groups.
+  surviving_row_group_metrics num_row_groups_after_filters{};
+
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    filtered_row_group_indices = filter_row_groups(
-      sources, row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+    // Span of input row group indices for predicate pushdown
+    host_span<std::vector<size_type> const> input_row_group_indices;
+    std::vector<std::vector<size_type>> all_row_group_indices;
+    if (row_group_indices.empty()) {
+      std::transform(per_file_metadata.cbegin(),
+                     per_file_metadata.cend(),
+                     std::back_inserter(all_row_group_indices),
+                     [](auto const& file_meta) {
+                       std::vector<size_type> rg_idx(file_meta.row_groups.size());
+                       std::iota(rg_idx.begin(), rg_idx.end(), 0);
+                       return rg_idx;
+                     });
+      input_row_group_indices = host_span<std::vector<size_type> const>(all_row_group_indices);
+    } else {
+      input_row_group_indices = row_group_indices;
+    }
+    // Predicate pushdown: Filter row groups using stats and bloom filters
+    std::tie(filtered_row_group_indices, num_row_groups_after_filters) =
+      filter_row_groups(sources,
+                        input_row_group_indices,
+                        total_row_groups,
+                        output_dtypes,
+                        output_column_schemas,
+                        filter.value(),
+                        stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
-  std::vector<row_group_info> selection;
+
+  // Compute the number of rows to read and skip
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
@@ -1061,7 +1118,9 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
-  // Get number of rows in each data source
+  // Vector to hold the `row_group_info` of selected row groups
+  std::vector<row_group_info> selection;
+  // Number of rows in each data source
   std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
 
   if (!row_group_indices.empty()) {
@@ -1083,6 +1142,10 @@ aggregate_reader_metadata::select_row_groups(
       }
     }
   } else {
+    // Reset and recompute input row group count to adjust for num_rows and skip_rows. Here, the
+    // output from predicate pushdown was empty. i.e., no row groups filtered.
+    total_row_groups = 0;
+
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
       auto const& fmd = per_file_metadata[src_idx];
@@ -1093,6 +1156,9 @@ aggregate_reader_metadata::select_row_groups(
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
+          // Keep this row group, increase count
+          total_row_groups++;
+
           // start row of this row group adjusted with rows_to_skip
           num_rows_per_source[src_idx] += count;
           num_rows_per_source[src_idx] -=
@@ -1113,9 +1179,24 @@ aggregate_reader_metadata::select_row_groups(
         }
       }
     }
+
+    // If filter had a value and no row groups were filtered, set the number of row groups after
+    // filters to the number of adjusted input row groups
+    auto const after_stats_filter = num_row_groups_after_filters.after_stats_filter.has_value()
+                                      ? std::make_optional(total_row_groups)
+                                      : std::nullopt;
+    auto const after_bloom_filter = num_row_groups_after_filters.after_bloom_filter.has_value()
+                                      ? std::make_optional(total_row_groups)
+                                      : std::nullopt;
+    num_row_groups_after_filters  = {after_stats_filter, after_bloom_filter};
   }
 
-  return {rows_to_skip, rows_to_read, std::move(selection), std::move(num_rows_per_source)};
+  return {rows_to_skip,
+          rows_to_read,
+          std::move(selection),
+          std::move(num_rows_per_source),
+          total_row_groups,
+          std::move(num_row_groups_after_filters)};
 }
 
 std::tuple<std::vector<input_column_info>,

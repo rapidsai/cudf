@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -277,13 +277,24 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
-  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source
                                             //!< Currently only computed for Parquet readers if no
-                                            //!< AST filters being used. Empty vector otherwise.
+                                            //!< AST filters being used. Empty vector otherwise
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>
     per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
+
+  // The following variables are currently only computed for Parquet reader
+  size_type num_input_row_groups{0};  //!< Total number of input row groups across all data sources
+  std::optional<size_type>
+    num_row_groups_after_stats_filter;  //!< Number of remaining row groups after stats filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
+  std::optional<size_type>
+    num_row_groups_after_bloom_filter;  //!< Number of remaining row groups after bloom filter.
+                                        //!< std::nullopt if no filtering done. Currently only
+                                        //!< reported by Parquet readers
 };
 
 /**
@@ -342,8 +353,8 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths)
-    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  explicit source_info(std::vector<std::string> file_paths)
+    : _type(io_type::FILEPATH), _filepaths(std::move(file_paths))
   {
   }
 
@@ -352,8 +363,8 @@ struct source_info {
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path)
-    : _type(io_type::FILEPATH), _filepaths({file_path})
+  explicit source_info(std::string file_path)
+    : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
   {
   }
 
@@ -523,8 +534,8 @@ struct sink_info {
    *
    * @param file_paths Output files paths
    */
-  explicit sink_info(std::vector<std::string> const& file_paths)
-    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
+  explicit sink_info(std::vector<std::string> file_paths)
+    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(std::move(file_paths))
   {
   }
 
@@ -533,8 +544,8 @@ struct sink_info {
    *
    * @param file_path Single output file path
    */
-  explicit sink_info(std::string const& file_path)
-    : _type(io_type::FILEPATH), _filepaths({file_path})
+  explicit sink_info(std::string file_path)
+    : _type(io_type::FILEPATH), _filepaths({std::move(file_path)})
   {
   }
 
@@ -543,8 +554,8 @@ struct sink_info {
    *
    * @param buffers Output host buffers
    */
-  explicit sink_info(std::vector<std::vector<char>*> const& buffers)
-    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
+  explicit sink_info(std::vector<std::vector<char>*> buffers)
+    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(std::move(buffers))
   {
   }
   /**
@@ -560,7 +571,9 @@ struct sink_info {
    * @param user_sinks Output user-implemented sinks
    */
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
-    : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
+    : _type(io_type::USER_IMPLEMENTED),
+      _num_sinks(user_sinks.size()),
+      _user_sinks(std::move(user_sinks))
   {
   }
 
@@ -810,7 +823,7 @@ class column_in_metadata {
    *
    * @return The name of this column
    */
-  [[nodiscard]] std::string get_name() const noexcept { return _name; }
+  [[nodiscard]] std::string const& get_name() const noexcept { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.

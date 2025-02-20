@@ -20,6 +20,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
+#include <vector>
+
 namespace cudf {
 namespace detail {
 

@@ -1,6 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
+
+from datetime import timedelta
 
 import numpy as np
 import pytest
@@ -58,6 +60,7 @@ def ldf(with_nulls, dtype):
         {
             "a": pl.Series(values, dtype=dtype),
             "b": pl.Series([i - 4 for i in range(len(values))], dtype=pl.Float32),
+            "c": pl.Series([timedelta(hours=i) for i in range(len(values))]),
         }
     )
 
@@ -89,3 +92,9 @@ def test_log(ldf, natural):
     q = ldf.select(expr)
 
     assert_gpu_result_equal(q, check_exact=False)
+
+
+@pytest.mark.parametrize("col", ["a", "b", "c"])
+def test_negate(ldf, col):
+    q = ldf.select(-pl.col(col))
+    assert_gpu_result_equal(q)

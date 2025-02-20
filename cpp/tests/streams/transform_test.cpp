@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,11 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
-  cudf::transform(
-    in, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx, cudf::test::get_default_stream());
+  cudf::transform({in},
+                  udf,
+                  cudf::data_type(cudf::type_to_id<dtype>()),
+                  is_ptx,
+                  cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, Transform)

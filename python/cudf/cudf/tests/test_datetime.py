@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -1639,11 +1639,7 @@ def test_date_range_raise_overflow():
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd.errors.OutOfBoundsDatetime):
-        # Extending beyond the max value will trigger a warning when pandas
-        # does an internal conversion to a Python built-in datetime.datetime
-        # object, which only supports down to microsecond resolution.
-        with pytest.warns(UserWarning):
-            cudf.date_range(start=start, periods=periods, freq=freq)
+        cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 @pytest.mark.parametrize(
@@ -1683,7 +1679,9 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         with pytest.raises(ValueError, match="does not yet support"):
-            with expect_warning_if(PANDAS_GE_220):
+            with expect_warning_if(
+                PANDAS_GE_220 and freqstr_unsupported not in {"b", "bh"}
+            ):
                 cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 
@@ -2563,3 +2561,17 @@ def test_date_range_start_end_divisible_by_freq():
     result = cudf.date_range("2011-01-01", "2011-01-02", freq="h")
     expected = pd.date_range("2011-01-01", "2011-01-02", freq="h")
     assert_eq(result, expected)
+
+
+def test_writable_numpy_array():
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]")
+    expected_flags = pd.Index(
+        [1, 2, 3], dtype="datetime64[ns]"
+    )._data._ndarray.flags
+
+    actual_flags = gi.to_pandas()._data._ndarray.flags
+    assert expected_flags.c_contiguous == actual_flags.c_contiguous
+    assert expected_flags.f_contiguous == actual_flags.f_contiguous
+    assert expected_flags.writeable == actual_flags.writeable
+    assert expected_flags.aligned == actual_flags.aligned
+    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy

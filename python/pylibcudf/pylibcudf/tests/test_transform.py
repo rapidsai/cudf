@@ -1,8 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import math
 
+import numba
 import pyarrow as pa
+from numba import cuda
 from utils import assert_column_eq
 
 import pylibcudf as plc
@@ -81,3 +83,33 @@ def test_one_hot_encode():
         schema=pa.schema([pa.field("", pa.bool_(), nullable=False)] * 3),
     )
     assert result.equals(expected)
+
+
+def test_transform_udf():
+    @cuda.jit(device=True)
+    def op(a, b, c):
+        return (a + b) * c
+
+    ptx, _ = cuda.compile_ptx_for_current_device(
+        op, (numba.float64, numba.float64, numba.float64), device=True
+    )
+
+    A = 5.0
+    B = 20.0
+    C = 0.5
+
+    a = pa.array([A] * 100)
+    b = pa.array([B] * 100)
+    c = pa.array([C])
+    expected = pa.array([(A + B) * C] * 100)
+    result = plc.transform.transform(
+        [
+            plc.interop.from_arrow(a),
+            plc.interop.from_arrow(b),
+            plc.interop.from_arrow(c),
+        ],
+        transform_udf=ptx,
+        output_type=plc.DataType(plc.TypeId.FLOAT64),
+        is_ptx=True,
+    )
+    assert_column_eq(expected, result)

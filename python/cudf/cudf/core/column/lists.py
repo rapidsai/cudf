@@ -545,7 +545,8 @@ class ListMethods(ColumnMethods):
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
                 out = out._scatter_by_column(
-                    out_of_bounds_mask, cudf.Scalar(default)
+                    out_of_bounds_mask,
+                    pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
         if out.dtype != self._column.dtype.element_type:
             # libcudf doesn't maintain struct labels so we must transfer over

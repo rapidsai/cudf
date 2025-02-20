@@ -27,6 +27,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 
+#include <string_view>
+
 /**
  * @file
  * @brief Class definitions for cudf::scalar
@@ -454,7 +456,7 @@ class string_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation.
    */
-  string_scalar(std::string const& string,
+  string_scalar(std::string_view string,
                 bool is_valid                     = true,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

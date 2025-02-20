@@ -193,6 +193,9 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
     "tests/unit/test_empty.py::test_empty_9137": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
+    "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_parquet-write_parquet]": "Need to expose include_file_paths xref: cudf#18012",
+    "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_csv-write_csv]": "Need to expose include_file_paths xref: cudf#18012",
+    "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics[False]": "Debug output on stderr doesn't match",
     # Maybe flaky, order-dependent?
     "tests/unit/test_projections.py::test_schema_full_outer_join_projection_pd_13287": "Order-specific result check, query is correct but in different order",
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
@@ -214,6 +217,10 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
+    # TODO: Remove once when we support polars 1.23
+    "tests/unit/io/database/test_read.py::test_read_database[uri: connectorx]": "ValueError: arrow2",
+    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://123:456@account/database/schema?warehouse=warehouse&role=role]": "ValueError: arrow2",
+    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://my#%us3r:p433w0rd@not_a_real_host:9999/database]": "ValueError: arrow2",
 }
 
 

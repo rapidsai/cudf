@@ -1,7 +1,8 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import glob
 import os
 import pickle
 from typing import TYPE_CHECKING, BinaryIO
@@ -75,23 +76,40 @@ def pytest_collection_modifyitems(
             swap_xfail(item, "xfail_compare")
 
 
+def get_full_nodeid(pyfuncitem):
+    # Get the full path to the test file
+    filepath = pyfuncitem.path
+    # Get the test name and any parameters
+    test_name = "::".join(pyfuncitem.nodeid.split("::")[1:])
+    # Combine the full file path with the test name
+    full_nodeid = f"{filepath}::{test_name}"
+    return full_nodeid
+
+
+def read_all_results(pattern):
+    results = {}
+    for filepath in glob.glob(pattern):
+        with open(filepath, "rb") as f:
+            results.update(dict(read_results(f)))
+    return results
+
+
 def pytest_configure(config: _pytest.config.Config):
     gold_basename = "results-gold"
     cudf_basename = "results-cudf-pandas"
     test_folder = os.path.join(os.path.dirname(__file__))
 
     if config.getoption("--compare"):
-        # Everyone reads everything
-        gold_path = os.path.join(test_folder, f"{gold_basename}.pickle")
-        cudf_path = os.path.join(test_folder, f"{cudf_basename}.pickle")
+        gold_path = os.path.join(test_folder, f"{gold_basename}*.pickle")
+        cudf_path = os.path.join(test_folder, f"{cudf_basename}*.pickle")
         with disable_module_accelerator():
-            with open(gold_path, "rb") as f:
-                gold_results = dict(read_results(f))
-        with open(cudf_path, "rb") as f:
-            cudf_results = dict(read_results(f))
+            gold_results = read_all_results(gold_path)
+        cudf_results = read_all_results(cudf_path)
         config.stash[results] = (gold_results, cudf_results)
     else:
-        if "cudf.pandas" in config.option.plugins:
+        if any(
+            plugin.strip() == "cudf.pandas" for plugin in config.option.plugins
+        ):
             basename = cudf_basename
         else:
             basename = gold_basename
@@ -112,7 +130,7 @@ def pytest_configure(config: _pytest.config.Config):
 def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
     if pyfuncitem.config.getoption("--compare"):
         gold_results, cudf_results = pyfuncitem.config.stash[results]
-        key = pyfuncitem.nodeid
+        key = get_full_nodeid(pyfuncitem)
         try:
             gold = gold_results[key]
         except KeyError:
@@ -140,7 +158,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         # Tuple-based key-value pairs, key is the node-id
         try:
             pickle.dump(
-                (pyfuncitem.nodeid, result),
+                (get_full_nodeid(pyfuncitem), result),
                 pyfuncitem.config.stash[file_handle_key],
             )
         except pickle.PicklingError:

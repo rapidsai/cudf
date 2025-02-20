@@ -1,6 +1,6 @@
-=========
-pylibcudf
-=========
+=============
+API Reference
+=============
 
 This page provides API documentation for pylibcudf.
 

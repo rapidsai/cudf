@@ -47,6 +47,11 @@ struct file_intermediate_data {
   // partial sum of the number of rows per data source
   std::vector<std::size_t> exclusive_sum_num_rows_per_source{};
 
+  size_type num_input_row_groups{0};  // total number of input row groups across all data sources
+
+  // struct containing the number of remaining row groups after each predicate pushdown filter
+  surviving_row_group_metrics surviving_row_groups;
+
   size_t _current_input_pass{0};  // current input pass index
   size_t _output_chunk_count{0};  // how many output chunks we have produced
 

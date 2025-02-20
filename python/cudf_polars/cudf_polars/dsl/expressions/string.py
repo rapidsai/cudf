@@ -210,7 +210,7 @@ class StringFunction(Expr):
             (child,) = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
             delimiter, ignore_nulls = self.options
-            if column.obj.null_count() > 0 and not ignore_nulls:
+            if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1))
             return Column(
                 plc.strings.combine.join_strings(
@@ -228,7 +228,7 @@ class StringFunction(Expr):
                 pat = arg.evaluate(df, context=context, mapping=mapping)
                 pattern = (
                     pat.obj_scalar
-                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    if pat.is_scalar and pat.size != column.size
                     else pat.obj
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
@@ -298,7 +298,7 @@ class StringFunction(Expr):
                 plc.strings.find.ends_with(
                     column.obj,
                     suffix.obj_scalar
-                    if column.obj.size() != suffix.obj.size() and suffix.is_scalar
+                    if column.size != suffix.size and suffix.is_scalar
                     else suffix.obj,
                 )
             )
@@ -308,7 +308,7 @@ class StringFunction(Expr):
                 plc.strings.find.starts_with(
                     column.obj,
                     prefix.obj_scalar
-                    if column.obj.size() != prefix.obj.size() and prefix.is_scalar
+                    if column.size != prefix.size and prefix.is_scalar
                     else prefix.obj,
                 )
             )

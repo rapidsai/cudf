@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <optional>
+#include <string_view>
 
 namespace CUDF_EXPORT cudf {
 namespace io {
@@ -90,7 +91,7 @@ struct parse_options {
  */
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
-  std::string const& delimiter,
+  std::string_view delimiter,
   parse_options options             = {},
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

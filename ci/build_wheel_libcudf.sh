@@ -18,7 +18,7 @@ rapids-dependency-file-generator \
 | tee /tmp/requirements-build.txt
 
 rapids-logger "Installing build requirements"
-python -m pip install \
+rapids-pip-retry install \
     -v \
     --prefer-binary \
     -r /tmp/requirements-build.txt
@@ -34,6 +34,7 @@ mkdir -p ${package_dir}/final_dist
 python -m auditwheel repair \
     --exclude libnvcomp.so.4 \
     --exclude libkvikio.so \
+    --exclude librapids_logger.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 

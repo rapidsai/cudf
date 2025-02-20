@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -12,7 +12,7 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import find_common_type, is_mixed_with_object_dtype
 
 if TYPE_CHECKING:
-    from cudf._typing import ScalarLike
+    from cudf._typing import DtypeObj, ScalarLike
     from cudf.core.column import ColumnBase
 
 
@@ -106,20 +106,13 @@ def _check_and_cast_columns_with_other(
     return _normalize_categorical(source_col.astype(common_dtype), other)
 
 
-def _can_cast(from_dtype, to_dtype):
+def _can_cast(from_dtype: DtypeObj, to_dtype: DtypeObj) -> bool:
     """
     Utility function to determine if we can cast
     from `from_dtype` to `to_dtype`. This function primarily calls
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if cudf.utils.utils.is_na_like(from_dtype):
-        return True
-    if isinstance(from_dtype, type):
-        from_dtype = cudf.dtype(from_dtype)
-    if isinstance(to_dtype, type):
-        to_dtype = cudf.dtype(to_dtype)
-
     # TODO : Add precision & scale checking for
     # decimal types in future
 
@@ -131,6 +124,8 @@ def _can_cast(from_dtype, to_dtype):
                 return True
             else:
                 return False
+        else:
+            return False
     elif isinstance(from_dtype, np.dtype):
         if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
@@ -139,22 +134,22 @@ def _can_cast(from_dtype, to_dtype):
                 return True
             else:
                 return False
-        elif isinstance(to_dtype, cudf.core.types.CategoricalDtype):
+        elif isinstance(to_dtype, cudf.CategoricalDtype):
             return True
         else:
             return False
-    elif isinstance(from_dtype, cudf.core.dtypes.ListDtype):
+    elif isinstance(from_dtype, cudf.ListDtype):
         # TODO: Add level based checks too once casting of
         # list columns is supported
-        if isinstance(to_dtype, cudf.core.dtypes.ListDtype):
+        if isinstance(to_dtype, cudf.ListDtype):
             return np.can_cast(from_dtype.leaf_type, to_dtype.leaf_type)
         else:
             return False
-    elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
-        if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
+    elif isinstance(from_dtype, cudf.CategoricalDtype):
+        if isinstance(to_dtype, cudf.CategoricalDtype):
             return True
         elif isinstance(to_dtype, np.dtype):
-            return np.can_cast(from_dtype._categories.dtype, to_dtype)
+            return np.can_cast(from_dtype.categories.dtype, to_dtype)
         else:
             return False
     else:

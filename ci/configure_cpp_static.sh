@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -15,7 +15,7 @@ rapids-dependency-file-generator \
   --file-key test_static_build \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${REQUIREMENTS_FILE}"
 
-python -m pip install -r "${REQUIREMENTS_FILE}"
+rapids-pip-retry install -r "${REQUIREMENTS_FILE}"
 pyenv rehash
 
 cmake -S cpp -B build_static -GNinja -DBUILD_SHARED_LIBS=OFF -DCUDF_USE_ARROW_STATIC=ON -DBUILD_TESTS=OFF

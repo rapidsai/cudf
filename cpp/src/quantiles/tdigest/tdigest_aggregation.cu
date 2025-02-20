@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1088,7 +1088,7 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
         size_type i) { return tdigest_offsets[group_offsets[i]]; }));
 
   // perform the sort using the means as the key
-  size_t temp_size;
+  size_t temp_size = 0;
   CUDF_CUDA_TRY(cub::DeviceSegmentedSort::SortPairs(nullptr,
                                                     temp_size,
                                                     tdv.means().begin<double>(),

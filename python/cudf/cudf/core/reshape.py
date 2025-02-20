@@ -11,7 +11,6 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
@@ -20,7 +19,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
-    from cudf._typing import Dtype
+    from cudf._typing import DtypeObj
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -810,6 +809,8 @@ def get_dummies(
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
+    dtype = cudf.dtype(dtype)
+
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
 
@@ -978,7 +979,7 @@ def _merge_sorted(
     )
 
     result_columns = [
-        Column.from_pylibcudf(col) for col in plc_table.columns()
+        ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(
@@ -1316,7 +1317,7 @@ def _one_hot_encode_column(
     categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
-    dtype: Dtype | None,
+    dtype: DtypeObj,
     drop_first: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
@@ -1348,8 +1349,7 @@ def _one_hot_encode_column(
         data.pop(next(iter(data)))
     if prefix is not None and prefix_sep is not None:
         data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
-    if dtype:
-        data = {k: v.astype(dtype) for k, v in data.items()}
+    data = {k: v.astype(dtype) for k, v in data.items()}
     return data
 
 

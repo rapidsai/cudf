@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -16,7 +16,7 @@ cd "${package_dir}"
 sccache --zero-stats
 
 rapids-logger "Building '${package_name}' wheel"
-python -m pip wheel \
+rapids-pip-retry wheel \
     -w dist \
     -v \
     --no-deps \

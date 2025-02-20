@@ -771,6 +771,22 @@ on_bad_lines : {'error', 'recover'}, default 'error'
 
     - ``'error'``, raise an Exception when a bad line is encountered.
     - ``'recover'``, fills the row with <NA> when a bad line is encountered.
+**kwargs : Additional parameters to be passed to the JSON reader. These are experimental features subject to change.
+    - ``'normalize_single_quotes'``, normalize single quotes to double quotes in the input buffer
+    - ``'normalize_whitespace'``, normalize unquoted whitespace in input buffer
+    - ``'delimiter'``, delimiter separating records in JSONL inputs
+    - ``'experimental'``, whether to enable experimental features.
+        When set to true, experimental features, such as the new column tree
+        construction, utf-8 matching of field names will be enabled.
+    - ``'na_values'``, sets additional values to recognize as null values.
+    - ``'nonnumeric_numbers'``, set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
+        Infinity, and -Infinity. Strict validation must be enabled for this to work.
+    - ``'nonnumeric_numbers'``, set whether leading zeros are allowed in numeric values. Strict validation
+        must be enabled for this to work.
+    - ``'strict_validation'``, set whether strict validation is enabled or not
+    - ``'unquoted_control_chars'``, set whether in a quoted string should characters greater than or equal to 0
+        and less than 32 be allowed without some form of escaping. Strict validation
+        must be enabled for this to work.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
@@ -1623,12 +1639,18 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
     )
 
     md_dict = json.loads(metadata[b"pandas"])
+    _update_pandas_metadata_types_inplace(table, md_dict)
+    return json.dumps(md_dict)
 
+
+def _update_pandas_metadata_types_inplace(
+    df: cudf.DataFrame, md_dict: dict
+) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
         if (
-            col_meta["name"] in table._column_names
-            and table._data[col_meta["name"]].nullable
+            col_meta["name"] in df._column_names
+            and df._data[col_meta["name"]].nullable
             and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
             and col_meta["pandas_type"] != "decimal"
         ):
@@ -1637,8 +1659,6 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             ]
         if col_meta["numpy_type"] in ("list", "struct"):
             col_meta["numpy_type"] = "object"
-
-    return json.dumps(md_dict)
 
 
 def is_url(url):

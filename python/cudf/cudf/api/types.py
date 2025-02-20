@@ -34,6 +34,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 
 def is_numeric_dtype(obj):
@@ -113,7 +114,7 @@ def is_string_dtype(obj):
     return (
         (
             isinstance(obj, (cudf.Index, cudf.Series))
-            and obj.dtype == cudf.dtype("O")
+            and obj.dtype == CUDF_STRING_DTYPE
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (

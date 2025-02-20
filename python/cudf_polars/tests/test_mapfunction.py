@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -92,4 +92,15 @@ def test_unpivot_defaults():
         }
     )
     q = df.unpivot(index="d")
+    assert_gpu_result_equal(q)
+
+
+def test_with_row_index_defaults():
+    lf = pl.LazyFrame(
+        {
+            "a": [1, 3, 5],
+            "b": [2, 4, 6],
+        }
+    )
+    q = lf.with_row_index()
     assert_gpu_result_equal(q)
