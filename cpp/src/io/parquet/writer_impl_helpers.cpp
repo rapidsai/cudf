@@ -26,6 +26,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
+#include <functional>
+#include <string>
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;

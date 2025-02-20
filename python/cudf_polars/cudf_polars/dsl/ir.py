@@ -1650,6 +1650,16 @@ class Projection(IR):
         return DataFrame(columns)
 
 
+class MergeSorted(IR):
+    """Merge sorted operation."""
+
+    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
+        # libcudf merge is not stable wrt order of inputs, since
+        # it uses a priority queue to manage the tables it produces.
+        # See: https://github.com/rapidsai/cudf/issues/16010
+        raise NotImplementedError("MergeSorted not yet implemented")
+
+
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -1663,13 +1673,10 @@ class MapFunction(IR):
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
             "rechunk",
-            # libcudf merge is not stable wrt order of inputs, since
-            # it uses a priority queue to manage the tables it produces.
-            # See: https://github.com/rapidsai/cudf/issues/16010
-            # "merge_sorted",
             "rename",
             "explode",
             "unpivot",
+            "row_index",
         ]
     )
 
@@ -1678,8 +1685,12 @@ class MapFunction(IR):
         self.name = name
         self.options = options
         self.children = (df,)
-        if self.name not in MapFunction._NAMES:
-            raise NotImplementedError(f"Unhandled map function {self.name}")
+        if (
+            self.name not in MapFunction._NAMES
+        ):  # pragma: no cover; need more polars rust functions
+            raise NotImplementedError(
+                f"Unhandled map function {self.name}"
+            )  # pragma: no cover
         if self.name == "explode":
             (to_explode,) = self.options
             if len(to_explode) > 1:
@@ -1716,6 +1727,9 @@ class MapFunction(IR):
                 variable_name,
                 value_name,
             )
+        elif self.name == "row_index":
+            col_name, offset = options
+            self.options = (col_name, offset)
         self._non_child_args = (schema, name, self.options)
 
     @classmethod
@@ -1781,6 +1795,23 @@ class MapFunction(IR):
                     Column(value_column, name=value_name),
                 ]
             )
+        elif name == "row_index":
+            col_name, offset = options
+            dtype = schema[col_name]
+            step = plc.interop.from_arrow(
+                pa.scalar(1, type=plc.interop.to_arrow(dtype))
+            )
+            init = plc.interop.from_arrow(
+                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
+            )
+            index_col = Column(
+                plc.filling.sequence(df.num_rows, init, step),
+                is_sorted=plc.types.Sorted.YES,
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.AFTER,
+                name=col_name,
+            )
+            return DataFrame([index_col, *df.columns])
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 
