@@ -77,7 +77,7 @@ test-results
 CMakeFiles/
 Debug
 build/
-cpp/build/
+./cpp/build/
 cpp/examples/*/install/
 cpp/examples/*/build/
 cpp/include/cudf/ipc_generated/*.h
