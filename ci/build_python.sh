@@ -21,7 +21,6 @@ sccache --zero-stats
 
 # TODO: Remove `--test skip` flag once importing on a CPU
 # node works correctly
-# With boa installed conda build forwards to the boa builder
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
