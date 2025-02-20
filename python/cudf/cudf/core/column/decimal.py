@@ -228,8 +228,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self
 
     def to_arrow(self) -> pa.Array:
-        # Preserve the self.dtype.precision in the pyarrow result
-        return super().to_arrow().cast(self.dtype.to_arrow())
+        # Try preserving the self.dtype.precision in the pyarrow result
+        pa_array = super().to_arrow()
+        try:
+            return pa_array.cast(self.dtype.to_arrow())
+        except pa.ArrowInvalid:
+            # Value doesn't fit in specified precision
+            return pa_array
 
     def to_pandas(
         self,
@@ -240,11 +245,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # TODO: Can remove override once pyarrow>=20 is the minimum version
         # https://github.com/apache/arrow/pull/45571
         if not arrow_type and not nullable:
-            return pd.Index(
-                self.to_arrow()
-                .cast(pa.decimal128(self.dtype.precision, self.dtype.scale))
-                .to_pandas()
+            pa_array = self.to_arrow()
+            pa_type = pa_array.type
+            pa_array = pa_array.cast(
+                pa.decimal128(pa_type.precision, pa_type.scale)
             )
+            return pd.Index(pa_array.to_pandas())
         else:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
