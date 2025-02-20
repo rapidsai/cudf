@@ -14,39 +14,22 @@
  * limitations under the License.
  */
 
-//// #include "arrow_utilities.hpp"
-////
-//// #include <cudf/column/column_view.hpp>
-//// #include <cudf/copying.hpp>
-//// #include <cudf/detail/get_value.cuh>
-
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/interop.hpp>
-//// #include <cudf/detail/null_mask.hpp>
-//// #include <cudf/detail/nvtx/ranges.hpp>
-//// #include <cudf/detail/transform.hpp>
-//// #include <cudf/detail/unary.hpp>
-//// #include <cudf/interop.hpp>
-//// #include <cudf/table/table_view.hpp>
-//// #include <cudf/types.hpp>
-//// #include <cudf/utilities/default_stream.hpp>
-//// #include <cudf/utilities/memory_resource.hpp>
-//// #include <cudf/utilities/traits.hpp>
-//// #include <cudf/utilities/type_dispatcher.hpp>
-////
-//// #include <rmm/cuda_device.hpp>
-//// #include <rmm/cuda_stream_view.hpp>
-//// #include <rmm/device_buffer.hpp>
-////
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
-//
-// #include <exception>
+
 #include <memory>
 #include <utility>
-#include <variant>
-// #include <memory>
-//
+
 /*
  * Notes on ownership
  *
@@ -258,10 +241,6 @@ unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
 //         .device_id   = -1,
 //         .device_type = ARROW_DEVICE_CPU};
 //     ArrowArrayMove(&arr, container->arr);
-// }
-// arrow_table::arrow_table(cudf::table &&input) {
-//     auto output = cudf::to_arrow_device(input, container->arr);
-//     ArrowArrayMove(output.get(), container->arr);
 // }
 
 arrow_table::arrow_table(cudf::table&& input,
