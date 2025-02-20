@@ -160,7 +160,7 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
                 "max_bound": fupper_bound,
             },
             {
-                "dtype": "decimal64",
+                "dtype": "decimal128",
                 "null_frequency": 0.4,
                 "cardinality": n_rows,
                 "min_bound": ilower_bound,
