@@ -43,6 +43,7 @@
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
 
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 
