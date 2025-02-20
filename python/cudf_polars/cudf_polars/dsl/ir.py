@@ -547,7 +547,6 @@ class Scan(IR):
         elif typ == "parquet":
             parquet_options = config_options.get("parquet_options", {})
             if parquet_options.get("chunked", True):
-                print("HERE0", include_file_paths)
                 options = plc.io.parquet.ParquetReaderOptions.builder(
                     plc.io.SourceInfo(paths)
                 ).build()
@@ -605,7 +604,6 @@ class Scan(IR):
                     names=names,
                 )
             else:
-                print("HERE", include_file_paths)
                 filters = None
                 if predicate is not None and row_index is None:
                     # Can't apply filters during read if we have a row index.
