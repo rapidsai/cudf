@@ -17,7 +17,6 @@ rapids-logger "Begin cpp build"
 
 sccache --zero-stats
 
-# With boa installed conda build forward to boa
 RAPIDS_PACKAGE_VERSION=$(rapids-generate-version)
 export RAPIDS_PACKAGE_VERSION
 
