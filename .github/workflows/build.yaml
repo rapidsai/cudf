@@ -34,6 +34,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+      script: "ci/cpp/build/build_cpp.sh"
   python-build:
     needs: [cpp-build]
     secrets: inherit

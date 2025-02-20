@@ -142,6 +142,7 @@ jobs:
     with:
       build_type: pull-request
       node_type: "cpu16"
+      script: "ci/cpp/build/build_cpp.sh"
   cpp-linters:
     secrets: inherit
     needs: checks
