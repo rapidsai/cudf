@@ -439,7 +439,10 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return decompressed_bytes;
 }
 
-#if 0
+/**
+ * @brief Code ported from libzstd "experimental" API since this symbol is accessible
+ * only if the library is statically linked
+ */
 unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 {
   unsigned long long totalDstSize = 0;
@@ -458,7 +461,7 @@ unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 
   while (src_size >= ZSTD_startingInputLength()) {
     CUDF_EXPECTS((magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) != ZSTD_MAGIC_SKIPPABLE_START,
-                 "Don't support skippable frames yet!");
+                 "No support for skippable frames yet!");
 
     unsigned long long const fcs = ZSTD_getFrameContentSize(src, src_size);
     if (fcs >= ZSTD_CONTENTSIZE_ERROR) return fcs;
@@ -471,13 +474,12 @@ unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
     CUDF_EXPECTS(frameSrcSize <= src_size, "Corrupted frame");
     src = (const uint8_t*)src + frameSrcSize;
     src_size -= frameSrcSize;
-  } /* while (srcSize >= ZSTD_frameHeaderSize_prefix) */
+  }
 
   if (src_size) return ZSTD_CONTENTSIZE_ERROR;
 
   return totalDstSize;
 }
-#endif
 
 struct source_properties {
   compression_type compression = compression_type::NONE;
@@ -586,17 +588,10 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      uncomp_len = 0;
-      comp_data  = raw;
-      comp_len   = src.size();
-      /*
-      // TODO: debug
+      uncomp_len                   = 0;
+      comp_data                    = raw;
+      comp_len                     = src.size();
       unsigned long long const ret = ZSTD_findDecompressedSize(
-        reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
-      */
-      // This function only gets the size of first frame so works great with single pass functions
-      // like ZSTD_compress
-      unsigned long long const ret = ZSTD_getFrameContentSize(
         reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN, "Decompressed ZSTD size cannot be determined");
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
