@@ -484,50 +484,6 @@ unsigned long long ZSTD_findDecompressedSize(host_span<uint8_t const> src)
   return totalDstSize;
 }
 
-#if 0
-/**
- * @brief Code ported from libzstd "experimental" API since this symbol is accessible
- * only if the library is statically linked
- */
-unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
-{
-  unsigned long long totalDstSize = 0;
-  auto ZSTD_startingInputLength   = []() { return 5; };
-  bool is_little_endian           = []() {
-    uint16_t n    = 0x1;
-    uint8_t* byte = reinterpret_cast<uint8_t*>(&n);
-    return (*byte == n);
-  }();
-  uint32_t magic_number = [is_little_endian, src]() {
-    uint32_t* p  = reinterpret_cast<uint32_t*>(const_cast<void*>(src));
-    uint32_t ret = p[0];
-    if (is_little_endian) return ret;
-    return __builtin_bswap32(ret);
-  }();
-
-  while (src_size >= ZSTD_startingInputLength()) {
-    CUDF_EXPECTS((magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) != ZSTD_MAGIC_SKIPPABLE_START,
-                 "No support for skippable frames yet!");
-
-    unsigned long long const fcs = ZSTD_getFrameContentSize(src, src_size);
-    if (fcs >= ZSTD_CONTENTSIZE_ERROR) return fcs;
-    if (totalDstSize + fcs < totalDstSize) return ZSTD_CONTENTSIZE_ERROR; /* check for overflow */
-    totalDstSize += fcs;
-
-    /* skip to next frame */
-    size_t const frameSrcSize = ZSTD_findFrameCompressedSize(src, src_size);
-    if (ZSTD_isError(frameSrcSize)) return ZSTD_CONTENTSIZE_ERROR;
-    CUDF_EXPECTS(frameSrcSize <= src_size, "Corrupted frame");
-    src = (const uint8_t*)src + frameSrcSize;
-    src_size -= frameSrcSize;
-  }
-
-  if (src_size) return ZSTD_CONTENTSIZE_ERROR;
-
-  return totalDstSize;
-}
-#endif
-
 struct source_properties {
   compression_type compression = compression_type::NONE;
   uint8_t const* comp_data     = nullptr;
