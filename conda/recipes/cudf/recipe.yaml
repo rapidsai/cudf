@@ -4,9 +4,9 @@ schema_version: 1
 
 context:
   version: ${{ env.get("RAPIDS_PACKAGE_VERSION") }}
-  minor_version: ${{ (version | split('.'))[:2] | join('.') }}
-  cuda_version: ${{ (env.get('RAPIDS_CUDA_VERSION') | split('.'))[:2] | join(".") }}
-  cuda_major: ${{ (env.get('RAPIDS_CUDA_VERSION') | split('.'))[0] }}
+  minor_version: ${{ (version | split("."))[:2] | join(".") }}
+  cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
+  cuda_major: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}
   date_string: ${{ env.get("RAPIDS_DATE_STRING") }}
   py_version: ${{ env.get("RAPIDS_PY_VERSION") | version_to_buildstring }}
   head_rev: ${{ git.head_rev(".")[:8] }}
@@ -78,7 +78,7 @@ requirements:
     - pyarrow>=14.0.0,<20.0.0a0
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
-    - ${{ pin_compatible('rmm', upper_bound='x.x') }}
+    - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
     - if:  cuda_major == "11"
       then:
@@ -98,7 +98,7 @@ requirements:
         - if: linux64
           then:
             - libcufile
-    - ${{ pin_compatible('cuda-version', upper_bound='x', lower_bound='x') }}
+    - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
     - nvtx >=0.2.1
     - packaging
     - cachetools
