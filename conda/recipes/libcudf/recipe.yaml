@@ -179,12 +179,12 @@ outputs:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major != "11"
           then:
-            - cuda-nvtx
+            - cuda-nvtx-dev
       ignore_run_exports:
         from_package:
           - if: cuda_major != "11"
             then:
-              - cuda-nvtx
+              - cuda-nvtx-dev
         by_name:
           - cuda-version
     about:
