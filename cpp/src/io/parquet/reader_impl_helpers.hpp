@@ -113,6 +113,7 @@ struct row_group_info {
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
+  metadata() = default;
   explicit metadata(datasource* source);
   void sanitize_schema();
 };
@@ -134,6 +135,7 @@ struct surviving_row_group_metrics {
 };
 
 class aggregate_reader_metadata {
+ protected:
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
@@ -582,8 +584,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   size_type _num_input_columns;
-
- private:
   std::vector<std::vector<ast::literal*>> _literals;
 };
 
