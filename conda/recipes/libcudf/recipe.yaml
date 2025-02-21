@@ -4,9 +4,9 @@ schema_version: 1
 
 context:
   version: ${{ env.get("RAPIDS_PACKAGE_VERSION") }}
-  minor_version: ${{ (version | split('.'))[:2] | join('.') }}
-  cuda_version: ${{ (env.get('RAPIDS_CUDA_VERSION') | split('.'))[:2] | join(".") }}
-  cuda_major: ${{ (env.get('RAPIDS_CUDA_VERSION') | split('.'))[0] }}
+  minor_version: ${{ (version | split("."))[:2] | join(".") }}
+  cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
+  cuda_major: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}
   date_string: ${{ env.get("RAPIDS_DATE_STRING") }}
   head_rev: ${{ git.head_rev(".")[:8] }}
 
@@ -47,9 +47,9 @@ cache:
 
   requirements:
     build:
-      - ${{ compiler('c') }}
-      - ${{ compiler('cxx') }}
-      - ${{ compiler('cuda') }}
+      - ${{ compiler("c") }}
+      - ${{ compiler("cxx") }}
+      - ${{ compiler("cuda") }}
       - cuda-version =${{ cuda_version }}
       - cmake ${{ cmake_version }}
       - ninja
@@ -94,7 +94,7 @@ outputs:
       host:
         - cuda-version =${{ cuda_version }}
       run:
-        - ${{ pin_compatible('cuda-version', upper_bound='x', lower_bound='x') }}
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major == "11"
           then:
             - cudatoolkit
@@ -135,10 +135,10 @@ outputs:
     requirements:
       host:
         - librdkafka ${{ librdkafka_version }}
-        - ${{ pin_subpackage('libcudf', exact=True) }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
       run:
         - librdkafka ${{ librdkafka_version }}
-        - ${{ pin_subpackage('libcudf', exact=True) }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
         by_name:
           - cuda-version
@@ -160,14 +160,14 @@ outputs:
     requirements:
       build:
         - cmake ${{ cmake_version }}
-        - ${{ compiler('c') }}
-        - ${{ compiler('cxx') }}
-        - ${{ compiler('cuda') }} =${{ cuda_version }}
+        - ${{ compiler("c") }}
+        - ${{ compiler("cxx") }}
+        - ${{ compiler("cuda") }} =${{ cuda_version }}
         - cuda-version =${{ cuda_version }}
         - ninja
         - ${{ stdlib("c") }}
       host:
-        - ${{ pin_subpackage('libcudf', exact=True) }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
         - if: cuda_major == "11"
           then:
             - cuda-nvtx =${{ cuda_version }}
@@ -175,8 +175,8 @@ outputs:
             - cuda-nvtx-dev
         - cuda-version =${{ cuda_version }}
       run:
-        - ${{ pin_subpackage('libcudf', exact=True) }}
-        - ${{ pin_compatible('cuda-version', upper_bound='x', lower_bound='x') }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major != "11"
           then:
             - cuda-nvtx
@@ -202,17 +202,17 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
       host:
-        - ${{ pin_subpackage('libcudf', exact=True) }}
-        - ${{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - if: cuda_major == "11"
           then:
             - libcurand ${{ cuda11_libcurand_run_version }}
           else:
       run:
-        - ${{ pin_compatible('cuda-version', upper_bound='x', lower_bound='x') }}
-        - ${{ pin_subpackage('libcudf', exact=True) }}
-        - ${{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - if: cuda_major == "11"
           then:
             - libcurand ${{ cuda11_libcurand_run_version }}
