@@ -146,7 +146,7 @@ def get_client():
         from dask import get
 
         return get
-    else:
+    else:  # pragma: no cover; block depends on executor type and Distributed cluster
         client.run(_register_serialize)
         client.run_on_scheduler(_register_serialize)
 
