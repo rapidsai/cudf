@@ -18,16 +18,89 @@
 
 package ai.rapids.cudf;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
+
 /**
  * Base class for all MemoryBuffers that are in device memory.
  */
 public abstract class BaseDeviceMemoryBuffer extends MemoryBuffer {
+
+  private static final Logger log = LoggerFactory.getLogger(BaseDeviceMemoryBuffer.class);
+
+  private static final boolean BOOKKEEP_MEMORY = Boolean.getBoolean("ai.rapids.memory.bookkeep");
+  private static final ConcurrentHashMap<Long, LongAdder> deviceMemPerThread = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<Long, Long> addr2threadId = new ConcurrentHashMap<>();
+
+  private void bookkeepDeviceMemory(long threadId, long amount) {
+    LongAdder adder = deviceMemPerThread.computeIfAbsent(threadId, key -> new LongAdder());
+    adder.add(amount);
+  }
+
+  public static String getDeviceMemoryBookkeepSummary() {
+    if(BOOKKEEP_MEMORY) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("<<Device Memory Bookkeeping>>\n");
+      for (Map.Entry<Long, LongAdder> entry : deviceMemPerThread.entrySet()) {
+        long threadId = entry.getKey();
+        LongAdder adder = entry.getValue();
+        sb.append("Thread with ID ").append(threadId).append(" is accountable for ")
+            .append(adder.sum()).append(" bytes\n");
+      }
+      return sb.toString();
+    } else {
+      return "Device Memory Bookkeeping is disabled";
+    }
+  }
+
+  public static class MemoryBookkeeper implements EventHandler {
+    private long ptr;
+    private long amount;
+
+    public MemoryBookkeeper(long ptr, long amount) {
+      this.ptr = ptr;
+      this.amount = amount;
+    }
+
+    @Override
+    public void onClosed(int refCount) {
+      if (refCount == 0) {
+        if (BOOKKEEP_MEMORY) {
+          Long threadId = addr2threadId.get(ptr);
+          if (threadId != null) {
+            LongAdder adder = deviceMemPerThread.get(threadId);
+            if (adder != null) {
+              adder.add(-amount);
+            } else {
+              log.warn("Could not find adder for thread {} from address {} bytes: {}",
+                  threadId, ptr, amount);
+            }
+            addr2threadId.remove(ptr);
+          } else {
+            log.warn("Could not find thread id for address {} bytes: {}", ptr, amount);
+          }
+        }
+      }
+    }
+  }
+
   protected BaseDeviceMemoryBuffer(long address, long length, MemoryBuffer parent) {
     super(address, length, parent);
   }
 
   protected BaseDeviceMemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
     super(address, length, cleaner);
+
+    if (BOOKKEEP_MEMORY && cleaner != null && !(cleaner instanceof SlicedBufferCleaner)) {
+      long threadId = Thread.currentThread().getId();
+      addr2threadId.put(address, threadId);
+      bookkeepDeviceMemory(threadId, length);
+      setEventHandler(new MemoryBookkeeper(address, length));
+    }
   }
 
   /**
