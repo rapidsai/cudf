@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,8 +159,11 @@ __device__ inline string_view::const_iterator::const_iterator(string_view const&
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
-  if (byte_pos < bytes)
-    byte_pos += strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos]));
+  if (byte_pos < bytes) {
+    // max is used to prevent an infinite loop on invalid UTF-8 data
+    byte_pos +=
+      cuda::std::max(1, strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos])));
+  }
   ++char_pos;
   return *this;
 }
