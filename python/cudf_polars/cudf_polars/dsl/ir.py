@@ -716,7 +716,11 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.config_options = config_options
-        self._non_child_args = (schema, df, self.projection)
+        self._non_child_args = (
+            schema,
+            pl.DataFrame._from_pydf(df),
+            self.projection,
+        )
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -743,10 +747,9 @@ class DataFrameScan(IR):
         projection: tuple[str, ...] | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        pdf = pl.DataFrame._from_pydf(df)
         if projection is not None:
-            pdf = pdf.select(projection)
-        df = DataFrame.from_polars(pdf)
+            df = df.select(projection)
+        df = DataFrame.from_polars(df)
         assert all(
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
@@ -827,6 +830,28 @@ class Reduce(IR):
 class GroupBy(IR):
     """Perform a groupby."""
 
+    class AggInfos:
+        """Serializable wrapper for GroupBy aggregation info."""
+
+        agg_requests: Sequence[expr.NamedExpr]
+        agg_infos: Sequence[expr.AggInfo]
+
+        def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
+            self.agg_requests = tuple(agg_requests)
+            self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
+
+        def __reduce__(self):
+            """Pickle an AggInfos object."""
+            return (type(self), (self.agg_requests,))
+
+    class GroupbyOptions:
+        """Serializable wrapper for polars GroupbyOptions."""
+
+        def __init__(self, polars_groupby_options: Any):
+            self.dynamic = polars_groupby_options.dynamic
+            self.rolling = polars_groupby_options.rolling
+            self.slice = polars_groupby_options.slice
+
     __slots__ = (
         "agg_infos",
         "agg_requests",
@@ -841,7 +866,7 @@ class GroupBy(IR):
     """Aggregation expressions."""
     maintain_order: bool
     """Preserve order in groupby."""
-    options: Any
+    options: GroupbyOptions
     """Arbitrary options."""
 
     def __init__(
@@ -857,7 +882,7 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = options
+        self.options = self.GroupbyOptions(options)
         self.children = (df,)
         if self.options.rolling:
             raise NotImplementedError(
@@ -867,13 +892,12 @@ class GroupBy(IR):
             raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
-        self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            options,
-            self.agg_infos,
+            self.options,
+            self.AggInfos(self.agg_requests),
         )
 
     @staticmethod
@@ -910,8 +934,8 @@ class GroupBy(IR):
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: Any,
-        agg_infos: Sequence[expr.AggInfo],
+        options: GroupbyOptions,
+        agg_info_wrapper: AggInfos,
         df: DataFrame,
     ):
         """Evaluate and return a dataframe."""
@@ -931,7 +955,7 @@ class GroupBy(IR):
         # TODO: uniquify
         requests = []
         replacements: list[expr.Expr] = []
-        for info in agg_infos:
+        for info in agg_info_wrapper.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
                     # A count aggregation, doesn't touch the column,
@@ -1002,6 +1026,20 @@ class GroupBy(IR):
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
+    class Predicate:
+        """Serializable wrapper for a predicate expression."""
+
+        predicate: expr.Expr
+        ast: plc.expressions.Expression
+
+        def __init__(self, predicate: expr.Expr):
+            self.predicate = predicate
+            self.ast = to_ast(predicate)
+
+        def __reduce__(self):
+            """Pickle a Predicate object."""
+            return (type(self), (self.predicate,))
+
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
@@ -1034,22 +1072,22 @@ class ConditionalJoin(IR):
         self.predicate = predicate
         self.options = options
         self.children = (left, right)
-        self.ast_predicate = to_ast(predicate)
+        predicate_wrapper = self.Predicate(predicate)
         _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not join_nulls
         assert not coalesce
         assert maintain_order == "none"
-        if self.ast_predicate is None:
+        if predicate_wrapper.ast is None:
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (self.ast_predicate, zlice, suffix, maintain_order)
+        self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
 
     @classmethod
     def do_evaluate(
         cls,
-        predicate: plc.expressions.Expression,
+        predicate_wrapper: Predicate,
         zlice: tuple[int, int] | None,
         suffix: str,
         maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
@@ -1057,7 +1095,11 @@ class ConditionalJoin(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        lg, rg = plc.join.conditional_inner_join(left.table, right.table, predicate)
+        lg, rg = plc.join.conditional_inner_join(
+            left.table,
+            right.table,
+            predicate_wrapper.ast,
+        )
         left = DataFrame.from_table(
             plc.copying.gather(
                 left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
@@ -1608,6 +1650,16 @@ class Projection(IR):
         return DataFrame(columns)
 
 
+class MergeSorted(IR):
+    """Merge sorted operation."""
+
+    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
+        # libcudf merge is not stable wrt order of inputs, since
+        # it uses a priority queue to manage the tables it produces.
+        # See: https://github.com/rapidsai/cudf/issues/16010
+        raise NotImplementedError("MergeSorted not yet implemented")
+
+
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -1621,13 +1673,10 @@ class MapFunction(IR):
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
             "rechunk",
-            # libcudf merge is not stable wrt order of inputs, since
-            # it uses a priority queue to manage the tables it produces.
-            # See: https://github.com/rapidsai/cudf/issues/16010
-            # "merge_sorted",
             "rename",
             "explode",
             "unpivot",
+            "row_index",
         ]
     )
 
@@ -1636,8 +1685,12 @@ class MapFunction(IR):
         self.name = name
         self.options = options
         self.children = (df,)
-        if self.name not in MapFunction._NAMES:
-            raise NotImplementedError(f"Unhandled map function {self.name}")
+        if (
+            self.name not in MapFunction._NAMES
+        ):  # pragma: no cover; need more polars rust functions
+            raise NotImplementedError(
+                f"Unhandled map function {self.name}"
+            )  # pragma: no cover
         if self.name == "explode":
             (to_explode,) = self.options
             if len(to_explode) > 1:
@@ -1674,6 +1727,9 @@ class MapFunction(IR):
                 variable_name,
                 value_name,
             )
+        elif self.name == "row_index":
+            col_name, offset = options
+            self.options = (col_name, offset)
         self._non_child_args = (schema, name, self.options)
 
     @classmethod
@@ -1739,6 +1795,23 @@ class MapFunction(IR):
                     Column(value_column, name=value_name),
                 ]
             )
+        elif name == "row_index":
+            col_name, offset = options
+            dtype = schema[col_name]
+            step = plc.interop.from_arrow(
+                pa.scalar(1, type=plc.interop.to_arrow(dtype))
+            )
+            init = plc.interop.from_arrow(
+                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
+            )
+            index_col = Column(
+                plc.filling.sequence(df.num_rows, init, step),
+                is_sorted=plc.types.Sorted.YES,
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.AFTER,
+                name=col_name,
+            )
+            return DataFrame([index_col, *df.columns])
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 

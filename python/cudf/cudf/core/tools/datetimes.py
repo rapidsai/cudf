@@ -15,12 +15,12 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -214,11 +214,11 @@ def to_datetime(
                 )
 
             new_series = (
-                arg[unit_rev["year"]].astype("str")
+                arg[unit_rev["year"]].astype(CUDF_STRING_DTYPE)
                 + "-"
-                + arg[unit_rev["month"]].astype("str").str.zfill(2)
+                + arg[unit_rev["month"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
                 + "-"
-                + arg[unit_rev["day"]].astype("str").str.zfill(2)
+                + arg[unit_rev["day"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
             )
             format = "%Y-%m-%d"
             for u in ["h", "m", "s", "ms", "us", "ns"]:
@@ -255,9 +255,13 @@ def to_datetime(
                     # float dtype we don't want to type-cast
                     if current_col.dtype.kind in ("O"):
                         try:
-                            current_col = current_col.astype(dtype="int64")
+                            current_col = current_col.astype(
+                                np.dtype(np.int64)
+                            )
                         except ValueError:
-                            current_col = current_col.astype(dtype="float64")
+                            current_col = current_col.astype(
+                                np.dtype(np.float64)
+                            )
 
                     factor = (
                         column.datetime._unit_to_nanoseconds_conversion[u]
@@ -269,7 +273,7 @@ def to_datetime(
                     else:
                         times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (col.astype(dtype="int64") + times_column).astype(
+                col = (col.astype(np.dtype(np.int64)) + times_column).astype(
                     dtype=col.dtype
                 )
             col = _process_col(
@@ -336,7 +340,7 @@ def _process_col(
             # parsing against `format`.
             col = (
                 col.astype(np.dtype(np.int64))
-                .astype("str")
+                .astype(CUDF_STRING_DTYPE)
                 .strptime(
                     dtype=np.dtype("datetime64[us]")
                     if "%f" in format
@@ -356,7 +360,7 @@ def _process_col(
             col = col * factor
 
         if format is not None:
-            col = col.astype("str").strptime(
+            col = col.astype(CUDF_STRING_DTYPE).strptime(
                 dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
@@ -365,9 +369,9 @@ def _process_col(
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
-                col = col.astype(dtype="int64")
+                col = col.astype(np.dtype(np.int64))
             except ValueError:
-                col = col.astype(dtype="float64")
+                col = col.astype(np.dtype(np.float64))
             return _process_col(
                 col=col,
                 unit=unit,
@@ -982,7 +986,7 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = libcudf.column.Column.from_pylibcudf(
+            res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
                     pa_scalar_to_plc_scalar(pa.scalar(start)),
