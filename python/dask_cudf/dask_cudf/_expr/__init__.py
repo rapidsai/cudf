@@ -20,6 +20,7 @@ from dask.dataframe.dask_expr._cumulative import (
 )
 from dask.dataframe.dask_expr._expr import (
     Elemwise,
+    EnforceRuntimeDivisions,
     Expr,
     RenameAxis,
     VarColumns,
@@ -70,6 +71,7 @@ __all__ = [
     "DXSeriesGroupBy",
     "DecomposableGroupbyAggregation",
     "Elemwise",
+    "EnforceRuntimeDivisions",
     "Expr",
     "FragmentWrapper",
     "FrameBase",
