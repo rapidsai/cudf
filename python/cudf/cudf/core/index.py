@@ -1273,7 +1273,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        if not isinstance(other, BaseIndex) or len(self) != len(other):
+        if not (isinstance(other, type(self)) and len(self) == len(other)):
             return False
 
         check_dtypes = False
