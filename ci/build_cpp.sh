@@ -30,7 +30,6 @@ rattler-build build --recipe conda/recipes/libcudf \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --render-only \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
