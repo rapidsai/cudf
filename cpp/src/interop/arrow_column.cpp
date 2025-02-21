@@ -127,7 +127,8 @@ void copy_array(ArrowArray* output,
     private_data->children_raw.resize(input->n_children);
     for (auto i = 0; i < input->n_children; ++i) {
       private_data->children.push_back(std::make_unique<ArrowArray>());
-      copy_array(private_data->children.back().get(), input->children[i], container);
+      private_data->children_raw[i] = private_data->children.back().get();
+      copy_array(private_data->children_raw[i], input->children[i], container);
     }
   }
   output->children = private_data->children_raw.data();
@@ -268,8 +269,8 @@ arrow_table::arrow_table(cudf::table&& input,
 {
   // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
   // TODO: metadata should be provided by the user
-  auto meta       = cudf::column_metadata{};
-  auto table_meta = std::vector{meta};
+  auto table_meta = std::vector<cudf::column_metadata>{static_cast<size_t>(input.num_columns()),
+                                                       cudf::column_metadata{}};
   auto schema     = cudf::to_arrow_schema(input.view(), table_meta);
   ArrowSchemaMove(schema.get(), &(container->schema));
   auto output = cudf::to_arrow_device(std::move(input));
