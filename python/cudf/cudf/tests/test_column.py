@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -401,19 +401,23 @@ def test_column_view_string_slice(slc):
     [
         (
             np.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column(
+                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
+            ),
         ),
         (
             cp.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column(
+                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
+            ),
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.column_empty(0, dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype=np.dtype(np.uint8)),
         ),
         (
             cp.array([255], dtype="uint8"),
-            cudf.core.column.as_column([255], dtype="uint8"),
+            cudf.core.column.as_column([255], dtype=np.dtype(np.uint8)),
         ),
     ],
 )
