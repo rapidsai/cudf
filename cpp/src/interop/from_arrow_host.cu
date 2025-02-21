@@ -43,6 +43,10 @@
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
 
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 
@@ -381,6 +385,11 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(
+    input->length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+    "Total number of rows in Arrow column exceeds the column size limit.",
+    std::overflow_error);
+
   return type.id() != type_id::EMPTY
            ? std::move(type_dispatcher(
                type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask))
