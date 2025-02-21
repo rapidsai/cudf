@@ -60,7 +60,6 @@ tests:
         - cudf_polars
       pip_check: false
 
-
 about:
   homepage: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.urls.Homepage }}
   license: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.license.text }}

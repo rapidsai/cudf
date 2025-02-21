@@ -27,7 +27,6 @@ build:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN
-
     env:
       CMAKE_C_COMPILER_LAUNCHER: ${{ env.get("CMAKE_C_COMPILER_LAUNCHER") }}
       CMAKE_CUDA_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CUDA_COMPILER_LAUNCHER") }}
@@ -55,7 +54,6 @@ requirements:
   ignore_run_exports:
     by_name:
       - cuda-version
-
 
 tests:
   - python:
