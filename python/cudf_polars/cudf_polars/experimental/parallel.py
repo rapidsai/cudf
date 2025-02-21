@@ -28,6 +28,32 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
+class SerializerManager:
+    """Manager to ensure ensure serializer is only registered once."""
+
+    _serializer_registered = False
+    _client_run_executed = False
+
+    @classmethod
+    def register_serialize(cls) -> None:
+        """Register Dask/cudf-polars serializers in calling process."""
+        if not cls._serializer_registered:
+            from cudf_polars.experimental.dask_serialize import register
+
+            register()
+            cls._serializer_registered = True
+
+    @classmethod
+    def run_on_cluster(cls, client) -> None:
+        """Run serializer registration on the workers and scheduler."""
+        if (
+            not cls._client_run_executed
+        ):  # pragma: no cover; Only executes with Distributed scheduler
+            client.run(cls.register_serialize)
+            client.run_on_scheduler(cls.register_serialize)
+            cls._client_run_executed = True
+
+
 @lower_ir_node.register(IR)
 def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Default logic - Requires single partition
@@ -127,11 +153,31 @@ def task_graph(
         return graph, (key_name, 0)
 
 
+def get_client():
+    """Get appropriate Dask client or scheduler."""
+    SerializerManager.register_serialize()
+
+    try:  # pragma: no cover; block depends on executor type and Distributed cluster
+        from distributed import get_client
+
+        client = get_client()
+        SerializerManager.run_on_cluster(client)
+    except (
+        ImportError,
+        ValueError,
+    ):  # pragma: no cover; block depends on Dask local scheduler
+        from dask import get
+
+        return get
+    else:  # pragma: no cover; block depends on executor type and Distributed cluster
+        return client.get
+
+
 def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
-    from dask import get
-
     ir, partition_info = lower_ir_graph(ir)
+
+    get = get_client()
 
     graph, key = task_graph(ir, partition_info)
     return get(graph, key)
