@@ -12,7 +12,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
@@ -212,7 +211,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             if _same_precision_and_scale(self.dtype, other.dtype):
                 other = other.astype(self.dtype)
             return other
-        elif is_scalar(other) and isinstance(other, (int, Decimal)):
+        elif isinstance(other, (int, Decimal)):
             dtype = self.dtype._from_decimal(Decimal(other))
             return cudf.Scalar(other, dtype=dtype)
         return NotImplemented
