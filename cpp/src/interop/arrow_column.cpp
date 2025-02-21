@@ -30,31 +30,6 @@
 #include <memory>
 #include <utility>
 
-/*
- * Notes on ownership
- *
- * If you start with a cudf object, it has sole ownership and we have complete control of its
- * provenance. We can convert it to an ArrowDeviceArray that has sole ownership of each piece of
- * data. We can also (if desired) decompose a cudf::table down into columns and create a separate
- * ArrowDeviceArray for each column. In this case, we would also be able to export and maintain the
- * lifetimes of each column separately. The nanoarrow array creation routines will produce an
- * ArrowArray for each column that has its own deleter that deletes each buffer, so we could give
- * each buffer ownership of the corresponding cudf data buffer and then we wouldn't really need any
- * private data attribute. That would be more work than what I was initially proposing to do, which
- * is to just have a single ArrowDeviceArray that owns all the data for the whole table, but not
- * much different. It would also mean a bit more work during the conversion since we wouldn't simply
- * be tying lifetimes to an underlying unique_ptr to a cudf type (wrapped through a shared pointer
- * to a containing structure), which is a quick and dirty way to do it.
- *
- * If we start with an ArrowDeviceArray from another source, though, we have no guarantees about who
- * owns what within the array. Assuming that it's a struct array representing a table, each child
- * array could own its own data via its buffers, or all of the data could be collectively owned by
- * the private data with each buffer having no ownership on its own. In that case, you would always
- * need to keep the whole private data alive in order to keep any individual column alive.
- *
- * I think the best long-term option is to decompose as much as possible so that it is in principle
- * possible to minimize the amount of
- */
 namespace cudf {
 
 struct arrow_array_container {
