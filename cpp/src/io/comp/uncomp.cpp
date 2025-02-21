@@ -448,8 +448,8 @@ unsigned long long ZSTD_findDecompressedSize(host_span<uint8_t const> src)
   unsigned long long totalDstSize = 0;
   auto ZSTD_startingInputLength   = []() { return 5; };
   bool is_little_endian           = []() {
-    uint16_t n    = 0x1;
-    uint8_t* byte = reinterpret_cast<uint8_t*>(&n);
+    uint16_t n = 0x1;
+    auto byte  = reinterpret_cast<uint8_t*>(&n);
     return (*byte == n);
   }();
   uint32_t magic_number = [is_little_endian, src]() {
@@ -635,7 +635,6 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      uncomp_len     = 0;
       comp_data      = raw;
       comp_len       = src.size();
       auto const ret = ZSTD_findDecompressedSize(src);
