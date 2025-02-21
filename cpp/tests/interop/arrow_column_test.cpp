@@ -79,6 +79,32 @@ TEST_F(ArrowColumnTest, LifetimeManagement)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col1->view(), *col2->view());
 }
 
+TEST_F(ArrowColumnTest, ComplexNanoarrowDeviceTables)
+{
+  auto [tbl, schema, arr] = get_nanoarrow_tables(100);
+  for (auto i = 0; i < tbl->num_columns(); i++) {
+    auto& col = tbl->get_column(i);
+
+    ArrowDeviceArray device_arr{
+      .array       = *arr->children[i],
+      .device_id   = 0,
+      .device_type = ARROW_DEVICE_CUDA,
+    };
+    auto arrow_column_from_nanoarrow_array = cudf::arrow_column(schema->children[i], &device_arr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
+
+    auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_column] =
+      export_to_arrow(arrow_column_from_nanoarrow_array);
+    arrow_column_from_nanoarrow_array.to_arrow_schema(arrow_schema_from_nanoarrow_array.get());
+    arrow_column_from_nanoarrow_array.to_arrow(arrow_array_from_arrow_column.get(),
+                                               ARROW_DEVICE_CUDA);
+
+    auto arrow_column_from_arrow_array = cudf::arrow_column(arrow_schema_from_nanoarrow_array.get(),
+                                                            arrow_array_from_arrow_column.get());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_arrow_array.view());
+  }
+}
+
 TEST_F(ArrowColumnTest, ComplexNanoarrowHostTables)
 {
   auto [tbl, schema, arr] = get_nanoarrow_host_tables(100);
@@ -126,6 +152,28 @@ TEST_F(ArrowTableTest, TwoWayConversion)
   auto arrow_table_from_arrow_array =
     cudf::arrow_table(arrow_schema_from_arrow_table.get(), arrow_array_from_arrow_table.get());
   CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
+}
+
+TEST_F(ArrowTableTest, ComplexNanoarrowDeviceTables)
+{
+  auto [tbl, schema, arr] = get_nanoarrow_tables(100);
+  ArrowDeviceArray device_arr{
+    .array       = *arr.get(),
+    .device_id   = 0,
+    .device_type = ARROW_DEVICE_CUDA,
+  };
+  auto arrow_table_from_nanoarrow_array = cudf::arrow_table(schema.get(), &device_arr);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
+
+  auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_table] =
+    export_to_arrow(arrow_table_from_nanoarrow_array);
+  arrow_table_from_nanoarrow_array.to_arrow_schema(arrow_schema_from_nanoarrow_array.get());
+  arrow_table_from_nanoarrow_array.to_arrow(arrow_array_from_arrow_table.get(), ARROW_DEVICE_CUDA);
+
+  auto arrow_table_from_arrow_array =
+    cudf::arrow_table(arrow_schema_from_nanoarrow_array.get(), arrow_array_from_arrow_table.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
