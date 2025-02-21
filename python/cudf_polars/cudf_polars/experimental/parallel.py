@@ -142,7 +142,10 @@ def get_client():
         from distributed import get_client
 
         client = get_client()
-    except (ImportError, ValueError):
+    except (
+        ImportError,
+        ValueError,
+    ):  # pragma: no cover; block depends on Dask local scheduler
         from dask import get
 
         return get
