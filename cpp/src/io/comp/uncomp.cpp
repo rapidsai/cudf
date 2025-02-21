@@ -443,6 +443,52 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
  * @brief Code ported from libzstd "experimental" API since this symbol is accessible
  * only if the library is statically linked
  */
+unsigned long long ZSTD_findDecompressedSize(host_span<uint8_t const> src)
+{
+  unsigned long long totalDstSize = 0;
+  auto ZSTD_startingInputLength   = []() { return 5; };
+  bool is_little_endian           = []() {
+    uint16_t n    = 0x1;
+    uint8_t* byte = reinterpret_cast<uint8_t*>(&n);
+    return (*byte == n);
+  }();
+  uint32_t magic_number = [is_little_endian, src]() {
+    uint32_t ret = 0;
+    std::memcpy(&ret, src.data(), sizeof(uint32_t));
+    if (is_little_endian) return ret;
+    return __builtin_bswap32(ret);
+  }();
+
+  auto src_size = src.size();
+  auto srcptr   = src.data();
+  while (src_size >= ZSTD_startingInputLength()) {
+    CUDF_EXPECTS((magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) != ZSTD_MAGIC_SKIPPABLE_START,
+                 "No support for skippable frames yet!");
+
+    auto const fcs = ZSTD_getFrameContentSize(reinterpret_cast<const void*>(srcptr), src_size);
+    if (fcs >= ZSTD_CONTENTSIZE_ERROR) return fcs;
+    if (totalDstSize + fcs < totalDstSize) return ZSTD_CONTENTSIZE_ERROR; /* check for overflow */
+    totalDstSize += fcs;
+
+    /* skip to next frame */
+    auto const frameSrcSize =
+      ZSTD_findFrameCompressedSize(reinterpret_cast<const void*>(srcptr), src_size);
+    if (ZSTD_isError(frameSrcSize)) return ZSTD_CONTENTSIZE_ERROR;
+    CUDF_EXPECTS(frameSrcSize <= src_size, "Corrupted frame");
+    srcptr = reinterpret_cast<uint8_t const*>(srcptr) + frameSrcSize;
+    src_size -= frameSrcSize;
+  }
+
+  if (src_size) return ZSTD_CONTENTSIZE_ERROR;
+
+  return totalDstSize;
+}
+
+#if 0
+/**
+ * @brief Code ported from libzstd "experimental" API since this symbol is accessible
+ * only if the library is statically linked
+ */
 unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 {
   unsigned long long totalDstSize = 0;
@@ -480,6 +526,7 @@ unsigned long long ZSTD_findDecompressedSize(const void* src, size_t src_size)
 
   return totalDstSize;
 }
+#endif
 
 struct source_properties {
   compression_type compression = compression_type::NONE;
@@ -588,11 +635,10 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      uncomp_len                   = 0;
-      comp_data                    = raw;
-      comp_len                     = src.size();
-      unsigned long long const ret = ZSTD_findDecompressedSize(
-        reinterpret_cast<void*>(const_cast<unsigned char*>(raw)), comp_len);
+      uncomp_len     = 0;
+      comp_data      = raw;
+      comp_len       = src.size();
+      auto const ret = ZSTD_findDecompressedSize(src);
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN, "Decompressed ZSTD size cannot be determined");
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
       uncomp_len = static_cast<size_t>(ret);

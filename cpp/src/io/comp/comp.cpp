@@ -100,11 +100,11 @@ std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
   std::vector<std::uint8_t> compressed_buffer(compressed_size);
 
   // This function compresses in a single frame
-  size_t const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
-                                                compressed_size,
-                                                reinterpret_cast<const void*>(src.data()),
-                                                src.size(),
-                                                1);
+  auto const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
+                                              compressed_size,
+                                              reinterpret_cast<const void*>(src.data()),
+                                              src.size(),
+                                              1);
   CUDF_EXPECTS(ZSTD_isError(compressed_size_) == 0, "Error in ZSTD compression");
   compressed_buffer.resize(compressed_size_);
 
