@@ -214,10 +214,20 @@ class arrow_column {
                ArrowDeviceArray* input,
                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-  // arrow_column(ArrowSchema const* schema,
-  //              ArrowArray* input,
-  //              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  //              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow column object
+   *
+   * @param schema Arrow schema for the column
+   * @param input ArrowArray data for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(ArrowSchema const* schema,
+               ArrowArray* input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
   /**
    * @brief Construct a new arrow column object
    *
@@ -293,10 +303,19 @@ class arrow_table {
               ArrowDeviceArray* input,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-  // arrow_table(ArrowSchema const* schema,
-  //        ArrowArray* input,
-  //        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  //        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow table object
+   *
+   * @param schema Arrow schema for the table
+   * @param input ArrowArray data for the table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_table(ArrowSchema const* schema,
+              ArrowArray* input,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Construct a new arrow table object

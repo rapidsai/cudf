@@ -143,6 +143,7 @@ arrow_column::arrow_column(cudf::column&& input,
 
 // IMPORTANT: This constructor will move the input array if it is device data.
 // Probably won't for host data, though... is that asymmetry okay?
+// We should switch to just also releasing for the host data case.
 arrow_column::arrow_column(ArrowSchema const* schema,
                            ArrowDeviceArray* input,
                            rmm::cuda_stream_view stream,
@@ -179,20 +180,16 @@ arrow_column::arrow_column(ArrowSchema const* schema,
     default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
   }
 }
-// arrow_column::arrow_column(
-//   ArrowSchema const* schema,
-//   ArrowArray* input,
-//   rmm::cuda_stream_view stream,
-//   rmm::device_async_resource_ref mr)
-//{
-//   //// The copy initialization of .array means that the release callback will be
-//   //// called on that object, so we don't need to call it on the `input` in this
-//   //// function.
-//   //ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
-//   //// TODO: Merge with the ARROW_DEVICE_CPU case above with a helper function.
-//   //auto col = from_arrow_host_column(schema, &arr, stream, mr);
-//   //container->owner = std::shared_ptr<cudf::column>(col.release());
-// }
+
+arrow_column::arrow_column(ArrowSchema const* schema,
+                           ArrowArray* input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  auto tmp  = arrow_column(schema, &arr, stream, mr);
+  container = tmp.container;
+}
 
 void arrow_column::to_arrow_schema(ArrowSchema* output,
                                    rmm::cuda_stream_view stream,
@@ -243,14 +240,6 @@ unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
 {
   return from_arrow_device_column(&container->schema, &container->owner, stream, mr);
 }
-
-// arrow_table::arrow_table(ArrowArray* input) {
-//     ArrowDeviceArray arr{
-//         .array = *input,
-//         .device_id   = -1,
-//         .device_type = ARROW_DEVICE_CPU};
-//     ArrowArrayMove(&arr, container->arr);
-// }
 
 std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& input)
 {
@@ -364,21 +353,18 @@ arrow_table::arrow_table(ArrowSchema const* schema,
   }
 }
 
+arrow_table::arrow_table(ArrowSchema const* schema,
+                         ArrowArray* input,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+{
+  ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  auto tmp  = arrow_table(schema, &arr, stream, mr);
+  container = tmp.container;
+}
+
 //// ArrowArrayStream and ArrowArray overloads (they can be overloads now instead
 //// of separate functions) are trivial wrappers around this function. Also need versions
 //// of all three that return an arrow_column instead of an arrow_table.
-// std::unique_ptr<arrow_table> from_arrow(ArrowSchema const* schema,
-//                                         ArrowDeviceArray* input,
-//                                         rmm::cuda_stream_view stream,
-//                                         rmm::mr::device_memory_resource mr);
-//
-//// Produce an ArrowDeviceArray and then create an arrow_column around it.
-// std::unique_ptr<arrow_table> to_arrow(
-//   // Question: Do we really need a column_view overload? If we're going this
-//   // route, I think it's OK to always require a transfer of ownership to the
-//   // arrow_table, but there is potentially some small overhead there.
-//   std::unique_ptr<cudf::table> input,
-//   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-//   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf
