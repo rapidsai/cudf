@@ -19,7 +19,7 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 # Super verbosity for testing HTTP caching issues.
-rapids-mamba-retry env create --yes -vvv -f "${ENV_YAML_DIR}/env.yaml" -n test
+rapids-mamba-retry env create --yes -vvvv -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 # Temporarily allow unbound variables for conda activation.
 set +u
