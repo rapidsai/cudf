@@ -47,7 +47,12 @@ def pytest_sessionstart(session):
         session.config.getoption("--dask-cluster")
         and session.config.getoption("--executor") == "dask-experimental"
     ):
+        from dask import config
         from dask.distributed import Client, LocalCluster
+
+        # Avoid "Sending large graph of size ..." warnings
+        # (We expect these for tests using literal/random arrays)
+        config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
 
         cluster = LocalCluster()
         client = Client(cluster)
