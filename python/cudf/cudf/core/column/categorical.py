@@ -147,7 +147,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series._from_column(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -617,7 +617,7 @@ class CategoricalColumn(column.ColumnBase):
         return self._codes
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
@@ -1109,7 +1109,7 @@ class CategoricalColumn(column.ColumnBase):
             )
 
         return self.set_categories(
-            new_categories=dtype.categories, ordered=dtype.ordered
+            new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
