@@ -785,9 +785,9 @@ add_library(
   src/utilities/type_dispatcher.cpp
 )
 set_source_files_properties(
-  src/interop/arrow_column.cpp
-  PROPERTIES COMPILE_OPTIONS "-g;-O0")
-
+  src/interop/arrow_column.cpp src/interop/to_arrow_schema.cpp src/interop/from_arrow_host.cu
+  src/interop/to_arrow_device.cu PROPERTIES COMPILE_OPTIONS "-g;-O0"
+)
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
