@@ -1289,8 +1289,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         elif (
             not self_is_categorical
             and not other_is_categorical
+            and not isinstance(other, RangeIndex)
             and not isinstance(self, type(other))
         ):
+            # Can compare Index to CategoricalIndex or RangeIndex
+            # Other comparisons are invalid
             return False
 
         try:
