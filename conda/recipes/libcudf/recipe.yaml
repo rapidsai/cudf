@@ -60,10 +60,10 @@ cache:
       - if: cuda_major == "11"
         then:
           - cudatoolkit
-          - libcufile ${{ cuda11_libcufile_host_version }}
-          - libcufile-dev ${{ cuda11_libcufile_host_version }}
-          - libcurand ${{ cuda11_libcurand_host_version }}
-          - libcurand-dev ${{ cuda11_libcurand_host_version }}
+          - libcufile =${{ cuda11_libcufile_host_version }}
+          - libcufile-dev =${{ cuda11_libcufile_host_version }}
+          - libcurand =${{ cuda11_libcurand_host_version }}
+          - libcurand-dev =${{ cuda11_libcurand_host_version }}
           - cuda-nvrtc =${{ cuda_version }}
           - cuda-nvrtc-dev =${{ cuda_version }}
           - cuda-nvtx =${{ cuda_version }}
