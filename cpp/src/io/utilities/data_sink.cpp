@@ -37,7 +37,7 @@ class file_sink : public data_sink {
     _kvikio_file = kvikio::FileHandle(filepath, "w");
     CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
-                  _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
+                  _kvikio_file.get_compat_mode_manager().is_compat_mode_preferred() ? "on" : "off");
   }
 
   // Marked as NOLINT because we are calling a virtual method in the destructor

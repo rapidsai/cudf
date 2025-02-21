@@ -55,7 +55,9 @@ files:
     output: none
     includes:
       - cuda_version
+      - depends_on_libcudf
       - test_cpp
+      - test_cpp_cudf
   test_python_cudf_pandas:
     output: none
     includes:
@@ -98,11 +100,14 @@ files:
       - build_all
       - cuda
       - cuda_version
+      - depends_on_libcudf
       - test_java
   test_notebooks:
     output: none
     includes:
       - cuda_version
+      - depends_on_cudf
+      - depends_on_libcudf
       - notebooks
       - py_version
   checks:
@@ -125,6 +130,10 @@ files:
     includes:
       - cuda
       - cuda_version
+      - depends_on_cudf
+      - depends_on_dask_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
       - docs
       - py_version
   py_build_cudf:
@@ -370,6 +379,16 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  test_python_narwhals:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_cudf_common
+      - test_python_cudf
+      - depends_on_cudf
+      - depends_on_cudf_polars
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -445,7 +464,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.1.0.6
+          - nvcomp==4.2.0.11
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -453,12 +472,12 @@ dependencies:
               cuda: "12.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-nvcomp-cu12==4.1.0.6
+              - nvidia-nvcomp-cu12==4.2.0.11
           - matrix:
               cuda: "11.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-nvcomp-cu11==4.1.0.6
+              - nvidia-nvcomp-cu11==4.2.0.11
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
           # (e.g. for DLFW and pip devcontainers)
           - matrix:
@@ -468,7 +487,7 @@ dependencies:
           # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
-              - nvidia-nvcomp==4.1.0.6
+              - nvidia-nvcomp==4.2.0.11
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -794,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.20,<1.22
+          - polars>=1.20,<1.23
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -835,6 +854,15 @@ dependencies:
               - cuda-sanitizer-api=11.8.86
           - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
+  # packages we want in the 'test_cpp' group in 'files', for CI, but which
+  # shouldn't be added to 'all' for building a development environment
+  test_cpp_cudf:
+    common:
+      - output_types: conda
+        packages:
+          - libcudf-example==25.4.*,>=0.0.0a0
+          - libcudf_kafka==25.4.*,>=0.0.0a0
+          - libcudf-tests==25.4.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
