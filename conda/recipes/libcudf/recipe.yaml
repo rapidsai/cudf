@@ -92,6 +92,7 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
       host:
+        - cmake ${{ cmake_version }}
         - cuda-version =${{ cuda_version }}
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
@@ -134,6 +135,7 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
       host:
+        - cmake ${{ cmake_version }}
         - librdkafka ${{ librdkafka_version }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
       run:
@@ -202,6 +204,7 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
       host:
+        - cmake ${{ cmake_version }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
