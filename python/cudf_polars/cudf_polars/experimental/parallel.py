@@ -7,7 +7,7 @@ from __future__ import annotations
 import itertools
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
@@ -24,6 +24,8 @@ from cudf_polars.experimental.dispatch import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from distributed import Client
+
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
 
@@ -31,8 +33,8 @@ if TYPE_CHECKING:
 class SerializerManager:
     """Manager to ensure ensure serializer is only registered once."""
 
-    _serializer_registered = False
-    _client_run_executed = set()
+    _serializer_registered: bool = False
+    _client_run_executed: ClassVar[set[str]] = set()
 
     @classmethod
     def register_serialize(cls) -> None:
@@ -44,7 +46,7 @@ class SerializerManager:
             cls._serializer_registered = True
 
     @classmethod
-    def run_on_cluster(cls, client) -> None:
+    def run_on_cluster(cls, client: Client) -> None:
         """Run serializer registration on the workers and scheduler."""
         if (
             client.id not in cls._client_run_executed
