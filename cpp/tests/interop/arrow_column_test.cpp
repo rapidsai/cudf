@@ -32,13 +32,13 @@
 struct ArrowColumnTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-auto export_to_arrow(T& obj)
+auto export_to_arrow(T& obj, ArrowDeviceType device_type = ARROW_DEVICE_CUDA)
 {
   // Now we can extract an ArrowDeviceArray from the arrow_column
   auto schema = std::make_unique<ArrowSchema>();
   obj.to_arrow_schema(schema.get());
   auto array = std::make_unique<ArrowDeviceArray>();
-  obj.to_arrow(array.get(), ARROW_DEVICE_CUDA);
+  obj.to_arrow(array.get(), device_type);
   return std::make_pair(std::move(schema), std::move(array));
 }
 
@@ -131,6 +131,22 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostTables)
   }
 }
 
+TEST_F(ArrowColumnTest, ToFromHost)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+  auto col                           = cudf::column(int_col);
+  auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
+
+  auto [arrow_schema_from_arrow_column, arrow_array_from_arrow_column] =
+    export_to_arrow(arrow_column_from_cudf_column, ARROW_DEVICE_CPU);
+  arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_arrow_column.get());
+  arrow_column_from_cudf_column.to_arrow(arrow_array_from_arrow_column.get(), ARROW_DEVICE_CPU);
+
+  auto arrow_column_from_arrow_array =
+    cudf::arrow_column(arrow_schema_from_arrow_column.get(), arrow_array_from_arrow_column.get());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
+}
+
 struct ArrowTableTest : public cudf::test::BaseFixture {};
 
 TEST_F(ArrowTableTest, TwoWayConversion)
@@ -196,4 +212,23 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
   auto arrow_table_from_arrow_array =
     cudf::arrow_table(arrow_schema_from_nanoarrow_array.get(), arrow_array_from_arrow_table.get());
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
+}
+
+TEST_F(ArrowTableTest, ToFromHost)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+  cudf::test::fixed_width_column_wrapper<float> float_col{
+    {1., 2., 3., 4., 5., 6., 7., 8., 9., 10.}};
+  auto original_view = cudf::table_view{{int_col, float_col}};
+  cudf::table table{cudf::table_view{{int_col, float_col}}};
+  auto arrow_table_from_cudf_table = cudf::arrow_table(std::move(table));
+
+  auto [arrow_schema_from_arrow_table, arrow_array_from_arrow_table] =
+    export_to_arrow(arrow_table_from_cudf_table, ARROW_DEVICE_CPU);
+  arrow_table_from_cudf_table.to_arrow_schema(arrow_schema_from_arrow_table.get());
+  arrow_table_from_cudf_table.to_arrow(arrow_array_from_arrow_table.get(), ARROW_DEVICE_CPU);
+
+  auto arrow_table_from_arrow_array =
+    cudf::arrow_table(arrow_schema_from_arrow_table.get(), arrow_array_from_arrow_table.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
 }

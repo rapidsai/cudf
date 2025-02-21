@@ -221,9 +221,15 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
       output->device_type = device_type;
       break;
     }
-      // case ARROW_DEVICE_CPU: {
-      //     auto out = cudf::to_arrow_host(container->view, output, stream, mr);
-      //     }
+    case ARROW_DEVICE_CPU: {
+      auto out = cudf::to_arrow_host(*view().get(), stream, mr);
+      ArrowArrayMove(&out->array, &output->array);
+      output->device_id   = -1;
+      output->sync_event  = nullptr;
+      output->device_type = ARROW_DEVICE_CPU;
+      break;
+    }
+    default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
   }
 }
 
@@ -305,9 +311,15 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
       output->device_type = device_type;
       break;
     }
-      // case ARROW_DEVICE_CPU: {
-      //     auto out = cudf::to_arrow_host(container->view, output, stream, mr);
-      //     }
+    case ARROW_DEVICE_CPU: {
+      auto out = cudf::to_arrow_host(*view().get(), stream, mr);
+      ArrowArrayMove(&out->array, &output->array);
+      output->device_id   = -1;
+      output->sync_event  = nullptr;
+      output->device_type = ARROW_DEVICE_CPU;
+      break;
+    }
+    default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
   }
 }
 
