@@ -20,9 +20,9 @@ GPU_MEMORY_GB=$((GPU_MEMORY / 1024))
 
 # Set the NUM_PROCESSES based on GPU memory
 if [ "$GPU_MEMORY_GB" -lt 24 ]; then
-  NUM_PROCESSES=6
+  NUM_PROCESSES=8
 else
-  NUM_PROCESSES=11
+  NUM_PROCESSES=10
 fi
 
 
