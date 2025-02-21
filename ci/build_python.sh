@@ -64,6 +64,9 @@ rattler-build build --recipe conda/recipes/dask-cudf \
                     --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
+sccache --show-adv-stats
+sccache --zero-stats
+
 rattler-build build --recipe conda/recipes/cudf_kafka \
                     --experimental \
                     --no-build-id \
@@ -74,6 +77,7 @@ rattler-build build --recipe conda/recipes/cudf_kafka \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
+sccache --zero-stats
 
 rattler-build build --recipe conda/recipes/custreamz \
                     --experimental \
@@ -84,6 +88,9 @@ rattler-build build --recipe conda/recipes/custreamz \
                     --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
+sccache --show-adv-stats
+sccache --zero-stats
+
 rattler-build build --recipe conda/recipes/cudf-polars \
                     --experimental \
                     --no-build-id \
@@ -92,6 +99,8 @@ rattler-build build --recipe conda/recipes/cudf-polars \
                     --test skip \
                     --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
+
+sccache --show-adv-stats
 
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
