@@ -171,10 +171,10 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       break;
     }
     case ARROW_DEVICE_CPU: {
-      throw std::runtime_error("ArrowDeviceArray with CPU data not supported");
-      // auto col = from_arrow_host_column(schema, input, stream, mr);
-      // container->owner = std::shared_ptr<cudf::column>(col.release());
-      // break;
+      auto col        = from_arrow_host_column(schema, input, stream, mr);
+      auto tmp_column = arrow_column(std::move(*col));
+      container       = tmp_column.container;
+      break;
     }
     default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
   }
