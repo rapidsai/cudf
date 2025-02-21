@@ -41,7 +41,7 @@ struct arrow_array_container {
   ~arrow_array_container()
   {
     // TODO: Do we have to sync before releasing?
-    ArrowArrayRelease(&owner.array);
+    if (owner.array.release != nullptr) { ArrowArrayRelease(&owner.array); }
   }
 };
 
@@ -116,6 +116,15 @@ void copy_array(ArrowArray* output,
 
 }  // namespace
 
+cudf::column_metadata get_column_metadata(cudf::column_view const& input)
+{
+  cudf::column_metadata meta{};
+  for (auto i = 0; i < input.num_children(); ++i) {
+    meta.children_meta.push_back(get_column_metadata(input.child(i)));
+  }
+  return meta;
+}
+
 arrow_column::arrow_column(cudf::column&& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
@@ -123,7 +132,7 @@ arrow_column::arrow_column(cudf::column&& input,
 {
   // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
   // TODO: metadata should be provided by the user
-  auto meta       = cudf::column_metadata{};
+  auto meta       = get_column_metadata(input.view());
   auto table_meta = std::vector{meta};
   auto tv         = cudf::table_view{{input.view()}};
   auto schema     = cudf::to_arrow_schema(tv, table_meta);
@@ -237,6 +246,15 @@ unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
 //     ArrowArrayMove(&arr, container->arr);
 // }
 
+std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& input)
+{
+  auto meta = std::vector<cudf::column_metadata>{};
+  for (auto i = 0; i < input.num_columns(); ++i) {
+    meta.push_back(get_column_metadata(input.column(i)));
+  }
+  return meta;
+}
+
 arrow_table::arrow_table(cudf::table&& input,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
@@ -244,8 +262,7 @@ arrow_table::arrow_table(cudf::table&& input,
 {
   // The output ArrowDeviceArray here will own all the data, so we don't need to save a column
   // TODO: metadata should be provided by the user
-  auto table_meta = std::vector<cudf::column_metadata>{static_cast<size_t>(input.num_columns()),
-                                                       cudf::column_metadata{}};
+  auto table_meta = get_table_metadata(input.view());
   auto schema     = cudf::to_arrow_schema(input.view(), table_meta);
   ArrowSchemaMove(schema.get(), &(container->schema));
   auto output = cudf::to_arrow_device(std::move(input));
@@ -322,10 +339,14 @@ arrow_table::arrow_table(ArrowSchema const* schema,
       break;
     }
     case ARROW_DEVICE_CPU: {
-      throw std::runtime_error("ArrowDeviceArray with CPU data not supported");
-      // auto col = from_arrow_host_table(schema, input, stream, mr);
-      // container->owner = std::shared_ptr<cudf::table>(col.release());
-      // break;
+      // I'm not sure if there is a more efficient approach than doing this
+      // back-and-forth conversion without writing a lot of bespoke logic. I
+      // suspect that the overhead of the memory copies will dwarf any extra
+      // work here, but it's worth benchmarking to be sure.
+      auto tbl       = from_arrow_host(schema, input, stream, mr);
+      auto tmp_table = arrow_table(std::move(*tbl));
+      container      = tmp_table.container;
+      break;
     }
     default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
   }

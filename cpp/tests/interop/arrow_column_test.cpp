@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "nanoarrow_utils.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -47,13 +49,13 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
   auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column.view());
 
-  auto [arrow_schema_from_cudf_column, arrow_array_from_arrow_column] =
+  auto [arrow_schema_from_arrow_column, arrow_array_from_arrow_column] =
     export_to_arrow(arrow_column_from_cudf_column);
-  arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_cudf_column.get());
+  arrow_column_from_cudf_column.to_arrow_schema(arrow_schema_from_arrow_column.get());
   arrow_column_from_cudf_column.to_arrow(arrow_array_from_arrow_column.get(), ARROW_DEVICE_CUDA);
 
   auto arrow_column_from_arrow_array =
-    cudf::arrow_column(arrow_schema_from_cudf_column.get(), arrow_array_from_arrow_column.get());
+    cudf::arrow_column(arrow_schema_from_arrow_column.get(), arrow_array_from_arrow_column.get());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
 }
 
@@ -90,12 +92,34 @@ TEST_F(ArrowTableTest, TwoWayConversion)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_cudf_table.view());
 
-  auto [arrow_schema_from_cudf_table, arrow_array_from_arrow_table] =
+  auto [arrow_schema_from_arrow_table, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_cudf_table);
-  arrow_table_from_cudf_table.to_arrow_schema(arrow_schema_from_cudf_table.get());
+  arrow_table_from_cudf_table.to_arrow_schema(arrow_schema_from_arrow_table.get());
   arrow_table_from_cudf_table.to_arrow(arrow_array_from_arrow_table.get(), ARROW_DEVICE_CUDA);
 
   auto arrow_table_from_arrow_array =
-    cudf::arrow_table(arrow_schema_from_cudf_table.get(), arrow_array_from_arrow_table.get());
+    cudf::arrow_table(arrow_schema_from_arrow_table.get(), arrow_array_from_arrow_table.get());
   CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
+}
+
+TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
+{
+  auto [tbl, schema, arr] = get_nanoarrow_host_tables(100);
+  ArrowDeviceArray device_arr{
+    .array       = *arr.get(),
+    .device_id   = -1,
+    .device_type = ARROW_DEVICE_CPU,
+  };
+  auto arrow_table_from_nanoarrow_array = cudf::arrow_table(schema.get(), &device_arr);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
+
+  auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_table] =
+    export_to_arrow(arrow_table_from_nanoarrow_array);
+  arrow_table_from_nanoarrow_array.to_arrow_schema(arrow_schema_from_nanoarrow_array.get());
+  arrow_table_from_nanoarrow_array.to_arrow(arrow_array_from_arrow_table.get(), ARROW_DEVICE_CUDA);
+
+  auto arrow_table_from_arrow_array =
+    cudf::arrow_table(arrow_schema_from_nanoarrow_array.get(), arrow_array_from_arrow_table.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
 }
