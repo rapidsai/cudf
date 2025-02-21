@@ -164,7 +164,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
 
 /**
  * @brief Hashing kernel launched as a thread per tile-size (block or warp)
- * for lists column
+ * for a lists column
  *
  * This kernel computes the hashes for each row using the seed and the specified
  * hash function. The ngrams identifies consecutive strings to hash over in
@@ -199,9 +199,8 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
   if (row_idx >= d_input.size()) { return; }
   if (d_input.is_null(row_idx)) { return; }
 
-  // retrieve this string's offset to locate the output position in d_hashes
-  auto const offsets     = d_input.offsets();
-  auto const offsets_itr = offsets.data<cudf::size_type>() + d_input.offset();
+  // retrieve this row's offset to locate the output position in d_hashes
+  auto const offsets_itr = d_input.offsets().data<cudf::size_type>() + d_input.offset();
   auto const offset      = offsets_itr[row_idx];
   auto const size_row    = offsets_itr[row_idx + 1] - offset;
   if (size_row == 0) { return; }
@@ -209,18 +208,17 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
   auto const d_row    = cudf::list_device_view(d_input, row_idx);
   auto const lane_idx = static_cast<cudf::size_type>(tid % tile_size);
 
-  // hashes for this string/thread are stored here
-  auto seed_hashes = d_hashes + offset - offsets_itr[0] + lane_idx;
-
+  // hashes for this row/thread are stored here
+  auto seed_hashes  = d_hashes + offset - offsets_itr[0] + lane_idx;
   auto const hasher = HashFunction(seed);
 
-  for (auto idx = lane_idx; idx < d_row.size(); idx += tile_size, seed_hashes += tile_size) {
-    if (d_row.is_null(idx) || d_row.size() == 0) {
+  for (auto idx = lane_idx; idx < size_row; idx += tile_size, seed_hashes += tile_size) {
+    if (d_row.is_null(idx)) {
       *seed_hashes = 0;
       continue;
     }
 
-    auto next_idx = cuda::std::min(idx + ngrams, d_row.size() - 1);
+    auto next_idx = cuda::std::min(idx + ngrams, size_row - 1);
     if ((idx != 0) && ((next_idx - idx) < ngrams)) {
       *seed_hashes = 0;
       continue;
@@ -228,7 +226,8 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
 
     auto const first_str = d_row.element<cudf::string_view>(idx);
     auto const last_str  = d_row.element<cudf::string_view>(next_idx);
-    auto const size      = static_cast<cudf::size_type>(
+    // build super-string since adjacent strings are contiguous in memory
+    auto const size = static_cast<cudf::size_type>(
       thrust::distance(first_str.data(), last_str.data()) + last_str.size_bytes());
     auto const hash_str = cudf::string_view(first_str.data(), size);
     hash_value_type hv;
@@ -241,14 +240,14 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
     *seed_hashes = cuda::std::max(hv, hash_value_type{1});
   }
 
-  // logic appended here so an extra kernel is not required
+  // logic appended here to count long rows so an extra kernel is not required
   if (size_row >= wide_row_threshold) {
     if (lane_idx == 0) {
-      // count the number of wide strings
+      // count the number of wide rows
       cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> ref{*threshold_count};
       ref.fetch_add(1, cuda::std::memory_order_relaxed);
     }
-    // initialize the output -- only needed for wider strings
+    // initialize the output -- only needed for wider rows
     auto d_output = d_results + (row_idx * param_count);
     for (auto i = lane_idx; i < param_count; i += tile_size) {
       d_output[i] = cuda::std::numeric_limits<hash_value_type>::max();
@@ -275,14 +274,14 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
  *
  * @tparam offsets_type Type for the offsets iterator for the input column
  * @tparam hash_value_type Derived from HashFunction result_type
- * @tparam blocks_per_row Number of blocks used to process each string
+ * @tparam blocks_per_row Number of blocks used to process each row
  *
  * @param offsets_itr The offsets are used to address the d_hashes
- * @param indices The indices of the strings in d_strings to process
+ * @param indices The indices of the rows in the input column
  * @param parameter_a 1st set of parameters for the calculation result
  * @param parameter_b 2nd set of parameters for the calculation result
  * @param width Used for calculating the number of available hashes in each row
- * @param d_hashes The hash values computed in minhash_seed_kernel
+ * @param d_hashes The hash values computed in one of the hash kernels
  * @param d_results Final results vector of calculate values
  */
 template <typename offsets_type, typename hash_value_type, int blocks_per_row>
@@ -566,7 +565,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
   auto [threshold_index, indices] =
     partition_input(input.size(), d_threshold_count.value(stream), sizes_fn, stream);
 
-  auto input_offsets = input.offsets_begin() + input.offset();
+  auto input_offsets = input.offsets_begin();  // already includes input.offset()
   using offset_type  = decltype(input_offsets);
 
   // handle the strings below the threshold width

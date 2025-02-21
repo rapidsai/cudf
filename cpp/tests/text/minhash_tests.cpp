@@ -280,7 +280,6 @@ TEST_F(MinHashTest, Ngrams)
 
 TEST_F(MinHashTest, NgramsWide)
 {
-  // using LCWS    = cudf::test::lists_column_wrapper<cudf::string_view>;
   auto many     = std::vector<char const*>(1024, "hello");
   auto str_data = cudf::test::strings_column_wrapper(many.begin(), many.end());
   auto offsets =
@@ -310,6 +309,47 @@ TEST_F(MinHashTest, NgramsWide)
   LCW64 expected64({
     LCW64{ 1947142336021414174ul, 1219519365938078011ul, 491896395854741840ul},
     LCW64{ 1947142336021414174ul, 1219519365938078011ul, 491896395854741840ul}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
+TEST_F(MinHashTest, NgramsSliced)
+{
+  using LCWS = cudf::test::lists_column_wrapper<cudf::string_view>;
+  auto input =
+    LCWS({LCWS{"ignored", "row"},
+          LCWS{"The", "quick", "brown", "fox", "jumpéd", "over", "the", "lazy", "brown", "dog."},
+          LCWS{"The", "quick", "brown", "fox", "jumpéd", "over", "the", "lazy", "", "dog."},
+          LCWS{"short", "row"},
+          LCWS{"ignored", "row"}});
+
+  auto view  = cudf::lists_column_view(cudf::slice(input, {1, 4}).front());
+  auto first = thrust::counting_iterator<uint32_t>(10);
+
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results =
+    nvtext::minhash_ngrams(view, 4, 0, cudf::column_view(params), cudf::column_view(params));
+
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW32 expected({
+    LCW32{ 230924604u,   55492793u, 963436400u},
+    LCW32{ 230924604u,  367515795u, 963436400u},
+    LCW32{2380648568u, 1330223236u, 279797904u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 =
+    nvtext::minhash64_ngrams(view, 4, 0, cudf::column_view(params64), cudf::column_view(params64));
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+  LCW64 expected64({
+    LCW64{ 208926840193078200ul, 576399628675212695ul,  312927673584437419ul},
+    LCW64{ 677038498284219393ul, 326338087730412201ul,  298455901014050223ul},
+    LCW64{1493265692486268500ul, 720255058049417768ul, 2253087432826260995ul}
   });
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
