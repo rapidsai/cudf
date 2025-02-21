@@ -1273,7 +1273,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        if not (isinstance(other, type(self)) and len(self) == len(other)):
+        if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1286,6 +1286,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
             check_dtypes = True
+        elif (
+            not self_is_categorical
+            and not other_is_categorical
+            and not isinstance(self, type(other))
+        ):
+            return False
 
         try:
             return self._column.equals(
