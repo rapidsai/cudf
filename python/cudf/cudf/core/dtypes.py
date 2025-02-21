@@ -6,7 +6,7 @@ import operator
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,11 @@ import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, cudf_dtype_from_pa_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
+)
 
 if PANDAS_GE_210:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
@@ -29,7 +33,9 @@ else:
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cudf._typing import Dtype
+    from typing_extension import Self
+
+    from cudf._typing import Dtype, DtypeObj
     from cudf.core.buffer import Buffer
 
 
@@ -573,15 +579,11 @@ class StructDtype(_BaseDtype):
 
     name = "struct"
 
-    def __init__(self, fields):
-        pa_fields = {
-            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(cudf.dtype(v))
-            for k, v in fields.items()
-        }
-        self._typ = pa.struct(pa_fields)
+    def __init__(self, fields: dict[str, Dtype]) -> None:
+        self._fields = {k: cudf.dtype(v) for k, v in fields.items()}
 
     @property
-    def fields(self):
+    def fields(self) -> dict[str, DtypeObj]:
         """
         Returns an ordered dict of column name and dtype key-value.
 
@@ -594,10 +596,7 @@ class StructDtype(_BaseDtype):
         >>> struct_dtype.fields
         {'a': dtype('int64'), 'b': dtype('O')}
         """
-        return {
-            field.name: cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type)
-            for field in self._typ
-        }
+        return self._fields
 
     @property
     def type(self):
@@ -606,7 +605,7 @@ class StructDtype(_BaseDtype):
         return dict
 
     @classmethod
-    def from_arrow(cls, typ):
+    def from_arrow(cls, typ: pa.StructType) -> Self:
         """
         Convert a ``pyarrow.StructType`` to ``StructDtype``.
 
@@ -620,11 +619,19 @@ class StructDtype(_BaseDtype):
         >>> cudf.StructDtype.from_arrow(pa_struct_type)
         StructDtype({'x': dtype('int32'), 'y': dtype('O')})
         """
-        obj = object.__new__(cls)
-        obj._typ = typ
-        return obj
+        return cls(
+            {
+                typ.field(i).name: cudf_dtype_from_pa_type(typ.field(i).type)
+                for i in range(typ.num_fields)
+            }
+            # Once pyarrow 18 is the min version, replace with this version
+            # {
+            #     field.name: cudf_dtype_from_pa_type(field.type)
+            #     for field in typ.fields
+            # }
+        )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.StructType:
         """
         Convert a ``StructDtype`` to a ``pyarrow.StructType``.
 
@@ -637,20 +644,25 @@ class StructDtype(_BaseDtype):
         >>> struct_type.to_arrow()
         StructType(struct<x: int32, y: string>)
         """
-        return self._typ
+        return pa.struct(
+            {
+                k: cudf_dtype_to_pa_type(dtype)
+                for k, dtype in self.fields.items()
+            }
+        )
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, str):
             return other == self.name
         if not isinstance(other, StructDtype):
             return False
-        return self._typ.equals(other._typ)
+        return self.to_arrow().equals(other.to_arrow())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}({self.fields})"
 
-    def __hash__(self):
-        return hash(self._typ)
+    def __hash__(self) -> int:
+        return hash(self.to_arrow())
 
     def serialize(self) -> tuple[dict, list]:
         header: dict[str, Any] = {}
@@ -674,7 +686,7 @@ class StructDtype(_BaseDtype):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list):
+    def deserialize(cls, header: dict, frames: list) -> Self:
         _check_type(cls, header, frames)
         fields = {}
         for k, dtype in header["fields"].items():
@@ -689,11 +701,8 @@ class StructDtype(_BaseDtype):
         return cls(fields)
 
     @cached_property
-    def itemsize(self):
-        return sum(
-            cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
-            for field in self._typ
-        )
+    def itemsize(self) -> int:
+        return sum(field.itemsize for field in self.fields.values())
 
     def _recursively_replace_fields(self, result: dict) -> dict:
         """
@@ -926,6 +935,10 @@ class Decimal128Dtype(DecimalDtype):
 
 class IntervalDtype(StructDtype):
     """
+    A data type for Interval data.
+
+    Parameters
+    ----------
     subtype: str, np.dtype
         The dtype of the Interval bounds.
     closed: {'right', 'left', 'both', 'neither'}, default 'right'
@@ -935,43 +948,55 @@ class IntervalDtype(StructDtype):
 
     name = "interval"
 
-    def __init__(self, subtype, closed="right"):
-        super().__init__(fields={"left": subtype, "right": subtype})
-
-        if closed is None:
-            closed = "right"
-        if closed in ["left", "right", "neither", "both"]:
+    def __init__(
+        self,
+        subtype: None | Dtype = None,
+        closed: Literal["left", "right", "neither", "both"] = "right",
+    ) -> None:
+        if closed in {"left", "right", "neither", "both"}:
             self.closed = closed
         else:
-            raise ValueError("closed value is not valid")
+            raise ValueError(f"{closed=} is not valid")
+        if subtype is None:
+            self._subtype = None
+            dtypes = {}
+        else:
+            self._subtype = cudf.dtype(subtype)
+            dtypes = {"left": self._subtype, "right": self._subtype}
+        super().__init__(dtypes)
 
     @property
-    def subtype(self):
-        return self.fields["left"]
+    def subtype(self) -> DtypeObj | None:
+        return self._subtype
 
     def __repr__(self) -> str:
+        if self.subtype is None:
+            return "interval"
         return f"interval[{self.subtype}, {self.closed}]"
 
     def __str__(self) -> str:
-        return self.__repr__()
+        return repr(self)
 
     @classmethod
-    def from_arrow(cls, typ):
-        return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
+    def from_arrow(cls, typ: ArrowIntervalType) -> Self:
+        return cls(typ.subtype.to_pandas_dtype(), typ.closed)
 
-    def to_arrow(self):
+    def to_arrow(self) -> ArrowIntervalType:
         return ArrowIntervalType(
-            pa.from_numpy_dtype(self.subtype), self.closed
+            cudf_dtype_to_pa_type(self.subtype), self.closed
         )
 
     @classmethod
-    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
+    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> Self:
+        return cls(
+            subtype=pd_dtype.subtype,
+            closed="right" if pd_dtype.closed is None else pd_dtype.closed,
+        )
 
     def to_pandas(self) -> pd.IntervalDtype:
         return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
@@ -981,21 +1006,23 @@ class IntervalDtype(StructDtype):
             and self.closed == other.closed
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
 
     def serialize(self) -> tuple[dict, list]:
         header = {
-            "fields": (self.subtype.str, self.closed),
+            "fields": (
+                self.subtype.str if self.subtype is not None else self.subtype,
+                self.closed,
+            ),
             "frame_count": 0,
         }
         return header, []
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list):
+    def deserialize(cls, header: dict, frames: list) -> Self:
         _check_type(cls, header, frames)
         subtype, closed = header["fields"]
-        subtype = np.dtype(subtype)
         return cls(subtype, closed=closed)
 
 
