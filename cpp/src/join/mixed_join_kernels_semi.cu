@@ -30,9 +30,10 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
-template <cudf::size_type block_size, bool has_nulls>
+template <cudf::size_type block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  mixed_join_semi(table_device_view left_table,
+  mixed_join_semi(bool has_nulls,
+                  table_device_view left_table,
                   table_device_view right_table,
                   table_device_view probe,
                   table_device_view build,
@@ -50,19 +51,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // used to circumvent conflicts between arrays of different types between
   // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
-  auto intermediate_storage =
-    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    intermediate_storage + (tile.meta_group_rank() * device_expression_data.num_intermediates);
+    raw_intermediate_storage + threadIdx.x * device_expression_data.num_intermediates *
+                                 sizeof(cudf::ast::detail::IntermediateDataType<true>);
 
   // Equality evaluator to use
-  auto const evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data);
+  auto const evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   // Make sure to swap_tables here as hash_set will use probe table as the left one
   auto constexpr swap_tables = true;
-  auto const equality        = single_expression_equality<has_nulls>{
-    evaluator, thread_intermediate_storage, swap_tables, equality_probe};
+  auto const equality =
+    single_expression_equality{evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   // Create set ref with the new equality comparator
   auto const set_ref_equality = set_ref.rebind_key_eq(equality);
@@ -94,29 +94,17 @@ void launch_mixed_join_semi(bool has_nulls,
                             int64_t shmem_size_per_block,
                             rmm::cuda_stream_view stream)
 {
-  if (has_nulls) {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        left_table,
-        right_table,
-        probe,
-        build,
-        equality_probe,
-        set_ref,
-        left_table_keep_mask,
-        device_expression_data);
-  } else {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        left_table,
-        right_table,
-        probe,
-        build,
-        equality_probe,
-        set_ref,
-        left_table_keep_mask,
-        device_expression_data);
-  }
+  mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      has_nulls,
+      left_table,
+      right_table,
+      probe,
+      build,
+      equality_probe,
+      set_ref,
+      left_table_keep_mask,
+      device_expression_data);
 }
 
 }  // namespace detail
