@@ -127,8 +127,7 @@ cdef class Scalar:
 
         Parameters
         ----------
-        numpy_val: numpy.bool_, numpy.(u)int(8/16/32/16), numpy.float(32/16),
-                   numpy.str_, numpy.datetime64, numpy.timedelta64
+        numpy_val: numpy.generic
             Value to convert to a pylibcudf.Scalar
 
         Returns
