@@ -32,7 +32,7 @@ class SerializerManager:
     """Manager to ensure ensure serializer is only registered once."""
 
     _serializer_registered = False
-    _client_run_executed = False
+    _client_run_executed = set()
 
     @classmethod
     def register_serialize(cls) -> None:
@@ -47,11 +47,11 @@ class SerializerManager:
     def run_on_cluster(cls, client) -> None:
         """Run serializer registration on the workers and scheduler."""
         if (
-            not cls._client_run_executed
+            client.id not in cls._client_run_executed
         ):  # pragma: no cover; Only executes with Distributed scheduler
             client.run(cls.register_serialize)
             client.run_on_scheduler(cls.register_serialize)
-            cls._client_run_executed = True
+            cls._client_run_executed.add(client.id)
 
 
 @lower_ir_node.register(IR)
