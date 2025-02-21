@@ -40,6 +40,7 @@ jobs:
       - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
+      - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
     secrets: inherit
@@ -358,6 +359,20 @@ jobs:
         node_type: "cpu4"
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+  narwhals-tests:
+    needs: [conda-python-build, changed-files]
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      continue-on-error: true
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
