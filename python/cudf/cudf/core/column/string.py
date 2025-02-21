@@ -4679,6 +4679,9 @@ class StringMethods(ColumnMethods):
         r"""
         Normalizes strings characters for tokenizing.
 
+        .. deprecated:: 25.04
+           Use `CharacterNormalizer` instead.
+
         The normalizer function includes:
 
             - adding padding around punctuation (unicode category starts with
@@ -4719,6 +4722,11 @@ class StringMethods(ColumnMethods):
         2              $ 99
         dtype: object
         """
+        warnings.warn(
+            "normalize_characters is deprecated and will be removed in a future "
+            "version. Use CharacterNormalizer instead.",
+            FutureWarning,
+        )
         return self._return_or_inplace(
             self._column.characters_normalize(do_lower)
         )
