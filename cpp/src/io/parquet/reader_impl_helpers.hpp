@@ -113,7 +113,6 @@ struct row_group_info {
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
-  explicit metadata(datasource* source);
   void sanitize_schema();
 };
 
