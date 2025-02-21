@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
         SeriesOrIndex,
         SeriesOrSingleColumnIndex,
@@ -1168,7 +1169,7 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col.codes
         return out
 
-    def view(self, dtype: Dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )

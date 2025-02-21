@@ -28,7 +28,12 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -378,10 +383,10 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if to_dtype.kind == "m":  # type: ignore[union-attr]
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
+        if to_dtype.kind == "m":
             to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            self_res = self.time_unit
 
             max_int = np.iinfo(np.int64).max
 

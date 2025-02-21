@@ -18,9 +18,10 @@ import cudf
 import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_buffer
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 # The size of the mask in bytes
-mask_dtype = cudf.api.types.dtype(np.int32)
+mask_dtype = SIZE_TYPE_DTYPE
 mask_bitsize = mask_dtype.itemsize * 8
 
 # Mapping from ufuncs to the corresponding binary operators.
