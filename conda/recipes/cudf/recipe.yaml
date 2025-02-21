@@ -112,7 +112,6 @@ requirements:
           - if: linux64
             then: libcufile-dev
 
-
 tests:
   - python:
       imports:
