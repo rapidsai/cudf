@@ -443,10 +443,12 @@ __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, siz
 __device__ inline string_view string_view::substr(size_type pos, size_type count) const
 {
   if (pos < 0 || pos >= length()) { return string_view{}; }
-  auto const itr  = begin() + pos;
-  auto const spos = itr.byte_offset();
-  auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
-  return {data() + spos, epos - spos};
+  auto const spos = begin() + pos;
+  auto const epos = count >= 0 ? (spos + count) : const_iterator{*this, _length, size_bytes()};
+  auto ss = string_view{data() + spos.byte_offset(), epos.byte_offset() - spos.byte_offset()};
+  // this potentially saves redundant character counting downstream
+  if (_length != UNKNOWN_STRING_LENGTH) { ss._length = epos.position() - spos.position(); }
+  return ss;
 }
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
