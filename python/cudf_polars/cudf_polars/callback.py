@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from polars import GPUEngine
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.typing import NodeTraverser
+    from cudf_polars.typing import NodeTimer, NodeTraverser
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -178,6 +178,7 @@ def _callback(
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
+    node_timer: NodeTimer,
     *,
     device: int | None,
     memory_resource: int | None,
@@ -193,7 +194,7 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "pylibcudf":
-            return ir.evaluate(cache={}).to_polars()
+            return ir.evaluate(cache={}, node_timer=node_timer).to_polars()
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 

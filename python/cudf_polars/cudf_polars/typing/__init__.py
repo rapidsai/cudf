@@ -18,12 +18,14 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
     "ExprTransformer",
     "GenericTransformer",
     "IRTransformer",
+    "NodeTimer",
     "NodeTraverser",
     "OptimizationArgs",
     "PolarsExpr",
@@ -105,6 +107,16 @@ class NodeTraverser(Protocol):
         callback: Callable[[list[str] | None, str | None, int | None], pl.DataFrame],
     ) -> None:
         """Set the callback replacing the current node in the plan."""
+        ...
+
+
+class NodeTimer(Protocol):
+    """Abstract protocol for polars NodeTimer."""
+
+    def record(
+        self, name: str, callback: Callable[..., DataFrame], args: tuple[Any]
+    ) -> DataFrame:
+        """Record node timing information."""
         ...
 
 
