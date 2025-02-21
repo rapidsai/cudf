@@ -171,7 +171,7 @@ class CategoricalDtype(_BaseDtype):
     Categories (2, object): ['b' < 'a']
     """
 
-    def __init__(self, categories=None, ordered: bool = False) -> None:
+    def __init__(self, categories=None, ordered: bool | None = False) -> None:
         self._categories = self._init_categories(categories)
         self._ordered = ordered
 
@@ -206,7 +206,7 @@ class CategoricalDtype(_BaseDtype):
         return "|O08"
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -280,6 +280,11 @@ class CategoricalDtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
+        elif (self.ordered is None and self._categories is None) or (
+            other.ordered is None and other._categories is None
+        ):
+            # self or other is equivalent to the string "category"
+            return True
         elif self.ordered != other.ordered:
             return False
         elif self._categories is None or other._categories is None:

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from types import ModuleType
 
-    from cudf._typing import Dtype, ScalarLike
+    from cudf._typing import Dtype, DtypeObj, ScalarLike
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -319,7 +319,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return self._num_rows
 
     @_performance_tracking
-    def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
+    def astype(
+        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+    ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
