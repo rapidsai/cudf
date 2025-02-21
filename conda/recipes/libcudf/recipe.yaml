@@ -170,6 +170,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - ninja
         - ${{ stdlib("c") }}
+        - make
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - if: cuda_major == "11"
