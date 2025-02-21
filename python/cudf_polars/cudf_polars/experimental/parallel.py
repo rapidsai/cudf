@@ -46,7 +46,9 @@ class SerializerManager:
     @classmethod
     def run_on_cluster(cls, client) -> None:
         """Run serializer registration on the workers and scheduler."""
-        if not cls._client_run_executed:
+        if (
+            not cls._client_run_executed
+        ):  # pragma: no cover; Only executes with Distributed scheduler
             client.run(cls.register_serialize)
             client.run_on_scheduler(cls.register_serialize)
             cls._client_run_executed = True
