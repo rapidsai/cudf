@@ -280,10 +280,8 @@ class CategoricalDtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif (self.ordered is None and self._categories is None) or (
-            other.ordered is None and other._categories is None
-        ):
-            # self or other is equivalent to the string "category"
+        elif other.ordered is None and other._categories is None:
+            # other is equivalent to the string "category"
             return True
         elif self.ordered != other.ordered:
             return False
