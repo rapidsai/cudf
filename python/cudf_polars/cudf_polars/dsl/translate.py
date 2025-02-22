@@ -691,6 +691,20 @@ def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr
 
 
 @_translate_expr.register
+def _(node: pl_expr.Slice, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    offset = translator.translate_expr(n=node.offset)
+    length = translator.translate_expr(n=node.length)
+    assert isinstance(offset, expr.Literal)
+    assert isinstance(length, expr.Literal)
+    return expr.Slice(
+        dtype,
+        offset.value.as_py(),
+        length.value.as_py(),
+        translator.translate_expr(n=node.input),
+    )
+
+
+@_translate_expr.register
 def _(node: pl_expr.Gather, translator: Translator, dtype: plc.DataType) -> expr.Expr:
     return expr.Gather(
         dtype,
