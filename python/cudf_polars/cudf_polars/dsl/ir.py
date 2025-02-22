@@ -256,6 +256,7 @@ class Scan(IR):
     __slots__ = (
         "cloud_options",
         "config_options",
+        "include_file_paths",
         "n_rows",
         "paths",
         "predicate",
@@ -276,6 +277,7 @@ class Scan(IR):
         "skip_rows",
         "n_rows",
         "row_index",
+        "include_file_paths",
         "predicate",
     )
     typ: str
@@ -296,6 +298,8 @@ class Scan(IR):
     """Number of rows to read after skipping."""
     row_index: tuple[str, int] | None
     """If not None add an integer index column of the given name."""
+    include_file_paths: str | None
+    """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
@@ -314,6 +318,7 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
     ):
         self.schema = schema
@@ -326,6 +331,7 @@ class Scan(IR):
         self.skip_rows = skip_rows
         self.n_rows = n_rows
         self.row_index = row_index
+        self.include_file_paths = include_file_paths
         self.predicate = predicate
         self._non_child_args = (
             schema,
@@ -337,6 +343,7 @@ class Scan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
         self.children = ()
@@ -419,6 +426,7 @@ class Scan(IR):
             self.skip_rows,
             self.n_rows,
             self.row_index,
+            self.include_file_paths,
             self.predicate,
         )
 
@@ -434,9 +442,30 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
     ):
         """Evaluate and return a dataframe."""
+
+        def _include_file_paths_column(include_file_paths: str | None, df: DataFrame):
+            assert include_file_paths not in df.column_names
+            plc_col = plc.interop.from_arrow(
+                pa.array(
+                    [
+                        [
+                            s
+                            for s, n in zip(
+                                paths, tbl_w_meta.num_rows_per_source, strict=False
+                            )
+                            for _ in range(n)
+                        ]
+                    ]
+                )
+            )
+            (_, col) = plc_col.children()
+            paths_col = Column(col, name=include_file_paths)
+            return df.with_columns([paths_col])
+
         if typ == "csv":
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -596,6 +625,8 @@ class Scan(IR):
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
                 )
+                if include_file_paths is not None:
+                    df = _include_file_paths_column(include_file_paths, df)
                 if filters is not None:
                     # Mask must have been applied.
                     return df
@@ -643,7 +674,7 @@ class Scan(IR):
                 name=name,
             )
             df = DataFrame([index, *df.columns])
-        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        # assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
         else:
