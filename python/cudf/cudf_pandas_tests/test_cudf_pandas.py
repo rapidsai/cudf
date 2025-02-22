@@ -42,6 +42,7 @@ from cudf.pandas.fast_slow_proxy import (
     OOMFallbackError,
     TypeFallbackError,
     _Unusable,
+    as_proxy_object,
     is_proxy_object,
 )
 from cudf.testing import assert_eq
@@ -1936,3 +1937,51 @@ def test_numpy_data_access():
     actual = xs.values.data
 
     assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame({"a": [1, 2, 3]}),
+        pd.Series([1, 2, 3]),
+        pd.Index([1, 2, 3]),
+        pd.Categorical([1, 2, 3]),
+        pd.to_datetime(["2021-01-01", "2021-01-02"]),
+        pd.to_timedelta(["1 days", "2 days"]),
+        cudf.DataFrame({"a": [1, 2, 3]}),
+        cudf.Series([1, 2, 3]),
+        cudf.Index([1, 2, 3]),
+        cudf.Index([1, 2, 3], dtype="category"),
+        cudf.to_datetime(["2021-01-01", "2021-01-02"]),
+        cudf.Index([1, 2, 3], dtype="timedelta64[ns]"),
+        [1, 2, 3],
+        {"a": 1, "b": 2},
+        (1, 2, 3),
+    ],
+)
+def test_as_proxy_object(obj):
+    proxy_obj = as_proxy_object(obj)
+    if isinstance(
+        obj,
+        (
+            pd.DataFrame,
+            pd.Series,
+            pd.Index,
+            pd.Categorical,
+            cudf.DataFrame,
+            cudf.Series,
+            cudf.Index,
+        ),
+    ):
+        assert is_proxy_object(proxy_obj)
+        if isinstance(proxy_obj, xpd.DataFrame):
+            tm.assert_frame_equal(proxy_obj, xpd.DataFrame(obj))
+        elif isinstance(proxy_obj, xpd.Series):
+            tm.assert_series_equal(proxy_obj, xpd.Series(obj))
+        elif isinstance(proxy_obj, xpd.Index):
+            tm.assert_index_equal(proxy_obj, xpd.Index(obj))
+        else:
+            tm.assert_equal(proxy_obj, obj)
+    else:
+        assert not is_proxy_object(proxy_obj)
+        assert proxy_obj == obj
