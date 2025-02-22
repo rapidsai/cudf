@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 
 import pandas as pd
@@ -11,6 +11,8 @@ from utils import (
     write_source_str,
 )
 
+from rmm.pylibrmm.stream import Stream
+
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
@@ -18,9 +20,12 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
-def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
+def test_write_json_basic(
+    table_data, source_or_sink, lines, rows_per_chunk, stream
+):
     plc_table_w_meta, pa_table = table_data
     sink = source_or_sink
 
@@ -35,7 +40,7 @@ def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
 
     options.set_rows_per_chunk(rows_per_chunk)
 
-    plc.io.json.write_json(options)
+    plc.io.json.write_json(options, stream)
 
     exp = pa_table.to_pandas()
 
@@ -143,9 +148,10 @@ def test_write_json_bool_opts(true_value, false_value):
     assert str_result == pd_result
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("lines", [True, False])
 def test_read_json_basic(
-    table_data, source_or_sink, lines, text_compression_type
+    table_data, source_or_sink, lines, text_compression_type, stream
 ):
     compression_type = text_compression_type
 
@@ -172,7 +178,8 @@ def test_read_json_basic(
             .compression(compression_type)
             .lines(lines)
             .build()
-        )
+        ),
+        stream,
     )
 
     # Adjustments to correct for the fact orient=records is lossy

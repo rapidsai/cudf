@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -18,6 +18,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
+from rmm.pylibrmm.stream cimport Stream
 
 cdef class CsvReaderOptions:
     cdef csv_reader_options c_obj
@@ -61,7 +62,7 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
     cpdef CsvReaderOptions build(self)
 
-cpdef TableWithMetadata read_csv(CsvReaderOptions options)
+cpdef TableWithMetadata read_csv(CsvReaderOptions options, Stream stream = *)
 
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj
@@ -84,4 +85,4 @@ cdef class CsvWriterOptionsBuilder:
     cpdef CsvWriterOptions build(self)
 
 
-cpdef void write_csv(CsvWriterOptions options)
+cpdef void write_csv(CsvWriterOptions options, Stream stream = *)
