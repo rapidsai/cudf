@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 import numpy as np
@@ -210,3 +210,12 @@ def test_reduction_return_interval_pandas_compatible():
         result = cudf_ii.min()
     expected = ii.min()
     assert result == expected
+
+
+def test_empty_intervaldtype():
+    # "older pandas" supported closed=None, cudf chooses not to support that
+    pd_id = pd.IntervalDtype(closed="right")
+    cudf_id = cudf.IntervalDtype()
+
+    assert str(pd_id) == str(cudf_id)
+    assert pd_id.subtype == cudf_id.subtype
