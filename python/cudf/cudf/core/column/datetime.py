@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -837,7 +838,7 @@ class DatetimeColumn(column.ColumnBase):
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
