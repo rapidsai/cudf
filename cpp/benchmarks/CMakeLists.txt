@@ -351,6 +351,10 @@ ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
 ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
 
 # ##################################################################################################
+# * transform benchmark ----------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/transform.cpp)
+
+# ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
