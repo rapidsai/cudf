@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,6 +121,7 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
 
   schema.release(&schema);
 
+  if (chunks.size() == 1) { return std::move(chunks[0]); }
   auto chunk_views = std::vector<table_view>{};
   chunk_views.reserve(chunks.size());
   std::transform(
