@@ -4679,8 +4679,10 @@ class StringMethods(ColumnMethods):
         r"""
         Normalizes strings characters for tokenizing.
 
-        This uses the normalizer that is built into the
-        subword_tokenize function which includes:
+        .. deprecated:: 25.04
+           Use `CharacterNormalizer` instead.
+
+        The normalizer function includes:
 
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
@@ -4720,8 +4722,13 @@ class StringMethods(ColumnMethods):
         2              $ 99
         dtype: object
         """
+        warnings.warn(
+            "normalize_characters is deprecated and will be removed in a future "
+            "version. Use CharacterNormalizer instead.",
+            FutureWarning,
+        )
         return self._return_or_inplace(
-            self._column.normalize_characters(do_lower)
+            self._column.characters_normalize(do_lower)
         )
 
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
@@ -6256,11 +6263,22 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
-    def normalize_characters(self, do_lower: bool = True) -> Self:
+    def characters_normalize(self, do_lower: bool = True) -> Self:
+        return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.normalize.characters_normalize(
+                self.to_pylibcudf(mode="read"),
+                do_lower,
+            )
+        )
+
+    @acquire_spill_lock()
+    def normalize_characters(
+        self, normalizer: plc.nvtext.normalize.CharacterNormalizer
+    ) -> Self:
         return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_characters(
                 self.to_pylibcudf(mode="read"),
-                do_lower,
+                normalizer,
             )
         )
 
