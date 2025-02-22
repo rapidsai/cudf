@@ -569,7 +569,7 @@ class DatetimeColumn(column.ColumnBase):
 
         return NotImplemented
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
         elif isinstance(dtype, pd.DatetimeTZDtype):
@@ -579,13 +579,13 @@ class DatetimeColumn(column.ColumnBase):
             )
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_timedelta_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -1104,7 +1104,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self._local_time.as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype: np.dtype | pd.DatetimeTZDtype
+    ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
