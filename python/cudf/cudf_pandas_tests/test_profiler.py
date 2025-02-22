@@ -104,6 +104,7 @@ def test_profiler_commandline():
         capture_output=True,
         text=True,
         env=env,
+        encoding="utf-8",
     )
     assert sp_completed.returncode == 0
     output = sp_completed.stdout
