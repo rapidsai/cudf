@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import dask
@@ -486,6 +487,52 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     dd.assert_eq(ddf1.compute(), ddf2.compute())
 
 
+@pytest.mark.parametrize("specify_schema", [True, False])
+def test_read_inconsistent_schema(tmpdir, specify_schema):
+    if specify_schema:
+        # If we specify the expected schema,
+        # we also need to specify the partitioning.
+        kwargs = {
+            "dataset": {
+                "schema": pa.schema(
+                    [
+                        ("id", pa.int64()),
+                        ("text", pa.string()),
+                        ("meta1", pa.struct([("field1", pa.string())])),
+                    ]
+                ),
+                "partitioning": None,
+            },
+        }
+    else:
+        kwargs = {}
+
+    records = [
+        {"id": 123, "text": "foo"},
+        {
+            "text": "bar",
+            "meta1": [{"field1": "cat"}],
+            "id": 456,
+        },
+    ]
+    columns = ["text", "id"]
+    pd.DataFrame(records[:1]).to_parquet(tmpdir / "part.0.parquet")
+    pd.DataFrame(records[1:]).to_parquet(tmpdir / "part.1.parquet")
+    # Check that cuDF and Dask cuDF match
+    dd.assert_eq(
+        cudf.read_parquet(
+            tmpdir, columns=columns, allow_mismatched_pq_schemas=True
+        ),
+        dask_cudf.read_parquet(tmpdir, columns=columns, **kwargs),
+        check_index=False,
+    )
+    # Check that "pandas" and "cudf" backends match
+    dd.assert_eq(
+        dd.read_parquet(tmpdir, columns=columns),
+        dask_cudf.read_parquet(tmpdir, columns=columns, **kwargs),
+    )
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -526,7 +573,6 @@ def test_cudf_list_struct_write(tmpdir):
 
 
 def test_null_partition(tmpdir):
-    import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
 
     ids = pd.Series([0, 1, None], dtype="Int64")
