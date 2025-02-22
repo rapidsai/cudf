@@ -17,8 +17,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.dtypes import (
-    Decimal32Dtype,
-    Decimal64Dtype,
     ListDtype,
     StructDtype,
 )
@@ -85,9 +83,9 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         return value.as_py(), dtype
 
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-        value = pa.scalar(
-            value, type=pa.decimal128(dtype.precision, dtype.scale)
-        ).as_py()
+        if isinstance(value, np.integer):
+            value = int(value)
+        value = pa.scalar(value, type=dtype.to_arrow()).as_py()
     if isinstance(value, decimal.Decimal) and dtype is None:
         dtype = cudf.Decimal128Dtype._from_decimal(value)
 
@@ -199,18 +197,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
         pa_type = pa.from_numpy_dtype(dtype)
 
     pa_scalar = pa.scalar(value, type=pa_type)
-    plc_scalar = plc.interop.from_arrow(pa_scalar)
-    if isinstance(dtype, (Decimal32Dtype, Decimal64Dtype)):
-        # pyarrow only supports decimal128
-        if isinstance(dtype, Decimal32Dtype):
-            plc_type = plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
-        elif isinstance(dtype, Decimal64Dtype):
-            plc_type = plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
-        plc_column = plc.unary.cast(
-            plc.Column.from_scalar(plc_scalar, 1), plc_type
-        )
-        plc_scalar = plc.copying.get_element(plc_column, 0)
-    return plc_scalar
+    return plc.interop.from_arrow(pa_scalar)
 
 
 @functools.lru_cache(maxsize=128)

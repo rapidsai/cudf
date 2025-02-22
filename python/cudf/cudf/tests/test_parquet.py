@@ -2737,7 +2737,18 @@ def test_parquet_writer_nested(tmpdir, data):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 @pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
-def test_parquet_writer_decimal(decimal_type, data):
+def test_parquet_writer_decimal(decimal_type, data, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            (
+                decimal_type is cudf.Decimal32Dtype
+                or decimal_type is cudf.Decimal64Dtype
+            )
+            and version.parse(pa.__version__) < version.parse("20.0"),
+            reason="https://github.com/apache/arrow/issues/45582",
+        )
+    )
+
     gdf = cudf.DataFrame({"val": data})
 
     gdf["dec_val"] = gdf["val"].astype(decimal_type(7, 2))
@@ -3118,6 +3129,10 @@ def test_parquet_row_group_metadata(tmpdir, large_int64_gdf, size_rows):
     )
 
 
+@pytest.mark.xfail(
+    version.parse(pa.__version__) < version.parse("20.0"),
+    reason="https://github.com/apache/arrow/issues/45582",
+)
 def test_parquet_reader_decimal_columns():
     df = cudf.DataFrame(
         {

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
@@ -925,7 +926,17 @@ def test_empty_string_columns(data):
     "decimal_type",
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
-def test_orc_writer_decimal(tmpdir, scale, decimal_type):
+def test_orc_writer_decimal(tmpdir, scale, decimal_type, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            (
+                decimal_type is cudf.Decimal32Dtype
+                or decimal_type is cudf.Decimal64Dtype
+            )
+            and version.parse(pa.__version__) < version.parse("20.0"),
+            reason="https://github.com/apache/arrow/issues/45582",
+        )
+    )
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
