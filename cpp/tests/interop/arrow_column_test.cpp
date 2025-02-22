@@ -271,3 +271,12 @@ TEST_F(ArrowTableTest, ToFromHost)
     cudf::arrow_table(arrow_schema_from_arrow_table.get(), arrow_array_from_arrow_table.get());
   CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
 }
+
+TEST_F(ArrowTableTest, FromArrowArrayStream)
+{
+  auto num_copies         = 3;
+  auto [tbl, sch, stream] = get_nanoarrow_stream(num_copies);
+
+  auto result = cudf::arrow_table(&stream);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *result.view());
+}

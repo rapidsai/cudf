@@ -363,8 +363,13 @@ arrow_table::arrow_table(ArrowSchema const* schema,
   container = tmp.container;
 }
 
-//// ArrowArrayStream and ArrowArray overloads (they can be overloads now instead
-//// of separate functions) are trivial wrappers around this function. Also need versions
-//// of all three that return an arrow_column instead of an arrow_table.
-
+// TODO: Make sure stream and mr are forwarded everywhere in this file.
+arrow_table::arrow_table(ArrowArrayStream* input,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+{
+  auto tbl  = from_arrow_stream(input, stream, mr);
+  auto tmp  = arrow_table(std::move(*tbl), stream, mr);
+  container = tmp.container;
+}
 }  // namespace cudf
