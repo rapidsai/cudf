@@ -13,17 +13,18 @@ import rmm
 import cudf
 from cudf._lib.column import Column
 from cudf._lib.strings_udf import (
-    column_from_udf_string_array,
+    column_from_managed_udf_string_array,
     column_to_string_view_array,
 )
+from cudf.core.udf._nrt_cuda import memsys
 from cudf.core.udf.strings_typing import (
+    managed_udf_string,
     str_view_arg_handler,
     string_view,
-    udf_string,
 )
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing import assert_eq
-from cudf.testing._utils import sv_to_udf_str
+from cudf.testing._utils import sv_to_managed_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
 _PTX_FILE = _ptx_file()
@@ -42,7 +43,7 @@ def get_kernels(func, dtype, size):
     func = cuda.jit(device=True)(func)
 
     if dtype == "str":
-        outty = CPointer(udf_string)
+        outty = CPointer(managed_udf_string)
     else:
         outty = numba.np.numpy_support.from_dtype(dtype)[::1]
     sig = nb_signature(void, CPointer(string_view), outty)
@@ -61,7 +62,7 @@ def get_kernels(func, dtype, size):
         id = cuda.grid(1)
         if id < size:
             st = input_strings[id]
-            st = sv_to_udf_str(st)
+            st = sv_to_managed_udf_str(st)
             result = func(st)
             output_col[id] = result
 
@@ -79,7 +80,7 @@ def run_udf_test(data, func, dtype):
     """
     if dtype == "str":
         output = rmm.DeviceBuffer(
-            size=len(data) * _get_extensionty_size(udf_string)
+            size=len(data) * _get_extensionty_size(managed_udf_string)
         )
     else:
         dtype = np.dtype(dtype)
@@ -97,7 +98,9 @@ def run_udf_test(data, func, dtype):
     with _CUDFNumbaConfig():
         sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = Column.from_pylibcudf(column_from_udf_string_array(output))
+        result = Column.from_pylibcudf(
+            column_from_managed_udf_string_array(output, memsys)
+        )
     else:
         result = output
 
@@ -106,7 +109,9 @@ def run_udf_test(data, func, dtype):
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = Column.from_pylibcudf(column_from_udf_string_array(output))
+        result = Column.from_pylibcudf(
+            column_from_managed_udf_string_array(output, memsys)
+        )
     else:
         result = output
 
