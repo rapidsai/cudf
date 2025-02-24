@@ -197,7 +197,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_csv-write_csv]": "Need to expose include_file_paths xref: cudf#18012",
     "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics[False]": "Debug output on stderr doesn't match",
     # Maybe flaky, order-dependent?
-    "tests/unit/test_projections.py::test_schema_full_outer_join_projection_pd_13287": "Order-specific result check, query is correct but in different order",
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
 }
 
