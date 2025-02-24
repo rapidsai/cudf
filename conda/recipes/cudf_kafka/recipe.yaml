@@ -50,6 +50,7 @@ requirements:
     - ${{ stdlib("c") }}
   host:
     - python
+    - pip
     - cython >=3.0.3
     - cuda-version =${{ cuda_version }}
     - pylibcudf =${{ version }}
