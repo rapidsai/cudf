@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -436,76 +436,6 @@ std::unique_ptr<column> round_general(rounding_function round_kind,
     column.type(), dispatch_round{}, round_kind, component, column, stream, mr);
 }
 
-std::unique_ptr<column> extract_year(column_view const& column,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::YEAR, stream, mr);
-}
-
-std::unique_ptr<column> extract_month(column_view const& column,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::MONTH, stream, mr);
-}
-
-std::unique_ptr<column> extract_day(column_view const& column,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::DAY, stream, mr);
-}
-
-std::unique_ptr<column> extract_weekday(column_view const& column,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::WEEKDAY, stream, mr);
-}
-
-std::unique_ptr<column> extract_hour(column_view const& column,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::HOUR, stream, mr);
-}
-
-std::unique_ptr<column> extract_minute(column_view const& column,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::MINUTE, stream, mr);
-}
-
-std::unique_ptr<column> extract_second(column_view const& column,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::SECOND, stream, mr);
-}
-
-std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::MILLISECOND, stream, mr);
-}
-
-std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::MICROSECOND, stream, mr);
-}
-
-std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
-{
-  return detail::extract_datetime_component(column, datetime_component::NANOSECOND, stream, mr);
-}
-
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
@@ -598,62 +528,6 @@ std::unique_ptr<column> round_datetimes(column_view const& column,
   return detail::round_general(detail::rounding_function::ROUND, freq, column, stream, mr);
 }
 
-std::unique_ptr<column> extract_year(column_view const& column,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_year(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_month(column_view const& column,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_month(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_day(column_view const& column,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_day(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_weekday(column_view const& column,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_weekday(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_hour(column_view const& column,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_hour(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_minute(column_view const& column,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_minute(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_second(column_view const& column,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_second(column, stream, mr);
-}
-
 std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
                                                          datetime_component component,
                                                          rmm::cuda_stream_view stream,
@@ -661,30 +535,6 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
 {
   CUDF_FUNC_RANGE();
   return detail::extract_datetime_component(column, component, stream, mr);
-}
-
-std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_millisecond_fraction(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_microsecond_fraction(column, stream, mr);
-}
-
-std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::extract_nanosecond_fraction(column, stream, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
