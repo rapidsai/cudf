@@ -369,6 +369,17 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
+  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
+  {
+    return source->host_read_async(offset, size, dst);
+  }
+
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
+  {
+    return source->host_read_async(offset, size);
+  }
+
   [[nodiscard]] bool supports_device_read() const override
   {
     return source->supports_device_read();
