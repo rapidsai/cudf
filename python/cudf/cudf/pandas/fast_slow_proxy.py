@@ -1338,6 +1338,7 @@ def _get_proxy_base_class(cls):
 def as_proxy_object(obj: Any) -> Any:
     """
     Wraps a cudf or pandas object in a proxy object if applicable.
+
     There will be no memory transfer, i.e., GPU objects stay on GPU and
     CPU objects stay on CPU. The object will be wrapped in a
     proxy object. This is useful for ensuring that the object is
