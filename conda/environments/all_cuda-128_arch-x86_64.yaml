@@ -57,14 +57,14 @@ dependencies:
 - numba>=0.59.1,<0.61.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcomp==4.1.0.6
+- nvcomp==4.2.0.11
 - nvtx>=0.2.1
 - openpyxl
 - packaging
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.20,<1.22
+- polars>=1.20,<1.23
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
