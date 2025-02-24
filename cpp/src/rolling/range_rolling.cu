@@ -98,12 +98,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     return {make_range_window<rolling::direction::PRECEDING>(
               orderby, grouping, order, null_order, preceding, stream, mr),
             make_range_window<rolling::direction::FOLLOWING>(
-              orderby, grouping, order, null_order, preceding, stream, mr)};
+              orderby, grouping, order, null_order, following, stream, mr)};
   } else {
     return {make_range_window<rolling::direction::PRECEDING>(
               orderby, std::nullopt, order, null_order, preceding, stream, mr),
             make_range_window<rolling::direction::FOLLOWING>(
-              orderby, std::nullopt, order, null_order, preceding, stream, mr)};
+              orderby, std::nullopt, order, null_order, following, stream, mr)};
   }
 }
 }  // namespace detail
