@@ -1943,16 +1943,16 @@ def test_numpy_data_access():
     "obj",
     [
         pd.DataFrame({"a": [1, 2, 3]}),
-        xpd.DataFrame({"a": [1, 2, 3]}),
         pd.Series([1, 2, 3]),
-        xpd.Series([1, 2, 3]),
         pd.Index([1, 2, 3]),
-        xpd.Index([1, 2, 3]),
         pd.Categorical([1, 2, 3]),
-        xpd.Categorical([1, 2, 3]),
         pd.to_datetime(["2021-01-01", "2021-01-02"]),
-        xpd.to_datetime(["2021-01-01", "2021-01-02"]),
         pd.to_timedelta(["1 days", "2 days"]),
+        xpd.DataFrame({"a": [1, 2, 3]}),
+        xpd.Series([1, 2, 3]),
+        xpd.Index([1, 2, 3]),
+        xpd.Categorical([1, 2, 3]),
+        xpd.to_datetime(["2021-01-01", "2021-01-02"]),
         xpd.to_timedelta(["1 days", "2 days"]),
         cudf.DataFrame({"a": [1, 2, 3]}),
         cudf.Series([1, 2, 3]),
@@ -1971,12 +1971,12 @@ def test_as_proxy_object(obj):
         obj,
         (
             pd.DataFrame,
-            xpd.DataFrame,
             pd.Series,
-            xpd.Series,
             pd.Index,
-            xpd.Index,
             pd.Categorical,
+            xpd.DataFrame,
+            xpd.Series,
+            xpd.Index,
             xpd.Categorical,
             cudf.DataFrame,
             cudf.Series,
@@ -1995,3 +1995,25 @@ def test_as_proxy_object(obj):
     else:
         assert not is_proxy_object(proxy_obj)
         assert proxy_obj == obj
+
+
+def test_as_proxy_object_doesnot_copy_series():
+    s = pd.Series([1, 2, 3])
+    proxy_obj = as_proxy_object(s)
+    s[0] = 10
+    assert proxy_obj[0] == 10
+    tm.assert_series_equal(s, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_dataframe():
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    proxy_obj = as_proxy_object(df)
+    df.iloc[0, 0] = 10
+    assert proxy_obj.iloc[0, 0] == 10
+    tm.assert_frame_equal(df, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_index():
+    idx = pd.Index([1, 2, 3])
+    proxy_obj = as_proxy_object(idx)
+    assert proxy_obj._fsproxy_wrapped is idx
