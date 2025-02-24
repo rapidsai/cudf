@@ -36,8 +36,6 @@ namespace transformation {
 namespace jit {
 namespace {
 
-using scale_repr = std::underlying_type_t<numeric::scale_type>;
-
 jitify2::StringVec build_jit_typenames(mutable_column_view output,
                                        std::vector<column_view> const& inputs)
 {
