@@ -134,7 +134,7 @@ arrow_column::arrow_column(cudf::column&& input,
   auto tv         = cudf::table_view{{input.view()}};
   auto schema     = cudf::to_arrow_schema(tv, table_meta);
   ArrowSchemaMove(schema->children[0], &(container->schema));
-  auto output = cudf::to_arrow_device(std::move(input));
+  auto output = cudf::to_arrow_device(std::move(input), stream, mr);
   ArrowDeviceArrayMove(output.get(), &container->owner);
 }
 
@@ -160,7 +160,7 @@ arrow_column::arrow_column(ArrowSchema const* schema,
     }
     case ARROW_DEVICE_CPU: {
       auto col        = from_arrow_host_column(schema, input, stream, mr);
-      auto tmp_column = arrow_column(std::move(*col));
+      auto tmp_column = arrow_column(std::move(*col), stream, mr);
       container       = tmp_column.container;
       // Should always be non-null unless we're in some odd multithreaded
       // context but best to be safe.
@@ -253,7 +253,7 @@ arrow_table::arrow_table(cudf::table&& input,
   auto table_meta = get_table_metadata(input.view());
   auto schema     = cudf::to_arrow_schema(input.view(), table_meta);
   ArrowSchemaMove(schema.get(), &(container->schema));
-  auto output = cudf::to_arrow_device(std::move(input));
+  auto output = cudf::to_arrow_device(std::move(input), stream, mr);
   ArrowDeviceArrayMove(output.get(), &container->owner);
 }
 
@@ -331,7 +331,7 @@ arrow_table::arrow_table(ArrowSchema const* schema,
       // suspect that the overhead of the memory copies will dwarf any extra
       // work here, but it's worth benchmarking to be sure.
       auto tbl       = from_arrow_host(schema, input, stream, mr);
-      auto tmp_table = arrow_table(std::move(*tbl));
+      auto tmp_table = arrow_table(std::move(*tbl), stream, mr);
       container      = tmp_table.container;
       break;
     }
@@ -351,7 +351,6 @@ arrow_table::arrow_table(ArrowSchema const* schema,
   container = tmp.container;
 }
 
-// TODO: Make sure stream and mr are forwarded everywhere in this file.
 arrow_table::arrow_table(ArrowArrayStream* input,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
