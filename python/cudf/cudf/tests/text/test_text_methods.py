@@ -269,7 +269,7 @@ def test_normalize_characters():
     )
 
     normalizer = CharacterNormalizer(False)
-    actual = normalizer(strings.str)
+    actual = normalizer.normalize(strings.str)
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
