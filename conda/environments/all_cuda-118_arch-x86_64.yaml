@@ -15,7 +15,7 @@ dependencies:
 - cachetools
 - clang-tools=16.0.6
 - clang==16.0.6
-- cmake>=3.26.4,!=3.30.0
+- cmake>=3.30.4
 - cramjam
 - cubinlinker
 - cuda-nvtx=11.8
@@ -59,7 +59,7 @@ dependencies:
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
-- nvcomp==4.1.0.6
+- nvcomp==4.2.0.11
 - nvtx>=0.2.1
 - openpyxl
 - packaging
