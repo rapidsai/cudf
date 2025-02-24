@@ -61,7 +61,7 @@ static void BM_transform(nvbench::state& state)
   // Construct expression that chains additions like (((a + b) + c) + d)
   std::string const op = "+";
   std::string expression;
-  if (reuse_columns) {
+  if constexpr (reuse_columns) {
     expression = "c0 " + op + " c0";
     std::for_each(thrust::make_counting_iterator(1),
                   thrust::make_counting_iterator(num_columns),
