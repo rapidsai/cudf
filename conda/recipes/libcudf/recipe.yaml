@@ -93,8 +93,9 @@ outputs:
         - cmake --install cpp/build
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
-      host:
+      build:
         - cmake ${{ cmake_version }}
+      host:
         - cuda-version =${{ cuda_version }}
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
@@ -136,8 +137,9 @@ outputs:
         - cmake --install cpp/libcudf_kafka/build
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
-      host:
+      build:
         - cmake ${{ cmake_version }}
+      host:
         - librdkafka ${{ librdkafka_version }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
       run:
@@ -206,8 +208,9 @@ outputs:
         - cmake --install cpp/libcudf_kafka/build --component testing
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
     requirements:
-      host:
+      build:
         - cmake ${{ cmake_version }}
+      host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
