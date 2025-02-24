@@ -37,12 +37,29 @@ def test_minhash(minhash_input_data, width):
 
 @pytest.fixture(scope="module", params=[pa.uint32(), pa.uint64()])
 def minhash_ngrams_input_data(request):
-    input_arr = pa.array([["foo", "bar", "foo foo", "bar bar"]])
+    input_arr = pa.array(
+        [
+            ["foo", "bar", "foo foo", "bar bar", "foo bar", "bar foo"],
+            [
+                "one",
+                "two",
+                "three",
+                "four",
+                "five",
+                "six",
+                "seven",
+                "eight",
+                "nine",
+                "ten",
+                "eleven",
+            ],
+        ]
+    )
     ab = pa.array([2, 3, 4, 5], request.param)
     return input_arr, ab, request.param
 
 
-@pytest.mark.parametrize("ngrams", [5, 12])
+@pytest.mark.parametrize("ngrams", [5, 10])
 def test_minhash_ngrams(minhash_ngrams_input_data, ngrams):
     input_arr, ab, seed_type = minhash_ngrams_input_data
     minhash_func = (
