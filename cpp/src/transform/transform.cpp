@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/jit/types.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -35,43 +36,22 @@ namespace transformation {
 namespace jit {
 namespace {
 
-using device_data_t = void*;
-
 using scale_repr = std::underlying_type_t<numeric::scale_type>;
-
-std::string repr_typename(cudf::data_type type)
-{
-  CUDF_EXPECTS(cudf::is_fixed_width(type),
-               "Requested representation type name of non-fixed-width type");
-
-  switch (type.id()) {
-    case cudf::type_id::DECIMAL32: return "int32_t";
-    case cudf::type_id::DECIMAL64: return "int64_t";
-    case cudf::type_id::DECIMAL128: return "__int128_t";
-    default: return cudf::type_to_name(type);
-  }
-}
-std::string scale_repr_typename()
-{
-  return cudf::type_to_name(cudf::data_type(cudf::type_to_id<scale_repr>()));
-}
 
 jitify2::StringVec build_jit_typenames(mutable_column_view output,
                                        std::vector<column_view> const& inputs)
 {
-  static constexpr auto SCALAR_STRIDE = 0;
-  static constexpr auto COLUMN_STRIDE = 1;
-
   jitify2::StringVec typenames;
-  int32_t id = 0;
+  int32_t index = 0;
 
   auto const add_column = [&](cudf::data_type data_type, bool is_scalar) {
-    auto const stride_type =
-      jitify2::reflection::Template("cudf::transformation::jit::strided")
-        .instantiate(
-          id++, is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE, cudf::type_to_name(data_type));
+    std::string accessor = jitify2::reflection::Template("cudf::transformation::jit::accessor")
+                             .instantiate(cudf::type_to_name(data_type), index++);
 
-    typenames.push_back(stride_type);
+    typenames.push_back(
+      is_scalar
+        ? jitify2::reflection::Template("cudf::transformation::jit::scalar").instantiate(accessor)
+        : accessor);
   };
 
   add_column(output.type(), false);
@@ -90,15 +70,12 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   uint32_t index = 0;
 
   auto const add_column = [&](bool is_output, data_type type) {
-    auto const repr_type  = repr_typename(type);
-    auto const value_type = cudf::type_to_name(type);
+    auto const type_name = cudf::type_to_name(type);
 
     if (is_output) {
-      params.emplace(index++, repr_type + "*");
-
-      if (cudf::is_fixed_point(type)) { params.emplace(index++, scale_repr_typename()); }
+      params.emplace(index++, type_name + "*");
     } else {
-      params.emplace(index++, value_type);
+      params.emplace(index++, type_name);
     }
   };
 
@@ -111,59 +88,58 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   return params;
 }
 
-rmm::device_uvector<scale_repr> build_scales(mutable_column_view output,
-                                             std::vector<column_view> const& inputs,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+cudf::jit::column_device_view to_jit_view(column_view const& view)
 {
-  std::vector<scale_repr> host_scales;
-
-  auto const add_column = [&](cudf::data_type type) { host_scales.push_back(type.scale()); };
-
-  add_column(output.type());
-
-  for (auto const& input : inputs) {
-    add_column(input.type());
-  }
-
-  rmm::device_uvector<scale_repr> scales(host_scales.size(), stream, mr);
-
-  detail::cuda_memcpy_async(
-    cudf::device_span<scale_repr>{scales}, cudf::host_span<scale_repr const>{host_scales}, stream);
-
-  return scales;
+  return {const_cast<void*>(view.head()), nullptr, view.null_mask(), view.type()};
 }
 
-std::vector<device_data_t> build_device_data(mutable_column_view output,
-                                             std::vector<column_view> const& inputs,
-                                             rmm::device_uvector<scale_repr> const& scales)
+rmm::device_uvector<cudf::jit::column_device_view> build_views(
+  mutable_column_view output,
+  std::vector<column_view> const& inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
-  std::vector<device_data_t> data;
+  std::vector<cudf::jit::column_device_view> host;
 
-  data.push_back(const_cast<device_data_t>(static_cast<void const*>(scales.data())));
+  host.emplace_back(to_jit_view(output));
 
-  auto add_column = [&](column_view const& col) {
-    data.push_back(const_cast<device_data_t>(cudf::jit::get_data_ptr(col)));
-  };
+  std::transform(inputs.begin(), inputs.end(), std::back_inserter(host), to_jit_view);
 
-  add_column(output);
+  rmm::device_uvector<cudf::jit::column_device_view> views{host.size(), stream, mr};
 
-  std::for_each(inputs.begin(), inputs.end(), add_column);
+  detail::cuda_memcpy_async(cudf::device_span<cudf::jit::column_device_view>{views},
+                            cudf::host_span<cudf::jit::column_device_view const>{host},
+                            stream);
 
-  return data;
+  return views;
 }
 
-std::vector<void*> build_launch_args(cudf::size_type& size, std::vector<device_data_t>& device_data)
+void launch(jitify2::ConfiguredKernel& kernel,
+            cudf::size_type size,
+            rmm::device_uvector<cudf::jit::column_device_view>& views)
 {
   // JITIFY and NVRTC need non-const pointers even if they aren't written to
-  std::vector<void*> args;
-  args.push_back(&size);
-  std::transform(
-    device_data.begin(), device_data.end(), std::back_inserter(args), [](auto& data) -> void* {
-      return &data;
-    });
 
-  return args;
+  cudf::jit::column_device_view* views_ptr = views.data();
+
+  std::array<void*, 2> args{&size, &views_ptr};
+
+  kernel->launch(args.data());
+}
+
+jitify2::Kernel get_kernel(mutable_column_view output,
+                           std::vector<column_view> const& inputs,
+                           std::string const& cuda_source)
+{
+  std::string const kernel_name =
+    jitify2::reflection::Template(cudf::is_fixed_point(output.type())
+                                    ? "cudf::transformation::jit::fixed_point_kernel"
+                                    : "cudf::transformation::jit::kernel")
+      .instantiate(build_jit_typenames(output, inputs));
+
+  return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
+    .get_kernel(
+      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
 }
 
 void transform_operation(size_type base_column_size,
@@ -174,28 +150,17 @@ void transform_operation(size_type base_column_size,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
 {
-  std::string const kernel_name =
-    jitify2::reflection::Template(cudf::is_fixed_point(output.type())
-                                    ? "cudf::transformation::jit::fixed_point_kernel"
-                                    : "cudf::transformation::jit::kernel")
-      .instantiate(build_jit_typenames(output, inputs));
-
   std::string const cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(
                udf, "GENERIC_TRANSFORM_OP", build_ptx_params(output, inputs))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto const scales = build_scales(output, inputs, stream, mr);
+  auto views = build_views(output, inputs, stream, mr);
 
-  auto device_data = build_device_data(output, inputs, scales);
+  auto kernel = get_kernel(output, inputs, cuda_source)
+                  ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 
-  auto args = build_launch_args(base_column_size, device_data);
-
-  cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())                             //
-    ->launch(args.data());
+  launch(kernel, base_column_size, views);
 }
 }  // namespace
 

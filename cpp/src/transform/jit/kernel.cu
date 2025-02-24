@@ -15,6 +15,7 @@
  */
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/jit/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -34,51 +35,66 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
-using scale_rep = cuda::std::underlying_type_t<numeric::scale_type>;
+template <typename T, int32_t index>
+struct accessor {
+  using type                     = T;
+  static constexpr int32_t INDEX = index;
 
-/// @brief This class supports striding into columns of data as either scalars or actual
-/// columns at no runtime cost. Although it implies the kernel will be recompiled if scalar and
-/// column inputs are interchanged.
-template <int32_t id, int32_t multiplier, typename T>
-struct strided {
-  using type = T;
-  using rep  = T;
-
-  T data;
-
-  __device__ T get(int64_t index, scale_rep const* __restrict__ scales) const
+  static constexpr T& get(cudf::jit::column_device_view const* views, int64_t row)
   {
-    return (&data)[index * multiplier];
+    T* data = reinterpret_cast<T*>(views[INDEX].data);
+    return data[row];
   }
 
-  __device__ T const& get_rep(int64_t index) const { return (&data)[index * multiplier]; }
-
-  __device__ T& get_rep(int64_t index) { return (&data)[index * multiplier]; }
+  static constexpr void set(cudf::jit::column_device_view const* views, int64_t row, T const& value)
+  {
+    T* data   = reinterpret_cast<T*>(views[INDEX].data);
+    data[row] = value;
+  }
 };
 
-template <int32_t id, int32_t multiplier, typename Rep, numeric::Radix rad>
-struct strided<id, multiplier, numeric::fixed_point<Rep, rad>> {
-  using type = numeric::fixed_point<Rep, rad>;
-  using rep  = Rep;
+template <typename Rep, int32_t index, numeric::Radix rad>
+struct accessor<numeric::fixed_point<Rep, rad>, index> {
+  using type                     = numeric::fixed_point<Rep, rad>;
+  using rep                      = Rep;
+  static constexpr int32_t INDEX = index;
 
-  rep data;
-
-  __device__ type get(int64_t index, scale_rep const* __restrict__ scales) const
+  static constexpr type get(cudf::jit::column_device_view const* views, int64_t row)
   {
-    return type{
-      numeric::scaled_integer<rep>{(&data)[index * multiplier], numeric::scale_type{scales[id]}}};
+    rep* data                 = reinterpret_cast<rep*>(views[INDEX].data);
+    numeric::scale_type scale = static_cast<numeric::scale_type>(views[INDEX].type.scale());
+    return type{numeric::scaled_integer<rep>{data[row], scale}};
   }
 
-  __device__ rep const& get_rep(int64_t index) const { return (&data)[index * multiplier]; }
+  static constexpr void set(cudf::jit::column_device_view const* views,
+                            int64_t row,
+                            type const& value)
+  {
+    rep* data = reinterpret_cast<rep*>(views[INDEX].data);
+    data[row] = value.value();
+  }
+};
 
-  __device__ rep& get_rep(int64_t index) { return (&data)[index * multiplier]; }
+template <typename accessor>
+struct scalar {
+  using type                     = typename accessor::type;
+  static constexpr int32_t INDEX = accessor::INDEX;
+
+  static constexpr decltype(auto) get(cudf::jit::column_device_view const* views, int64_t row)
+  {
+    return accessor::get(views, 0);
+  }
+
+  static constexpr void set(cudf::jit::column_device_view const* views,
+                            int64_t row,
+                            type const& value)
+  {
+    return accessor::set(views, 0, value);
+  }
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::size_type size,
-                        scale_rep const* __restrict__ scales,
-                        Out* __restrict__ out,
-                        In const* __restrict__... ins)
+CUDF_KERNEL void kernel(cudf::size_type size, cudf::jit::column_device_view const* views)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -87,27 +103,25 @@ CUDF_KERNEL void kernel(cudf::size_type size,
   thread_index_type const stride = block_size * gridDim.x;
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
-    GENERIC_TRANSFORM_OP(&out->get_rep(i), ins->get(i, scales)...);
+    GENERIC_TRANSFORM_OP(&Out::get(views, i), In::get(views, i)...);
   }
 }
 
 template <typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::size_type size,
-                                    scale_rep const* __restrict__ scales,
-                                    Out* __restrict__ out,
-                                    In const* __restrict__... ins)
+                                    cudf::jit::column_device_view const* views)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
-  auto const block_size          = static_cast<thread_index_type>(blockDim.x);
-  thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
-  thread_index_type const stride = block_size * gridDim.x;
+  auto const block_size                  = static_cast<thread_index_type>(blockDim.x);
+  thread_index_type const start          = threadIdx.x + blockIdx.x * block_size;
+  thread_index_type const stride         = block_size * gridDim.x;
+  numeric::scale_type const output_scale = static_cast<numeric::scale_type>(views[0].type.scale());
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
-    typename Out::type value{
-      numeric::scaled_integer<typename Out::rep>{0, numeric::scale_type{scales[0]}}};
-    GENERIC_TRANSFORM_OP(&value, ins->get(i, scales)...);
-    out->get_rep(i) = value.value();
+    typename Out::type result{numeric::scaled_integer<typename Out::rep>{0, output_scale}};
+    GENERIC_TRANSFORM_OP(&result, In::get(views, i)...);
+    Out::set(views, i, result);
   }
 }
 
