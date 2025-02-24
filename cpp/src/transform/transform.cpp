@@ -51,33 +51,27 @@ std::string repr_typename(cudf::data_type type)
     default: return cudf::type_to_name(type);
   }
 }
-
 std::string scale_repr_typename()
 {
   return cudf::type_to_name(cudf::data_type(cudf::type_to_id<scale_repr>()));
 }
 
-std::vector<std::string> build_jit_typenames(mutable_column_view output,
-                                             std::vector<column_view> const& inputs)
+jitify2::StringVec build_jit_typenames(mutable_column_view output,
+                                       std::vector<column_view> const& inputs)
 {
   static constexpr auto SCALAR_STRIDE = 0;
   static constexpr auto COLUMN_STRIDE = 1;
 
-  std::vector<std::string> typenames;
+  jitify2::StringVec typenames;
+  int32_t id = 0;
 
   auto const add_column = [&](cudf::data_type data_type, bool is_scalar) {
-    auto const repr_type =
+    auto const stride_type =
       jitify2::reflection::Template("cudf::transformation::jit::strided")
-        .instantiate(repr_typename(data_type), is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE);
+        .instantiate(
+          id++, is_scalar ? SCALAR_STRIDE : COLUMN_STRIDE, cudf::type_to_name(data_type));
 
-    typenames.push_back(repr_type);
-
-    // add scale type
-    if (cudf::is_fixed_point(data_type)) {
-      auto const scale_type = jitify2::reflection::Template("cudf::transformation::jit::strided")
-                                .instantiate(scale_repr_typename(), SCALAR_STRIDE);
-      typenames.push_back(scale_type);
-    }
+    typenames.push_back(stride_type);
   };
 
   add_column(output.type(), false);
@@ -96,12 +90,16 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   uint32_t index = 0;
 
   auto const add_column = [&](bool is_output, data_type type) {
-    auto const repr_type = repr_typename(type);
+    auto const repr_type  = repr_typename(type);
+    auto const value_type = cudf::type_to_name(type);
 
-    params.emplace(index++, is_output ? (repr_type + "*") : repr_type);
+    if (is_output) {
+      params.emplace(index++, repr_type + "*");
 
-    /// add scale argument
-    if (cudf::is_fixed_point(type)) { params.emplace(index++, scale_repr_typename()); }
+      if (cudf::is_fixed_point(type)) { params.emplace(index++, scale_repr_typename()); }
+    } else {
+      params.emplace(index++, value_type);
+    }
   };
 
   add_column(true, output.type());
@@ -120,9 +118,7 @@ rmm::device_uvector<scale_repr> build_scales(mutable_column_view output,
 {
   std::vector<scale_repr> host_scales;
 
-  auto const add_column = [&](cudf::data_type type) {
-    if (cudf::is_fixed_point(type)) { host_scales.push_back(type.scale()); }
-  };
+  auto const add_column = [&](cudf::data_type type) { host_scales.push_back(type.scale()); };
 
   add_column(output.type());
 
@@ -144,15 +140,10 @@ std::vector<device_data_t> build_device_data(mutable_column_view output,
 {
   std::vector<device_data_t> data;
 
-  auto scale_ptr = scales.data();
+  data.push_back(const_cast<device_data_t>(static_cast<void const*>(scales.data())));
 
   auto add_column = [&](column_view const& col) {
     data.push_back(const_cast<device_data_t>(cudf::jit::get_data_ptr(col)));
-
-    if (cudf::is_fixed_point(col.type())) {
-      void const* ptr = scale_ptr++;
-      data.push_back(const_cast<device_data_t>(ptr));
-    }
   };
 
   add_column(output);
@@ -179,13 +170,15 @@ void transform_operation(size_type base_column_size,
                          mutable_column_view output,
                          std::vector<column_view> const& inputs,
                          std::string const& udf,
-                         data_type output_type,
                          bool is_ptx,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
 {
-  std::string const kernel_name = jitify2::reflection::Template("cudf::transformation::jit::kernel")
-                                    .instantiate(build_jit_typenames(output, inputs));
+  std::string const kernel_name =
+    jitify2::reflection::Template(cudf::is_fixed_point(output.type())
+                                    ? "cudf::transformation::jit::fixed_point_kernel"
+                                    : "cudf::transformation::jit::kernel")
+      .instantiate(build_jit_typenames(output, inputs));
 
   std::string const cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(
@@ -254,7 +247,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 
   // transform
   transformation::jit::transform_operation(
-    base_column->size(), output_view, inputs, transform_udf, output_type, is_ptx, stream, mr);
+    base_column->size(), output_view, inputs, transform_udf, is_ptx, stream, mr);
 
   return output;
 }
