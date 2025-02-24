@@ -1653,11 +1653,31 @@ class Projection(IR):
 class MergeSorted(IR):
     """Merge sorted operation."""
 
-    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
-        # libcudf merge is not stable wrt order of inputs, since
-        # it uses a priority queue to manage the tables it produces.
-        # See: https://github.com/rapidsai/cudf/issues/16010
-        raise NotImplementedError("MergeSorted not yet implemented")
+    __slots__ = ("key",)
+    _non_child = ("schema", "key")
+    key: str
+    """Key that is sorted."""
+
+    def __init__(self, schema: Schema, key: str, left: IR, right: IR):
+        self.schema = schema
+        self.key = key
+        self.children = (left, right)
+        self._non_child_args = (
+            schema,
+            key,
+        )
+
+    @classmethod
+    def do_evaluate(cls, schema: Schema, key: str, *dfs: DataFrame) -> DataFrame:
+        return DataFrame.from_table(
+            plc.merge.merge(
+                [df.table for df in dfs],
+                [0, 0],
+                [plc.types.Order.ASCENDING] * 2,
+                [plc.types.NullOrder.AFTER] * 2,
+            ),
+            dfs[0].column_names,
+        )
 
 
 class MapFunction(IR):
