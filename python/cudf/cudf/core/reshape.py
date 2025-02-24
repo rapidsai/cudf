@@ -14,11 +14,18 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+    concat_columns,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     from cudf._typing import DtypeObj
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -534,14 +541,14 @@ def concat(
 
 
 def melt(
-    frame,
+    frame: cudf.DataFrame,
     id_vars=None,
     value_vars=None,
     var_name=None,
-    value_name="value",
+    value_name: Hashable = "value",
     col_level=None,
     ignore_index: bool = True,
-):
+) -> cudf.DataFrame:
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -605,14 +612,12 @@ def melt(
     """
     if col_level is not None:
         raise NotImplementedError("col_level != None is not supported yet.")
-    if ignore_index is not True:
-        raise NotImplementedError("ignore_index is currently not supported.")
 
     # Arg cleaning
 
     # id_vars
     if id_vars is not None:
-        if cudf.api.types.is_scalar(id_vars):
+        if is_scalar(id_vars):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -626,7 +631,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if cudf.api.types.is_scalar(value_vars):
+        if is_scalar(value_vars):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)
@@ -643,7 +648,7 @@ def melt(
     # Error for unimplemented support for datatype
     if any(
         isinstance(frame[col].dtype, cudf.CategoricalDtype)
-        for col in id_vars + value_vars
+        for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
@@ -668,15 +673,14 @@ def melt(
     N = len(frame)
     K = len(value_vars)
 
-    def _tile(A, reps):
-        series_list = [A] * reps
+    def _tile(base_col: ColumnBase, reps: int) -> ColumnBase:
         if reps > 0:
-            return cudf.Series._concat(objs=series_list, index=False)
+            return concat_columns([base_col] * reps)
         else:
-            return cudf.Series([], dtype=A.dtype)
+            return column_empty(0, dtype=base_col.dtype)
 
     # Step 1: tile id_vars
-    mdata = {col: _tile(frame[col], K) for col in id_vars}
+    mdata = {col: _tile(frame[col]._column, K) for col in id_vars}
 
     # Step 2: add variable
     nval = len(value_vars)
@@ -687,23 +691,27 @@ def melt(
 
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
-        var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index.dtype
+        var_data = column_empty(
+            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
         )
     else:
-        var_data = (
-            cudf.Series(value_vars)
-            .take(np.repeat(np.arange(nval, dtype=dtype), N))
-            .reset_index(drop=True)
+        var_data = as_column(value_vars).take(
+            as_column(np.repeat(np.arange(nval, dtype=dtype), N)),
+            check_bounds=False,
         )
     mdata[var_name] = var_data
 
     # Step 3: add values
-    mdata[value_name] = cudf.Series._concat(
-        objs=[frame[val] for val in value_vars], index=False
+    mdata[value_name] = concat_columns(
+        [frame[val]._column for val in value_vars]
     )
 
-    return cudf.DataFrame(mdata)
+    result = cudf.DataFrame._from_data(mdata)
+    if not ignore_index:
+        taker = np.tile(np.arange(len(frame)), frame.shape[1] - len(id_vars))
+        result.index = frame.index.take(taker)
+
+    return result
 
 
 def get_dummies(
