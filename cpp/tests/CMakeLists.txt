@@ -298,7 +298,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
+ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
 
 ConfigureTest(
