@@ -9,12 +9,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
-    mircoseconds,
     numeric_scalar,
     timestamp_scalar,
-    time_point,
-    system_clock,
-    time_point_cast,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_empty_scalar_like,
@@ -23,7 +19,14 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
-from pylibcudf.libcudf.wrappers.timestamps cimport timestamp_us
+from pylibcudf.libcudf.wrappers.timestamps cimport (
+    timestamp_us,
+    nanoseconds,
+    microseconds,
+    time_point,
+    system_clock,
+    time_point_cast,
+)
 
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
@@ -36,11 +39,13 @@ from functools import singledispatch
 __all__ = ["Scalar"]
 
 
-cdef time_point[system_clock] _datetime_to_time_point(datetime.datetime dt):
+cdef time_point[system_clock, nanoseconds] _datetime_to_time_point(
+    datetime.datetime dt
+):
     if dt.tzinfo is not None:
         raise NotImplementedError("datetimes with timezones are not supported.")
     if dt.microsecond != 0:
-        raise NotImplementedError("Non-zero mircoseconds are not supported.")
+        raise NotImplementedError("Non-zero microseconds are not supported.")
     cdef tm time_struct
     time_struct.tm_year = dt.year - 1900
     time_struct.tm_mon = dt.month - 1
@@ -49,7 +54,7 @@ cdef time_point[system_clock] _datetime_to_time_point(datetime.datetime dt):
     time_struct.tm_min = dt.minute
     time_struct.tm_sec = dt.second
     cdef time_t time = mktime(&time_struct)
-    cdef time_point[system_clock] tp = system_clock.from_time_t(time)
+    cdef time_point[system_clock, nanoseconds] tp = system_clock.from_time_t(time)
     return tp
 
 
@@ -197,9 +202,10 @@ def _(py_val):
 def _(py_val):
     cdef DataType dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
     cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(dtype.c_obj)
-    cdef time_point[system_clock] tp = _datetime_to_time_point(py_val)
-    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(
-        time_point_cast[mircoseconds](tp)
+    cdef time_point[system_clock, nanoseconds] tp = _datetime_to_time_point(py_val)
+    cdef time_point[system_clock, microseconds] tp_casted = (
+        time_point_cast[system_clock, microseconds, nanoseconds](tp)
     )
+    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp_casted)
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)
     return slr
