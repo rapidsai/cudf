@@ -1335,6 +1335,29 @@ def _get_proxy_base_class(cls):
     return object
 
 
+def as_proxy_object(obj: Any) -> Any:
+    """
+    Wraps a cudf or pandas object in a proxy object if applicable.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to wrap.
+
+    Returns
+    -------
+    Any
+        The wrapped proxy object if applicable, otherwise the original object.
+    """
+    if _is_final_type(obj):
+        typ = get_final_type_map()[type(obj)]
+        return typ._fsproxy_wrap(obj, None)
+    elif _is_intermediate_type(obj):
+        typ = get_intermediate_type_map()[type(obj)]
+        return typ._fsproxy_wrap(obj, None)
+    return obj
+
+
 def is_proxy_instance(obj, type):
     return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
@@ -1429,26 +1452,3 @@ _SPECIAL_METHODS: set[str] = {
     "__truediv__",
     "__xor__",
 }
-
-
-def as_proxy_object(obj: Any) -> Any:
-    """
-    Wraps a cudf or pandas object in a proxy object if applicable.
-
-    Parameters
-    ----------
-    obj : Any
-        The object to wrap.
-
-    Returns
-    -------
-    Any
-        The wrapped proxy object if applicable, otherwise the original object.
-    """
-    if _is_final_type(obj):
-        typ = get_final_type_map()[type(obj)]
-        return typ._fsproxy_wrap(obj, None)
-    elif _is_intermediate_type(obj):
-        typ = get_intermediate_type_map()[type(obj)]
-        return typ._fsproxy_wrap(obj, None)
-    return obj
