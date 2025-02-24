@@ -28,6 +28,18 @@ namespace CUDF_EXPORT cudf {
 namespace detail::rolling {
 
 /**
+ * @brief Information about group bounds of the current row's group.
+ */
+struct range_group_info {
+  size_type group_start;
+  size_type group_end;
+  size_type null_start;
+  size_type null_end;
+  size_type non_null_start;
+  size_type non_null_end;
+};
+
+/**
  * @brief A group descriptor for an ungrouped rolling window.
  *
  * @param num_rows The number of rows to be rolled over.
@@ -36,7 +48,7 @@ namespace detail::rolling {
  * construction.
  */
 struct ungrouped {
-  cudf::size_type num_rows;
+  cudf::size_type const num_rows;
 
   static constexpr bool has_nulls{false};
 
@@ -57,14 +69,11 @@ struct ungrouped {
    * @brief Return information about the current row.
    *
    * @param i The row
-   * @returns Tuple of `(null_count, group_start, group_end, null_start,
-   * null_end, non_null_start, non_null_end)`
+   * @returns `range_group_info` with the information about the row.
    */
-  [[nodiscard]] __device__ constexpr cuda::std::
-    tuple<size_type, size_type, size_type, size_type, size_type, size_type, size_type>
-    row_info(size_type i) const noexcept
+  [[nodiscard]] __device__ constexpr range_group_info row_info(size_type i) const noexcept
   {
-    return {0, 0, num_rows, 0, 0, 0, num_rows};
+    return {0, num_rows, 0, 0, 0, num_rows};
   }
 };
 
@@ -100,14 +109,89 @@ struct grouped {
   /**
    * @copydoc ungrouped::row_info
    */
-  [[nodiscard]] __device__ constexpr cuda::std::
-    tuple<size_type, size_type, size_type, size_type, size_type, size_type, size_type>
-    row_info(size_type i) const noexcept
+  [[nodiscard]] __device__ constexpr range_group_info row_info(size_type i) const noexcept
   {
     auto const label       = labels[i];
     auto const group_start = offsets[label];
     auto const group_end   = offsets[label + 1];
-    return {0, group_start, group_end, group_start, group_start, group_start, group_end};
+    return {group_start, group_end, group_start, group_start, group_start, group_end};
+  }
+};
+
+/**
+ * @brief A group descriptor for an ungrouped rolling window with nulls
+ *
+ * @param nulls_at_start Are the nulls at the start or end?
+ * @param num_rows The number of rows to be rolled over.
+ * @param null_count The number of nulls.
+ *
+ * @note This is used for uniformity of interface between grouped and ungrouped
+ * iterator construction.
+ */
+struct ungrouped_with_nulls {
+  bool const nulls_at_start;
+  cudf::size_type const num_rows;
+  cudf::size_type const null_count;
+
+  static constexpr bool has_nulls{true};
+  /**
+   * @copydoc ungrouped::row_info
+   */
+  [[nodiscard]] __device__ constexpr range_group_info row_info(size_type i) const noexcept
+  {
+    if (nulls_at_start) {
+      return {0, num_rows, 0, null_count, null_count, num_rows};
+    } else {
+      return {num_rows, null_count, num_rows - null_count, num_rows, 0, num_rows - null_count};
+    }
+  }
+};
+
+/**
+ * @brief A group descriptor for a grouped rolling window with nulls
+ *
+ * @param nulls_at_start Are the nulls at the start of each group?
+ * @param labels The group labels, mapping from input rows to group.
+ * @param offsets The group offsets providing the endpoints of each group.
+ * @param null_counts The null counts per group.
+ * @param orderby The orderby column, sorted groupwise.
+ *
+ * @note This is used for uniformity of interface between grouped and ungrouped
+ * iterator construction.
+ */
+struct grouped_with_nulls {
+  bool const nulls_at_start;
+  // Taking raw pointers here to avoid stealing three registers for the sizes which are never
+  // needed.
+  cudf::size_type const* labels;
+  cudf::size_type const* offsets;
+  cudf::size_type const* null_counts;
+
+  static constexpr bool has_nulls{true};
+  /**
+   * @copydoc ungrouped::row_info
+   */
+  [[nodiscard]] __device__ constexpr range_group_info row_info(size_type i) const noexcept
+  {
+    auto const label       = labels[i];
+    auto const null_count  = null_counts[label];
+    auto const group_start = offsets[label];
+    auto const group_end   = offsets[label + 1];
+    if (nulls_at_start) {
+      return {group_start,
+              group_end,
+              group_start,
+              group_start + null_count,
+              group_start + null_count,
+              group_end};
+    } else {
+      return {group_start,
+              group_end,
+              group_end - null_count,
+              group_end,
+              group_start,
+              group_end - null_count};
+    }
   }
 };
 
