@@ -104,7 +104,8 @@ CUDF_KERNEL void fixed_point_kernel(cudf::size_type size,
   thread_index_type const stride = block_size * gridDim.x;
 
   for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
-    typename Out::type value;
+    typename Out::type value{
+      numeric::scaled_integer<typename Out::rep>{0, numeric::scale_type{scales[0]}}};
     GENERIC_TRANSFORM_OP(&value, ins->get(i, scales)...);
     out->get_rep(i) = value.value();
   }
