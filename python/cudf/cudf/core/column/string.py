@@ -21,7 +21,7 @@ import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.scalar import pa_scalar_to_plc_scalar
@@ -46,7 +46,6 @@ if TYPE_CHECKING:
         ScalarLike,
         SeriesOrIndex,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
 
@@ -5622,14 +5621,18 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        data: Buffer | None = None,
+        data: Buffer,
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple["column.ColumnBase", ...] = (),
+        children: tuple[column.ColumnBase] = (),  # type: ignore[assignment]
     ):
-        dtype = cudf.api.types.dtype("object")
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer")
+        if dtype != CUDF_STRING_DTYPE:
+            raise ValueError(f"dtypy must be {CUDF_STRING_DTYPE}")
 
         if size is None:
             for child in children:
@@ -5724,8 +5727,6 @@ class StringColumn(column.ColumnBase):
     # override for string column
     @property
     def data(self):
-        if self.base_data is None:
-            return None
         if self._data is None:
             if (
                 self.offset == 0
