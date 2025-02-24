@@ -1451,5 +1451,4 @@ def as_proxy_object(obj: Any) -> Any:
     elif _is_intermediate_type(obj):
         typ = get_intermediate_type_map()[type(obj)]
         return typ._fsproxy_wrap(obj, None)
-    else:
-        return obj
+    return obj
