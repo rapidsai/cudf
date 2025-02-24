@@ -18,7 +18,6 @@
 
 #include "gpuinflate.hpp"
 #include "io/utilities/getenv_or.hpp"
-#include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -32,14 +31,17 @@
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
 
+#include <numeric>
+
 namespace cudf::io::detail {
 
 namespace {
 
 auto& h_comp_pool()
 {
-  static std::size_t pool_size =
-    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", std::thread::hardware_concurrency());
+  static const std::size_t default_pool_size = std::min(32u, std::thread::hardware_concurrency());
+  static const std::size_t pool_size =
+    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", default_pool_size);
   static BS::thread_pool pool(pool_size);
   return pool;
 }
@@ -92,34 +94,198 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   return dst;
 }
 
-/**
- * @brief SNAPPY device compressor
- */
-std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
-                                          rmm::cuda_stream_view stream)
+namespace snappy {
+
+template <typename T>
+[[nodiscard]] T load(uint8_t const* ptr)
 {
-  auto const d_src =
-    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
-  cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(1, stream);
-  inputs[0] = d_src;
-  inputs.host_to_device_async(stream);
-
-  auto dst_size = compress_max_output_chunk_size(nvcomp::compression_type::SNAPPY, src.size());
-  rmm::device_uvector<uint8_t> d_dst(dst_size, stream);
-  cudf::detail::hostdevice_vector<device_span<uint8_t>> outputs(1, stream);
-  outputs[0] = d_dst;
-  outputs.host_to_device_async(stream);
-
-  cudf::detail::hostdevice_vector<compression_result> hd_status(1, stream);
-  hd_status[0] = {};
-  hd_status.host_to_device_async(stream);
-
-  nvcomp::batched_compress(nvcomp::compression_type::SNAPPY, inputs, outputs, hd_status, stream);
-
-  hd_status.device_to_host_sync(stream);
-  CUDF_EXPECTS(hd_status[0].status == compression_status::SUCCESS, "snappy compression failed");
-  return cudf::detail::make_std_vector_sync<uint8_t>(d_dst, stream);
+  T value;
+  std::memcpy(&value, ptr, sizeof(T));
+  return value;
 }
+
+class hash_table {
+  std::vector<uint16_t> tbl;
+  static constexpr int hash_table_bits = 15;
+
+ public:
+  hash_table() : tbl(1 << hash_table_bits, 0) {}
+
+  void clear() { std::fill(tbl.begin(), tbl.end(), 0); }
+
+  [[nodiscard]] uint16_t* entry(uint32_t bytes)
+  {
+    constexpr uint32_t multiplier = 0x1e35a7bd;
+    auto const hash               = (bytes * multiplier) >> (31 - hash_table_bits);
+    return tbl.data() + hash / sizeof(uint16_t);
+  }
+};
+
+uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t const* literal_end)
+{
+  auto const literal_size = literal_end - literal_begin;
+  if (literal_size == 0) { return out_begin; }
+  auto const n = literal_size - 1;
+
+  auto out_it = out_begin;
+  if (n < 60) {
+    // Fits into a single tag byte
+    *out_it++ = n << 2;
+  } else {
+    auto const log2_n = 31 - __builtin_clz(n);
+    auto const count  = (log2_n >> 3) + 1;
+    *out_it++         = (59 + count) << 2;
+    std::memcpy(out_it, &n, count);
+    out_it += count;
+  }
+  std::memcpy(out_it, literal_begin, literal_size);
+  return out_it + literal_size;
+}
+
+uint8_t* emit_copy(uint8_t* out_begin, size_t offset, size_t len)
+{
+  while (len > 0) {
+    auto const copy_len = std::min(len, 64ul);
+    auto const out_val  = 2 + ((copy_len - 1) << 2) + (offset << 8);
+    std::memcpy(out_begin, &out_val, 3);
+
+    out_begin += 3;
+    len -= copy_len;
+  }
+  return out_begin;
+}
+
+size_t compress_block(host_span<uint8_t const> input, hash_table& table, host_span<uint8_t> output)
+{
+  auto const [in_remain, out_remain] = [&]() -> std::pair<uint8_t const*, uint8_t*> {
+    auto in_it  = input.begin();
+    auto out_it = output.begin();
+
+    // The algorithm reads 8 bytes at a time, so we need to ensure there are at least 8 bytes
+    auto const input_max = input.end() - sizeof(uint64_t);
+    while (in_it < input_max) {
+      auto const next_emit     = in_it++;
+      auto data                = load<uint64_t>(in_it);
+      uint32_t stride          = 1;
+      uint8_t const* candidate = nullptr;
+
+      auto word_match_found = [&]() {
+        if (input_max - in_it < 16) { return false; }
+        for (size_t word_idx = 0; word_idx < 4; ++word_idx) {
+          for (size_t byte_idx = 0; byte_idx < sizeof(uint32_t); ++byte_idx) {
+            auto const offset = sizeof(uint32_t) * word_idx + byte_idx;
+            auto* const entry = table.entry(static_cast<uint32_t>(data));
+            candidate         = input.begin() + *entry;
+            *entry            = in_it - input.data() + offset;
+
+            if (load<uint32_t>(candidate) == static_cast<uint32_t>(data)) {
+              *(out_it++) = offset * sizeof(uint32_t);
+              std::memcpy(out_it, next_emit, offset + 1);
+              in_it += offset;
+              out_it += offset + 1;
+              stride = 1;
+              return true;
+            }
+            data >>= 8;
+          }
+          // Fetch the next eight bytes
+          data = load<uint64_t>(in_it + sizeof(uint32_t) * (word_idx + 1));
+        }
+        in_it += 16;
+        return false;
+      }();
+
+      if (not word_match_found) {
+        // keep looking for a match with increasing stride
+        while (true) {
+          auto* const entry = table.entry(static_cast<uint32_t>(data));
+          candidate         = input.begin() + *entry;
+          *entry            = in_it - input.begin();
+          if (static_cast<uint32_t>(data) == load<uint32_t>(candidate)) {
+            stride = 1;
+            break;
+          }
+
+          auto const next_input = in_it + stride;
+          if (next_input > input_max) {
+            // Reached the end of the input without finding a match
+            return {next_emit, out_it};
+          }
+
+          data  = load<uint32_t>(next_input);
+          in_it = next_input;
+          stride += 1;
+        }
+
+        // Emit data prior to the match as literal
+        out_it = emit_literal(out_it, next_emit, in_it);
+      }
+
+      // Emit match(es)
+      do {
+        auto const match_len = std::mismatch(in_it, input.end(), candidate).first - in_it;
+        out_it               = emit_copy(out_it, in_it - candidate, match_len);
+
+        in_it += match_len;
+        if (in_it >= input_max) {
+          // Reached the end of the input, no more matches to look for
+          return {in_it, out_it};
+        }
+        data                                    = load<uint64_t>(in_it);
+        *table.entry(load<uint32_t>(in_it - 1)) = in_it - input.begin() - 1;
+        auto* const entry                       = table.entry(data);
+        candidate                               = input.begin() + *entry;
+        *entry                                  = in_it - input.begin();
+
+      } while (static_cast<uint32_t>(data) == load<uint32_t>(candidate));
+    }
+
+    return {in_it, out_it};
+  }();
+
+  // Emit the remaining data as a literal
+  return emit_literal(out_remain, in_remain, input.end()) - output.begin();
+}
+
+void append_varint(std::vector<uint8_t>& output, size_t v)
+{
+  while (v > 127) {
+    output.push_back((v & 0x7F) | 0x80);
+    v >>= 7;
+  }
+  output.push_back(v);
+}
+
+[[nodiscard]] std::vector<std::uint8_t> compress(host_span<uint8_t const> src)
+{
+  std::vector<uint8_t> dst;
+  append_varint(dst, src.size());
+  dst.reserve(dst.size() + max_compressed_size(compression_type::SNAPPY, src.size()));
+
+  hash_table table;  // reuse hash table across blocks
+  constexpr size_t block_size          = 1 << 16;
+  auto const block_max_compressed_size = max_compressed_size(compression_type::SNAPPY, block_size);
+  for (std::size_t src_offset = 0; src_offset < src.size(); src_offset += block_size) {
+    // Compress data in blocks of limited size
+    auto const block = src.subspan(src_offset, std::min(src.size() - src_offset, block_size));
+
+    auto const previous_size = dst.size();
+    auto const curr_block_max_comp_size =
+      (block.size() == block_size) ? block_max_compressed_size
+                                   : max_compressed_size(compression_type::SNAPPY, block.size());
+    dst.resize(previous_size + curr_block_max_comp_size);
+    auto const block_dst =
+      host_span<uint8_t>{dst.data() + previous_size, dst.size() - previous_size};
+
+    table.clear();
+    auto const comp_block_size = compress_block(block, table, block_dst);
+    dst.resize(previous_size + comp_block_size);
+  }
+
+  return dst;
+}
+
+}  // namespace snappy
 
 void device_compress(compression_type compression,
                      device_span<device_span<uint8_t const> const> inputs,
@@ -156,6 +322,13 @@ void host_compress(compression_type compression,
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
 
+  // Generate order vector to submit largest tasks first
+  std::vector<size_t> task_order(num_chunks);
+  std::iota(task_order.begin(), task_order.end(), 0);
+  std::sort(task_order.begin(), task_order.end(), [&](size_t a, size_t b) {
+    return h_inputs[a].size() > h_inputs[b].size();
+  });
+
   std::vector<std::future<size_t>> tasks;
   auto const num_streams =
     std::min<std::size_t>({num_chunks,
@@ -163,9 +336,12 @@ void host_compress(compression_type compression,
                            h_comp_pool().get_thread_count()});
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
+    auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
-      auto const h_in  = cudf::detail::make_host_vector_sync(d_in, cur_stream);
+    auto task =
+      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+      auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
       auto const h_out = compress(compression, h_in, cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
       return h_out.size();
@@ -174,7 +350,7 @@ void host_compress(compression_type compression,
   }
 
   for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[i] = {tasks[i].get(), compression_status::SUCCESS};
+    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
 }
@@ -183,6 +359,7 @@ void host_compress(compression_type compression,
 {
   switch (compression) {
     case compression_type::GZIP:
+    case compression_type::SNAPPY:
     case compression_type::NONE: return true;
     default: return false;
   }
@@ -212,7 +389,7 @@ void host_compress(compression_type compression,
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
-  return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", 0);
+  return getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"}) == "ON";
 }
 
 }  // namespace
@@ -249,12 +426,12 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
 
 std::vector<std::uint8_t> compress(compression_type compression,
                                    host_span<uint8_t const> src,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view)
 {
   CUDF_FUNC_RANGE();
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
-    case compression_type::SNAPPY: return compress_snappy(src, stream);
+    case compression_type::SNAPPY: return snappy::compress(src);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
