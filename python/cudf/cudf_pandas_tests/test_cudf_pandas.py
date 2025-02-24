@@ -2073,4 +2073,3 @@ def test_pickle_round_trip_proxy_numpy_array(array):
     np.testing.assert_equal(
         pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
     )
-    
