@@ -956,6 +956,13 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     assert ser.memory_usage() == 8
 
 
+def test_list_methods_setattr():
+    ser = cudf.Series([["a", "b", "c"], ["d", "e", "f"]])
+
+    with pytest.raises(AttributeError):
+        ser.list.a = "b"
+
+
 def test_dataframe_list_round_trip():
     data = [{"text": "hello", "list_col": np.asarray([1, 2], dtype="uint32")}]
     cudf_arrow = cudf.DataFrame(data).to_arrow()
