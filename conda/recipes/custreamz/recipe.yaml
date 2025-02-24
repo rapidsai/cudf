@@ -66,6 +66,6 @@ tests:
       pip_check: false
 
 about:
-  homepage: $${{ load_from_file("python/custreamz/pyproject.toml").project.urls.Homepage }}
-  license: $${{ load_from_file("python/custreamz/pyproject.toml").project.license.text }}
-  summary: $${{ load_from_file("python/custreamz/pyproject.toml").project.description }}
+  homepage: ${{ load_from_file("python/custreamz/pyproject.toml").project.urls.Homepage }}
+  license: ${{ load_from_file("python/custreamz/pyproject.toml").project.license.text }}
+  summary: ${{ load_from_file("python/custreamz/pyproject.toml").project.description }}
