@@ -5587,13 +5587,14 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
+    data : Buffer
+        Buffer of the string data
     mask : Buffer
         The validity mask
     offset : int
         Data offset
     children : Tuple[Column]
-        Two non-null columns containing the string data and offsets
-        respectively
+        Columns containing the offsets
     """
 
     _start_offset: int | None
@@ -5633,6 +5634,8 @@ class StringColumn(column.ColumnBase):
             raise ValueError("data must be a Buffer")
         if dtype != CUDF_STRING_DTYPE:
             raise ValueError(f"dtypy must be {CUDF_STRING_DTYPE}")
+        if len(children) > 1:
+            raise ValueError("StringColumn must have at most 1 offset column.")
 
         if size is None:
             for child in children:
