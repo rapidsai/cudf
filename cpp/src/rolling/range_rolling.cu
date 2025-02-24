@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "detail/range_utils.cuh"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -77,6 +79,32 @@ rmm::device_uvector<cudf::size_type> nulls_per_group(column_view const& orderby,
   return null_counts;
 }
 
+std::unique_ptr<column> make_range_window(
+  column_view const& orderby,
+  std::optional<rolling::preprocessed_group_info> const& grouping,
+  rolling::direction direction,
+  order order,
+  null_order null_order,
+  range_window_type window,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
+                              (order == order::DESCENDING && null_order == null_order::AFTER);
+
+  auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
+    return type_dispatcher(
+      orderby.type(), clamper, orderby, grouping, nulls_at_start, row_delta, stream, mr);
+  };
+  return std::visit(
+    [&](auto&& window) -> std::unique_ptr<column> {
+      using WindowTag = cuda::std::decay_t<decltype(window)>;
+      return dispatch(rolling::range_window_clamper<WindowTag>{direction, order}, window.delta());
+    },
+    window);
+}
+
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   column_view const& orderby,
@@ -95,15 +123,34 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
     auto per_group_nulls = orderby.has_nulls() ? nulls_per_group(orderby, offsets, stream)
                                                : rmm::device_uvector<size_type>{0, stream};
     auto grouping = detail::rolling::preprocessed_group_info{labels, offsets, per_group_nulls};
-    return {make_range_window<rolling::direction::PRECEDING>(
-              orderby, grouping, order, null_order, preceding, stream, mr),
-            make_range_window<rolling::direction::FOLLOWING>(
-              orderby, grouping, order, null_order, following, stream, mr)};
+    return {
+      make_range_window(
+        orderby, grouping, rolling::direction::PRECEDING, order, null_order, preceding, stream, mr),
+      make_range_window(orderby,
+                        grouping,
+                        rolling::direction::FOLLOWING,
+                        order,
+                        null_order,
+                        following,
+                        stream,
+                        mr)};
   } else {
-    return {make_range_window<rolling::direction::PRECEDING>(
-              orderby, std::nullopt, order, null_order, preceding, stream, mr),
-            make_range_window<rolling::direction::FOLLOWING>(
-              orderby, std::nullopt, order, null_order, following, stream, mr)};
+    return {make_range_window(orderby,
+                              std::nullopt,
+                              rolling::direction::PRECEDING,
+                              order,
+                              null_order,
+                              preceding,
+                              stream,
+                              mr),
+            make_range_window(orderby,
+                              std::nullopt,
+                              rolling::direction::FOLLOWING,
+                              order,
+                              null_order,
+                              following,
+                              stream,
+                              mr)};
   }
 }
 }  // namespace detail

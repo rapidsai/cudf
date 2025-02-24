@@ -404,22 +404,23 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
       // This is polyfill code anyway, so can be removed after this public API is deprecated and
       // removed.
       return std::pair{
-        detail::make_range_window<rolling::direction::PRECEDING>(
-          order_by_column,
-          grouping,
-          order,
-          null_order,
-          get_window_type(preceding),
-          stream,
-          cudf::get_current_device_resource_ref()),
-        detail::make_range_window<rolling::direction::FOLLOWING>(
-          order_by_column,
-          grouping,
-          order,
-          null_order,
-          get_window_type(following),
-          stream,
-          cudf::get_current_device_resource_ref()),
+        detail::make_range_window(order_by_column,
+                                  grouping,
+                                  rolling::direction::PRECEDING,
+                                  order,
+                                  null_order,
+                                  get_window_type(preceding),
+                                  stream,
+                                  cudf::get_current_device_resource_ref()),
+        detail::make_range_window(order_by_column,
+                                  grouping,
+                                  rolling::direction::FOLLOWING,
+                                  order,
+
+                                  null_order,
+                                  get_window_type(following),
+                                  stream,
+                                  cudf::get_current_device_resource_ref()),
       };
     } else {
       auto null_order =

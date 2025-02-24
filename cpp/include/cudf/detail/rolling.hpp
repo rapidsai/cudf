@@ -103,28 +103,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * launches.
  * @param mr Device memory resource used for allocations.
  */
-template <rolling::direction Direction>
 [[nodiscard]] std::unique_ptr<column> make_range_window(
   column_view const& orderby,
   std::optional<rolling::preprocessed_group_info> const& grouping,
-  order order,
-  null_order null_order,
-  range_window_type window,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-extern template std::unique_ptr<column> make_range_window<rolling::direction::PRECEDING>(
-  column_view const& orderby,
-  std::optional<rolling::preprocessed_group_info> const& grouping,
-  order order,
-  null_order null_order,
-  range_window_type window,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
-extern template std::unique_ptr<column> make_range_window<rolling::direction::FOLLOWING>(
-  column_view const& orderby,
-  std::optional<rolling::preprocessed_group_info> const& grouping,
+  rolling::direction direction,
   order order,
   null_order null_order,
   range_window_type window,
