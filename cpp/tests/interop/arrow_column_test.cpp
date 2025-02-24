@@ -86,10 +86,11 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowDeviceTables)
     auto& col = tbl->get_column(i);
 
     ArrowDeviceArray device_arr{
-      .array       = *arr->children[i],
+      .array       = {},
       .device_id   = 0,
       .device_type = ARROW_DEVICE_CUDA,
     };
+    ArrowArrayMove(arr->children[i], &device_arr.array);
     auto arrow_column_from_nanoarrow_array = cudf::arrow_column(schema->children[i], &device_arr);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
 
@@ -112,10 +113,11 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostTables)
     auto& col = tbl->get_column(i);
 
     ArrowDeviceArray device_arr{
-      .array       = *arr->children[i],
+      .array       = {},
       .device_id   = -1,
       .device_type = ARROW_DEVICE_CPU,
     };
+    ArrowArrayMove(arr->children[i], &device_arr.array);
     auto arrow_column_from_nanoarrow_array = cudf::arrow_column(schema->children[i], &device_arr);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
 
@@ -196,10 +198,11 @@ TEST_F(ArrowTableTest, ComplexNanoarrowDeviceTables)
 {
   auto [tbl, schema, arr] = get_nanoarrow_tables(100);
   ArrowDeviceArray device_arr{
-    .array       = *arr.get(),
+    .array       = {},
     .device_id   = 0,
     .device_type = ARROW_DEVICE_CUDA,
   };
+  ArrowArrayMove(arr.get(), &device_arr.array);
   auto arrow_table_from_nanoarrow_array = cudf::arrow_table(schema.get(), &device_arr);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
@@ -218,10 +221,11 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
 {
   auto [tbl, schema, arr] = get_nanoarrow_host_tables(100);
   ArrowDeviceArray device_arr{
-    .array       = *arr.get(),
+    .array       = {},
     .device_id   = -1,
     .device_type = ARROW_DEVICE_CPU,
   };
+  ArrowArrayMove(arr.get(), &device_arr.array);
   auto arrow_table_from_nanoarrow_array = cudf::arrow_table(schema.get(), &device_arr);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());

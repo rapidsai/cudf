@@ -205,6 +205,9 @@ class arrow_column {
   /**
    * @brief Construct a new arrow column object
    *
+   * The input array will be moved into the arrow_column, so it is no longer
+   * suitable for use afterwards.
+   *
    * @param schema Arrow schema for the column
    * @param input ArrowDeviceArray data for the column
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -218,6 +221,9 @@ class arrow_column {
   /**
    * @brief Construct a new arrow column object
    *
+   * The input array will be released, so it is no longer suitable for use
+   * afterwards.
+   *
    * @param schema Arrow schema for the column
    * @param input ArrowArray data for the column
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -230,6 +236,9 @@ class arrow_column {
 
   /**
    * @brief Construct a new arrow column object
+   *
+   * The input column will be moved into the arrow_column, so it is no longer
+   * suitable for use afterwards.
    *
    * @param input cudf column to convert to arrow
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -294,6 +303,9 @@ class arrow_table {
   /**
    * @brief Construct a new arrow table object
    *
+   * The input array will be moved into the arrow_table, so it is no longer
+   * suitable for use afterwards.
+   *
    * @param schema Arrow schema for the table
    * @param input ArrowDeviceArray data for the table
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -318,6 +330,9 @@ class arrow_table {
   /**
    * @brief Construct a new arrow table object
    *
+   * The input array will be released, so it is no longer suitable for use
+   * afterwards.
+   *
    * @param schema Arrow schema for the table
    * @param input ArrowArray data for the table
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -330,6 +345,9 @@ class arrow_table {
 
   /**
    * @brief Construct a new arrow table object
+   *
+   * The input table will be moved into the arrow_table, so it is no longer
+   * suitable for use afterwards.
    *
    * @param input cudf table to convert to arrow
    * @param stream CUDA stream used for device memory operations and kernel launches

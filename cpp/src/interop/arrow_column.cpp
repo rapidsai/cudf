@@ -36,11 +36,8 @@ struct arrow_array_container {
   ArrowDeviceArray owner;  //< ArrowDeviceArray that owns the data
   ArrowSchema schema;      //< ArrowSchema that describes the data
 
-  // Question: When the input data was host data, we could presumably release
-  // immediately. Do we care? If so, how should we implement that?
   ~arrow_array_container()
   {
-    // TODO: Do we have to sync before releasing?
     if (owner.array.release != nullptr) { ArrowArrayRelease(&owner.array); }
   }
 };
@@ -79,8 +76,8 @@ void ArrayReleaseCallback(ArrowArray* array)
 /**
  * @brief Copy an ArrowArray.
  *
- * This function copies an ArrowArray and all of its children. It is used to
- * export cudf arrow objects to user-provided ArrowDeviceArrays.
+ * This function shallow copies an ArrowArray and all of its children. It is
+ * used to export cudf arrow objects to user-provided ArrowDeviceArrays.
  *
  * @param output The ArrowArray to copy to
  * @param input The ArrowArray to copy from
@@ -141,9 +138,6 @@ arrow_column::arrow_column(cudf::column&& input,
   ArrowDeviceArrayMove(output.get(), &container->owner);
 }
 
-// IMPORTANT: This constructor will move the input array if it is device data.
-// Probably won't for host data, though... is that asymmetry okay?
-// We should switch to just also releasing for the host data case.
 arrow_column::arrow_column(ArrowSchema const* schema,
                            ArrowDeviceArray* input,
                            rmm::cuda_stream_view stream,
@@ -154,19 +148,12 @@ arrow_column::arrow_column(ArrowSchema const* schema,
     case ARROW_DEVICE_CUDA:
     case ARROW_DEVICE_CUDA_HOST:
     case ARROW_DEVICE_CUDA_MANAGED: {
-      // In this case, we have an ArrowDeviceArray with CUDA data as the
-      // owner. We can simply move it into our container and safe it now. We
-      // do need to copy the schema, though.
       ArrowSchemaDeepCopy(schema, &container->schema);
       auto& device_arr = container->owner;
-      // This behavior is different than the old from_arrow_device function
-      // because now we are not create a non-owning column_view but an
-      // arrow_column that can manage lifetimes.
       ArrowArrayMove(&input->array, &device_arr.array);
       device_arr.device_type = input->device_type;
-      // Pointing to the existing sync event is safe assuming that the
-      // underlying event is managed by the private data and the release
-      // callback.
+      // Pointing to the existing sync event is safe because the underlying
+      // event must be managed by the private data and the release callback.
       device_arr.sync_event = input->sync_event;
       device_arr.device_id  = input->device_id;
       break;
@@ -175,6 +162,9 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       auto col        = from_arrow_host_column(schema, input, stream, mr);
       auto tmp_column = arrow_column(std::move(*col));
       container       = tmp_column.container;
+      // Should always be non-null unless we're in some odd multithreaded
+      // context but best to be safe.
+      if (input->array.release != nullptr) { ArrowArrayRelease(&input->array); }
       break;
     }
     default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
@@ -186,7 +176,8 @@ arrow_column::arrow_column(ArrowSchema const* schema,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
 {
-  ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  ArrowArrayMove(input, &arr.array);
   auto tmp  = arrow_column(schema, &arr, stream, mr);
   container = tmp.container;
 }
@@ -234,7 +225,9 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
 // storing the unique_column_view_t in the container. Then the container can
 // safely return copies of the view ad infinitum without needing this call, and
 // this call can be stream- and mr-free, matching the cudf::column::view
-// method.
+// method. Also doing this on construction would allow us to cache column data
+// for the types where the representation is not identical between arrow and
+// cudf (like bools) and avoiding constant back-and-forth conversion.
 unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
@@ -322,19 +315,12 @@ arrow_table::arrow_table(ArrowSchema const* schema,
     case ARROW_DEVICE_CUDA:
     case ARROW_DEVICE_CUDA_HOST:
     case ARROW_DEVICE_CUDA_MANAGED: {
-      // In this case, we have an ArrowDeviceArray with CUDA data as the
-      // owner. We can simply move it into our container and safe it now. We
-      // do need to copy the schema, though.
       ArrowSchemaDeepCopy(schema, &container->schema);
       auto& device_arr = container->owner;
-      // This behavior is different than the old from_arrow_device function
-      // because now we are not create a non-owning table_view but an
-      // arrow_table that can manage lifetimes.
       ArrowArrayMove(&input->array, &device_arr.array);
       device_arr.device_type = input->device_type;
-      // Pointing to the existing sync event is safe assuming that the
-      // underlying event is managed by the private data and the release
-      // callback.
+      // Pointing to the existing sync event is safe because the underlying
+      // event must be managed by the private data and the release callback.
       device_arr.sync_event = input->sync_event;
       device_arr.device_id  = input->device_id;
       break;
@@ -358,7 +344,9 @@ arrow_table::arrow_table(ArrowSchema const* schema,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
 {
-  ArrowDeviceArray arr{.array = *input, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
+  ArrowArrayMove(input, &arr.array);
+
   auto tmp  = arrow_table(schema, &arr, stream, mr);
   container = tmp.container;
 }
