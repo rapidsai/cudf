@@ -159,8 +159,7 @@ repos:
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
-            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
       - id: verify-alpha-spec
       - id: verify-codeowners
