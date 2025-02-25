@@ -45,8 +45,9 @@ auto export_to_arrow(T& obj, ArrowDeviceType device_type = ARROW_DEVICE_CUDA)
 TEST_F(ArrowColumnTest, TwoWayConversion)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  auto col                           = cudf::column(int_col);
-  auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
+  auto col = cudf::column(int_col);
+  auto arrow_column_from_cudf_column =
+    cudf::arrow_column(std::move(col), cudf::get_column_metadata(int_col));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column.view());
 
   auto [arrow_schema_from_arrow_column, arrow_array_from_arrow_column] =
@@ -62,8 +63,9 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
 TEST_F(ArrowColumnTest, LifetimeManagement)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  auto col                           = std::make_unique<cudf::column>(int_col);
-  auto arrow_column_from_cudf_column = std::make_unique<cudf::arrow_column>(std::move(*col));
+  auto col = std::make_unique<cudf::column>(int_col);
+  auto arrow_column_from_cudf_column =
+    std::make_unique<cudf::arrow_column>(std::move(*col), cudf::get_column_metadata(int_col));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column->view());
 
@@ -158,8 +160,9 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostArrowArrayTables)
 TEST_F(ArrowColumnTest, ToFromHost)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> int_col{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
-  auto col                           = cudf::column(int_col);
-  auto arrow_column_from_cudf_column = cudf::arrow_column(std::move(col));
+  auto col = cudf::column(int_col);
+  auto arrow_column_from_cudf_column =
+    cudf::arrow_column(std::move(col), cudf::get_column_metadata(int_col));
 
   auto [arrow_schema_from_arrow_column, arrow_array_from_arrow_column] =
     export_to_arrow(arrow_column_from_cudf_column, ARROW_DEVICE_CPU);
@@ -180,7 +183,8 @@ TEST_F(ArrowTableTest, TwoWayConversion)
     {1., 2., 3., 4., 5., 6., 7., 8., 9., 10.}};
   auto original_view = cudf::table_view{{int_col, float_col}};
   cudf::table table{cudf::table_view{{int_col, float_col}}};
-  auto arrow_table_from_cudf_table = cudf::arrow_table(std::move(table));
+  auto arrow_table_from_cudf_table =
+    cudf::arrow_table(std::move(table), cudf::get_table_metadata(original_view));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_cudf_table.view());
 
@@ -264,7 +268,8 @@ TEST_F(ArrowTableTest, ToFromHost)
     {1., 2., 3., 4., 5., 6., 7., 8., 9., 10.}};
   auto original_view = cudf::table_view{{int_col, float_col}};
   cudf::table table{cudf::table_view{{int_col, float_col}}};
-  auto arrow_table_from_cudf_table = cudf::arrow_table(std::move(table));
+  auto arrow_table_from_cudf_table =
+    cudf::arrow_table(std::move(table), cudf::get_table_metadata(original_view));
 
   auto [arrow_schema_from_arrow_table, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_cudf_table, ARROW_DEVICE_CPU);

@@ -193,6 +193,36 @@ using unique_column_view_t =
 struct arrow_array_container;
 
 /**
+ * @brief Helper function to generate empty column metadata (column with no
+ * name) for arrow conversion.
+ *
+ * This function is helpful for internal conversions between host and device
+ * data using existing arrow functions. It is also convenient for external
+ * usage of the libcudf Arrow APIs to produce the canonical mapping from cudf
+ * column names to Arrow column names (i.e. empty names with appropriate
+ * nesting).
+ *
+ * @param input The column to generate metadata for
+ * @return The metadata for the column
+ */
+cudf::column_metadata get_column_metadata(cudf::column_view const& input);
+
+/**
+ * @brief Helper function to generate empty table metadata (all columns with no
+ * names) for arrow conversion.
+ *
+ * This function is helpful for internal conversions between host and device
+ * data using existing arrow functions. It is also convenient for external
+ * usage of the libcudf Arrow APIs to produce the canonical mapping from cudf
+ * column names to Arrow column names (i.e. empty names with appropriate
+ * nesting).
+ *
+ * @param input The table to generate metadata for
+ * @return The metadata for the table
+ */
+std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& input);
+
+/**
  * @brief A standard interchange medium for ArrowDeviceArray data in cudf.
  *
  * This class provides a way to work with ArrowDeviceArray data in cudf without
@@ -241,10 +271,12 @@ class arrow_column {
    * suitable for use afterwards.
    *
    * @param input cudf column to convert to arrow
+   * @param metadata Column metadata for the column
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
   arrow_column(cudf::column&& input,
+               column_metadata const& metadata,
                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -350,10 +382,12 @@ class arrow_table {
    * suitable for use afterwards.
    *
    * @param input cudf table to convert to arrow
+   * @param metadata The hierarchy of names of columns and children
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
   arrow_table(cudf::table&& input,
+              cudf::host_span<column_metadata const> metadata,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
