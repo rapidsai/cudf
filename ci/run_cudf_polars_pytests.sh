@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -13,3 +13,9 @@ python -m pytest --cache-clear "$@" tests
 
 # Test the "dask-experimental" executor
 python -m pytest --cache-clear "$@" tests --executor dask-experimental
+
+# Test the "dask-experimental" executor with Distributed cluster
+# Not all tests pass yet, deselecting by name those that are failing.
+python -m pytest --cache-clear "$@" tests --executor dask-experimental --dask-cluster \
+    -k "not test_groupby_maintain_order_random and not test_scan_csv_multi and not test_select_literal_series" \
+    --cov-fail-under=89  # Override coverage, Distributed cluster coverage not yet 100%
