@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
 from collections.abc import Mapping
@@ -103,6 +103,8 @@ class TableWithMetadata:
     def per_file_user_data(self) -> list[Mapping[str, str]]: ...
     @property
     def num_rows_per_source(self) -> list[int]: ...
+    @property
+    def num_input_row_groups(self) -> int: ...
 
 class SourceInfo:
     def __init__(

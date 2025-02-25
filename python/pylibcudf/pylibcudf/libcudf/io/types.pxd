@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -78,6 +78,7 @@ cdef extern from "cudf/io/types.hpp" \
         vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
         vector[size_t] num_rows_per_source
+        size_t num_input_row_groups  
 
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl

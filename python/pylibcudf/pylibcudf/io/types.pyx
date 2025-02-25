@@ -408,6 +408,15 @@ cdef class TableWithMetadata:
         of rows for each file being read in.
         """
         return self.metadata.num_rows_per_source
+    
+    # The following functions are currently only for Parquet reader
+    @property
+    def num_input_row_groups(self):
+        """
+        Returns the total number of input 
+        Parquet row groups across all data sources.
+        """
+        return self.metadata.num_input_row_groups
 
 
 cdef class SourceInfo:

@@ -28,9 +28,7 @@ def test_gc_with_table_and_column_input_metadata():
         def __del__(self):
             pass
 
-    pa_table = pa.table(
-        {"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])}
-    )
+    pa_table = pa.table({"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])})
     plc_table = plc.interop.from_arrow(pa_table)
 
     tbl_meta = Foo(plc_table)
@@ -47,6 +45,12 @@ def test_num_rows_per_resource(parquet_data):
     source = plc.io.SourceInfo(parquet_data)
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
     assert plc.io.parquet.read_parquet(options).num_rows_per_source == [3, 2]
+
+
+def test_num_input_row_groups(parquet_data):
+    source = plc.io.SourceInfo(parquet_data)
+    options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+    assert plc.io.parquet.read_parquet(options).num_input_row_groups == 2
 
 
 # TODO: Test more IO types
