@@ -42,8 +42,7 @@ def _(
     # Check group-by keys
     if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
         raise NotImplementedError(
-            "GroupBy does not support multiple partitions "
-            f"for these keys:\n{ir.keys}"
+            f"GroupBy does not support multiple partitions for keys:\n{ir.keys}"
         )  # pragma: no cover
 
     name_map: MutableMapping[str, Any] = {}
