@@ -84,24 +84,20 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 /**
  * @brief Make a column representing the window offsets for a range-based window
  *
- * @tparam Direction Is this a preceding window or a following one.
- *
- * @param group_keys Table defining grouping of the windows. May be empty. If
- * non-empty, group keys must be sorted.
- * @param orderby Column use to define window ranges. If @p group_keys is empty,
+ * @param orderby Column use to define window ranges. If @p grouping is empty,
  * must be sorted. If
- * @p group_keys is non-empty, must be sorted within each group. As well as
+ * @p grouping is non-empty, must be sorted within each group. As well as
  * being sorted, must be sorted consistently with the @p order and @p null_order
  * parameters.
+ * @param grouping Optional preprocessed grouping information.
  * @param order The sort order of the @p orderby column.
  * @param null_order The sort order of nulls in the @p orderby column.
- * @param row_delta Pointer to scalar providing the delta for the window range.
- * May be null, but only if the @p window_type is @p CURRENT_ROW or @p
- * UNBOUNDED. Note that @p row_delta is always added to the current row value.
- * @param window_type The type of window we are computing bounds for.
+ * @param window Descriptor specifying the window type.
  * @param stream CUDA stream used for device memory operations and kernel
  * launches.
  * @param mr Device memory resource used for allocations.
+ * @return Column representing the window offsets as requested, suitable for passing to
+ * `rolling_window`.
  */
 [[nodiscard]] std::unique_ptr<column> make_range_window(
   column_view const& orderby,

@@ -103,7 +103,8 @@ using range_window_type = std::variant<unbounded, current_row, bounded_closed, b
  * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
  * be sorted groupwise.
  * @param order Sort order of the `orderby` column.
- * @param null_order Null sort order in the sorted `orderby` column.
+ * @param null_order Null sort order in the sorted `orderby` column. Apples groupwise if
+ * `group_keys` is non-empty.
  * @param preceding Type of the preceding window.
  * @param following Type of the following window.
  * @param stream CUDA stream used for device memory operations and kernel launches

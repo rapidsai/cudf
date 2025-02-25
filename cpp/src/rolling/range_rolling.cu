@@ -49,6 +49,7 @@ rmm::device_uvector<cudf::size_type> nulls_per_group(column_view const& orderby,
                                                      rmm::device_uvector<size_type> const& offsets,
                                                      rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   auto d_orderby        = column_device_view::create(orderby, stream);
   auto const num_groups = offsets.size() - 1;
   std::size_t bytes{0};
