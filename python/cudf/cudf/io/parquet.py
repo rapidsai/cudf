@@ -919,7 +919,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-        check_headers=check_header
+        check_headers=check_header,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
