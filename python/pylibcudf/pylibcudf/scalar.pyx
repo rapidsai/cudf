@@ -19,10 +19,10 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
+from pylibcudf.libcudf.wrappers.durations cimport duration_us
 from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_us,
     nanoseconds,
-    microseconds,
     time_point,
     system_clock,
     time_point_cast,
@@ -203,8 +203,8 @@ def _(py_val):
     cdef DataType dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
     cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(dtype.c_obj)
     cdef time_point[system_clock, nanoseconds] tp = _datetime_to_time_point(py_val)
-    cdef time_point[system_clock, microseconds] tp_casted = (
-        time_point_cast[system_clock, microseconds, nanoseconds](tp)
+    cdef time_point[system_clock, duration_us] tp_casted = (
+        time_point_cast[duration_us, system_clock, nanoseconds](tp)
     )
     (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp_casted)
     cdef Scalar slr = _new_scalar(move(c_obj), dtype)

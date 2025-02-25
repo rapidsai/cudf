@@ -2,7 +2,7 @@
 
 from libc.stdint cimport int32_t, int64_t
 
-cdef extern from "std" nogil:
+cdef extern from "<ratio>" namespace "std" nogil:
     cdef cppclass milli:
         pass
 
