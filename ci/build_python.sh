@@ -17,7 +17,7 @@ rapids-generate-version > ./VERSION
 
 rapids-logger "Begin py build"
 
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
 sccache --zero-stats
 
@@ -68,4 +68,4 @@ RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry mambabuild \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/cudf-polars
 
-rapids-upload-conda-to-s3 python
+# rapids-upload-conda-to-s3 python
