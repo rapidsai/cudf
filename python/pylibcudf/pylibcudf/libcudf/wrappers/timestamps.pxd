@@ -9,7 +9,6 @@ from pylibcudf.libcudf.wrappers.durations cimport (
     duration_ns,
 )
 
-
 cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
     cdef cppclass nanoseconds:
         pass
