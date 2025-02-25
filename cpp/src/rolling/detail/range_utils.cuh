@@ -326,6 +326,15 @@ template <typename T, typename V>
   }
 }
 
+/**
+ * @brief Functor to compute distance from current row for `unbounded` windows.
+ *
+ * An `unbounded` window runs to the boundary of the current row's group (inclusive).
+ *
+ * @tparam Grouping (inferred) type of object defining groups in the orderby column.
+ * @param groups object defining groups in the orderby column.
+ * @param direction direction of the window `PRECEDING` or `FOLLOWING`.
+ */
 template <typename Grouping>
 struct unbounded_distance_functor {
   unbounded_distance_functor(Grouping groups, direction direction)
@@ -345,6 +354,18 @@ struct unbounded_distance_functor {
   }
 };
 
+/**
+ * @brief Functor to compute distance from current row for `current_row` windows.
+ *
+ * A `current_row` window contains all rows whose value is the same as the current row.
+ *
+ * @tparam Grouping (inferred) type of object defining groups in the orderby column.
+ * @tparam OrderbyT (inferred) type of the entries in the orderby column
+ * @param groups object defining groups in the orderby column.
+ * @param direction direction of the window `PRECEDING` or `FOLLOWING`.
+ * @param order sort order of the orderby column.
+ * @param begin iterator to the begin of the orderby column.
+ */
 template <typename Grouping, typename OrderbyT>
 struct current_row_distance_functor {
   current_row_distance_functor(Grouping groups,
@@ -357,7 +378,7 @@ struct current_row_distance_functor {
   Grouping const groups;
   direction const direction;
   order const order;
-  column_device_view::const_iterator<OrderbyT> begin;
+  column_device_view::const_iterator<OrderbyT> const begin;
 
   [[nodiscard]] __device__ size_type operator()(size_type i) const noexcept
   {
@@ -384,19 +405,22 @@ struct current_row_distance_functor {
 };
 
 /**
- * @brief Functor to compute distance from a given row to the edge
- * of the window.
+ * @brief Functor to compute distance from current row for `bounded_open` and `bounded_closed`
+ * windows.
  *
- * @tparam WindowTag The type of window we're computing the distance for.
- * @tparam Grouping Object defining how the orderby column is
- * grouped.
- * @tparam OrderbyT Type of elements in the orderby columns.
- * @tparam DeltaT Type of the elements in the scalar delta (returned
- * by scalar.data()).
- * @param groups The grouping object.
- * @param row_delta Pointer to row delta on device.
- * @param begin Iterator to begin of orderby column on device.
- * @param end Iterator to end of orderby column on device.
+ * A `bounded_open` window contains all rows up to but not including the computed endpoint.
+ * A `bounded_closed` window contains all rows up to and including the computed endpoint.
+ *
+ * @tparam WindowTag type of window we're computing the distance for.
+ * @tparam Grouping type of object defining groups in the orderby column.
+ * @tparam OrderbyT type of elements in the orderby columns.
+ * @tparam DeltaT type of the elements in the scalar delta (returned
+ * by `scalar.data()`).
+ * @param groups object defining groups in the orderby column.
+ * @param direction direction of the window `PRECEDING` or `FOLLOWING`.
+ * @param order sort order of the orderby column.
+ * @param row_delta pointer to row delta on device.
+ * @param begin iterator to the begin of orderby column on device.
  *
  * @note Let `x` be the value of the current row and `delta` the provided
  * row delta then for bounded windows the endpoints are computed as follows.
@@ -411,25 +435,22 @@ struct current_row_distance_functor {
  */
 template <typename WindowTag, typename Grouping, typename OrderbyT, typename DeltaT>
 struct bounded_distance_functor {
+  static_assert(cuda::std::is_same_v<WindowTag, bounded_open> ||
+                  cuda::std::is_same_v<WindowTag, bounded_closed>,
+                "Invalid WindowTag, expecting bounded_open or bounded_closed.");
   bounded_distance_functor(Grouping groups,
-                           DeltaT const* row_delta,
                            direction const direction,
                            order const order,
+                           DeltaT const* row_delta,
                            column_device_view::const_iterator<OrderbyT> begin)
-    : groups{groups}, row_delta{row_delta}, direction{direction}, order{order}, begin{begin}
+    : groups{groups}, direction{direction}, order{order}, row_delta{row_delta}, begin{begin}
   {
   }
-  Grouping groups;  ///< Group information to determine bounds on current row's window
-  static_assert(cuda::std::is_same_v<Grouping, ungrouped> ||
-                  cuda::std::is_same_v<Grouping, grouped> ||
-                  cuda::std::is_same_v<Grouping, ungrouped_with_nulls> ||
-                  cuda::std::is_same_v<Grouping, grouped_with_nulls>,
-                "Invalid grouping descriptor");
-  DeltaT const* row_delta;  ///< Delta from current row that defines the interval endpoint. This
-                            ///< pointer is null for UNBOUNDED and CURRENT_ROW windows.
-  column_device_view::const_iterator<OrderbyT> begin;  ///< Iterator to beginning of orderby column
+  Grouping groups;
   direction const direction;
   order const order;
+  DeltaT const* row_delta;
+  column_device_view::const_iterator<OrderbyT> const begin;
 
   /**
    * @brief Compute the offset to the end of the window.
@@ -449,26 +470,25 @@ struct bounded_distance_functor {
                                                : row_info.null_end - i - 1;
     }
     auto const offset_value_overflow =
-      [order = order, direction = direction, delta = *row_delta, row_value = begin[i]]() {
-        if ((order == order::ASCENDING && direction == direction::PRECEDING) ||
-            (order == order::DESCENDING && direction == direction::FOLLOWING)) {
-          return saturating_sub(row_value, delta);
-        } else {
-          return saturating_add(row_value, delta);
-        }
+      [subtract = (order == order::ASCENDING && direction == direction::PRECEDING) ||
+                  (order == order::DESCENDING && direction == direction::FOLLOWING),
+       delta     = *row_delta,
+       row_value = begin[i]]() {
+        return subtract ? saturating_sub(row_value, delta) : saturating_add(row_value, delta);
       }();
     OrderbyT const offset_value = cuda::std::get<0>(offset_value_overflow);
     bool const did_overflow     = cuda::std::get<1>(offset_value_overflow);
-    auto const distance         = [order        = order,
-                           direction    = direction,
+    auto const distance         = [preceding    = direction == direction::PRECEDING,
                            current      = begin + i,
                            start        = begin + row_info.non_null_start,
                            end          = begin + row_info.non_null_end,
                            offset_value = offset_value](auto&& cmp) {
-      if (direction == direction::PRECEDING) {
+      if (preceding) {
+        // Search for first slot we can place the offset value
         return 1 + thrust::distance(thrust::lower_bound(thrust::seq, start, end, offset_value, cmp),
                                     current);
       } else {
+        // Search for last slot we can place the offset value
         return thrust::distance(current,
                                 thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
                1;
@@ -548,32 +568,36 @@ struct range_window_clamper {
   {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), orderby.size(), mask_state::UNALLOCATED, stream, mr);
-    auto d_orderby          = column_device_view::create(orderby, stream);
-    auto d_begin            = d_orderby->begin<OrderbyT>();
-    auto const* d_row_delta = row_delta ? dynamic_cast<ScalarT const*>(row_delta)->data() : nullptr;
-    using DeltaT = cuda::std::remove_cv_t<cuda::std::remove_pointer_t<decltype(d_row_delta)>>;
-    auto copy_n  = [&](auto&& grouping) {
+    auto d_orderby = column_device_view::create(orderby, stream);
+    auto d_begin   = d_orderby->begin<OrderbyT>();
+    auto copy_n    = [&](auto&& grouping) {
       using Grouping = cuda::std::decay_t<decltype(grouping)>;
+      static_assert(cuda::std::is_same_v<Grouping, ungrouped> ||
+                      cuda::std::is_same_v<Grouping, grouped> ||
+                      cuda::std::is_same_v<Grouping, ungrouped_with_nulls> ||
+                      cuda::std::is_same_v<Grouping, grouped_with_nulls>,
+                    "Invalid grouping descriptor");
+
       if constexpr (cuda::std::is_same_v<WindowTag, unbounded>) {
         thrust::copy_n(rmm::exec_policy_nosync(stream),
                        cudf::detail::make_counting_transform_iterator(
-                         0, unbounded_distance_functor<Grouping>{grouping, direction}),
+                         0, unbounded_distance_functor{grouping, direction}),
                        orderby.size(),
                        result->mutable_view().begin<size_type>());
       } else if constexpr (cuda::std::is_same_v<WindowTag, current_row>) {
-        thrust::copy_n(
-          rmm::exec_policy_nosync(stream),
-          cudf::detail::make_counting_transform_iterator(
-            0,
-            current_row_distance_functor<Grouping, OrderbyT>{grouping, direction, order, d_begin}),
-          orderby.size(),
-          result->mutable_view().begin<size_type>());
+        thrust::copy_n(rmm::exec_policy_nosync(stream),
+                       cudf::detail::make_counting_transform_iterator(
+                         0, current_row_distance_functor{grouping, direction, order, d_begin}),
+                       orderby.size(),
+                       result->mutable_view().begin<size_type>());
       } else {
+        auto const* d_row_delta = dynamic_cast<ScalarT const*>(row_delta)->data();
+        using DeltaT = cuda::std::remove_cv_t<cuda::std::remove_pointer_t<decltype(d_row_delta)>>;
         thrust::copy_n(rmm::exec_policy_nosync(stream),
                        cudf::detail::make_counting_transform_iterator(
                          0,
                          bounded_distance_functor<WindowTag, Grouping, OrderbyT, DeltaT>{
-                           grouping, d_row_delta, direction, order, d_begin}),
+                           grouping, direction, order, d_row_delta, d_begin}),
                        orderby.size(),
                        result->mutable_view().begin<size_type>());
       }
