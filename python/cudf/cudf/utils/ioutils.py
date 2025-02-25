@@ -2436,6 +2436,6 @@ def _update_col_struct_field_names(
         col.set_base_children(tuple(children))
 
     if isinstance(col.dtype, cudf.StructDtype):
-        col = col._rename_fields(child_names.keys()) # type: ignore[attr-defined]
+        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
 
     return col
