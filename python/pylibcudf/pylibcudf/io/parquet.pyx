@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
