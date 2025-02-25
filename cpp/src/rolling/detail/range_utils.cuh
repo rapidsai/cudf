@@ -155,175 +155,111 @@ struct comparator_t {
 };
 
 /**
- * @brief Compute `x + y` saturating at the numeric bounds rather than
- * overflowing.
+ * @brief Saturating addition or subtraction of values.
  *
- * @tparam T the type of the result and left operand.
- * @tparam V the type of the right operand.
- * @param x The left operand.
- * @param y The right operand.
+ * @tparam Op The operation to perform, `cuda::std::plus` or `cuda::std::minus`.
  *
- * @returns Pair of `x + y`, saturated at the numeric limits for the type of
- * `x`, without overflowing or invoking undefined behaviour, and
+ * Performs `x + y` (respectively `x - y`) saturating at the numeric
+ * limits for the type, returning the value and a flag indicating
  * whether overflow occurred.
  *
- * @note If `T` is a numeric type we must have `std::is_same_v<T,
- * V>`. If `T` is a timestamp type, `V` must be a duration type and
- * `std::is_same_v<typename T::duration, V>`. Note in particular that the
- * usual integral promotion rules are not applied. If `T` is a fixed
- * point type, then `V` must be the representation type of `T`, and it
- * is required that `x` and `y` have the same scale. If `T` is a
- * floating point type, then it is required (not checked) that `y` is
- * not inf or nan, otherwise behaviour is undefined, if `x` is finite,
- * then overflow to +-inf is clamped at lowest()/max().
+ * For arithmetic types, the usual arithmetic conversions are _not_
+ * applied, and so it is required that `x` and `y` have the same type.
+ *
+ * If `x` is floating, then `y` must be neither `inf` nor `nan` (not
+ * checked), otherwise behaviour is undefined. If `x` is `inf` or
+ * `nan`, then the result is the same as `x` and overflow does not
+ * occur.
+ *
+ * If `x` is a timestamp type, then `y` must be the matching
+ * `duration` type.
+ *
+ * If `x` is a decimal type, then `y` must be the matching underlying
+ * rep type, and _must_ have the same scale as `x` (not checked)
+ * otherwise behaviour is undefined.
+ *
+ * All other types are unsupported.
  */
-template <typename T, typename V>
-[[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> saturating_add(
-  T x, V y) noexcept
-{
-  if constexpr (cudf::is_timestamp_t<T>()) {
-    static_assert(cudf::is_duration_t<V>(), "Can only add durations to timestamps");
-    static_assert(cuda::std::is_same_v<typename T::duration, V>,
-                  "Duration resolution must match timestamp resolution");
-    auto const [value, did_overflow] = saturating_add(x.time_since_epoch(), y);
-    return {T{value}, did_overflow};
-  } else if constexpr (cudf::is_duration_t<T>()) {
-    static_assert(cuda::std::is_same_v<T, V>, "Cannot add mismatching types");
-    auto const [value, did_overflow] = saturating_add(x.count(), y.count());
-    return {T{value}, did_overflow};
-  } else if constexpr (cudf::is_fixed_point<T>()) {
-    using Rep = typename T::rep;
-    // Requirement, not checked, x and y have the same scale.
-    static_assert(cuda::std::is_same_v<Rep, V>, "Must add rep type of fixed point to fixed point.");
-    auto const [value, did_overflow] = saturating_add(x.value(), y);
-    return {T{numeric::scaled_integer<Rep>{value, x.scale()}}, did_overflow};
-  } else {
-    static_assert(cuda::std::is_same_v<T, V>, "Cannot add mismatching types");
+template <typename Op>
+struct saturating {
+  static_assert(cuda::std::is_same_v<Op, cuda::std::plus<>> ||
+                  cuda::std::is_same_v<Op, cuda::std::minus<>>,
+                "Only for addition or subtraction");
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<T>)>
+  [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
+    T x, T y) noexcept
+  {
+    // Mimicking spark requirements, inf/nan x propagates
+    if (cuda::std::isinf(x) || cuda::std::isnan(x)) { return {x, false}; }
+    // Requirement, not checked, y is not inf or nan.
+    T result = Op{}(x, y);
+    // If the result is outside the range of finite values it can at
+    // this point only be +- infinity (we can't generate a nan by
+    // adding a non-nan/non-inf y to a non-nan/non-inf x).
+    if (result < cuda::std::numeric_limits<T>::lowest()) {
+      return {cuda::std::numeric_limits<T>::lowest(), true};
+    } else if (result > cuda::std::numeric_limits<T>::max()) {
+      return {cuda::std::numeric_limits<T>::max(), true};
+    }
+    return {result, false};
+  }
 
-    if constexpr (cuda::std::is_floating_point_v<T>) {
-      // Mimicking spark requirements, inf/nan x propagates
-      if (cuda::std::isinf(x) || cuda::std::isnan(x)) { return {x, false}; }
-      // Requirement, not checked, y is not inf or nan.
-      T result = x + y;
-      // If the result is outside the range of finite values it can at
-      // this point only be +- infinity (we can't generate a nan by
-      // adding a non-nan/non-inf y to a non-nan/non-inf x).
-      if (result < cuda::std::numeric_limits<T>::lowest()) {
-        return {cuda::std::numeric_limits<T>::lowest(), true};
-      } else if (result > cuda::std::numeric_limits<T>::max()) {
-        return {cuda::std::numeric_limits<T>::max(), true};
-      }
-      return {result, false};
-    } else if constexpr (cuda::std::is_signed_v<T>) {
-      using U  = cuda::std::make_unsigned_t<T>;
-      U ux     = static_cast<U>(x);
-      U uy     = static_cast<U>(y);
-      U result = ux + uy;
-      ux       = (ux >> cuda::std::numeric_limits<T>::digits) +
-           static_cast<U>(cuda::std::numeric_limits<T>::max());
-      // Note: this cast is implementation defined (until C++20) but all
-      // the platforms we care about do the twos-complement thing.
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_integral_v<T>&& cuda::std::is_signed_v<T>)>
+  [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
+    T x, T y) noexcept
+  {
+    using U  = cuda::std::make_unsigned_t<T>;
+    U ux     = static_cast<U>(x);
+    U uy     = static_cast<U>(y);
+    U result = Op{}(ux, uy);
+    ux       = (ux >> cuda::std::numeric_limits<T>::digits) +
+         static_cast<U>(cuda::std::numeric_limits<T>::max());
+    // Note: the casts here are implementation defined (until C++20) but all
+    // the platforms we care about do the twos-complement thing.
+    if constexpr (cuda::std::is_same_v<Op, cuda::std::plus<>>) {
       auto const did_overflow = static_cast<T>((ux ^ uy) | ~(uy ^ result)) >= 0;
       return {did_overflow ? ux : result, did_overflow};
-    } else if constexpr (cuda::std::is_unsigned_v<T>) {
-      T result = x + y;
+    } else {
+      auto const did_overflow = static_cast<T>((ux ^ uy) & (ux ^ result)) < 0;
+      return {did_overflow ? ux : result, did_overflow};
+    }
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_integral_v<T>&& cuda::std::is_unsigned_v<T>)>
+  [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
+    T x, T y) noexcept
+  {
+    T result = Op{}(x, y);
+    if constexpr (cuda::std::is_same_v<Op, cuda::std::plus<>>) {
       // Only way we can overflow is in the positive direction
       // in which case result will be less than both of x and y.
       // To saturate, we bit-or with (T)-1 in this case
       auto const did_overflow = result < x;
       return {result | (-static_cast<T>(did_overflow)), did_overflow};
     } else {
-      static_assert(cuda::std::integral_constant<T, false>(),
-                    "Saturating addition only for signed and unsigned integers, floats, "
-                    "durations, fixed point, or timestamps.");
-    }
-  }
-}
-
-/**
- * @brief Compute `x - y` saturating at the numeric bounds rather than
- * overflowing.
- *
- * @tparam T the type of the result and left operand.
- * @tparam V the type of the right operand.
- * @param x The left operand.
- * @param y The right operand.
- *
- * @returns Pair of `x - y`, saturated at the numeric limits for the type of
- * `x`, without overflowing or invoking undefined behaviour, and
- * whether overflow occurred.
- *
- * @note If `T` is a numeric type we must have `std::is_same_v<T,
- * V>`. If `T` is a timestamp type, `V` must be a duration type and
- * `std::is_same_v<typename T::duration, V>`. Note in particular that the
- * usual integral promotion rules are not applied. If `T` is a fixed
- * point type, then `V` must be the representation type of `T`, and it
- * is required that `x` and `y` have the same scale. If `T` is a
- * floating point type, then it is required (not checked) that `y` is
- * not inf or nan, otherwise behaviour is undefined, if `x` is finite,
- * then overflow to +-inf is clamped at lowest()/max().
- */
-template <typename T, typename V>
-[[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> saturating_sub(
-  T x, V y) noexcept
-{
-  if constexpr (cudf::is_timestamp_t<T>()) {
-    static_assert(cudf::is_duration_t<V>(), "Can only add durations to timestamps");
-    static_assert(cuda::std::is_same_v<typename T::duration, V>,
-                  "Duration resolution must match timestamp resolution");
-    auto const [value, did_overflow] = saturating_sub(x.time_since_epoch(), y);
-    return {T{value}, did_overflow};
-  } else if constexpr (cudf::is_duration_t<T>()) {
-    static_assert(cuda::std::is_same_v<T, V>, "Cannot add mismatching types");
-    auto const [value, did_overflow] = saturating_sub(x.count(), y.count());
-    return {T{value}, did_overflow};
-  } else if constexpr (cudf::is_fixed_point<T>()) {
-    using Rep = typename T::rep;
-    // Requirement, not checked, x and y have the same scale.
-    static_assert(cuda::std::is_same_v<Rep, V>, "Must add rep type of fixed point to fixed point.");
-    auto const [value, did_overflow] = saturating_sub(x.value(), y);
-    return {T{numeric::scaled_integer<Rep>{value, x.scale()}}, did_overflow};
-  } else {
-    static_assert(cuda::std::is_same_v<T, V>, "Cannot add mismatching types");
-    if constexpr (cuda::std::is_floating_point_v<T>) {
-      // Mimicking spark requirements, inf/nan x propagates
-      if (cuda::std::isinf(x) || cuda::std::isnan(x)) { return {x, false}; }
-      // Requirement, not checked, y is not inf or nan.
-      T result = x - y;
-      // If the result is outside the range of finite values it can at
-      // this point only be +- infinity (we can't generate a nan by
-      // subtracting a non-nan/non-inf y from a non-nan/non-inf x).
-      if (result < cuda::std::numeric_limits<T>::lowest()) {
-        return {cuda::std::numeric_limits<T>::lowest(), true};
-      } else if (result > cuda::std::numeric_limits<T>::max()) {
-        return {cuda::std::numeric_limits<T>::max(), true};
-      }
-      return {result, false};
-    } else if constexpr (cuda::std::is_signed_v<T>) {
-      using U  = cuda::std::make_unsigned_t<T>;
-      U ux     = static_cast<U>(x);
-      U uy     = static_cast<U>(y);
-      U result = ux - uy;
-      ux       = (ux >> cuda::std::numeric_limits<T>::digits) +
-           static_cast<U>(cuda::std::numeric_limits<T>::max());
-      // Note: this cast is implementation defined (until C++20) but all
-      // the platforms we care about do the twos-complement thing.
-      auto const did_overflow = static_cast<T>((ux ^ uy) & (ux ^ result)) < 0;
-      return {did_overflow ? ux : result, did_overflow};
-    } else if constexpr (cuda::std::is_unsigned_v<T>) {
-      T result = x - y;
-      // Only way we can overflow is in the negative direction
-      // in which case result will be greater than either of x or y.
-      // To saturate, we bit-and with (T)0 in this case
       auto const did_overflow = result > x;
       return {result & (-static_cast<T>(!did_overflow)), did_overflow};
-    } else {
-      static_assert(cuda::std::integral_constant<T, false>(),
-                    "Saturating subtraction only for signed and unsigned integers, floats, "
-                    "durations, fixed point, or timestamps.");
     }
   }
-}
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+  [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
+    T x, typename T::duration y) noexcept
+  {
+    using Duration                   = typename T::duration;
+    auto const [value, did_overflow] = saturating<Op>{}(x.time_since_epoch().count(), y.count());
+    return {T{Duration{value}}, did_overflow};
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
+    T x, typename T::rep y) noexcept
+  {
+    using Rep                        = typename T::rep;
+    auto const [value, did_overflow] = saturating<Op>{}(x.value(), y);
+    return {T{numeric::scaled_integer<Rep>{value, x.scale()}}, did_overflow};
+  }
+};
 
 /**
  * @brief Functor to compute distance from current row for `unbounded` windows.
@@ -429,8 +365,7 @@ struct current_row_distance_functor {
  * PRECEDING | x - delta | x + delta
  * FOLLOWING | x + delta | x - delta
  *
- * See `saturating_sub` and `saturating_add` for details of the implementation of
- * saturating addition/subtraction.
+ * See `saturating_op` for details of the implementation of saturating addition/subtraction.
  */
 template <typename WindowType, typename Grouping, typename OrderbyT, typename DeltaT>
 struct bounded_distance_functor {
@@ -473,7 +408,8 @@ struct bounded_distance_functor {
                   (order == order::DESCENDING && direction == direction::FOLLOWING),
        delta     = *row_delta,
        row_value = begin[i]]() {
-        return subtract ? saturating_sub(row_value, delta) : saturating_add(row_value, delta);
+        return subtract ? saturating<cuda::std::minus<>>{}(row_value, delta)
+                        : saturating<cuda::std::plus<>>{}(row_value, delta);
       }();
     OrderbyT const offset_value = cuda::std::get<0>(offset_value_overflow);
     bool const did_overflow     = cuda::std::get<1>(offset_value_overflow);
