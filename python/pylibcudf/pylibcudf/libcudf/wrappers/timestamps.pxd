@@ -11,11 +11,7 @@ from pylibcudf.libcudf.wrappers.durations cimport (
 
 
 cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
-    cdef cppclass duration:
-        pass
     cdef cppclass nanoseconds:
-        pass
-    cdef cppclass microseconds:
         pass
     cdef cppclass time_point[T, Duration=*]:
         pass
