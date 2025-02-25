@@ -3517,7 +3517,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Literal["left", "right", "neither", "both"] | None = "right",
+        closed: Literal["left", "right", "neither", "both"] = "right",
         name=None,
         copy: bool = False,
         dtype=None,
