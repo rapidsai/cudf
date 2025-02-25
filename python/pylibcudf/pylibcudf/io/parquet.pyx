@@ -164,6 +164,21 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj.get()))
 
+    cpdef void enable_check_header(self, bool enabled):
+        """
+        Enable/Disable checking of the Parquet file header.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable checking of the Parquet file header
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.enable_check_header(enabled)
+
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -230,6 +245,22 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_arrow_schema(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder check_header(self, bool val):
+        """
+        Sets to enable/disable checking of the Parquet file header.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable checking of the Parquet file header
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.check_header(val)
         return self
 
     cpdef build(self):

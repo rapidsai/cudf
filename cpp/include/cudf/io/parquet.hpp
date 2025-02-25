@@ -327,7 +327,7 @@ class parquet_reader_options {
    *
    * @param val Boolean value whether to check the header
    */
-  void enable_check_magic_bytes(bool val) { _check_header = val; }
+  void enable_check_header(bool val) { _check_header = val; }
 };
 
 /**
@@ -492,7 +492,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& check_header(bool val)
   {
-    options.enable_check_magic_bytes(val);
+    options.enable_check_header(val);
     return *this;
   }
 
