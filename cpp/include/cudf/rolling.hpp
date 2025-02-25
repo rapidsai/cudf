@@ -52,7 +52,7 @@ struct bounded_closed {
 };
 
 /**
- * @brief Strongly typed wrapper for bounded closed rolling windows.
+ * @brief Strongly typed wrapper for bounded open rolling windows.
  *
  * The endpoints of this window are excluded.
  */

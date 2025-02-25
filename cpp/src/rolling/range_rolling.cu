@@ -94,13 +94,21 @@ std::unique_ptr<column> make_range_window(
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
   auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
-    return type_dispatcher(
-      orderby.type(), clamper, orderby, grouping, nulls_at_start, row_delta, stream, mr);
+    return type_dispatcher(orderby.type(),
+                           clamper,
+                           orderby,
+                           direction,
+                           order,
+                           grouping,
+                           nulls_at_start,
+                           row_delta,
+                           stream,
+                           mr);
   };
   return std::visit(
     [&](auto&& window) -> std::unique_ptr<column> {
-      using WindowTag = cuda::std::decay_t<decltype(window)>;
-      return dispatch(rolling::range_window_clamper<WindowTag>{direction, order}, window.delta());
+      using WindowType = cuda::std::decay_t<decltype(window)>;
+      return dispatch(rolling::range_window_clamper<WindowType>{}, window.delta());
     },
     window);
 }

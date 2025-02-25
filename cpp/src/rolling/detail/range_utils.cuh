@@ -43,7 +43,6 @@
 #include <thrust/execution_policy.h>
 
 #include <optional>
-#include <variant>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -411,7 +410,7 @@ struct current_row_distance_functor {
  * A `bounded_open` window contains all rows up to but not including the computed endpoint.
  * A `bounded_closed` window contains all rows up to and including the computed endpoint.
  *
- * @tparam WindowTag type of window we're computing the distance for.
+ * @tparam WindowType type of window we're computing the distance for.
  * @tparam Grouping type of object defining groups in the orderby column.
  * @tparam OrderbyT type of elements in the orderby columns.
  * @tparam DeltaT type of the elements in the scalar delta (returned
@@ -433,24 +432,24 @@ struct current_row_distance_functor {
  * See `saturating_sub` and `saturating_add` for details of the implementation of
  * saturating addition/subtraction.
  */
-template <typename WindowTag, typename Grouping, typename OrderbyT, typename DeltaT>
+template <typename WindowType, typename Grouping, typename OrderbyT, typename DeltaT>
 struct bounded_distance_functor {
-  static_assert(cuda::std::is_same_v<WindowTag, bounded_open> ||
-                  cuda::std::is_same_v<WindowTag, bounded_closed>,
-                "Invalid WindowTag, expecting bounded_open or bounded_closed.");
+  static_assert(cuda::std::is_same_v<WindowType, bounded_open> ||
+                  cuda::std::is_same_v<WindowType, bounded_closed>,
+                "Invalid WindowType, expecting bounded_open or bounded_closed.");
   bounded_distance_functor(Grouping groups,
                            direction const direction,
                            order const order,
-                           DeltaT const* row_delta,
-                           column_device_view::const_iterator<OrderbyT> begin)
-    : groups{groups}, direction{direction}, order{order}, row_delta{row_delta}, begin{begin}
+                           column_device_view::const_iterator<OrderbyT> begin,
+                           DeltaT const* row_delta)
+    : groups{groups}, direction{direction}, order{order}, begin{begin}, row_delta{row_delta}
   {
   }
-  Grouping groups;
+  Grouping const groups;
   direction const direction;
   order const order;
-  DeltaT const* row_delta;
   column_device_view::const_iterator<OrderbyT> const begin;
+  DeltaT const* row_delta;
 
   /**
    * @brief Compute the offset to the end of the window.
@@ -460,7 +459,7 @@ struct bounded_distance_functor {
    */
   [[nodiscard]] __device__ size_type operator()(size_type i) const
   {
-    using Comp          = comparator_t<OrderbyT, WindowTag>;
+    using Comp          = comparator_t<OrderbyT, WindowType>;
     auto const row_info = groups.row_info(i);
     if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
       // TODO: If the window is BOUNDED_OPEN, what does it mean for a row to fall in the null
@@ -528,19 +527,15 @@ struct bounded_distance_functor {
 /**
  * @brief Functor to dispatch computation of clamped range-based rolling window bounds.
  *
- * @tparam Direction The direction (preceding or following) of the window
- * @tparam WindowTag The tag indicating the type of window being computed
- * @tparam Order The sort order of the orderby column defining the window.
+ * @tparam WindowType The tag indicating the type of window being computed
  */
-template <typename WindowTag>
+template <typename WindowType>
 struct range_window_clamper {
-  direction const direction;
-  order const order;
-  static_assert(cuda::std::is_same_v<WindowTag, unbounded> ||
-                  cuda::std::is_same_v<WindowTag, current_row> ||
-                  cuda::std::is_same_v<WindowTag, bounded_closed> ||
-                  cuda::std::is_same_v<WindowTag, bounded_open>,
-                "Invalid WindowTag descriptor");
+  static_assert(cuda::std::is_same_v<WindowType, unbounded> ||
+                  cuda::std::is_same_v<WindowType, current_row> ||
+                  cuda::std::is_same_v<WindowType, bounded_closed> ||
+                  cuda::std::is_same_v<WindowType, bounded_open>,
+                "Invalid WindowType descriptor");
   /**
    * @brief Compute the window bounds (possibly grouped) for an orderby column.
    *
@@ -560,6 +555,8 @@ struct range_window_clamper {
   template <typename OrderbyT, typename ScalarT = cudf::scalar_type_t<OrderbyT>>
   [[nodiscard]] std::unique_ptr<column> window_bounds(
     column_view const& orderby,
+    direction direction,
+    order order,
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
@@ -570,53 +567,45 @@ struct range_window_clamper {
       data_type(type_to_id<size_type>()), orderby.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_orderby = column_device_view::create(orderby, stream);
     auto d_begin   = d_orderby->begin<OrderbyT>();
-    auto copy_n    = [&](auto&& grouping) {
+    auto expand    = [&](auto&& grouping) {
       using Grouping = cuda::std::decay_t<decltype(grouping)>;
       static_assert(cuda::std::is_same_v<Grouping, ungrouped> ||
                       cuda::std::is_same_v<Grouping, grouped> ||
                       cuda::std::is_same_v<Grouping, ungrouped_with_nulls> ||
                       cuda::std::is_same_v<Grouping, grouped_with_nulls>,
                     "Invalid grouping descriptor");
-
-      if constexpr (cuda::std::is_same_v<WindowTag, unbounded>) {
+      auto copy_n = [&](auto&& functor) {
         thrust::copy_n(rmm::exec_policy_nosync(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0, unbounded_distance_functor{grouping, direction}),
+                       cudf::detail::make_counting_transform_iterator(0, functor),
                        orderby.size(),
                        result->mutable_view().begin<size_type>());
-      } else if constexpr (cuda::std::is_same_v<WindowTag, current_row>) {
-        thrust::copy_n(rmm::exec_policy_nosync(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0, current_row_distance_functor{grouping, direction, order, d_begin}),
-                       orderby.size(),
-                       result->mutable_view().begin<size_type>());
+      };
+      if constexpr (cuda::std::is_same_v<WindowType, unbounded>) {
+        copy_n(unbounded_distance_functor{grouping, direction});
+      } else if constexpr (cuda::std::is_same_v<WindowType, current_row>) {
+        copy_n(current_row_distance_functor{grouping, direction, order, d_begin});
       } else {
         auto const* d_row_delta = dynamic_cast<ScalarT const*>(row_delta)->data();
         using DeltaT = cuda::std::remove_cv_t<cuda::std::remove_pointer_t<decltype(d_row_delta)>>;
-        thrust::copy_n(rmm::exec_policy_nosync(stream),
-                       cudf::detail::make_counting_transform_iterator(
-                         0,
-                         bounded_distance_functor<WindowTag, Grouping, OrderbyT, DeltaT>{
-                           grouping, direction, order, d_row_delta, d_begin}),
-                       orderby.size(),
-                       result->mutable_view().begin<size_type>());
+        copy_n(bounded_distance_functor<WindowType, Grouping, OrderbyT, DeltaT>{
+          grouping, direction, order, d_begin, d_row_delta});
       }
     };
 
     if (grouping.has_value()) {
       if (orderby.has_nulls()) {
-        copy_n(grouped_with_nulls{nulls_at_start,
+        expand(grouped_with_nulls{nulls_at_start,
                                   grouping->labels.data(),
                                   grouping->offsets.data(),
                                   grouping->nulls_per_group.data()});
       } else {
-        copy_n(grouped{grouping->labels.data(), grouping->offsets.data()});
+        expand(grouped{grouping->labels.data(), grouping->offsets.data()});
       }
     } else {
       if (orderby.has_nulls()) {
-        copy_n(ungrouped_with_nulls{nulls_at_start, orderby.size(), orderby.null_count()});
+        expand(ungrouped_with_nulls{nulls_at_start, orderby.size(), orderby.null_count()});
       } else {
-        copy_n(ungrouped{orderby.size()});
+        expand(ungrouped{orderby.size()});
       }
     }
     return result;
@@ -631,8 +620,8 @@ struct range_window_clamper {
   static constexpr bool is_supported()
   {
     return (cuda::std::is_same_v<OrderbyT, cudf::string_view> &&
-            (cuda::std::is_same_v<WindowTag, current_row> ||
-             cuda::std::is_same_v<WindowTag, unbounded>)) ||
+            (cuda::std::is_same_v<WindowType, current_row> ||
+             cuda::std::is_same_v<WindowType, unbounded>)) ||
            cudf::is_numeric_not_bool<OrderbyT>() || cudf::is_timestamp<OrderbyT>() ||
            cudf::is_fixed_point<OrderbyT>();
   }
@@ -640,6 +629,8 @@ struct range_window_clamper {
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_timestamp<OrderbyT>())>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
+    direction direction,
+    order order,
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
@@ -654,12 +645,14 @@ struct range_window_clamper {
                  "Row delta must have same the resolution as orderby.",
                  cudf::data_type_error);
     return window_bounds<OrderbyT, ScalarT>(
-      orderby, grouping, nulls_at_start, row_delta, stream, mr);
+      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_fixed_point<OrderbyT>())>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
+    direction direction,
+    order order,
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
@@ -679,14 +672,18 @@ struct range_window_clamper {
         dynamic_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
       auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
         value.rescaled(numeric::scale_type{orderby.type().scale()}), true, stream};
-      return window_bounds<OrderbyT>(orderby, grouping, nulls_at_start, &new_scalar, stream, mr);
+      return window_bounds<OrderbyT>(
+        orderby, direction, order, grouping, nulls_at_start, &new_scalar, stream, mr);
     }
-    return window_bounds<OrderbyT>(orderby, grouping, nulls_at_start, row_delta, stream, mr);
+    return window_bounds<OrderbyT>(
+      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<OrderbyT>())>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
+    direction direction,
+    order order,
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
@@ -696,15 +693,18 @@ struct range_window_clamper {
     CUDF_EXPECTS(!row_delta || cudf::have_same_types(orderby, *row_delta),
                  "Orderby column and row_delta must have the same type.",
                  cudf::data_type_error);
-    return window_bounds<OrderbyT>(orderby, grouping, nulls_at_start, row_delta, stream, mr);
+    return window_bounds<OrderbyT>(
+      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
   }
 
   template <typename OrderbyT,
             CUDF_ENABLE_IF(cuda::std::is_same_v<OrderbyT, cudf::string_view> &&
-                           (cuda::std::is_same_v<WindowTag, current_row> ||
-                            cuda::std::is_same_v<WindowTag, unbounded>))>
+                           (cuda::std::is_same_v<WindowType, current_row> ||
+                            cuda::std::is_same_v<WindowType, unbounded>))>
   [[nodiscard]] std::unique_ptr<column> operator()(
     column_view const& orderby,
+    direction direction,
+    order order,
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
@@ -713,11 +713,14 @@ struct range_window_clamper {
   {
     CUDF_EXPECTS(!row_delta,
                  "Not expecting window range to have value for string-based window calculation");
-    return window_bounds<OrderbyT>(orderby, grouping, nulls_at_start, row_delta, stream, mr);
+    return window_bounds<OrderbyT>(
+      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(!is_supported<OrderbyT>())>
   std::unique_ptr<column> operator()(column_view const&,
+                                     direction,
+                                     order,
                                      std::optional<preprocessed_group_info> const&,
                                      bool,
                                      scalar const*,
