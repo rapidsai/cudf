@@ -154,7 +154,7 @@ def _plc_write_parquet(
         user_data = [
             {
                 "pandas": ioutils.generate_pandas_metadata(
-                    table.iloc[start_row: start_row + num_row].copy(
+                    table.iloc[start_row : start_row + num_row].copy(
                         deep=False
                     ),
                     index,
@@ -769,7 +769,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
-    check_headers=True,
+    check_header=True,
     *args,
     **kwargs,
 ):
@@ -919,8 +919,8 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-        check_headers=check_headers
-        ** kwargs,
+        check_headers=check_header
+        **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)
@@ -1189,7 +1189,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
-                .check_headers(check_headers)
+                .check_header(check_headers)
                 .build()
             )
             if row_groups is not None:
@@ -1256,7 +1256,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
-                .check_headers(check_headers)
+                .check_header(check_headers)
                 .build()
             )
             if row_groups is not None:
@@ -2331,8 +2331,7 @@ def _process_metadata(
                         cudf.core.column.column_empty(0)
                     )
             else:
-                start = range_index_meta["start"] + \
-                    skip_rows  # type: ignore[operator]
+                start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
                 stop = range_index_meta["stop"]
                 if nrows > -1:
                     stop = start + nrows
