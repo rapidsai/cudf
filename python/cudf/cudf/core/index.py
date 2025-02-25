@@ -18,7 +18,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -48,11 +47,15 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
     find_common_type,
     is_mixed_with_object_dtype,
 )
@@ -122,17 +125,21 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="left",
-        ascending=sort_vals.is_monotonic_increasing,
+    lower_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="left",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
-    upper_bound = search.search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="right",
-        ascending=sort_vals.is_monotonic_increasing,
+    upper_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="right",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -1363,8 +1370,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 plc.Table([rcol.to_pylibcudf(mode="read")]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
-            indices = libcudf.column.Column.from_pylibcudf(right_plc)
+            scatter_map = ColumnBase.from_pylibcudf(left_plc)
+            indices = ColumnBase.from_pylibcudf(right_plc)
         result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
@@ -1449,12 +1456,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = repr(
-                    preprocess.astype("str")
+                    preprocess.astype(CUDF_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                "str"
+                                CUDF_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -1725,12 +1732,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == cudf.dtype("object")
+                        if this.dtype == CUDF_STRING_DTYPE
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
+                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
@@ -2012,7 +2019,7 @@ class DatetimeIndex(Index):
 
     @property
     def asi8(self) -> cupy.ndarray:
-        return self._column.astype("int64").values
+        return self._column.astype(np.dtype(np.int64)).values
 
     @property
     def inferred_freq(self) -> cudf.DateOffset | None:
@@ -2326,7 +2333,8 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32") * np.int32(1000)
+                self._column.millisecond.astype(np.dtype(np.int32))
+                * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
@@ -2486,7 +2494,9 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
-        return Index._from_column(self._column.quarter.astype("int8"))
+        return Index._from_column(
+            self._column.quarter.astype(np.dtype(np.int8))
+        )
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Index:
@@ -2928,7 +2938,7 @@ class TimedeltaIndex(Index):
 
     @property
     def asi8(self) -> cupy.ndarray:
-        return self._column.astype("int64").values
+        return self._column.astype(np.dtype(np.int64)).values
 
     def sum(self, *, skipna: bool = True, axis: int | None = 0):
         return self._column.sum(skipna=skipna)
@@ -2986,7 +2996,7 @@ class TimedeltaIndex(Index):
         """
         # Need to specifically return `int64` to avoid overflow.
         return Index._from_column(
-            self._column.days.astype("int64"), name=self.name
+            self._column.days.astype(np.dtype(np.int64)), name=self.name
         )
 
     @property  # type: ignore
@@ -2996,7 +3006,7 @@ class TimedeltaIndex(Index):
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
         return Index._from_column(
-            self._column.seconds.astype("int32"), name=self.name
+            self._column.seconds.astype(np.dtype(np.int32)), name=self.name
         )
 
     @property  # type: ignore
@@ -3006,7 +3016,8 @@ class TimedeltaIndex(Index):
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
         return Index._from_column(
-            self._column.microseconds.astype("int32"), name=self.name
+            self._column.microseconds.astype(np.dtype(np.int32)),
+            name=self.name,
         )
 
     @property  # type: ignore
@@ -3017,7 +3028,7 @@ class TimedeltaIndex(Index):
         element.
         """
         return Index._from_column(
-            self._column.nanoseconds.astype("int32"), name=self.name
+            self._column.nanoseconds.astype(np.dtype(np.int32)), name=self.name
         )
 
     @property  # type: ignore
@@ -3124,7 +3135,7 @@ class CategoricalIndex(Index):
             data = column.as_column(data)
         else:
             data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
+                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
             )
             # dtype has already been taken care
             dtype = None
@@ -3346,50 +3357,56 @@ def interval_range(
             "freq, exactly three must be specified"
         )
 
-    start = cudf.Scalar(start) if start is not None else start
-    end = cudf.Scalar(end) if end is not None else end
     if periods is not None and not cudf.api.types.is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
             FutureWarning,
         )
-    periods = cudf.Scalar(int(periods)) if periods is not None else periods
-    freq = cudf.Scalar(freq) if freq is not None else freq
-
     if start is None:
         start = end - freq * periods
     elif freq is None:
-        quotient, remainder = divmod((end - start).value, periods.value)
+        quotient, remainder = divmod(end - start, periods)
         if remainder:
             freq = (end - start) / periods
         else:
-            freq = cudf.Scalar(int(quotient))
+            freq = int(quotient)
     elif periods is None:
-        periods = cudf.Scalar(int((end - start) / freq))
+        periods = int((end - start) / freq)
     elif end is None:
         end = start + periods * freq
 
+    pa_start = pa.scalar(start)
+    pa_end = pa.scalar(end)
+    pa_freq = pa.scalar(freq)
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not _is_non_decimal_numeric_dtype(cudf_dtype_from_pa_type(x.type))
+        for x in (pa_start, pa.scalar(periods), pa_freq, pa_end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
-    periods = periods.astype("int64")
-    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
-    start = start.astype(common_dtype)
-    freq = freq.astype(common_dtype)
+    common_dtype = find_common_type(
+        (
+            cudf_dtype_from_pa_type(pa_start.type),
+            cudf_dtype_from_pa_type(pa_freq.type),
+            cudf_dtype_from_pa_type(pa_end.type),
+        )
+    )
+    pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
+    pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
     with acquire_spill_lock():
-        bin_edges = libcudf.column.Column.from_pylibcudf(
+        bin_edges = ColumnBase.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value,
-                step=freq.device_value,
+                init=pa_scalar_to_plc_scalar(pa_start),
+                step=pa_scalar_to_plc_scalar(pa_freq),
             )
         )
-    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
+    return IntervalIndex.from_breaks(
+        bin_edges.astype(common_dtype), closed=closed, name=name
+    )
 
 
 class IntervalIndex(Index):
@@ -3500,7 +3517,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Literal["left", "right", "neither", "both"] | None = "right",
+        closed: Literal["left", "right", "neither", "both"] = "right",
         name=None,
         copy: bool = False,
         dtype=None,

@@ -125,6 +125,14 @@ struct arrow_schema_data_types {
   data_type type{type_id::EMPTY};
 };
 
+/**
+ * @brief Struct to store the number of row groups surviving each predicate pushdown filter.
+ */
+struct surviving_row_group_metrics {
+  std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
+  std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
+};
+
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
@@ -196,6 +204,11 @@ class aggregate_reader_metadata {
   void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
   /**
+   * @brief Returns the required alignment for bloom filter buffers
+   */
+  [[nodiscard]] size_t get_bloom_filter_alignment() const;
+
+  /**
    * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
    * groups.
    *
@@ -228,6 +241,50 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<Type> get_parquet_types(
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<int const> column_schemas) const;
+
+  /**
+   * @brief Filters the row groups using stats filter
+   *
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter AST expression to filter row groups based on bloom filter membership
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices if any is filtered
+   */
+  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_stats_filters(
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    size_type total_row_groups,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filters the row groups using bloom filters
+   *
+   * @param bloom_filter_data Bloom filter data device buffers for each input row group
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param literals Lists of equality literals, one per each input row group
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Datatypes of output columns
+   * @param equality_col_schemas schema indices of equality columns only
+   * @param filter AST expression to filter row groups based on bloom filter membership
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices if any is filtered
+   */
+  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
+    std::vector<rmm::device_buffer>& bloom_filter_data,
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<std::vector<ast::literal*> const> literals,
+    size_type total_row_groups,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> equality_col_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
@@ -355,43 +412,27 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
-   * @brief Filters the row groups based on predicate filter
+   * @brief Filters the row groups using stats and bloom filters based on predicate filter
    *
    * @param sources Lists of input datasources
-   * @param row_group_indices Lists of row groups to read, one per source
+   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered row group indices, if any is filtered
+   * @return A pair of a list of filtered row group indices if any are filtered, and a struct
+   *         containing the number of row groups surviving each predicate pushdown filter
    */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter,
-    rmm::cuda_stream_view stream) const;
-
-  /**
-   * @brief Filters the row groups using bloom filters
-   *
-   * @param sources Dataset sources
-   * @param row_group_indices Lists of input row groups to read, one per source
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
-   * @param filter AST expression to filter row groups based on bloom filter membership
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return Filtered row group indices, if any is filtered
-   */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> input_row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::pair<std::optional<std::vector<std::vector<size_type>>>,
+                          surviving_row_group_metrics>
+  filter_row_groups(host_span<std::unique_ptr<datasource> const> sources,
+                    host_span<std::vector<size_type> const> input_row_group_indices,
+                    size_type total_row_groups,
+                    host_span<data_type const> output_dtypes,
+                    host_span<int const> output_column_schemas,
+                    std::reference_wrapper<ast::expression const> filter,
+                    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups
@@ -408,9 +449,15 @@ class aggregate_reader_metadata {
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count, list of row group indexes and its
-   *         starting row, and list of number of rows per source
+   *         starting row, list of number of rows per source, number of input row groups, and a
+   *         struct containing the number of row groups surviving each predicate pushdown filter
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+  [[nodiscard]] std::tuple<int64_t,
+                           size_type,
+                           std::vector<row_group_info>,
+                           std::vector<size_t>,
+                           size_type,
+                           surviving_row_group_metrics>
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
                     host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
@@ -490,6 +537,54 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
+};
+
+/**
+ * @brief Collects lists of equality predicate literals in the AST expression, one list per input
+ * table column. This is used in row group filtering based on bloom filters.
+ */
+class equality_literals_collector : public ast::detail::expression_transformer {
+ public:
+  equality_literals_collector();
+
+  equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Vectors of equality literals in the AST expression, one per input table column
+   *
+   * @return Vectors of equality literals, one per input table column
+   */
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() &&;
+
+ protected:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+
+  size_type _num_input_columns;
+
+ private:
+  std::vector<std::vector<ast::literal*>> _literals;
 };
 
 /**

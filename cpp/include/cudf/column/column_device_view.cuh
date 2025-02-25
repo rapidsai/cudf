@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@
 #include <thrust/pair.h>
 
 #include <algorithm>
+#include <functional>
 #include <type_traits>
 
 /**
@@ -58,8 +59,8 @@ namespace CUDF_EXPORT cudf {
  *
  */
 struct nullate {
-  struct YES : cuda::std::bool_constant<true> {};
-  struct NO : cuda::std::bool_constant<false> {};
+  struct YES : cuda::std::true_type {};
+  struct NO : cuda::std::false_type {};
   /**
    * @brief `nullate::DYNAMIC` defers the determination of nullability to run time rather than
    * compile time. The calling code is responsible for specifying whether or not nulls are

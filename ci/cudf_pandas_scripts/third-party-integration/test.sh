@@ -11,7 +11,6 @@ extract_lib_from_dependencies_yaml() {
     # Parse all keys in dependencies.yaml under the "files" section,
     # extract all the keys that start with "test_", and extract the rest
     extracted_libs="$(yq -o json "$file" | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
-    local extracted_libs
     echo "$extracted_libs"
 }
 
@@ -22,22 +21,38 @@ main() {
     LIBS=${LIBS#[}
     LIBS=${LIBS%]}
 
+    if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
+        rapids-logger "Downloading artifacts from this pr jobs"
+        CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+        PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+    fi
+
     ANY_FAILURES=0
 
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
-
-        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
+        CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "11.8"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
-
-        rapids-logger "Generate Python testing dependencies"
-        rapids-dependency-file-generator \
-          --config "$dependencies_yaml" \
-          --output conda \
-          --file-key "test_${lib}" \
-          --matrix "cuda=${CUDA_MAJOR};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+        # Check the value of RAPIDS_BUILD_TYPE
+        if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+                --prepend-channel "${CPP_CHANNEL}" \
+                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
+        else
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+        fi
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 

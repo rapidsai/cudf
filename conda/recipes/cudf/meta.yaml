@@ -33,9 +33,6 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
-  ignore_run_exports:
-    # libcudf's run_exports pinning is looser than we would like
-    - libcudf
   ignore_run_exports_from:
     - {{ compiler('cuda') }}
     {% if cuda_major != "11" %}
@@ -81,7 +78,7 @@ requirements:
     - numba-cuda >=0.2.0,<0.3.0a0
     - numba >=0.59.1,<0.61.0a0
     - numpy >=1.23,<3.0a0
-    - pyarrow>=14.0.0,<18.0.0a0
+    - pyarrow>=14.0.0,<20.0.0a0
     - libcudf ={{ version }}
     - pylibcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}

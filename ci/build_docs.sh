@@ -13,27 +13,21 @@ rapids-logger "Create test conda environment"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+
 rapids-dependency-file-generator \
   --output conda \
   --file-key docs \
+  --prepend-channel "${CPP_CHANNEL}" \
+  --prepend-channel "${PYTHON_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n docs
 conda activate docs
 
 rapids-print-env
-
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
-  "libcudf=${RAPIDS_VERSION}" \
-  "pylibcudf=${RAPIDS_VERSION}" \
-  "cudf=${RAPIDS_VERSION}" \
-  "dask-cudf=${RAPIDS_VERSION}"
 
 RAPIDS_DOCS_DIR="$(mktemp -d)"
 export RAPIDS_DOCS_DIR
