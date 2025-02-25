@@ -18,6 +18,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -157,10 +158,18 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
-      auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
-      for (auto const& filepath : info.filepaths()) {
-        sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
+      std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
+      source_tasks.reserve(info.filepaths().size());
+      for (auto const& path : info.filepaths()) {
+        source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+          [&] { return cudf::io::datasource::create(path, offset, max_size_estimate); }));
       }
+      std::vector<std::unique_ptr<cudf::io::datasource>> sources;
+      sources.reserve(source_tasks.size());
+      std::transform(
+        source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
+          return std::move(task.get());
+        });
       return sources;
     }
     case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.host_buffers());
