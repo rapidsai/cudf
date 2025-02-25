@@ -257,13 +257,13 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-// TODO: Consider just doing this work on construction of the container and
-// storing the unique_column_view_t in the container. Then the container can
-// safely return copies of the view ad infinitum without needing this call, and
-// this call can be stream- and mr-free, matching the cudf::column::view
-// method. Also doing this on construction would allow us to cache column data
-// for the types where the representation is not identical between arrow and
-// cudf (like bools) and avoiding constant back-and-forth conversion.
+// If it proves to be a bottleneck we could do this work on construction of the
+// container and store the extra columns in the container. Then the container
+// can safely return copies of the view ad infinitum and this call can be
+// stream- and mr-free, matching the cudf::column::view method. Also doing this
+// on construction would allow us to cache column data for the types where the
+// representation is not identical between arrow and cudf (like bools) and
+// avoiding constant back-and-forth conversion.
 unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
