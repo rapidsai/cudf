@@ -79,6 +79,8 @@ class parquet_reader_options {
   bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Check whether the first four bytes match the magic bytes "PAR1"
+  bool _check_header = true;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -205,6 +207,14 @@ class parquet_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
+   * @brief Returns true/false depending on whether the reader will check if the first four bytes
+   * are "PAR1".
+   *
+   * @return `true` if the header will be checked
+   */
+  [[nodiscard]] bool is_enabled_check_header() const { return _check_header; }
+
+  /**
    * @brief Sets names of the columns to be read.
    *
    * @param col_names Vector of column names
@@ -311,6 +321,13 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Sets to enable/disable the check of the first four bytes to be "PAR1".
+   *
+   * @param val Boolean value whether to check the header
+   */
+  void enable_check_magic_bytes(bool val) { _check_header = val; }
 };
 
 /**
@@ -464,6 +481,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable checking if the first four bytes are "PAR1".
+   *
+   * @param val Boolean value whether to check the header
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& check_header(bool val)
+  {
+    options.enable_check_magic_bytes(val);
     return *this;
   }
 
