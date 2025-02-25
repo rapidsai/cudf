@@ -2280,7 +2280,7 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
     if fs is None:
         # We have an open fsspec file object
         path_or_fob.seek(offset)
-        local_buffer[offset: offset + nbytes] = np.frombuffer(
+        local_buffer[offset : offset + nbytes] = np.frombuffer(
             path_or_fob.read(nbytes),
             dtype="b",
         )
@@ -2288,7 +2288,7 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
-            local_buffer[offset: offset + nbytes] = np.frombuffer(
+            local_buffer[offset : offset + nbytes] = np.frombuffer(
                 fob.read(nbytes),
                 dtype="b",
             )
@@ -2349,7 +2349,7 @@ def _get_remote_bytes_all(
         unique_count = dict(zip(*np.unique(paths, return_counts=True)))
         offset = np.cumsum([0] + [unique_count[p] for p in remote_paths])
         buffers = [
-            functools.reduce(operator.add, chunks[offset[i]: offset[i + 1]])
+            functools.reduce(operator.add, chunks[offset[i] : offset[i + 1]])
             for i in range(len(remote_paths))
         ]
         return buffers
@@ -2381,7 +2381,7 @@ def _get_remote_bytes_parquet(
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
             chunk = path_data[range_offset]
-            buf[range_offset[0]: range_offset[1]] = np.frombuffer(
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
                 chunk, dtype="b"
             )
         buffers.append(buf.tobytes())
@@ -2437,7 +2437,6 @@ def _update_col_struct_field_names(
         col.set_base_children(tuple(children))
 
     if isinstance(col.dtype, cudf.StructDtype):
-        # type: ignore[attr-defined]
-        col = col._rename_fields(child_names.keys())
+        col = col._rename_fields(child_names.keys()) # type: ignore[attr-defined]
 
     return col
