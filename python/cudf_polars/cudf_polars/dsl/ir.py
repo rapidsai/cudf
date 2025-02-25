@@ -1670,14 +1670,17 @@ class MergeSorted(IR):
     @classmethod
     def do_evaluate(cls, schema: Schema, key: str, *dfs: DataFrame) -> DataFrame:
         left, right = dfs
+        left, right = dfs
+        on_col_left = left.select_columns({key})[0]
+        on_col_right = right.select_columns({key})[0]
         return DataFrame.from_table(
             plc.merge.merge(
-                [left.table, right.table],
+                [right.table, left.table],
                 [left.column_names.index(key), right.column_names.index(key)],
-                [plc.types.Order.ASCENDING] * 2,
-                [plc.types.NullOrder.AFTER] * 2,
+                [on_col_left.order, on_col_right.order],
+                [plc.types.NullOrder.BEFORE, plc.types.NullOrder.BEFORE],
             ),
-            dfs[0].column_names,
+            left.column_names,
         )
 
 
