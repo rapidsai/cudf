@@ -1666,11 +1666,15 @@ class MergeSorted(IR):
             schema,
             key,
         )
+        assert isinstance(left, Sort)
+        assert isinstance(right, Sort)
+        assert left.order == right.order
+        assert len(left.schema.keys()) <= len(right.schema.keys())
 
     @classmethod
     def do_evaluate(cls, schema: Schema, key: str, *dfs: DataFrame) -> DataFrame:
         left, right = dfs
-        left, right = dfs
+        right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
         on_col_right = right.select_columns({key})[0]
         return DataFrame.from_table(
