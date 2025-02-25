@@ -210,7 +210,7 @@ nrows : int, default None
 allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
-check_headers : boolean, default True
+check_header : boolean, default True
     If True, enables the check that verifies that the header matches the magic value "PAR1"
 prefetch_options : dict, default None
     WARNING: This is an experimental feature and may be removed at any
