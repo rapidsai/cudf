@@ -156,9 +156,7 @@ void copy_array(ArrowArray* output,
       copy_array(private_data->children_raw[i], input->children[i], container);
     }
   }
-  output->children = private_data->children_raw.data();
-  // TODO: This is probably not quite right but we don't actually support
-  // dictionaries so not sure it's worth fixing.
+  output->children     = private_data->children_raw.data();
   output->dictionary   = input->dictionary;
   output->release      = ArrayReleaseCallback;
   output->private_data = private_data;
