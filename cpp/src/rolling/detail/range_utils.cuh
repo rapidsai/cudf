@@ -363,27 +363,22 @@ struct current_row_distance_functor {
   {
     using Comp          = comparator_t<OrderbyT, current_row>;
     auto const row_info = groups.row_info(i);
-    bool const is_null  = Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end;
+    if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
+      return direction == direction::PRECEDING ? i - row_info.null_start + 1
+                                               : row_info.null_end - i - 1;
+    }
     if (direction == direction::PRECEDING) {
-      if (is_null) {
-        return i - row_info.null_start + 1;
-      } else {
-        return 1 +
-               thrust::distance(
-                 thrust::lower_bound(
-                   thrust::seq, begin + row_info.non_null_start, begin + i, begin[i], Comp{order}),
-                 begin + i);
-      }
+      return 1 +
+             thrust::distance(
+               thrust::lower_bound(
+                 thrust::seq, begin + row_info.non_null_start, begin + i, begin[i], Comp{order}),
+               begin + i);
     } else {
-      if (is_null) {
-        return row_info.null_end - i - 1;
-      } else {
-        return thrust::distance(
-                 begin + i,
-                 thrust::upper_bound(
-                   thrust::seq, begin + i, begin + row_info.non_null_end, begin[i], Comp{order})) -
-               1;
-      }
+      return thrust::distance(
+               begin + i,
+               thrust::upper_bound(
+                 thrust::seq, begin + i, begin + row_info.non_null_end, begin[i], Comp{order})) -
+             1;
     }
   }
 };
@@ -446,127 +441,66 @@ struct bounded_distance_functor {
   {
     using Comp          = comparator_t<OrderbyT, WindowTag>;
     auto const row_info = groups.row_info(i);
-    bool const is_null  = Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end;
-    if (direction == direction::PRECEDING) {
+    if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
       // TODO: If the window is BOUNDED_OPEN, what does it mean for a row to fall in the null
       // group? Not that important because only spark allows nulls in the orderby column, and it
       // doesn't have BOUNDED_OPEN windows.
-      if (is_null) {
-        return i - row_info.null_start + 1;
+      return direction == direction::PRECEDING ? i - row_info.null_start + 1
+                                               : row_info.null_end - i - 1;
+    }
+    auto const offset_value_overflow =
+      [order = order, direction = direction, delta = *row_delta, row_value = begin[i]]() {
+        if ((order == order::ASCENDING && direction == direction::PRECEDING) ||
+            (order == order::DESCENDING && direction == direction::FOLLOWING)) {
+          return saturating_sub(row_value, delta);
+        } else {
+          return saturating_add(row_value, delta);
+        }
+      }();
+    OrderbyT const offset_value = cuda::std::get<0>(offset_value_overflow);
+    bool const did_overflow     = cuda::std::get<1>(offset_value_overflow);
+    auto const distance         = [order        = order,
+                           direction    = direction,
+                           current      = begin + i,
+                           start        = begin + row_info.non_null_start,
+                           end          = begin + row_info.non_null_end,
+                           offset_value = offset_value](auto&& cmp) {
+      if (direction == direction::PRECEDING) {
+        return 1 + thrust::distance(thrust::lower_bound(thrust::seq, start, end, offset_value, cmp),
+                                    current);
       } else {
-        // The preceding endpoint is computed via row_value - delta.
-        // When delta is positive, this can only overflow towards -infinity.
-        // If we did overflow towards -infinity, then the value
-        // we're searching for is some min. But -infinity < min, so
-        // we must always use a `bounded_closed` window so that
-        // orderby = [min, ...] with positive delta picks up that
-        // row in the window.
-        // Conversely, when delta is negative, we can only overflow
-        // towards +infinity. If we did overflow towards +infinity
-        // then the value we're searching for is some max. But
-        // +infinity > max, so we must use a `bounded_open` window
-        // so that orderby = [..., max] with negative delta does not
-        // pick up that row in the window.
-        // When the orderby column is sorted in descending order the
-        // above applies mutatis mutandis with a sign flip.
-        OrderbyT value;
-        bool did_overflow{false};
-        if (order == order::ASCENDING) {
-          auto const result = saturating_sub(begin[i], *row_delta);
-          value             = cuda::std::get<0>(result);
-          did_overflow      = cuda::std::get<1>(result);
-        } else {
-          auto const result = saturating_add(begin[i], *row_delta);
-          value             = cuda::std::get<0>(result);
-          did_overflow      = cuda::std::get<1>(result);
-        }
-        if (did_overflow) {
-          if (*row_delta > DeltaT{0}) {
-            return 1 + thrust::distance(
-                         thrust::lower_bound(thrust::seq,
-                                             begin + row_info.non_null_start,
-                                             begin + row_info.non_null_end,
-                                             value,
-                                             comparator_t<OrderbyT, bounded_closed>{order}),
-                         begin + i);
-          } else {
-            return 1 + thrust::distance(
-                         thrust::lower_bound(thrust::seq,
-                                             begin + row_info.non_null_start,
-                                             begin + row_info.non_null_end,
-                                             value,
-                                             comparator_t<OrderbyT, bounded_open>{order}),
-                         begin + i);
-          }
-        } else {
-          return 1 + thrust::distance(thrust::lower_bound(thrust::seq,
-                                                          begin + row_info.non_null_start,
-                                                          begin + row_info.non_null_end,
-                                                          value,
-                                                          Comp{order}),
-                                      begin + i);
-        }
+        return thrust::distance(current,
+                                thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
+               1;
+      }
+    };
+    if (did_overflow) {
+      // If computing the offset row value overflowed then we must
+      // adapt the search comparator. Suppose that the window
+      // direction is PRECEDING and orderby column is ASCENDING. The
+      // offset value is computed as row_value - delta. There are two
+      // cases:
+      // 1. delta is positive: we overflowed towards -infinity;
+      // 2. delta is negative, we overflowed towards +infinity.
+      // For case 1, the saturating minimum value must be
+      // included in the preceding window bound (because -infinity <
+      // min). Conversely, for case 2, the saturating maximum value
+      // must not be included in the preceding window bound (because
+      // max < +infinity). This can be obtained by picking a
+      // bounded_closed (respectively bounded_open) window.
+      // For FOLLOWING windows (with ASCENDING orderby), positive
+      // delta overflows towards +infinity and negative delta towards
+      // -infinity, and the same logic applies: we should include for
+      // positive overflow, but exclude for negative overflow.
+      // Since, when the orderby columns is ASCENDING, delta is
+      // treated with a sign flip, the above also applies in that case.
+      if (*row_delta > DeltaT{0}) {
+        return distance(comparator_t<OrderbyT, bounded_closed>{order});
+      } else {
+        return distance(comparator_t<OrderbyT, bounded_open>{order});
       }
     } else {
-      if (is_null) {
-        return row_info.null_end - i - 1;
-      } else {
-        // The following endpoint is computed via row_value + delta.
-        // When delta is positive, this can only overflow towards +infinity.
-        // If we did overflow towards +infinity, then the value
-        // we're searching for is some max. But +infinity > max, so
-        // we must always use a `bounded_closed` window so that
-        // orderby = [..., max] with positive delta picks up that
-        // row in the window.
-        // Conversely, when delta is negative, we can only overflow
-        // towards -infinity. If we did overflow towards -infinity
-        // then the value we're searching for is some min. But
-        // -infinity < min, so we must use a `bounded_open` window
-        // so that orderby = [min, ...] with negative delta does not
-        // pick up that row in the window.
-        // When the orderby column is sorted in descending order the
-        // above applies mutatis mutandis with a sign flip.
-        OrderbyT value;
-        bool did_overflow{false};
-        if (order == order::ASCENDING) {
-          auto const result = saturating_add(begin[i], *row_delta);
-          value             = cuda::std::get<0>(result);
-          did_overflow      = cuda::std::get<1>(result);
-        } else {
-          auto const result = saturating_sub(begin[i], *row_delta);
-          value             = cuda::std::get<0>(result);
-          did_overflow      = cuda::std::get<1>(result);
-        }
-        if (did_overflow) {
-          if (*row_delta > DeltaT{0}) {
-            return thrust::distance(
-                     begin + i,
-                     thrust::upper_bound(thrust::seq,
-                                         begin + row_info.non_null_start,
-                                         begin + row_info.non_null_end,
-                                         value,
-                                         comparator_t<OrderbyT, bounded_closed>{order})) -
-                   1;
-          } else {
-            return thrust::distance(
-                     begin + i,
-                     thrust::upper_bound(thrust::seq,
-                                         begin + row_info.non_null_start,
-                                         begin + row_info.non_null_end,
-                                         value,
-                                         comparator_t<OrderbyT, bounded_open>{order})) -
-                   1;
-          }
-        } else {
-          return thrust::distance(begin + i,
-                                  thrust::upper_bound(thrust::seq,
-                                                      begin + row_info.non_null_start,
-                                                      begin + row_info.non_null_end,
-                                                      value,
-                                                      Comp{order})) -
-                 1;
-        }
-      }
+      return distance(Comp{order});
     }
   }
 };
