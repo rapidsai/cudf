@@ -29,7 +29,7 @@ set -u
 
 rapids-print-env
 
-NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
+NBTEST="$(realpath "$(dirname "$0")/../../utils/nbtest.sh")"
 pushd notebooks
 
 # Add notebooks that should be skipped here

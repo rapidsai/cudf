@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 # Assumption, polars has been cloned in the root of the repo.
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../polars/
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../../../polars/
 
 DESELECTED_TESTS=(
     "tests/unit/test_polars_import.py::test_polars_import" # relies on a polars built in place

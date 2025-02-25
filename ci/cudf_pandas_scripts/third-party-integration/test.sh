@@ -71,7 +71,7 @@ main() {
 
         rapids-logger "pytest ${lib}"
 
-        NUM_PROCESSES=8
+        NUM_PROCESSES=7
         serial_libraries=(
             "tensorflow"
         )

@@ -22,6 +22,8 @@ compile_commands.json
 dask-worker-space/
 dist/
 cudf.egg-info/
+!ci/python/build
+!ci/python/*/build
 python/build
 python/*/build
 python/cudf/cudf-coverage.xml
@@ -77,6 +79,7 @@ test-results
 CMakeFiles/
 Debug
 build/
+!ci/cpp/build/
 cpp/build/
 cpp/examples/*/install/
 cpp/examples/*/build/
