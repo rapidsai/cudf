@@ -211,8 +211,7 @@ allow_mismatched_pq_schemas : boolean, default False
     If True, enables reading (matching) columns specified in `columns` and `filters`
     options from the input files with otherwise mismatched schemas.
 check_headers : boolean, default True
-    If True, checks the headers of the input files to ensure they are the same.
-    If False, skips the header check.
+    If True, enables the check that verifies that the header matches the magic value "PAR1"
 prefetch_options : dict, default None
     WARNING: This is an experimental feature and may be removed at any
     time without warning or deprecation period.
