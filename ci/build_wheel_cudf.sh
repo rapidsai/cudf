@@ -28,7 +28,7 @@ python -m auditwheel repair \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
     -w ${wheel_dir} \
-    ${initial_wheel_dir}/*
+    "${initial_wheel_dir}"/*
 
 ./ci/validate_wheel.sh ${package_dir} ${wheel_dir}
 
