@@ -512,14 +512,6 @@ def test_reduction_column_multiindex():
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("op", ["sum", "product"])
-def test_dtype_deprecated(op):
-    ser = cudf.Series(range(5))
-    with pytest.warns(FutureWarning):
-        result = getattr(ser, op)(dtype=np.dtype(np.int8))
-    assert isinstance(result, np.int8)
-
-
 @pytest.mark.parametrize(
     "columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")]
 )
