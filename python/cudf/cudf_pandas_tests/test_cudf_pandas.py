@@ -2060,6 +2060,13 @@ def test_as_proxy_object_doesnot_copy_index():
     assert proxy_obj._fsproxy_wrapped is idx
 
 
+def test_as_proxy_object_no_op_for_intermediates():
+    s = pd.Series(["abc", "def", "ghi"])
+    str_attr = s.str
+    proxy_obj = as_proxy_object(str_attr)
+    assert proxy_obj is str_attr
+
+
 def test_pickle_round_trip_proxy_numpy_array(array):
     arr, proxy_arr = array
     pickled_arr = BytesIO()

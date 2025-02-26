@@ -1357,9 +1357,6 @@ def as_proxy_object(obj: Any) -> Any:
     if _is_final_type(obj):
         typ = get_final_type_map()[type(obj)]
         return typ._fsproxy_wrap(obj, None)
-    elif _is_intermediate_type(obj):
-        typ = get_intermediate_type_map()[type(obj)]
-        return typ._fsproxy_wrap(obj, None)
     return obj
 
 
