@@ -21,8 +21,8 @@ source:
 build:
   string: cuda${{ cuda_major }}_py${{ py_version }}_${{ date_string }}_${{ head_rev }}
   script:
-    content:
-      - ./build.sh pylibcudf
+    content: |
+      ./build.sh pylibcudf
     secrets:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY

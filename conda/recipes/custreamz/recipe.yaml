@@ -21,8 +21,8 @@ source:
 build:
   string: cuda${{ cuda_major }}_py${{ py_version }}_${{ date_string }}_${{ head_rev }}
   script:
-    content:
-      - ./build.sh -v custreamz
+    content: |
+      ./build.sh -v custreamz
     secrets:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
@@ -37,7 +37,7 @@ build:
       SCCACHE_REGION: ${{ env.get("SCCACHE_REGION") }}
       SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL") }}
       SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS") }}
-      SCCACHE_S3_KEY_PREFIX: pylibcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}
+      SCCACHE_S3_KEY_PREFIX: custreamz-${{ env.get("RAPIDS_CONDA_ARCH") }}
 
 requirements:
   host:
