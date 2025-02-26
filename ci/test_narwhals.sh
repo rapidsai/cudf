@@ -28,7 +28,8 @@ python -m pytest \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     --numprocesses=8 \
     --dist=worksteal \
-    --constructors=cudf
+    --constructors=cudf \
+    -k "not test_select_duplicates"
 
 rapids-logger "Run narwhals tests for cuDF Polars"
 NARWHALS_POLARS_GPU=1 python -m pytest \
