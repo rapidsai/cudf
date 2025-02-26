@@ -81,7 +81,7 @@ requirements:
     - pylibcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - if:  cuda_major == "11"
+    - if: cuda_major == "11"
       then:
         - cudatoolkit
         - ptxcompiler >=0.7.0
@@ -104,7 +104,6 @@ requirements:
     - packaging
     - cachetools
     - rich
-
   ignore_run_exports:
     from_package:
       - if: cuda_major != "11"
@@ -112,6 +111,8 @@ requirements:
           - cuda-cudart-dev
           - if: linux64
             then: libcufile-dev
+    by_name:
+      - cuda-version
 
 tests:
   - python:
