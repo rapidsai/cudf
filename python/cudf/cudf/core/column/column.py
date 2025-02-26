@@ -959,7 +959,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Parameters
         ----------
-        dtype : NumPy dtype
+        dtype : Dtype object
             The dtype to view the data as
         """
         if dtype.kind in ("o", "u", "s"):
