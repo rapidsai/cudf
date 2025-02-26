@@ -27,24 +27,6 @@ namespace CUDF_EXPORT cudf {
 namespace io::detail {
 
 /**
- * @brief Status of a compression/decompression operation.
- */
-enum class compression_status : uint8_t {
-  SUCCESS,          ///< Successful, output is valid
-  FAILURE,          ///< Failed, output is invalid (e.g. input is unsupported in some way)
-  SKIPPED,          ///< Operation skipped (if conversion, uncompressed data can be used)
-  OUTPUT_OVERFLOW,  ///< Output buffer is too small; operation can succeed with larger output
-};
-
-/**
- * @brief Descriptor of compression/decompression result.
- */
-struct compression_result {
-  uint64_t bytes_written;
-  compression_status status;
-};
-
-/**
  * @brief Compresses a system memory buffer.
  *
  * @param compression Type of compression of the input data

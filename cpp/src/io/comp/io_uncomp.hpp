@@ -52,6 +52,14 @@ size_t decompress(compression_type compression,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
+void decompress(compression_type compression,
+                device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<compression_result> results,
+                size_t max_uncomp_chunk_size,
+                size_t max_total_uncomp_size,
+                rmm::cuda_stream_view stream);
+
 /**
  * @brief Without actually decompressing the compressed input buffer passed, return the size of
  * decompressed output. If the decompressed size cannot be extracted apriori, return zero.
@@ -62,18 +70,6 @@ size_t decompress(compression_type compression,
  * @return Size of decompressed output
  */
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
-
-/**
- * @brief GZIP header flags
- * See https://tools.ietf.org/html/rfc1952
- */
-namespace GZIPHeaderFlag {
-constexpr uint8_t ftext    = 0x01;  // ASCII text hint
-constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
-constexpr uint8_t fextra   = 0x04;  // Extra fields present
-constexpr uint8_t fname    = 0x08;  // Original file name present
-constexpr uint8_t fcomment = 0x10;  // Comment present
-};                                  // namespace GZIPHeaderFlag
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

@@ -122,12 +122,7 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
     rmm::device_buffer d_scratch{cudf::io::detail::get_gpu_debrotli_scratch_size(1),
                                  cudf::get_default_stream()};
 
-    cudf::io::detail::gpu_debrotli(d_inf_in,
-                                   d_inf_out,
-                                   d_inf_stat,
-                                   d_scratch.data(),
-                                   d_scratch.size(),
-                                   cudf::get_default_stream());
+    cudf::io::detail::gpu_debrotli(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
   }
 };
 

@@ -15,8 +15,8 @@
  */
 
 #include "compact_protocol_reader.hpp"
-#include "io/comp/comp.hpp"
 #include "io/comp/gpuinflate.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
@@ -154,6 +154,19 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
   }
 }
 #endif  // CHUNKING_DEBUG
+
+compression_type from_parquet_compression(Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return compression_type::BROTLI;
+    case Compression::GZIP: return compression_type::GZIP;
+    case Compression::LZ4_RAW: return compression_type::LZ4;
+    case Compression::SNAPPY: return compression_type::SNAPPY;
+    case Compression::ZSTD: return compression_type::ZSTD;
+    case Compression::UNCOMPRESSED: return compression_type::NONE;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
 
 /**
  * @brief Functor which reduces two cumulative_page_info structs of the same key.
@@ -758,9 +771,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     }
   };
 
-  // Brotli scratch memory for decompressing
-  rmm::device_buffer debrotli_scratch;
-
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
@@ -800,10 +810,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       codec.num_pages++;
       num_comp_pages++;
     });
-    if (codec.compression_type == BROTLI && codec.num_pages > 0) {
-      debrotli_scratch.resize(cudf::io::detail::get_gpu_debrotli_scratch_size(codec.num_pages),
-                              stream);
-    }
   }
 
   // Dispatch batches of pages to decompress for each codec.
@@ -871,65 +877,14 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
-    switch (codec.compression_type) {
-      case GZIP:
-        if (cudf::io::nvcomp_integration::is_all_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpuinflate(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     cudf::io::detail::gzip_header_included::YES,
-                     stream);
-        }
-        break;
-      case SNAPPY:
-        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpu_unsnap(d_comp_in_view, d_comp_out, d_comp_res_view, stream);
-        }
-        break;
-      case ZSTD:
-        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      case BROTLI:
-        gpu_debrotli(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     debrotli_scratch.data(),
-                     debrotli_scratch.size(),
-                     stream);
-        break;
-      case LZ4_RAW:
-        nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
-    }
+    cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
+                                 d_comp_in_view,
+                                 d_comp_out_view,
+                                 d_comp_res_view,
+                                 codec.max_decompressed_size,
+                                 codec.total_decomp_size,
+                                 stream);
+
     start_pos += codec.num_pages;
   }
 
