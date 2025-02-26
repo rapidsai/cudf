@@ -1286,6 +1286,15 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
             check_dtypes = True
+        elif (
+            not self_is_categorical
+            and not other_is_categorical
+            and not isinstance(other, RangeIndex)
+            and not isinstance(self, type(other))
+        ):
+            # Can compare Index to CategoricalIndex or RangeIndex
+            # Other comparisons are invalid
+            return False
 
         try:
             return self._column.equals(
@@ -3517,7 +3526,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Literal["left", "right", "neither", "both"] | None = "right",
+        closed: Literal["left", "right", "neither", "both"] = "right",
         name=None,
         copy: bool = False,
         dtype=None,

@@ -713,7 +713,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # is empty.
         if self.null_count == self.size:
             return True
-        return self.reduce("all")
+        return bool(self.reduce("all"))
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
