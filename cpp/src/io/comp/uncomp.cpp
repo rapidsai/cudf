@@ -687,9 +687,12 @@ void host_decompress(compression_type compression,
       [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
-      auto const h_out = compress(compression, h_in, cur_stream);
-      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
-      return h_out.size();
+      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
+      auto const uncomp_size = decompress(compression, h_in, h_out, cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, uncomp_size),
+                                         host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
+                                         cur_stream);
+      return uncomp_size;
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
