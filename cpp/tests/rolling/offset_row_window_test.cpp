@@ -43,7 +43,6 @@ auto constexpr null = int32_t{0};  // NULL representation for int32_t;
 auto no_nulls_list() { return nulls_at({}); }
 
 struct OffsetRowWindowTest : public cudf::test::BaseFixture {
-
   struct rolling_runner {
     cudf::window_bounds _preceding, _following;
     cudf::size_type _min_periods;
@@ -54,7 +53,9 @@ struct OffsetRowWindowTest : public cudf::test::BaseFixture {
     rolling_runner(cudf::window_bounds const& preceding,
                    cudf::window_bounds const& following,
                    cudf::size_type min_periods_ = 1)
-      : _preceding{preceding}, _following{following}, _min_periods{min_periods_},
+      : _preceding{preceding},
+        _following{following},
+        _min_periods{min_periods_},
         _keys{0, 0, 0, 0, 0, 0, 1, 1, 1, 1},
         _values{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
     {
