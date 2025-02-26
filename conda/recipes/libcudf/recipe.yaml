@@ -92,11 +92,20 @@ outputs:
       script:
         - cmake --install cpp/build
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
     requirements:
       build:
         - cmake ${{ cmake_version }}
+        - ${{ compiler("c") }}
       host:
         - cuda-version =${{ cuda_version }}
+        - libkvikio =${{ minor_version }}
+        - rapids-logger =0.1
+        - zlib ${{ zlib_version }}
+        - if: cuda_major == "11"
+          then: cudatoolkit
+          else: cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major == "11"
@@ -119,7 +128,16 @@ outputs:
         - ${{ pin_subpackage("libcudf", upper_bound="x.x") }}
       ignore_run_exports:
         by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
           - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf.so
@@ -136,9 +154,12 @@ outputs:
       script:
         - cmake --install cpp/libcudf_kafka/build
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
     requirements:
       build:
         - cmake ${{ cmake_version }}
+        - ${{ stdlib("c") }}
       host:
         - librdkafka ${{ librdkafka_version }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
@@ -147,7 +168,16 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
         by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
           - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_kafka.so
@@ -163,37 +193,50 @@ outputs:
       script:
         - ./cpp/examples/build.sh --install
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
     requirements:
       build:
-        - cmake ${{ cmake_version }}
         - ${{ compiler("c") }}
+        - ${{ compiler("cuda") }}
         - ${{ compiler("cxx") }}
-        - ${{ compiler("cuda") }} =${{ cuda_version }}
-        - cuda-version =${{ cuda_version }}
-        - ninja
         - ${{ stdlib("c") }}
+        - cmake ${{ cmake_version }}
+        - cuda-version =${{ cuda_version }}
         - make
+        - ninja
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
+        - cuda-version =${{ cuda_version }}
         - if: cuda_major == "11"
           then:
             - cuda-nvtx =${{ cuda_version }}
+            - cudatoolkit
           else:
             - cuda-nvtx-dev
-        - cuda-version =${{ cuda_version }}
+            - cuda-cudart-dev
       run:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major != "11"
           then:
-            - cuda-nvtx-dev
+            - cuda-nvtx
       ignore_run_exports:
         from_package:
           - if: cuda_major != "11"
             then:
               - cuda-nvtx-dev
         by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
           - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
@@ -207,9 +250,12 @@ outputs:
         - cmake --install cpp/build --component testing
         - cmake --install cpp/libcudf_kafka/build --component testing
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
     requirements:
       build:
         - cmake ${{ cmake_version }}
+        - ${{ stdlib("c") }}
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
@@ -217,8 +263,10 @@ outputs:
         - if: cuda_major == "11"
           then:
             - libcurand ${{ cuda11_libcurand_run_version }}
+            - cudatoolkit
           else:
             - libcurand-dev
+            - cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
@@ -234,7 +282,16 @@ outputs:
             then:
               - libcurand-dev
         by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
           - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
