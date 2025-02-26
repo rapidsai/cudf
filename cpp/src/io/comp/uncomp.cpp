@@ -749,6 +749,7 @@ void decompress(compression_type compression,
                 rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+  if (inputs.empty()) { return; }
   if (use_host_decompression(compression, inputs, outputs)) {
     return host_decompress(compression, inputs, outputs, results, stream);
   } else {
