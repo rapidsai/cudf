@@ -73,9 +73,12 @@ struct alignas(8) device_data_reference {
   }
 };
 
+using IntermediateType = std::int64_t;
+
+// TODO(lamarrr): rename and add RowIntermediate type that always has nulls
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+using IntermediateDataType = possibly_null_value_t<IntermediateType, has_nulls>;
 
 /**
  * @brief A container of all device data required to evaluate an expression on tables.

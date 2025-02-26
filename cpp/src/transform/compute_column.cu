@@ -77,7 +77,7 @@ __launch_bounds__(max_block_size) CUDF_KERNEL
 
   for (thread_index_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result(output_column);
-    evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
+    evaluator.evaluate(&output_dest, row_index, thread_intermediate_storage);
   }
 }
 

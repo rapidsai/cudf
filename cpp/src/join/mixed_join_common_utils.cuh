@@ -89,7 +89,7 @@ struct single_expression_equality : expression_equality {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
 
-    auto output_dest = cudf::ast::detail::value_expression_result<bool>();
+    auto output_dest = cudf::ast::detail::value_expression_result();
     // Two levels of checks:
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
@@ -97,12 +97,12 @@ struct single_expression_equality : expression_equality {
     if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
       auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
       auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
-      this->evaluator.evaluate(output_dest,
+      this->evaluator.evaluate(&output_dest,
                                static_cast<size_type>(lrow_idx),
                                static_cast<size_type>(rrow_idx),
                                0,
                                this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
+      return (output_dest.is_valid() && output_dest.value<bool>());
     }
     return false;
   }
@@ -139,7 +139,7 @@ struct pair_expression_equality : expression_equality {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
 
-    auto output_dest = cudf::ast::detail::value_expression_result<bool>();
+    auto output_dest = cudf::ast::detail::value_expression_result();
     // Three levels of checks:
     // 1. Row hashes of the columns involved in the equality condition are equal.
     // 2. The contents of the columns involved in the equality condition are equal.
@@ -150,8 +150,8 @@ struct pair_expression_equality : expression_equality {
       auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
       auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
       this->evaluator.evaluate(
-        output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
+        &output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
+      return (output_dest.is_valid() && output_dest.value<bool>());
     }
     return false;
   }

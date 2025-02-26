@@ -331,6 +331,7 @@ add_library(
   src/aggregation/aggregation.cpp
   src/aggregation/aggregation.cu
   src/aggregation/result_cache.cpp
+  src/ast/expression_evaluator.cu
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/ast/operators.cpp

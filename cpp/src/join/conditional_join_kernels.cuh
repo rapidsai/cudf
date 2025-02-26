@@ -187,12 +187,12 @@ CUDF_KERNEL void compute_conditional_join_output_size(
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index = 0; inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest                      = cudf::ast::detail::value_expression_result<bool>();
+      auto output_dest                      = cudf::ast::detail::value_expression_result();
       cudf::size_type const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       cudf::size_type const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
-        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
-      if (output_dest.is_valid() && output_dest.value()) {
+        &output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
+      if (output_dest.is_valid() && output_dest.value<bool>()) {
         if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
             !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
@@ -282,20 +282,20 @@ CUDF_KERNEL void conditional_join(bool has_nulls,
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
-  auto evaluator =
-    cudf::ast::detail::expression_evaluator(left_table, right_table, device_expression_data, has_nulls);
+  auto evaluator = cudf::ast::detail::expression_evaluator(
+    left_table, right_table, device_expression_data, has_nulls);
 
   if (outer_row_index < outer_num_rows) {
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest           = cudf::ast::detail::value_expression_result<bool>();
+      auto output_dest           = cudf::ast::detail::value_expression_result();
       auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
-        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
+        &output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
 
-      if (output_dest.is_valid() && output_dest.value()) {
+      if (output_dest.is_valid() && output_dest.value<bool>()) {
         // If the rows are equal, then we have found a true match
         // In the case of left anti joins we only add indices from left after
         // the loop if we have found _no_ matches from the right.
@@ -416,12 +416,12 @@ CUDF_KERNEL void conditional_join_anti_semi(
     bool found_match = false;
     for (cudf::thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
          ++inner_row_index) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool>();
+      auto output_dest = cudf::ast::detail::value_expression_result();
 
       evaluator.evaluate(
-        output_dest, outer_row_index, inner_row_index, 0, thread_intermediate_storage);
+        &output_dest, outer_row_index, inner_row_index, 0, thread_intermediate_storage);
 
-      if (output_dest.is_valid() && output_dest.value()) {
+      if (output_dest.is_valid() && output_dest.value<bool>()) {
         if (join_type == join_kind::LEFT_SEMI_JOIN && !found_match) {
           add_left_to_cache(outer_row_index, current_idx_shared, warp_id, join_shared_l[warp_id]);
         }

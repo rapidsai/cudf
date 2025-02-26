@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -28,6 +29,8 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/std/variant>
 
 namespace cudf {
 
@@ -45,26 +48,25 @@ namespace detail {
  * @tparam T The underlying data type.
  * @tparam has_nulls Whether or not the result data is nullable.
  */
-template <typename T>
 struct value_expression_result {
   __device__ inline value_expression_result() {}
 
   template <typename Element>
   __device__ inline void set_value(cudf::size_type index, Element const& result)
   {
-    _obj = result;
+    static_assert(sizeof(Element) <= sizeof(IntermediateType),
+                  "Size of Element is less than size of Intermediate type");
+    IntermediateType rep;
+    memcpy(&rep, &result, sizeof(Element));
+    _intermediate = rep;
   }
 
-  template <typename Element>
-  __device__ inline void set_null(cudf::size_type index)
-  {
-    _obj = thrust::nullopt;
-  }
+  __device__ inline void set_null(cudf::size_type index) { _intermediate = thrust::nullopt; }
 
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  [[nodiscard]] __device__ inline bool is_valid() const { return _obj.has_value(); }
+  [[nodiscard]] __device__ inline bool is_valid() const { return _intermediate.has_value(); }
 
   /**
    * @brief Returns the underlying data.
@@ -72,9 +74,18 @@ struct value_expression_result {
    * If the underlying data is not valid, behavior is undefined. Callers should
    * use is_valid to check for validity before accessing the value.
    */
-  __device__ inline T value() const { return *_obj; }
+  template <typename T>
+  __device__ inline T value() const
+  {
+    static_assert(sizeof(T) <= sizeof(IntermediateType),
+                  "Size of Element is less than size of Intermediate type");
+    IntermediateType rep = *_intermediate;
+    T value;
+    memcpy(&value, &rep, sizeof(IntermediateType));
+    return value;
+  }
 
-  thrust::optional<T> _obj;  ///< The underlying data value, or a nullable version of it.
+  IntermediateDataType<true> _intermediate;
 };
 
 // TODO: The below implementation significantly differs from the default
@@ -100,7 +111,6 @@ struct mutable_column_expression_result {
     if (_obj.nullable()) { _obj.set_valid(index); }
   }
 
-  template <typename Element>
   __device__ inline void set_null(cudf::size_type index)
   {
     if (_obj.nullable()) { _obj.set_null(index); }
@@ -129,32 +139,8 @@ struct mutable_column_expression_result {
   mutable_column_device_view& _obj;  ///< The column to which the data is written.
 };
 
-/**
- * @brief Dispatch to a binary operator based on a single data type.
- *
- * This functor is a dispatcher for binary operations that assumes that both
- * operands are of the same type. This assumption is encoded in the
- * non-deducible template parameter LHS, the type of the left-hand operand,
- * which is then used as the template parameter for both the left and right
- * operands to the binary operator f.
- */
-struct single_dispatch_binary_operator {
-  /**
-   * @brief Single-type dispatch to a binary operation.
-   *
-   * @tparam LHS Left input type.
-   * @tparam F Type of forwarded binary operator functor.
-   * @tparam Ts Parameter pack of forwarded arguments.
-   *
-   * @param f Binary operator functor.
-   * @param args Forwarded arguments to `operator()` of `f`.
-   */
-  template <typename LHS, typename F, typename... Ts>
-  __device__ inline auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
-  }
-};
+using expression_output =
+  cuda::std::variant<value_expression_result*, mutable_column_expression_result*>;
 
 /**
  * @brief The principal object for evaluating AST expressions on device.
@@ -211,8 +197,276 @@ struct expression_evaluator {
    * @return Element The type- and null-resolved data.
    */
 
-  template <typename Element,
-            bool has_nulls,
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param row_index Row index of all input and output data column(s).
+   */
+  __device__ __forceinline__ void evaluate(expression_output output,
+                                           cudf::size_type const row_index,
+                                           char* thread_intermediate_storage) const
+  {
+    evaluate(output, row_index, row_index, row_index, thread_intermediate_storage);
+  }
+
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param left_row_index The row to pull the data from the left table.
+   * @param right_row_index The row to pull the data from the right table.
+   * @param output_row_index The row in the output to insert the result.
+   */
+  __device__ void evaluate(expression_output output,
+                           cudf::size_type const left_row_index,
+                           cudf::size_type const right_row_index,
+                           cudf::size_type const output_row_index,
+                           char* thread_intermediate_storage) const;
+
+ protected:
+  table_device_view const& left;   ///< The left table to operate on.
+  table_device_view const& right;  ///< The right table to operate on.
+  expression_device_view const&
+    plan;  ///< The container of device data representing the expression to evaluate.
+  bool has_nulls;
+};
+
+/**
+ * @brief Dispatch to a binary operator based on a single data type.
+ *
+ * This functor is a dispatcher for binary operations that assumes that both
+ * operands are of the same type. This assumption is encoded in the
+ * non-deducible template parameter LHS, the type of the left-hand operand,
+ * which is then used as the template parameter for both the left and right
+ * operands to the binary operator f.
+ */
+struct single_dispatch_binary_operator {
+  /**
+   * @brief Single-type dispatch to a binary operation.
+   *
+   * @tparam LHS Left input type.
+   * @tparam F Type of forwarded binary operator functor.
+   * @tparam Ts Parameter pack of forwarded arguments.
+   *
+   * @param f Binary operator functor.
+   * @param args Forwarded arguments to `operator()` of `f`.
+   */
+  template <typename LHS, typename F, typename... Ts>
+  __device__ inline auto operator()(F&& f, Ts&&... args)
+  {
+    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
+  }
+};
+
+/**
+ * @brief Helper struct for type dispatch on the result of an expression.
+ *
+ * Evaluating an expression requires multiple levels of type dispatch to
+ * determine the input types, the operation type, and the output type. This
+ * helper class is a functor that handles the operator dispatch, invokes the
+ * operator, and dispatches output writing based on the resulting data type.
+ */
+struct expression_output_handler {
+ public:
+  __device__ inline expression_output_handler() {}
+
+  /**
+   * @brief Resolves an output data reference and assigns result value.
+   *
+   * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output
+   * reference types. Intermediates must be of fixed width less than or equal to
+   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+   *
+   * @tparam Element Type of result element.
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param device_data_reference Data reference to resolve.
+   * @param row_index Row index of data column.
+   * @param result Value to assign to output.
+   */
+  template <bool has_nulls,
+            typename Element,
+            typename ExpressionResult,
+            CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+  __device__ inline void resolve_output(
+    ExpressionResult& output_object,
+    detail::device_data_reference const& device_data_reference,
+    cudf::size_type const row_index,
+    char* thread_intermediate_storage,
+    possibly_null_value_t<Element, has_nulls> const& result) const
+  {
+    if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
+      if constexpr (has_nulls) {
+        if (result) {
+          output_object.template set_value<Element>(row_index, *result);
+        } else {
+          output_object.set_null(row_index);
+        }
+      } else {
+        output_object.template set_value<Element>(row_index, result);
+      }
+    } else {  // Assumes device_data_reference.reference_type ==
+              // detail::device_data_reference_type::INTERMEDIATE
+      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+      // Using a temporary variable ensures that the compiler knows the result is aligned.
+      IntermediateDataType<has_nulls> tmp;
+      memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
+      reinterpret_cast<IntermediateDataType<has_nulls>*>(
+        thread_intermediate_storage)[device_data_reference.data_index] = tmp;
+    }
+  }
+
+  template <bool has_nulls,
+            typename Element,
+            typename ExpressionResult,
+            CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
+  __device__ inline void resolve_output(
+    ExpressionResult& output_object,
+    detail::device_data_reference const& device_data_reference,
+    cudf::size_type const row_index,
+    char* thread_intermediate_storage,
+    possibly_null_value_t<Element, has_nulls> const& result) const
+  {
+    CUDF_UNREACHABLE("Invalid type in resolve_output.");
+  }
+};
+
+/**
+ * @brief Subclass of the expression output handler for unary operations.
+ *
+ * This functor's call operator is specialized to handle unary operations,
+ * which only require a single operand.
+ */
+template <bool has_nulls, typename Input>
+struct unary_expression_output_handler : public expression_output_handler {
+  __device__ inline unary_expression_output_handler() {}
+
+  /**
+   * @brief Callable to perform a unary operation.
+   *
+   * @tparam op The operation to perform.
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param outputrow_index The row in the output object to insert the data.
+   * @param input Input to the operation.
+   * @param output Output data reference.
+   */
+  template <
+    ast_operator op,
+    typename ExpressionResult,
+    std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                               possibly_null_value_t<Input, has_nulls>>>* = nullptr>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const output_row_index,
+                                    possibly_null_value_t<Input, has_nulls> const& input,
+                                    detail::device_data_reference const& output,
+                                    char* thread_intermediate_storage) const
+  {
+    // The output data type is the same whether or not nulls are present, so
+    // pull from the non-nullable operator.
+    using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, Input>;
+    this->template resolve_output<has_nulls, Out>(output_object,
+                                                  output,
+                                                  output_row_index,
+                                                  thread_intermediate_storage,
+                                                  detail::operator_functor<op, has_nulls>{}(input));
+  }
+
+  template <ast_operator op,
+            typename ExpressionResult,
+            std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                        possibly_null_value_t<Input, has_nulls>>>* =
+              nullptr>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const output_row_index,
+                                    possibly_null_value_t<Input, has_nulls> const& input,
+                                    detail::device_data_reference const& output,
+                                    char* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
+  }
+};
+
+/**
+ * @brief Subclass of the expression output handler for binary operations.
+ *
+ * This functor's call operator is specialized to handle binary operations,
+ * which require two operands.
+ */
+template <bool has_nulls, typename LHS, typename RHS>
+struct binary_expression_output_handler : public expression_output_handler {
+  __device__ inline binary_expression_output_handler() {}
+
+  /**
+   * @brief Callable to perform a binary operation.
+   *
+   * @tparam op The operation to perform.
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param output_row_index The row in the output to insert the result.
+   * @param lhs Left input to the operation.
+   * @param rhs Right input to the operation.
+   * @param output Output data reference.
+   */
+  template <
+    ast_operator op,
+    typename ExpressionResult,
+    std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                possibly_null_value_t<LHS, has_nulls>,
+                                                possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const output_row_index,
+                                    possibly_null_value_t<LHS, has_nulls> const& lhs,
+                                    possibly_null_value_t<RHS, has_nulls> const& rhs,
+                                    detail::device_data_reference const& output,
+                                    char* thread_intermediate_storage) const
+  {
+    // The output data type is the same whether or not nulls are present, so
+    // pull from the non-nullable operator.
+    using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
+    this->template resolve_output<has_nulls, Out>(
+      output_object,
+      output,
+      output_row_index,
+      thread_intermediate_storage,
+      detail::operator_functor<op, has_nulls>{}(lhs, rhs));
+  }
+
+  template <
+    ast_operator op,
+    typename ExpressionResult,
+    std::enable_if_t<!detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                 possibly_null_value_t<LHS, has_nulls>,
+                                                 possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
+  __device__ inline void operator()(ExpressionResult& output_object,
+                                    cudf::size_type const output_row_index,
+                                    possibly_null_value_t<LHS, has_nulls> const& lhs,
+                                    possibly_null_value_t<RHS, has_nulls> const& rhs,
+                                    detail::device_data_reference const& output,
+                                    char* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");
+  }
+};
+
+class expression_executor : public expression_evaluator {
+ public:
+  using expression_evaluator::expression_evaluator;
+
+  template <bool has_nulls,
+            typename Element,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference const& input_reference,
@@ -250,7 +504,7 @@ struct expression_evaluator {
         return ReturnType(plan.literals[input_reference.data_index].value<Element>());
       }
     } else {  // Assumes input_reference.reference_type ==
-              // detail::device_data_reference_type::INTERMEDIATE
+      // detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
@@ -263,8 +517,8 @@ struct expression_evaluator {
     return {};
   }
 
-  template <typename Element,
-            bool has_nulls,
+  template <bool has_nulls,
+            typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
   __device__ inline possibly_null_value_t<Element, has_nulls> resolve_input(
     detail::device_data_reference const& device_data_reference,
@@ -299,9 +553,9 @@ struct expression_evaluator {
   {
     if (has_nulls) {
       auto const typed_input =
-        resolve_input<Input, true>(input, thread_intermediate_storage, input_row_index);
+        resolve_input<true, Input>(input, thread_intermediate_storage, input_row_index);
       ast_operator_dispatcher(op,
-                              unary_expression_output_handler<Input>{},
+                              unary_expression_output_handler<true, Input>{},
                               output_object,
                               output_row_index,
                               typed_input,
@@ -310,9 +564,9 @@ struct expression_evaluator {
 
     } else {
       auto const typed_input =
-        resolve_input<Input, false>(input, thread_intermediate_storage, input_row_index);
+        resolve_input<false, Input>(input, thread_intermediate_storage, input_row_index);
       ast_operator_dispatcher(op,
-                              unary_expression_output_handler<Input>{},
+                              unary_expression_output_handler<false, Input>{},
                               output_object,
                               output_row_index,
                               typed_input,
@@ -350,11 +604,11 @@ struct expression_evaluator {
   {
     if (has_nulls) {
       auto const typed_lhs =
-        resolve_input<LHS, true>(lhs, thread_intermediate_storage, left_row_index, right_row_index);
+        resolve_input<true, LHS>(lhs, thread_intermediate_storage, left_row_index, right_row_index);
       auto const typed_rhs =
-        resolve_input<RHS, true>(rhs, thread_intermediate_storage, left_row_index, right_row_index);
+        resolve_input<true, RHS>(rhs, thread_intermediate_storage, left_row_index, right_row_index);
       ast_operator_dispatcher(op,
-                              binary_expression_output_handler<LHS, RHS>{},
+                              binary_expression_output_handler<true, LHS, RHS>{},
                               output_object,
                               output_row_index,
                               typed_lhs,
@@ -362,12 +616,12 @@ struct expression_evaluator {
                               output,
                               thread_intermediate_storage);
     } else {
-      auto const typed_lhs = resolve_input<LHS, false>(
+      auto const typed_lhs = resolve_input<false, LHS>(
         lhs, thread_intermediate_storage, left_row_index, right_row_index);
-      auto const typed_rhs = resolve_input<RHS, false>(
+      auto const typed_rhs = resolve_input<false, RHS>(
         rhs, thread_intermediate_storage, left_row_index, right_row_index);
       ast_operator_dispatcher(op,
-                              binary_expression_output_handler<LHS, RHS>{},
+                              binary_expression_output_handler<false, LHS, RHS>{},
                               output_object,
                               output_row_index,
                               typed_lhs,
@@ -376,287 +630,73 @@ struct expression_evaluator {
                               thread_intermediate_storage);
     }
   }
-
-  /**
-   * @brief Evaluate an expression applied to a row.
-   *
-   * This function performs an n-ary transform for one row on one thread.
-   *
-   * @tparam OutputType The container type that data will be inserted into.
-   *
-   * @param output_object The container that data will be inserted into.
-   * @param row_index Row index of all input and output data column(s).
-   */
-  template <typename ExpressionResult>
-  __device__ __forceinline__ void evaluate(ExpressionResult& output_object,
-                                           cudf::size_type const row_index,
-                                           char* thread_intermediate_storage) const
-  {
-    evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
-  }
-
-  /**
-   * @brief Evaluate an expression applied to a row.
-   *
-   * This function performs an n-ary transform for one row on one thread.
-   *
-   * @tparam OutputType The container type that data will be inserted into.
-   *
-   * @param output_object The container that data will be inserted into.
-   * @param left_row_index The row to pull the data from the left table.
-   * @param right_row_index The row to pull the data from the right table.
-   * @param output_row_index The row in the output to insert the result.
-   */
-  template <typename ExpressionResult>
-  __device__ __forceinline__ void evaluate(ExpressionResult& output_object,
-                                           cudf::size_type const left_row_index,
-                                           cudf::size_type const right_row_index,
-                                           cudf::size_type const output_row_index,
-                                           char* thread_intermediate_storage) const
-  {
-    cudf::size_type operator_source_index{0};
-    for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
-         ++operator_index) {
-      // TODO(lamarrr): dispatch on has_nulls
-      // Execute operator
-      auto const op    = plan.operators[operator_index];
-      auto const arity = plan.operator_arities[operator_index];
-      if (arity == 1) {
-        // Unary operator
-        auto const& input =
-          plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const& output =
-          plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto input_row_index =
-          input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        type_dispatcher(input.data_type,
-                        *this,
-                        output_object,
-                        input_row_index,
-                        input,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
-      } else if (arity == 2) {
-        // Binary operator
-        auto const& lhs =
-          plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const& rhs =
-          plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        auto const& output =
-          plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        type_dispatcher(lhs.data_type,
-                        detail::single_dispatch_binary_operator{},
-                        *this,
-                        output_object,
-                        left_row_index,
-                        right_row_index,
-                        lhs,
-                        rhs,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
-      } else {
-        CUDF_UNREACHABLE("Invalid operator arity.");
-      }
-    }
-  }
-
- private:
-  /**
-   * @brief Helper struct for type dispatch on the result of an expression.
-   *
-   * Evaluating an expression requires multiple levels of type dispatch to
-   * determine the input types, the operation type, and the output type. This
-   * helper class is a functor that handles the operator dispatch, invokes the
-   * operator, and dispatches output writing based on the resulting data type.
-   */
-  struct expression_output_handler {
-   public:
-    __device__ inline expression_output_handler() {}
-
-    /**
-     * @brief Resolves an output data reference and assigns result value.
-     *
-     * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output
-     * reference types. Intermediates must be of fixed width less than or equal to
-     * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
-     *
-     * @tparam Element Type of result element.
-     * @tparam OutputType The container type that data will be inserted into.
-     *
-     * @param output_object The container that data will be inserted into.
-     * @param device_data_reference Data reference to resolve.
-     * @param row_index Row index of data column.
-     * @param result Value to assign to output.
-     */
-    template <typename Element,
-              typename ExpressionResult,
-              bool has_nulls,
-              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
-    __device__ inline void resolve_output(
-      ExpressionResult& output_object,
-      detail::device_data_reference const& device_data_reference,
-      cudf::size_type const row_index,
-      char* thread_intermediate_storage,
-      possibly_null_value_t<Element, has_nulls> const& result) const
-    {
-      if (device_data_reference.reference_type == detail::device_data_reference_type::COLUMN) {
-        output_object.template set_value<Element>(row_index, result);
-      } else {  // Assumes device_data_reference.reference_type ==
-                // detail::device_data_reference_type::INTERMEDIATE
-        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
-        // Using a temporary variable ensures that the compiler knows the result is aligned.
-        IntermediateDataType<has_nulls> tmp;
-        memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
-        thread_intermediate_storage[device_data_reference.data_index] = tmp;
-      }
-    }
-
-    template <typename Element,
-              typename ExpressionResult,
-              bool has_nulls,
-              CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
-    __device__ inline void resolve_output(
-      ExpressionResult& output_object,
-      detail::device_data_reference const& device_data_reference,
-      cudf::size_type const row_index,
-      char* thread_intermediate_storage,
-      possibly_null_value_t<Element, has_nulls> const& result) const
-    {
-      CUDF_UNREACHABLE("Invalid type in resolve_output.");
-    }
-  };
-
-  /**
-   * @brief Subclass of the expression output handler for unary operations.
-   *
-   * This functor's call operator is specialized to handle unary operations,
-   * which only require a single operand.
-   */
-  template <typename Input>
-  struct unary_expression_output_handler : public expression_output_handler {
-    __device__ inline unary_expression_output_handler() {}
-
-    /**
-     * @brief Callable to perform a unary operation.
-     *
-     * @tparam op The operation to perform.
-     * @tparam OutputType The container type that data will be inserted into.
-     *
-     * @param output_object The container that data will be inserted into.
-     * @param outputrow_index The row in the output object to insert the data.
-     * @param input Input to the operation.
-     * @param output Output data reference.
-     */
-    template <ast_operator op,
-              typename ExpressionResult,
-              std::enable_if_t<
-                detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                          possibly_null_value_t<Input, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(ExpressionResult& output_object,
-                                      cudf::size_type const output_row_index,
-                                      possibly_null_value_t<Input, has_nulls> const& input,
-                                      detail::device_data_reference const& output,
-                                      char* thread_intermediate_storage) const
-    {
-      // The output data type is the same whether or not nulls are present, so
-      // pull from the non-nullable operator.
-      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, Input>;
-      this->template resolve_output<Out>(output_object,
-                                         output,
-                                         output_row_index,
-                                         thread_intermediate_storage,
-                                         detail::operator_functor<op, has_nulls>{}(input));
-    }
-
-    template <ast_operator op,
-              typename ExpressionResult,
-              std::enable_if_t<
-                !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(ExpressionResult& output_object,
-                                      cudf::size_type const output_row_index,
-                                      possibly_null_value_t<Input, has_nulls> const& input,
-                                      detail::device_data_reference const& output,
-                                      char* thread_intermediate_storage) const
-    {
-      CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
-    }
-  };
-
-  /**
-   * @brief Subclass of the expression output handler for binary operations.
-   *
-   * This functor's call operator is specialized to handle binary operations,
-   * which require two operands.
-   */
-  template <typename LHS, typename RHS>
-  struct binary_expression_output_handler : public expression_output_handler {
-    __device__ inline binary_expression_output_handler() {}
-
-    /**
-     * @brief Callable to perform a binary operation.
-     *
-     * @tparam op The operation to perform.
-     * @tparam OutputType The container type that data will be inserted into.
-     *
-     * @param output_object The container that data will be inserted into.
-     * @param output_row_index The row in the output to insert the result.
-     * @param lhs Left input to the operation.
-     * @param rhs Right input to the operation.
-     * @param output Output data reference.
-     */
-    template <ast_operator op,
-              typename ResultSubclass,
-              typename T,
-              std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                                          possibly_null_value_t<LHS, has_nulls>,
-                                                          possibly_null_value_t<RHS, has_nulls>>>* =
-                nullptr>
-    __device__ inline void operator()(expression_result<ResultSubclass, T>& output_object,
-                                      cudf::size_type const output_row_index,
-                                      possibly_null_value_t<LHS, has_nulls> const& lhs,
-                                      possibly_null_value_t<RHS, has_nulls> const& rhs,
-                                      detail::device_data_reference const& output,
-                                      char* thread_intermediate_storage) const
-    {
-      // The output data type is the same whether or not nulls are present, so
-      // pull from the non-nullable operator.
-      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
-      this->template resolve_output<Out>(output_object,
-                                         output,
-                                         output_row_index,
-                                         thread_intermediate_storage,
-                                         detail::operator_functor<op, has_nulls>{}(lhs, rhs));
-    }
-
-    template <ast_operator op,
-              typename ResultSubclass,
-              typename T,
-              std::enable_if_t<
-                !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                            possibly_null_value_t<LHS, has_nulls>,
-                                            possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
-    __device__ inline void operator()(expression_result<ResultSubclass, T>& output_object,
-                                      cudf::size_type const output_row_index,
-                                      possibly_null_value_t<LHS, has_nulls> const& lhs,
-                                      possibly_null_value_t<RHS, has_nulls> const& rhs,
-                                      detail::device_data_reference const& output,
-                                      char* thread_intermediate_storage) const
-    {
-      CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");
-    }
-  };
-
-  table_device_view const& left;   ///< The left table to operate on.
-  table_device_view const& right;  ///< The right table to operate on.
-  expression_device_view const&
-    plan;  ///< The container of device data representing the expression to evaluate.
-  bool has_nulls;
 };
+
+__device__ void expression_evaluator::evaluate(expression_output value_output,
+                                               cudf::size_type const left_row_index,
+                                               cudf::size_type const right_row_index,
+                                               cudf::size_type const output_row_index,
+                                               char* thread_intermediate_storage) const
+{
+  cudf::size_type operator_source_index{0};
+  expression_executor executor{left, right, plan, has_nulls};
+  for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
+       ++operator_index) {
+    // Execute operator
+    auto const op    = plan.operators[operator_index];
+    auto const arity = plan.operator_arities[operator_index];
+    if (arity == 1) {
+      // Unary operator
+      auto const& input =
+        plan.data_references[plan.operator_source_indices[operator_source_index++]];
+      auto const& output =
+        plan.data_references[plan.operator_source_indices[operator_source_index++]];
+      auto input_row_index =
+        input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
+
+      cuda::std::visit(
+        [&](auto* ptr_value_output) {
+          type_dispatcher(input.data_type,
+                          executor,
+                          *ptr_value_output,
+                          input_row_index,
+                          input,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        },
+        value_output);
+
+    } else if (arity == 2) {
+      // Binary operator
+      auto const& lhs = plan.data_references[plan.operator_source_indices[operator_source_index++]];
+      auto const& rhs = plan.data_references[plan.operator_source_indices[operator_source_index++]];
+      auto const& output =
+        plan.data_references[plan.operator_source_indices[operator_source_index++]];
+
+      cuda::std::visit(
+        [&](auto* ptr_value_output) {
+          type_dispatcher(lhs.data_type,
+                          detail::single_dispatch_binary_operator{},
+                          executor,
+                          *ptr_value_output,
+                          left_row_index,
+                          right_row_index,
+                          lhs,
+                          rhs,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        },
+        value_output);
+
+    } else {
+      CUDF_UNREACHABLE("Invalid operator arity.");
+    }
+  }
+}
 
 }  // namespace detail
 
