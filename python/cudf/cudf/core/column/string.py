@@ -21,7 +21,7 @@ import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.scalar import pa_scalar_to_plc_scalar
@@ -47,7 +47,6 @@ if TYPE_CHECKING:
         ScalarLike,
         SeriesOrIndex,
     )
-    from cudf.core.buffer import Buffer
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
 
@@ -4680,8 +4679,10 @@ class StringMethods(ColumnMethods):
         r"""
         Normalizes strings characters for tokenizing.
 
-        This uses the normalizer that is built into the
-        subword_tokenize function which includes:
+        .. deprecated:: 25.04
+           Use `CharacterNormalizer` instead.
+
+        The normalizer function includes:
 
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
@@ -4721,8 +4722,13 @@ class StringMethods(ColumnMethods):
         2              $ 99
         dtype: object
         """
+        warnings.warn(
+            "normalize_characters is deprecated and will be removed in a future "
+            "version. Use CharacterNormalizer instead.",
+            FutureWarning,
+        )
         return self._return_or_inplace(
-            self._column.normalize_characters(do_lower)
+            self._column.characters_normalize(do_lower)
         )
 
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
@@ -5589,13 +5595,14 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
+    data : Buffer
+        Buffer of the string data
     mask : Buffer
         The validity mask
     offset : int
         Data offset
     children : Tuple[Column]
-        Two non-null columns containing the string data and offsets
-        respectively
+        Columns containing the offsets
     """
 
     _start_offset: int | None
@@ -5623,14 +5630,20 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        data: Buffer | None = None,
+        data: Buffer,
+        size: int | None,
+        dtype: np.dtype,
         mask: Buffer | None = None,
-        size: int | None = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int | None = None,
-        children: tuple["column.ColumnBase", ...] = (),
+        children: tuple[column.ColumnBase] = (),  # type: ignore[assignment]
     ):
-        dtype = np.dtype("object")
+        if not isinstance(data, Buffer):
+            raise ValueError("data must be a Buffer")
+        if dtype != CUDF_STRING_DTYPE:
+            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
+        if len(children) > 1:
+            raise ValueError("StringColumn must have at most 1 offset column.")
 
         if size is None:
             for child in children:
@@ -5725,8 +5738,6 @@ class StringColumn(column.ColumnBase):
     # override for string column
     @property
     def data(self):
-        if self.base_data is None:
-            return None
         if self._data is None:
             if (
                 self.offset == 0
@@ -6251,11 +6262,22 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
-    def normalize_characters(self, do_lower: bool = True) -> Self:
+    def characters_normalize(self, do_lower: bool = True) -> Self:
+        return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.normalize.characters_normalize(
+                self.to_pylibcudf(mode="read"),
+                do_lower,
+            )
+        )
+
+    @acquire_spill_lock()
+    def normalize_characters(
+        self, normalizer: plc.nvtext.normalize.CharacterNormalizer
+    ) -> Self:
         return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_characters(
                 self.to_pylibcudf(mode="read"),
-                do_lower,
+                normalizer,
             )
         )
 
