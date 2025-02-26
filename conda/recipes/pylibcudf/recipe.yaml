@@ -85,7 +85,7 @@ requirements:
     - packaging
   ignore_run_exports:
     from_package:
-      - if: not (cuda_major == "11")
+      - if: cuda_major != "11"
         then:
           - cuda-cudart-dev
           - if: linux64
