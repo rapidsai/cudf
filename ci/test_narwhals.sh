@@ -24,9 +24,11 @@ python -c "import narwhals; print(narwhals.show_versions())"
 
 rapids-logger "Run narwhals tests for cuDF"
 python -m pytest \
+    --import-mode=importlib \
     --cache-clear \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -m "" \
     -p cudf.testing.narwhals_tests_plugin \
+    --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
