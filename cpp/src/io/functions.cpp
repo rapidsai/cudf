@@ -168,7 +168,7 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       sources.reserve(source_tasks.size());
       std::transform(
         source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
-          return std::move(task.get());
+          return task.get();
         });
       return sources;
     }
