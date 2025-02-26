@@ -29,7 +29,7 @@ rapids-pip-retry install \
 export PIP_NO_BUILD_ISOLATION=0
 
 export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
-./ci/build_wheel.sh "${package_name}" "${wheel_dir}"
+./ci/build_wheel.sh "${package_name}" ${package_dir} ${package_dir}/dist
 
 mkdir -p ${wheel_dir}
 python -m auditwheel repair \
@@ -39,6 +39,6 @@ python -m auditwheel repair \
     -w ${wheel_dir} \
     ${package_dir}/dist/*
 
-./ci/validate_wheel.sh ${wheel_dir}
+./ci/validate_wheel.sh ${package_dir} ${wheel_dir}
 
 # RAPIDS_PY_WHEEL_NAME="${package_name}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 cpp "${package_dir}/final_dist"

@@ -18,7 +18,7 @@ CPP_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${CPP_WHEELHOUSE}/libcudf_*.whl)" > /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
-./ci/build_wheel.sh pylibcudf ${package_dir}
+./ci/build_wheel.sh pylibcudf ${package_dir} ${package_dir}/dist
 
 python -m auditwheel repair \
     --exclude libcudf.so \
@@ -28,6 +28,6 @@ python -m auditwheel repair \
     -w ${wheel_dir} \
     ${package_dir}/dist/*
 
-./ci/validate_wheel.sh ${wheel_dir}
+./ci/validate_wheel.sh ${package_dir} ${wheel_dir}
 
 # RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist

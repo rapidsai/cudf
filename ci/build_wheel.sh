@@ -4,14 +4,15 @@
 set -euo pipefail
 
 package_name=$1
-wheel_dir=$2
+package_dir=$2
+wheel_dir=$3
 
 source rapids-configure-sccache
 source rapids-date-string
 
 rapids-generate-version > ./VERSION
 
-# cd "${package_dir}"
+cd "${package_dir}"
 
 sccache --zero-stats
 
