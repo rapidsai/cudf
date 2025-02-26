@@ -80,7 +80,7 @@ cdef extern from "cudf/io/types.hpp" \
         vector[column_name_info] schema_info
         vector[size_t] num_rows_per_source
         # The following variables are currently only computed for Parquet reader
-        size_t num_input_row_groups  
+        size_t num_input_row_groups
         optional[size_t] num_row_groups_after_stats_filter
         optional[size_t] num_row_groups_after_bloom_filter
 

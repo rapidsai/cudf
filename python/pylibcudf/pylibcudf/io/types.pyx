@@ -1,5 +1,4 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
-
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp cimport bool
@@ -7,7 +6,6 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from libcpp.optional cimport optional
 from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
@@ -409,12 +407,12 @@ cdef class TableWithMetadata:
         of rows for each file being read in.
         """
         return self.metadata.num_rows_per_source
-    
+
     # The following functions are currently only for Parquet reader
     @property
     def num_input_row_groups(self):
         """
-        Returns the total number of input 
+        Returns the total number of input
         Parquet row groups across all data sources.
         """
         return self.metadata.num_input_row_groups
@@ -422,7 +420,7 @@ cdef class TableWithMetadata:
     @property
     def num_row_groups_after_stats_filter(self):
         """
-        Returns the number of remaining Parquet row groups 
+        Returns the number of remaining Parquet row groups
         after stats filter. None if no filtering done.
         """
         if self.metadata.num_row_groups_after_stats_filter.has_value():
@@ -432,7 +430,7 @@ cdef class TableWithMetadata:
     @property
     def num_row_groups_after_bloom_filter(self):
         """
-        Returns the number of remaining Parquet row groups 
+        Returns the number of remaining Parquet row groups
         after bloom filter. None if no filtering done.
         """
         if self.metadata.num_row_groups_after_bloom_filter.has_value():
