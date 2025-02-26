@@ -54,8 +54,8 @@ struct OffsetRowWindowTest : public cudf::test::BaseFixture {
     rolling_runner(cudf::window_bounds const& preceding,
                    cudf::window_bounds const& following,
                    cudf::size_type min_periods_ = 1)
-      : _preceding{preceding}, _following{following}, _min_periods{min_periods_}, 
-        _keys{0, 0, 0, 0, 0, 0, 1, 1, 1, 1}, 
+      : _preceding{preceding}, _following{following}, _min_periods{min_periods_},
+        _keys{0, 0, 0, 0, 0, 0, 1, 1, 1, 1},
         _values{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
     {
     }
@@ -95,7 +95,7 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_3_to_Minus_1)
 {
   auto const preceding = cudf::window_bounds::get(3);
   auto const following = cudf::window_bounds::get(-1);
-  auto run_rolling     = rolling_runner{preceding, following}; 
+  auto run_rolling     = rolling_runner{preceding, following};
   run_rolling.min_periods(1).grouped(true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
