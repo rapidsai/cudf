@@ -3308,9 +3308,13 @@ class IndexedFrame(Frame):
             splits,
         )
 
+        @acquire_spill_lock()
+        def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
+            return [ColumnBase.from_pylibcudf(col) for col in split]
+
         return [
             self._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in split],
+                split_from_pylibcudf(split),
                 self._column_names,
                 self.index.names if keep_index else None,
             )
