@@ -1003,11 +1003,13 @@ class IntervalDtype(StructDtype):
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
-        return (
-            type(self) is type(other)
-            and self.subtype == other.subtype
-            and self.closed == other.closed
-        )
+        elif type(self) is not type(other):
+            # Avoid isinstance because this subclasses StructDtype
+            return False
+        elif other.subtype is None:
+            # Equivalent to the string "interval"
+            return True
+        return self.subtype == other.subtype and self.closed == other.closed
 
     def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
