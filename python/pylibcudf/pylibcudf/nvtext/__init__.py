@@ -1,7 +1,8 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from . import (
     byte_pair_encode,
+    dedup,
     edit_distance,
     generate_ngrams,
     jaccard,
@@ -16,6 +17,7 @@ from . import (
 
 __all__ = [
     "byte_pair_encode",
+    "dedup",
     "edit_distance",
     "generate_ngrams",
     "jaccard",

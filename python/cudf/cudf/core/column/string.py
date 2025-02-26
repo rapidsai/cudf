@@ -5343,6 +5343,27 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
+    def substring_deduplicate(self, min_width) -> SeriesOrIndex:
+        """
+
+
+        Parameters
+        ----------
+        min_width : int32
+            The minimum number of bytes to determine duplicates
+
+        Returns
+        -------
+        Series of duplicate strings found
+
+        """
+        return self._return_or_inplace(
+            self._column.substring_deduplicate(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
     def edit_distance(self, targets) -> SeriesOrIndex:
         """
         The ``targets`` strings are measured against the strings in this
@@ -6207,6 +6228,13 @@ class StringColumn(column.ColumnBase):
     ) -> ListColumn:
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def substring_deduplicate(self, min_width: int) -> Self:
+        result = plc.nvtext.dedup.substring_deduplicate(
+            self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 

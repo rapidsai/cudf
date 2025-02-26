@@ -1,7 +1,8 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 from . cimport (
     byte_pair_encode,
+    dedup,
     edit_distance,
     generate_ngrams,
     jaccard,
@@ -15,11 +16,12 @@ from . cimport (
 )
 
 __all__ = [
+    "byte_pair_encode",
+    "dedup",
     "edit_distance",
     "generate_ngrams",
     "jaccard",
     "minhash",
-    "byte_pair_encode"
     "ngrams_tokenize",
     "normalize",
     "replace",
