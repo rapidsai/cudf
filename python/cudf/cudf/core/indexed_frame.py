@@ -163,24 +163,6 @@ def _get_unique_drop_labels(array):
         yield from set(array)
 
 
-def _indices_from_labels(obj, labels):
-    if not isinstance(labels, cudf.MultiIndex):
-        labels = cudf.core.column.as_column(labels)
-        labels = labels.astype(obj.index.dtype)
-        idx_labels = cudf.Index._from_column(labels)
-    else:
-        idx_labels = labels
-
-    # join is not guaranteed to maintain the index ordering
-    # so we will sort it with its initial ordering which is stored
-    # in column "__"
-    lhs = cudf.DataFrame(
-        {"__": as_column(range(len(idx_labels)))}, index=idx_labels
-    )
-    rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
-    return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
-
-
 def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
@@ -6538,6 +6520,25 @@ class IndexedFrame(Frame):
             normalize_token(self.hash_values().values_host),
         ]
 
+    def _indices_from_labels(self, labels) -> cudf.Series:
+        if not isinstance(labels, cudf.MultiIndex):
+            labels = as_column(labels)
+            labels = labels.astype(self.index.dtype)
+            idx_labels = cudf.Index._from_column(labels)
+        else:
+            idx_labels = labels
+
+        # join is not guaranteed to maintain the index ordering
+        # so we will sort it with its initial ordering which is stored
+        # in column "left"
+        lhs = cudf.DataFrame._from_data(
+            {"left": as_column(range(len(idx_labels)))}, index=idx_labels
+        )
+        rhs = cudf.DataFrame._from_data(
+            {"right": as_column(range(len(self)))}, index=self.index
+        )
+        return lhs.join(rhs).sort_values(by=["left", "right"])["right"]
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""
@@ -6774,7 +6775,7 @@ def _drop_rows_by_labels(
             join_index = cudf.Index._from_column(labels, name=level)
         else:
             join_index = cudf.Index(labels, name=level)
-        to_join = cudf.DataFrame(index=join_index)
+        to_join = cudf.DataFrame._from_data({}, index=join_index)
         join_res = working_df.join(to_join, how="leftanti")
 
         # 4. Reconstruct original layout, and rename

@@ -72,7 +72,6 @@ from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
     _get_label_range_or_mask,
-    _indices_from_labels,
     doc_reset_index_template,
 )
 from cudf.core.join import Merge, MergeSemi
@@ -254,7 +253,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if isinstance(arg, pd.MultiIndex):
                     arg = MultiIndex.from_pandas(arg)
 
-                indices = _indices_from_labels(columns_df, arg)
+                indices = columns_df._indices_from_labels(arg)
                 return columns_df.take(indices)
 
             else:
@@ -332,7 +331,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                         tmp_col_name = (tmp_col_name, *extra)
                         cantor_name = (cantor_name, *extra)
-                    other_df = DataFrame(
+                    other_df = DataFrame._from_data(
                         {
                             tmp_col_name: column.as_column(
                                 range(len(tmp_arg[0]))
@@ -420,7 +419,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         self._frame.loc[key[0]].shape,
                     )
                 value_column_names = set(value._column_names)
-                scatter_map = _indices_from_labels(self._frame, key[0])
+                scatter_map = self._frame._indices_from_labels(key[0])
                 for col in columns_df._column_names:
                     columns_df[col][scatter_map] = (
                         value._data[col] if col in value_column_names else NA

@@ -52,7 +52,6 @@ from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
     _get_label_range_or_mask,
-    _indices_from_labels,
     doc_reset_index_template,
 )
 from cudf.core.resample import SeriesResampler
@@ -398,7 +397,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
 
-            return _indices_from_labels(self._frame, arg)
+            return self._frame._indices_from_labels(arg)
 
         else:
             arg = cudf.core.series.Series._from_column(
@@ -407,7 +406,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if arg.dtype.kind == "b":
                 return arg
             else:
-                indices = _indices_from_labels(self._frame, arg)
+                indices = self._frame._indices_from_labels(arg)
                 if indices.null_count > 0:
                     raise KeyError("label scalar is out of bound")
                 return indices
@@ -1340,15 +1339,26 @@ class Series(SingleColumnFrame, IndexedFrame):
                 raise NotImplementedError(
                     "default values in dicts are currently not supported."
                 )
-            lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+            lhs = cudf.DataFrame._from_data(
+                ColumnAccessor(
+                    {
+                        "x": self._column,
+                        "orig_order": as_column(range(len(self))),
+                    },
+                    verify=False,
+                )
             )
-            rhs = cudf.DataFrame(
-                {
-                    "x": arg.keys(),
-                    "s": arg.values(),
-                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
-                }
+            rhs = cudf.DataFrame._from_data(
+                ColumnAccessor(
+                    {
+                        "x": as_column(arg.keys()),
+                        "s": as_column(arg.values()),
+                        "bool": as_column(
+                            True, length=len(arg), dtype=self.dtype
+                        ),
+                    },
+                    verify=False,
+                )
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
                 by="orig_order"
@@ -1361,15 +1371,26 @@ class Series(SingleColumnFrame, IndexedFrame):
                 raise ValueError(
                     "Reindexing only valid with uniquely valued Index objects"
                 )
-            lhs = cudf.DataFrame(
-                {"x": self, "orig_order": as_column(range(len(self)))}
+            lhs = cudf.DataFrame._from_data(
+                ColumnAccessor(
+                    {
+                        "x": self._column,
+                        "orig_order": as_column(range(len(self))),
+                    },
+                    verify=False,
+                )
             )
-            rhs = cudf.DataFrame(
-                {
-                    "x": arg.keys(),
-                    "s": arg,
-                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
-                }
+            rhs = cudf.DataFrame._from_data(
+                ColumnAccessor(
+                    {
+                        "x": as_column(arg.index),
+                        "s": arg._column,
+                        "bool": as_column(
+                            True, length=len(arg), dtype=self.dtype
+                        ),
+                    },
+                    verify=False,
+                )
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
                 by="orig_order"
@@ -5343,8 +5364,8 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     combined_index = series_list[0].index
     for sr in series_list[1:]:
         combined_index = (
-            cudf.DataFrame(index=sr.index).join(
-                cudf.DataFrame(index=combined_index),
+            cudf.DataFrame._from_data(index=sr.index).join(
+                cudf.DataFrame._from_data(index=combined_index),
                 sort=True,
                 how=how,
             )
