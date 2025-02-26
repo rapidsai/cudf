@@ -842,11 +842,8 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
              : cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
   }
 
-  auto const first_offset = (input.offset() == 0) ? 0
-                                                  : cudf::strings::detail::get_offset_value(
-                                                      input.offsets(), input.offset(), stream);
-  auto const last_offset =
-    cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
+  auto [first_offset, last_offset] =
+    cudf::strings::detail::get_first_and_last_offset(input, stream);
   auto const chars_size = last_offset - first_offset;
 
   auto d_tokens =
