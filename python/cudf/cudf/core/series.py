@@ -76,7 +76,6 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from cudf._typing import (
-        ColumnLike,
         DataFrameOrSeries,
         Dtype,
         NotImplementedType,
@@ -166,12 +165,13 @@ def _describe_categorical(obj, percentiles):
     return data
 
 
-def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    to_type = find_common_type([type(value), col.dtype])
-    val_col = as_column(value, dtype=to_type)
+    val_col = as_column(value)
+    to_type = find_common_type([val_col.dtype, col.dtype])
+    val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
 
     col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)

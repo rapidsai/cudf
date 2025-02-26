@@ -5630,7 +5630,7 @@ class StringColumn(column.ColumnBase):
         null_count: int | None = None,
         children: tuple["column.ColumnBase", ...] = (),
     ):
-        dtype = cudf.api.types.dtype("object")
+        dtype = CUDF_STRING_DTYPE
 
         if size is None:
             for child in children:

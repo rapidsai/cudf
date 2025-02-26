@@ -39,9 +39,12 @@ if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
 
 
-def dtype(arbitrary):
+def dtype(arbitrary: Any) -> DtypeObj:
     """
     Return the cuDF-supported dtype corresponding to `arbitrary`.
+
+    This function should only be used when converting a dtype
+    provided from a public API user (i.e. not internally).
 
     Parameters
     ----------
@@ -61,7 +64,13 @@ def dtype(arbitrary):
     except TypeError:
         pass
     else:
-        if np_dtype.kind in set("OU"):
+        if np_dtype.kind == "O":
+            if cudf.get_option("mode.pandas_compatible"):
+                raise ValueError(
+                    "cudf does not support object dtype. Use 'str' instead."
+                )
+            return CUDF_STRING_DTYPE
+        elif np_dtype.kind == "U":
             return CUDF_STRING_DTYPE
         elif (
             np_dtype
