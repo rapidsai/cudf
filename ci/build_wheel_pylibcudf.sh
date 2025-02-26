@@ -5,6 +5,7 @@ set -euo pipefail
 
 package_dir="python/pylibcudf"
 wheel_dir=${RAPIDS_WHEEL_BLD_OUTPUT_DIR:-"${package_dir}/final_dist"}
+initial_wheel_dir=$(mktemp -d)
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
@@ -18,7 +19,7 @@ CPP_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${CPP_WHEELHOUSE}/libcudf_*.whl)" > /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
-./ci/build_wheel.sh pylibcudf ${package_dir} ${package_dir}/dist
+./ci/build_wheel.sh pylibcudf ${package_dir} ${initial_wheel_dir}
 
 python -m auditwheel repair \
     --exclude libcudf.so \

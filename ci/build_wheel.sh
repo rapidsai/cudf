@@ -5,7 +5,7 @@ set -euo pipefail
 
 package_name=$1
 package_dir=$2
-wheel_dir=$3
+initial_wheel_dir=$3
 
 source rapids-configure-sccache
 source rapids-date-string
@@ -18,7 +18,7 @@ sccache --zero-stats
 
 rapids-logger "Building '${package_name}' wheel"
 rapids-pip-retry wheel \
-    -w ${wheel_dir} \
+    -w "${initial_wheel_dir}" \
     -v \
     --no-deps \
     --disable-pip-version-check \
