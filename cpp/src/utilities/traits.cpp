@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,7 @@ struct is_numeric_not_bool_impl {
 
 bool is_numeric_not_bool(data_type type)
 {
+  if (type.id() == type_id::EMPTY) return false;
   return cudf::type_dispatcher(type, is_numeric_not_bool_impl{});
 }
 

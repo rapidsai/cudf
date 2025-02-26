@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pylibcudf as plc
 
@@ -23,6 +23,7 @@ def test_is_numeric():
 def test_is_numeric_not_bool():
     assert plc.traits.is_numeric_not_bool(plc.DataType(plc.TypeId.FLOAT64))
     assert not plc.traits.is_numeric_not_bool(plc.DataType(plc.TypeId.BOOL8))
+    assert not plc.traits.is_numeric_not_bool(plc.DataType(plc.TypeId.EMPTY))
 
 
 def test_is_index_type():
