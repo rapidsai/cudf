@@ -283,7 +283,7 @@ ConfigureTest(
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
-  interop/arrow_column_test.cpp
+  interop/arrow_data_structures_test.cpp
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
