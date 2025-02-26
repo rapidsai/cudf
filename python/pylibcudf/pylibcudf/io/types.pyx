@@ -7,6 +7,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from libcpp.optional cimport optional
 from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
@@ -417,6 +418,26 @@ cdef class TableWithMetadata:
         Parquet row groups across all data sources.
         """
         return self.metadata.num_input_row_groups
+
+    @property
+    def num_row_groups_after_stats_filter(self):
+        """
+        Returns the number of remaining Parquet row groups 
+        after stats filter. None if no filtering done.
+        """
+        if self.metadata.num_row_groups_after_stats_filter.has_value():
+            return self.metadata.num_row_groups_after_stats_filter.value()
+        return None
+
+    @property
+    def num_row_groups_after_bloom_filter(self):
+        """
+        Returns the number of remaining Parquet row groups 
+        after bloom filter. None if no filtering done.
+        """
+        if self.metadata.num_row_groups_after_bloom_filter.has_value():
+            return self.metadata.num_row_groups_after_bloom_filter.value()
+        return None
 
 
 cdef class SourceInfo:
