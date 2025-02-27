@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Plugin for running narhwals test suite with cudf."""
+"""Plugin for running narwhals test suite with cudf."""
 
 from __future__ import annotations
 
