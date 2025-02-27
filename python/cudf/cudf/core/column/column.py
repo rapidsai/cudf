@@ -950,7 +950,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    def view(self, dtype: Dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         """
         View the data underlying a column as different dtype.
         The source column must divide evenly into the size of
@@ -959,13 +959,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Parameters
         ----------
-        dtype : NumPy dtype, string
+        dtype : Dtype object
             The dtype to view the data as
-
         """
-
-        dtype = cudf.dtype(dtype)
-
         if dtype.kind in ("o", "u", "s"):
             raise TypeError(
                 "Bytes viewed as str without metadata is ambiguous"
@@ -1586,7 +1582,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._distinct_count[dropna] = result
             return self._distinct_count[dropna]
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         raise NotImplementedError()
 
     @acquire_spill_lock()
