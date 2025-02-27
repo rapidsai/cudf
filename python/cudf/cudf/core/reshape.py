@@ -1526,9 +1526,9 @@ def pivot_table(
     ----------
     data : DataFrame
     values : column name or list of column names to aggregate, optional
-    index : list of column names
+    index : scalar or list of column names
             Values to group by in the rows.
-    columns : list of column names
+    columns : scalar or list of column names
             Values to group by in the columns.
     aggfunc : str or dict, default "mean"
             If dict is passed, the key is column to aggregate
@@ -1561,6 +1561,11 @@ def pivot_table(
 
     if sort is not True:
         raise NotImplementedError("sort is not supported yet")
+
+    if is_scalar(index):
+        index = [index]
+    if is_scalar(columns):
+        columns = [columns]
 
     keys = index + columns
 
@@ -1620,15 +1625,8 @@ def pivot_table(
         table = table.fillna(fill_value)
 
     # discard the top level
-    if values_passed and not values_multi and table._data.multiindex:
-        column_names = table._data.level_names[1:]
-        table_columns = tuple(
-            map(lambda column: column[1:], table._column_names)
-        )
-        table.columns = pd.MultiIndex.from_tuples(
-            tuples=table_columns, names=column_names
-        )
-
+    if values_passed and not values_multi and table._data.nlevels > 1:
+        table.columns = table._data.to_pandas_index.droplevel(0)
     if len(index) == 0 and len(columns) > 0:
         table = table.T
 

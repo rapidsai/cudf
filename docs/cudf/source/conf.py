@@ -585,6 +585,7 @@ nitpick_ignore = [
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
     ("py:class", "pyarrow.lib.DataType"),
@@ -593,6 +594,8 @@ nitpick_ignore = [
     ("py:class", "pyarrow.lib.ChunkedArray"),
     ("py:class", "pyarrow.lib.Array"),
     ("py:class", "ColumnLike"),
+    ("py:class", "DtypeObj"),
+    ("py:class", "pa.StructType"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
