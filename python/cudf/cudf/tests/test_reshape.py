@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import re
 from itertools import chain
@@ -40,7 +40,10 @@ if get_global_manager() is not None:
 @pytest.mark.parametrize("num_rows", [1, 2, 100])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
-def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_melt(
+    nulls, num_id_vars, num_value_vars, num_rows, dtype, ignore_index
+):
     if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -72,10 +75,22 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 
     gdf = cudf.from_pandas(pdf)
 
-    got = cudf.melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
-    got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
+    got = cudf.melt(
+        frame=gdf,
+        id_vars=id_vars,
+        value_vars=value_vars,
+        ignore_index=ignore_index,
+    )
+    got_from_melt_method = gdf.melt(
+        id_vars=id_vars, value_vars=value_vars, ignore_index=ignore_index
+    )
 
-    expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
+    expect = pd.melt(
+        frame=pdf,
+        id_vars=id_vars,
+        value_vars=value_vars,
+        ignore_index=ignore_index,
+    )
 
     assert_eq(expect, got)
 
@@ -781,6 +796,25 @@ def test_dataframe_pivot_table_simple(aggfunc, fill_value):
         fill_value=fill_value,
     )
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize("index", ["A", ["A"]])
+@pytest.mark.parametrize("columns", ["C", ["C"]])
+def test_pivot_table_scalar_index_columns(index, columns):
+    data = {
+        "A": ["one", "one", "two", "three"] * 6,
+        "B": ["A", "B", "C"] * 8,
+        "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+        "D": range(24),
+        "E": range(24),
+    }
+    result = cudf.DataFrame(data).pivot_table(
+        values="D", index=index, columns=columns, aggfunc="sum"
+    )
+    expected = pd.DataFrame(data).pivot_table(
+        values="D", index=index, columns=columns, aggfunc="sum"
+    )
+    assert_eq(result, expected)
 
 
 def test_crosstab_simple():

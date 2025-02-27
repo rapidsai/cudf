@@ -85,9 +85,9 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         return value.as_py(), dtype
 
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-        value = pa.scalar(
-            value, type=pa.decimal128(dtype.precision, dtype.scale)
-        ).as_py()
+        if isinstance(value, np.integer):
+            value = int(value)
+        value = pa.scalar(value, type=dtype.to_arrow()).as_py()
     if isinstance(value, decimal.Decimal) and dtype is None:
         dtype = cudf.Decimal128Dtype._from_decimal(value)
 
@@ -175,7 +175,8 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar for cudf.Scalar._device_value
     """
     if cudf.utils.utils.is_na_like(value):
         value = None
@@ -225,7 +226,8 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar to use in pylibcudf APIs
     """
     return plc.interop.from_arrow(pa_scalar)
 
