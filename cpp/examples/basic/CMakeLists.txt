@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-cmake_minimum_required(VERSION 3.26.4)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../set_cuda_architecture.cmake)
 
