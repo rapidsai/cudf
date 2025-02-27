@@ -2063,9 +2063,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         left_default: Any = False
         equal_columns = False
         ca_attributes: dict[str, Any] = {}
+
+        def _fill_same_ca_attributes(
+            attrs: dict[str, Any], ca: ColumnAccessor
+        ) -> dict[str, Any]:
+            attrs["rangeindex"] = ca.rangeindex
+            attrs["multiindex"] = ca.multiindex
+            attrs["label_dtype"] = ca.label_dtype
+            attrs["level_names"] = ca.level_names
+            return attrs
+
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
             equal_columns = True
+            ca_attributes = _fill_same_ca_attributes(ca_attributes, self._data)
         elif isinstance(other, Series):
             if (
                 not (self_pd_columns := self._data.to_pandas_index).equals(
@@ -2085,10 +2096,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             left_default = as_column(np.nan, length=len(self))
             equal_columns = other_pd_index.equals(self_pd_columns)
             if equal_columns:
-                ca_attributes["rangeindex"] = self._data.rangeindex
-                ca_attributes["multiindex"] = self._data.multiindex
-                ca_attributes["label_dtype"] = self._data.label_dtype
-                ca_attributes["level_names"] = self._data.level_names
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
             elif other_pd_index.names == self_pd_columns.names:
                 ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, DataFrame):
@@ -2114,10 +2124,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             left_default = fill_value
             equal_columns = self._column_names == other._column_names
             if self._data.to_pandas_index.equals(other._data.to_pandas_index):
-                ca_attributes["rangeindex"] = self._data.rangeindex
-                ca_attributes["multiindex"] = self._data.multiindex
-                ca_attributes["label_dtype"] = self._data.label_dtype
-                ca_attributes["level_names"] = self._data.level_names
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
             elif self._data._level_names == other._data._level_names:
                 ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, (dict, abc.Mapping)):
