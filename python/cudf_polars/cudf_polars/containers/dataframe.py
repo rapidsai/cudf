@@ -28,6 +28,36 @@ if TYPE_CHECKING:
 __all__: list[str] = ["DataFrame"]
 
 
+def _get_valid_sink_csv_options(
+    options: dict[str, Any], cloud_options: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Validate and extract polars sink_csv options to pylibcudf write_csv options."""
+    if cloud_options is not None:
+        raise NotImplementedError("cloud_options is not currently not supported.")
+    if include_bom := options["include_bom"]:
+        raise NotImplementedError(f"{include_bom=} is not currently not supported.")
+    serialize_options = options["serialize_options"]
+    for formats in (
+        "date_format",
+        "time_format",
+        "datetime_format",
+        "float_scientific",
+        "float_precision",
+    ):
+        if serialize_options[formats] is not None:
+            raise NotImplementedError(f"{formats} is not currently not supported.")
+    if (quote_style := serialize_options["quote_style"]) != "necessary":
+        raise NotImplementedError(f"{quote_style=} is not currently not supported.")
+    if (quote_char := chr(serialize_options["quote_char"])) != '"':
+        raise NotImplementedError(f"{quote_char=} is not currently not supported.")
+    return {
+        "include_header": options["include_header"],
+        "na_rep": serialize_options["null"],
+        "line_terminator": serialize_options["line_terminator"],
+        "inter_column_delimiter": chr(serialize_options["separator"]),
+    }
+
+
 # Pacify the type checker. DataFrame init asserts that all the columns
 # have a string name, so let's narrow the type.
 class NamedColumn(Column):
@@ -73,6 +103,24 @@ class DataFrame:
             else pl.col(c.name)
             for c in self.columns
         )
+
+    def sink_csv(self, sink_kwargs: dict[str, Any]) -> None:
+        """Sink the result into a CSV file."""
+        valid_options = _get_valid_sink_csv_options(
+            sink_kwargs["options"], sink_kwargs["cloud_options"]
+        )
+        builder = (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink_kwargs["path"]]),
+                self.table,
+            )
+            .include_header(valid_options["include_header"])
+            .na_rep(valid_options["na_rep"])
+            .line_terminator(valid_options["line_terminator"])
+            .inter_column_delimiter(valid_options["inter_column_delimiter"])
+            .build()
+        )
+        plc.io.csv.write_csv(builder)
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
