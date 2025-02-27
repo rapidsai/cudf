@@ -1654,25 +1654,22 @@ class MergeSorted(IR):
     """Merge sorted operation."""
 
     __slots__ = ("key",)
-    _non_child = ("schema", "key")
+    _non_child = ("key",)
     key: str
     """Key that is sorted."""
 
     def __init__(self, schema: Schema, key: str, left: IR, right: IR):
-        self.schema = schema
-        self.key = key
-        self.children = (left, right)
-        self._non_child_args = (
-            schema,
-            key,
-        )
         assert isinstance(left, Sort)
         assert isinstance(right, Sort)
         assert left.order == right.order
         assert len(left.schema.keys()) <= len(right.schema.keys())
+        self.schema = schema
+        self.key = key
+        self.children = (left, right)
+        self._non_child_args = (key,)
 
     @classmethod
-    def do_evaluate(cls, schema: Schema, key: str, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
@@ -1682,7 +1679,12 @@ class MergeSorted(IR):
                 [right.table, left.table],
                 [left.column_names.index(key), right.column_names.index(key)],
                 [on_col_left.order, on_col_right.order],
-                [plc.types.NullOrder.BEFORE, plc.types.NullOrder.BEFORE],
+                [
+                    plc.types.NullOrder.BEFORE
+                    if on_col_left.order == plc.types.Order.ASCENDING
+                    else plc.types.NullOrder.AFTER
+                ]
+                * 2,
             ),
             left.column_names,
         )
