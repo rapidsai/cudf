@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -17,10 +15,10 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 
-def pytest_collection_modifyitems(
-    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(session, config, items) -> None:
     """Mark known failing tests."""
+    import pytest
+
     for item in items:
         if item.nodeid in EXPECTED_FAILURES:
             exp_val = EXPECTED_FAILURES[item.nodeid]

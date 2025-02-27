@@ -207,6 +207,7 @@ language = "en"
 exclude_patterns = [
     "venv",
     "**/includes/**",
+    "narwhals_test_plugin",
 ]
 
 # The name of the Pygments (syntax highlighting) style to use.
