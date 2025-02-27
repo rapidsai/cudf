@@ -574,7 +574,6 @@ class ColumnAccessor(abc.MutableMapping):
     def _select_by_label_grouped(self, key: abc.Hashable) -> Self:
         result = self._grouped_data[key]
         if isinstance(result, column.ColumnBase):
-            breakpoint()
             # self._grouped_data[key] = self._data[key] so skip validation
             return type(self)(
                 data={key: result},
@@ -587,7 +586,6 @@ class ColumnAccessor(abc.MutableMapping):
                 result = dict(_to_flat_dict_inner(result))
             if not isinstance(key, tuple):
                 key = (key,)
-            breakpoint()
             return self.__class__(
                 result,
                 multiindex=self.nlevels - len(key) > 1,
