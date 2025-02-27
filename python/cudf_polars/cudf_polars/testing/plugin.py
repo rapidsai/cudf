@@ -214,6 +214,10 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
+    # TODO: Remove once when we support polars 1.23
+    "tests/unit/io/database/test_read.py::test_read_database[uri: connectorx]": "ValueError: arrow2",
+    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://123:456@account/database/schema?warehouse=warehouse&role=role]": "ValueError: arrow2",
+    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://my#%us3r:p433w0rd@not_a_real_host:9999/database]": "ValueError: arrow2",
 }
 
 
