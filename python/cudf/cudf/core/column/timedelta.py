@@ -309,7 +309,9 @@ class TimeDeltaColumn(ColumnBase):
         # https://github.com/rapidsai/cudf/issues/17664
         return (
             (self.astype(np.dtype(np.int64)) * conversion)
-            .astype(cudf.Decimal128Dtype(38, 9))
+            .astype(
+                cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
+            )
             .round(decimals=abs(int(math.log10(conversion))))
             .astype(np.dtype(np.float64))
         )
