@@ -13,8 +13,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
 from cudf import concat
+from cudf.core.buffer import as_buffer
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index
 from cudf.testing import assert_eq
@@ -1202,7 +1205,12 @@ def test_string_misc_name(ps_gs, name):
 
 
 def test_string_no_children_properties():
-    empty_col = StringColumn(children=())
+    empty_col = StringColumn(
+        as_buffer(rmm.DeviceBuffer(size=0)),
+        size=0,
+        dtype=np.dtype("object"),
+        children=(),
+    )
     assert empty_col.base_children == ()
     assert empty_col.base_size == 0
 
