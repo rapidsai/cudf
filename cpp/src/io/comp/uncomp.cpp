@@ -729,10 +729,7 @@ void host_decompress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool use_host_decompression(
-  compression_type compression,
-  [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
-  [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
+[[nodiscard]] bool use_host_decompression(compression_type compression)
 {
   CUDF_EXPECTS(
     not host_decompression_supported(compression) or device_decompression_supported(compression),
@@ -741,6 +738,23 @@ void host_decompress(compression_type compression,
   if (not device_decompression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
   return getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"}) == "ON";
+}
+
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di)
+{
+  if (di.type == compression_type::NONE or use_host_decompression(di.type)) { return 0; }
+
+  auto const nvcomp_type = to_nvcomp_compression(di.type);
+  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                                   : "invalid compression type";
+  if (not nvcomp_disabled) {
+    nvcomp::batched_decompress_temp_size(
+      nvcomp_type.value(), di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
+  }
+
+  if (di.type == compression_type::BROTLI) return get_gpu_debrotli_scratch_size(di.num_pages);
+  // only Brotli kernel requires scratch memory
+  return 0;
 }
 
 void decompress(compression_type compression,
@@ -753,7 +767,7 @@ void decompress(compression_type compression,
 {
   CUDF_FUNC_RANGE();
   if (inputs.empty()) { return; }
-  if (use_host_decompression(compression, inputs, outputs)) {
+  if (use_host_decompression(compression)) {
     return host_decompress(compression, inputs, outputs, results, stream);
   } else {
     return device_decompress(

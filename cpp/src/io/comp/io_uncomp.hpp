@@ -71,5 +71,26 @@ void decompress(compression_type compression,
  */
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
 
+/**
+ * @brief Struct to hold information about decompression.
+ *
+ * This struct contains details about the decompression process, including
+ * the type of compression, the number of pages, the maximum size
+ * of a decompressed page, and the total decompressed size.
+ */
+struct decompression_info {
+  compression_type type;
+  size_t num_pages;
+  size_t max_page_decompressed_size;
+  size_t total_decompressed_size;
+};
+
+/**
+ * @brief Functor which returns total scratch space required based on computed decompression_info
+ * data.
+ *
+ */
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
+
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf
