@@ -776,35 +776,36 @@ decimal_dtype_template = textwrap.dedent(
 class DecimalDtype(_BaseDtype):
     _metadata = ("precision", "scale")
 
-    def __init__(self, precision, scale=0):
+    def __init__(self, precision: int, scale: int = 0) -> None:
         self._validate(precision, scale)
-        self._typ = pa.decimal128(precision, scale)
+        self._precision = precision
+        self._scale = scale
 
     @property
-    def str(self):
+    def str(self) -> str:
         return f"{self.name!s}({self.precision}, {self.scale})"
 
     @property
-    def precision(self):
+    def precision(self) -> int:
         """
         The decimal precision, in number of decimal digits (an integer).
         """
-        return self._typ.precision
+        return self._precision
 
     @precision.setter
-    def precision(self, value):
+    def precision(self, value: int) -> None:
         self._validate(value, self.scale)
-        self._typ = pa.decimal128(precision=value, scale=self.scale)
+        self._precision = value
 
     @property
-    def scale(self):
+    def scale(self) -> int:
         """
         The decimal scale (an integer).
         """
-        return self._typ.scale
+        return self._scale
 
     @property
-    def itemsize(self):
+    def itemsize(self) -> int:
         """
         Length of one column element in bytes.
         """
@@ -815,14 +816,14 @@ class DecimalDtype(_BaseDtype):
         # might need to account for precision and scale here
         return decimal.Decimal
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Decimal128Type:
         """
         Return the equivalent ``pyarrow`` dtype.
         """
-        return self._typ
+        return pa.decimal128(self.precision, self.scale)
 
     @classmethod
-    def from_arrow(cls, typ):
+    def from_arrow(cls, typ: pa.Decimal128Type) -> Self:
         """
         Construct a cudf decimal dtype from a ``pyarrow`` dtype
 
@@ -856,23 +857,23 @@ class DecimalDtype(_BaseDtype):
         )
 
     @classmethod
-    def _validate(cls, precision, scale=0):
+    def _validate(cls, precision: int, scale: int) -> None:
         if precision > cls.MAX_PRECISION:
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
                 f" with precision > {cls.MAX_PRECISION}"
             )
         if abs(scale) > precision:
-            raise ValueError(f"scale={scale} exceeds precision={precision}")
+            raise ValueError(f"{scale=} cannot exceed {precision=}")
 
     @classmethod
-    def _from_decimal(cls, decimal):
+    def _from_decimal(cls, decimal: decimal.Decimal) -> Self:
         """
         Create a cudf.DecimalDtype from a decimal.Decimal object
         """
         metadata = decimal.as_tuple()
-        precision = max(len(metadata.digits), -metadata.exponent)
-        return cls(precision, -metadata.exponent)
+        precision = max(len(metadata.digits), -metadata.exponent)  # type: ignore[operator]
+        return cls(precision, -metadata.exponent)  # type: ignore[operator]
 
     def serialize(self) -> tuple[dict, list]:
         return (
@@ -885,7 +886,7 @@ class DecimalDtype(_BaseDtype):
         )
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list):
+    def deserialize(cls, header: dict, frames: list) -> Self:
         _check_type(cls, header, frames, is_valid_class=issubclass)
         return cls(header["precision"], header["scale"])
 
@@ -896,8 +897,8 @@ class DecimalDtype(_BaseDtype):
             return False
         return self.precision == other.precision and self.scale == other.scale
 
-    def __hash__(self):
-        return hash(self._typ)
+    def __hash__(self) -> int:
+        return hash(self.to_arrow())
 
 
 @doc_apply(
