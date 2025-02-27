@@ -8,6 +8,7 @@ import pytest
 
 import cudf
 from cudf.core.byte_pair_encoding import BytePairEncoder
+from cudf.core.character_normalizer import CharacterNormalizer
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing import assert_eq
 
@@ -251,7 +252,8 @@ def test_normalize_characters():
         ]
     )
 
-    actual = strings.str.normalize_characters()
+    normalizer_lower = CharacterNormalizer(True)
+    actual = normalizer_lower.normalize(strings.str)
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
@@ -265,7 +267,9 @@ def test_normalize_characters():
             "Stock ^   $ 1",
         ]
     )
-    actual = strings.str.normalize_characters(do_lower=False)
+
+    normalizer = CharacterNormalizer(False)
+    actual = normalizer.normalize(strings.str)
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
 

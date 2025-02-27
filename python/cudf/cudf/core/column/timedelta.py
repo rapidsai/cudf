@@ -28,7 +28,12 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -380,10 +385,10 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if to_dtype.kind == "m":  # type: ignore[union-attr]
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
+        if to_dtype.kind == "m":
             to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            self_res = self.time_unit
 
             max_int = np.iinfo(np.int64).max
 
@@ -454,14 +459,13 @@ class TimeDeltaColumn(ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype | None = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
             self.astype(np.dtype(np.int64)).sum(  # type: ignore
-                skipna=skipna, min_count=min_count, dtype=dtype
+                skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)

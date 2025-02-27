@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -713,7 +712,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # is empty.
         if self.null_count == self.size:
             return True
-        return self.reduce("all")
+        return bool(self.reduce("all"))
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -951,7 +950,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
             )
 
-    def view(self, dtype: Dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         """
         View the data underlying a column as different dtype.
         The source column must divide evenly into the size of
@@ -960,13 +959,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         Parameters
         ----------
-        dtype : NumPy dtype, string
+        dtype : Dtype object
             The dtype to view the data as
-
         """
-
-        dtype = cudf.dtype(dtype)
-
         if dtype.kind in ("o", "u", "s"):
             raise TypeError(
                 "Bytes viewed as str without metadata is ambiguous"
@@ -1587,7 +1582,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             self._distinct_count[dropna] = result
             return self._distinct_count[dropna]
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         raise NotImplementedError()
 
     @acquire_spill_lock()
@@ -1946,8 +1941,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             skipna=skipna, min_count=min_count
         )
         if isinstance(preprocessed, ColumnBase):
-            dtype = kwargs.pop("dtype", None)
-            return preprocessed.reduce(op, dtype, **kwargs)
+            return preprocessed.reduce(op, **kwargs)
         return preprocessed
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
@@ -2110,16 +2104,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         )
 
-    def reduce(self, reduction_op: str, dtype=None, **kwargs) -> ScalarLike:
-        if dtype is not None:
-            warnings.warn(
-                "dtype is deprecated and will be remove in a future release. "
-                "Cast the result (e.g. .astype) after the operation instead.",
-                FutureWarning,
-            )
-            col_dtype = dtype
-        else:
-            col_dtype = self._reduction_result_dtype(reduction_op)
+    def reduce(self, reduction_op: str, **kwargs) -> ScalarLike:
+        col_dtype = self._reduction_result_dtype(reduction_op)
 
         # check empty case
         if len(self) <= self.null_count:
@@ -2148,7 +2134,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             }:
                 scale = -plc_scalar.type().scale()
                 # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-                p = col_dtype.precision
+                p = col_dtype.precision  # type: ignore[union-attr]
                 nrows = len(self)
                 if reduction_op in {"min", "max"}:
                     new_p = p
@@ -2162,7 +2148,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     raise NotImplementedError(
                         f"{reduction_op} not implemented for decimal types."
                     )
-                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)  # type: ignore[union-attr]
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
             elif isinstance(col_dtype, IntervalDtype):
@@ -2322,13 +2308,14 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.type in (np.object_, np.str_):
+    elif dtype == CUDF_STRING_DTYPE:
         return cudf.core.column.StringColumn(
-            data=data,
-            mask=mask,
+            data=data,  # type: ignore[arg-type]
             size=size,
+            dtype=dtype,
+            mask=mask,
             offset=offset,
-            children=children,
+            children=children,  # type: ignore[arg-type]
             null_count=null_count,
         )
     elif isinstance(dtype, ListDtype):
