@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         NoDefault,
         ScalarLike,
         SeriesOrIndex,
@@ -5642,7 +5643,7 @@ class StringColumn(column.ColumnBase):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
         if dtype != CUDF_STRING_DTYPE:
-            raise ValueError(f"dtypy must be {CUDF_STRING_DTYPE}")
+            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
 
@@ -5828,23 +5829,22 @@ class StringColumn(column.ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        out_dtype = cudf.api.types.dtype(dtype)
-        if out_dtype.kind == "b":
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if dtype.kind == "b":
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
             return (result > np.int8(0)).fillna(False)
-        elif out_dtype.kind in {"i", "u"}:
+        elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
-        elif out_dtype.kind == "f":
+        elif dtype.kind == "f":
             if not self.is_float().all():
                 raise ValueError(
                     "Could not convert strings to float "
@@ -5852,10 +5852,8 @@ class StringColumn(column.ColumnBase):
                 )
             cast_func = plc.strings.convert.convert_floats.to_floats
         else:
-            raise ValueError(
-                f"dtype must be a numerical type, not {out_dtype}"
-            )
-        plc_dtype = dtype_to_pylibcudf_type(out_dtype)
+            raise ValueError(f"dtype must be a numerical type, not {dtype}")
+        plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
@@ -5979,17 +5977,15 @@ class StringColumn(column.ColumnBase):
         else:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = cudf.api.types.dtype(to_dtype)
-
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and not self.is_integer().all():
-            return False
-        elif to_dtype.kind == "f" and not self.is_float().all():
-            return False
-        else:
+        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
             return True
+        elif to_dtype.kind == "f" and self.is_float().all():
+            return True
+        else:
+            return False
 
     def find_and_replace(
         self,
@@ -6128,12 +6124,11 @@ class StringColumn(column.ColumnBase):
         return NotImplemented
 
     @copy_docstring(ColumnBase.view)
-    def view(self, dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         if self.null_count > 0:
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = cudf.api.types.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size

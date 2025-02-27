@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         Dtype,
+        DtypeObj,
         NoDefault,
     )
 
@@ -319,7 +320,9 @@ class TimeDeltaColumn(ColumnBase):
         # https://github.com/rapidsai/cudf/issues/17664
         return (
             (self.astype(np.dtype(np.int64)) * conversion)
-            .astype(cudf.Decimal128Dtype(38, 9))
+            .astype(
+                cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
+            )
             .round(decimals=abs(int(math.log10(conversion))))
             .astype(np.dtype(np.float64))
         )
@@ -388,10 +391,10 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if to_dtype.kind == "m":  # type: ignore[union-attr]
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
+        if to_dtype.kind == "m":
             to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            self_res = self.time_unit
 
             max_int = np.iinfo(np.int64).max
 
