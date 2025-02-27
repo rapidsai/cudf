@@ -85,9 +85,9 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         return value.as_py(), dtype
 
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-        value = pa.scalar(
-            value, type=pa.decimal128(dtype.precision, dtype.scale)
-        ).as_py()
+        if isinstance(value, np.integer):
+            value = int(value)
+        value = pa.scalar(value, type=dtype.to_arrow()).as_py()
     if isinstance(value, decimal.Decimal) and dtype is None:
         dtype = cudf.Decimal128Dtype._from_decimal(value)
 
