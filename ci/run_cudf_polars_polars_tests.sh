@@ -48,9 +48,7 @@ python -m pytest \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.plugin \
-       -n 8 \
-       --dist=worksteal \
-       -vv \
+       -v \
        --tb=native \
        $DESELECTED_TESTS_STR \
        "$@" \
