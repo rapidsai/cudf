@@ -11084,6 +11084,20 @@ def test_dataframe_columns_set_preserve_type(klass):
 
 
 @pytest.mark.parametrize(
+    "expected",
+    [
+        pd.RangeIndex(1, 2, name="a"),
+        pd.Index([1], dtype=np.int8, name="a"),
+        pd.MultiIndex.from_arrays([[1]], names=["a"]),
+    ],
+)
+def test_dataframe_binop_preserves_column_metadata(expected):
+    df = cudf.DataFrame([1], columns=expected)
+    result = (df == df).columns
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
     "scalar",
     [
         1,

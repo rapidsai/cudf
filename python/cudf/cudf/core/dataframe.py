@@ -2055,15 +2055,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         lhs, rhs = self._data, other
         index = self.index
         fill_requires_key = False
         left_default: Any = False
         equal_columns = False
-        can_use_self_column_name = True
-
+        ca_attributes: dict[str, Any] = {}
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
             equal_columns = True
@@ -2085,9 +2084,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
             equal_columns = other_pd_index.equals(self_pd_columns)
-            can_use_self_column_name = (
-                equal_columns or other_pd_index.names == self_pd_columns.names
-            )
+            if equal_columns:
+                ca_attributes["rangeindex"] = self._data.rangeindex
+                ca_attributes["multiindex"] = self._data.multiindex
+                ca_attributes["label_dtype"] = self._data.label_dtype
+                ca_attributes["level_names"] = self._data.level_names
+            elif other_pd_index.names == self_pd_columns.names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -2110,17 +2113,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
             equal_columns = self._column_names == other._column_names
-            can_use_self_column_name = (
-                equal_columns
-                or self._data._level_names == other._data._level_names
-            )
+            if self._data.to_pandas_index.equals(other._data.to_pandas_index):
+                ca_attributes["rangeindex"] = self._data.rangeindex
+                ca_attributes["multiindex"] = self._data.multiindex
+                ca_attributes["label_dtype"] = self._data.label_dtype
+                ca_attributes["level_names"] = self._data.level_names
+            elif self._data._level_names == other._data._level_names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, (dict, abc.Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         if not isinstance(rhs, (dict, abc.Mapping)):
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         operands = {
             k: (
@@ -2150,8 +2156,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("other must be a DataFrame or Series.")
 
             sorted_dict = {key: operands[key] for key in column_names_list}
-            return sorted_dict, index, can_use_self_column_name
-        return operands, index, can_use_self_column_name
+            return sorted_dict, index, ca_attributes
+        return operands, index, ca_attributes
 
     @classmethod
     @_performance_tracking
