@@ -1256,15 +1256,15 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
   auto const num_columns = _input_columns.size();
 
-  // if the user has passed a very small value (under the hardcoded
-  // minimum_subpass_expected_size), respect it.
+  // if the user has passed a very small value (under the hardcoded minimum_subpass_expected_size),
+  // respect it.
   auto const min_subpass_size = std::min(_input_pass_read_limit, minimum_subpass_expected_size);
 
   // what do we do if the base memory size (the compressed data) itself is approaching or larger
   // than the overall read limit? we are still going to be decompressing in subpasses, but we have
-  // to assume some reasonable minimum size needed to safely decompress a single subpass. so
-  // always reserve at least that much space. this can result in using up to 2x the specified user
-  // limit but should only ever happen with unrealistically low numbers.
+  // to assume some reasonable minimum size needed to safely decompress a single subpass. so always
+  // reserve at least that much space. this can result in using up to 2x the specified user limit
+  // but should only ever happen with unrealistically low numbers.
   size_t const remaining_read_limit =
     _input_pass_read_limit == 0 ? 0
     : pass.base_mem_size + min_subpass_size >= _input_pass_read_limit
@@ -1333,8 +1333,8 @@ void reader::impl::setup_next_subpass(read_mode mode)
   if (subpass.single_subpass) {
     subpass.pages = pass.pages;
   }
-  // copy the appropriate subset of pages from each column and store the mapping back to the
-  // source (pass) pages
+  // copy the appropriate subset of pages from each column and store the mapping back to the source
+  // (pass) pages
   else {
     subpass.page_buf = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
     subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
@@ -1532,8 +1532,7 @@ void reader::impl::compute_input_passes()
     return;
   }
 
-  // generate passes. make sure to account for the case where a single row group doesn't fit
-  // within
+  // generate passes. make sure to account for the case where a single row group doesn't fit within
   //
   std::size_t const comp_read_limit =
     _input_pass_read_limit > 0
@@ -1556,8 +1555,8 @@ void reader::impl::compute_input_passes()
     auto const [compressed_rg_size, _ /*compressed + uncompressed*/] =
       get_row_group_size(row_group);
 
-    // We must use the effective size of the first row group we are reading to accurately
-    // calculate the first non-zero input_pass_start_row_count.
+    // We must use the effective size of the first row group we are reading to accurately calculate
+    // the first non-zero input_pass_start_row_count.
     auto const row_group_rows =
       (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
 
@@ -1567,8 +1566,8 @@ void reader::impl::compute_input_passes()
     // can we add this row group
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
       // A single row group (the current one) is larger than the read limit:
-      // We always need to include at least one row group, so end the pass at the end of the
-      // current row group
+      // We always need to include at least one row group, so end the pass at the end of the current
+      // row group
       if (cur_rg_start == cur_rg_index) {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
         _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);
