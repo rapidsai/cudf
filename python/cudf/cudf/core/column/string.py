@@ -19,6 +19,7 @@ import cudf
 import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
+from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        NoDefault,
         ScalarLike,
         SeriesOrIndex,
     )
@@ -5964,9 +5966,13 @@ class StringColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if nullable and not arrow_type:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             return pd.Index(pandas_array, copy=False)

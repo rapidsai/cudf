@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from cudf._typing import DataFrameOrSeries
+    from cudf._typing import DataFrameOrSeries, NoDefault
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
@@ -1605,7 +1605,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_performance_tracking
     def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.MultiIndex:
         # cudf uses np.iinfo(SIZE_TYPE_DTYPE).min as missing code
         # pandas uses -1 as missing code

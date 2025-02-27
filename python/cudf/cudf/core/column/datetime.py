@@ -19,6 +19,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
+from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         Dtype,
+        NoDefault,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -1000,9 +1002,13 @@ class DatetimeColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type and nullable:
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
@@ -1052,9 +1058,13 @@ class DatetimeTZColumn(DatetimeColumn):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type or nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:

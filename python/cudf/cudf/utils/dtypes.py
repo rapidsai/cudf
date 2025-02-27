@@ -612,6 +612,37 @@ def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
         return dtype.base
 
 
+def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+            pd.ArrowDtype,
+        ),
+    ):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
+        return is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
+
+
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
@@ -629,6 +660,11 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
+    elif is_pandas_nullable_extension_dtype(dtype):
+        if isinstance(dtype, pd.StringDtype):
+            dtype = CUDF_STRING_DTYPE
+        else:
+            dtype = dtype.numpy_dtype
     else:
         dtype = np.dtype(dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])

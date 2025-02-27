@@ -8,6 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
@@ -16,7 +17,7 @@ from cudf.core.missing import NA
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf._typing import Dtype
+    from cudf._typing import Dtype, NoDefault
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -100,11 +101,15 @@ class StructColumn(ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type or nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:

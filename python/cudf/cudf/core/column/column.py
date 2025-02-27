@@ -22,9 +22,9 @@ import pylibcudf as plc
 import rmm
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_decimal_dtype,
     is_dtype_equal,
@@ -70,6 +70,7 @@ from cudf.utils.dtypes import (
     get_time_unit,
     is_column_like,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -78,7 +79,7 @@ from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
 if TYPE_CHECKING:
     import builtins
 
-    from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf._typing import ColumnLike, Dtype, DtypeObj, NoDefault, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
 
@@ -625,15 +626,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
         """
-        # This default implementation does not handle nulls in any meaningful
-        # way
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type and nullable:
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
@@ -2545,13 +2548,13 @@ def as_column(
             raise NotImplementedError(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
-        elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if cudf.get_option("mode.pandas_compatible"):
-                raise NotImplementedError("not supported")
+        elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
                 arbitrary = arbitrary.array
+            if dtype is None:
+                dtype = arbitrary.dtype
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,

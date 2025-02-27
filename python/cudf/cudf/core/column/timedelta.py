@@ -15,6 +15,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
+from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
@@ -28,7 +29,12 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+        Dtype,
+        NoDefault,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -155,9 +161,13 @@ class TimeDeltaColumn(ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type and nullable:
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."

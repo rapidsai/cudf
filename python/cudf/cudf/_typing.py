@@ -1,11 +1,18 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import sys
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np
+import pandas as pd
+from packaging import parse
 from pandas import Period, Timedelta, Timestamp
+
+if parse.version(pd.__version__) >= parse.version("3.0"):
+    from pandas.api.typing import NoDefault
+else:
+    NoDefault = Any
 
 if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype

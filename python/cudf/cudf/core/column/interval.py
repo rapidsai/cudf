@@ -7,6 +7,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core.column.column import as_column
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
@@ -14,6 +15,7 @@ from cudf.core.dtypes import IntervalDtype
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from cudf._typing import NoDefault
     from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
@@ -187,14 +189,18 @@ class IntervalColumn(StructColumn):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
         # Note: This does not handle null values in the interval column.
         # However, this exact sequence (calling __from_arrow__ on the output of
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:

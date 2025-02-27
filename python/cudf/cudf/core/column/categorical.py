@@ -14,6 +14,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        NoDefault,
         ScalarLike,
         SeriesOrIndex,
         SeriesOrSingleColumnIndex,
@@ -772,9 +774,13 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
