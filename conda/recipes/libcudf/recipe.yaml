@@ -100,6 +100,7 @@ outputs:
       host:
         - cuda-version =${{ cuda_version }}
         - libkvikio =${{ minor_version }}
+        - nvcomp ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}
         - if: cuda_major == "11"
