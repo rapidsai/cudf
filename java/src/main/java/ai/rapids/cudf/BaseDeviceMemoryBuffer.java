@@ -41,20 +41,17 @@ public abstract class BaseDeviceMemoryBuffer extends MemoryBuffer {
     adder.add(amount);
   }
 
+  // Called from the application to get a summary of the device memory bookkeeping
   public static String getDeviceMemoryBookkeepSummary() {
-    if(BOOKKEEP_MEMORY) {
-      StringBuilder sb = new StringBuilder();
-      sb.append("<<Device Memory Bookkeeping>>\n");
-      for (Map.Entry<Long, LongAdder> entry : deviceMemPerThread.entrySet()) {
-        long threadId = entry.getKey();
-        LongAdder adder = entry.getValue();
-        sb.append("Thread with ID ").append(threadId).append(" is accountable for ")
-            .append(adder.sum()).append(" bytes\n");
-      }
-      return sb.toString();
-    } else {
-      return "Device Memory Bookkeeping is disabled";
+    StringBuilder sb = new StringBuilder();
+    sb.append("<<Device Memory Bookkeeping>>\n");
+    for (Map.Entry<Long, LongAdder> entry : deviceMemPerThread.entrySet()) {
+      long threadId = entry.getKey();
+      LongAdder adder = entry.getValue();
+      sb.append("Thread with ID ").append(threadId).append(" is accountable for ")
+          .append(adder.sum()).append(" bytes\n");
     }
+    return sb.toString();
   }
 
   public static class MemoryBookkeeper implements EventHandler {
