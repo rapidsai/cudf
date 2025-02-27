@@ -1654,7 +1654,7 @@ class MergeSorted(IR):
     """Merge sorted operation."""
 
     __slots__ = ("key",)
-    _non_child = ("key",)
+    _non_child = ("schema", "key")
     key: str
     """Key that is sorted."""
 
