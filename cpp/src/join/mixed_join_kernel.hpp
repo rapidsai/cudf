@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,9 +57,8 @@ namespace detail {
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
-void launch_mixed_join(
-    bool has_nulls,
-    table_device_view left_table,
+void launch_mixed_join(bool has_nulls,
+                       table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,21 +189,22 @@ mixed_join(
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
     matches_per_row_span = cudf::device_span<size_type const>{
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
-      join_size = launch_compute_mixed_join_output_size(has_nulls, *left_conditional_view,
-                                                              *right_conditional_view,
-                                                              *probe_view,
-                                                              *build_view,
-                                                              hash_probe,
-                                                              equality_probe,
-                                                              kernel_join_type,
-                                                              hash_table_view,
-                                                              parser.device_expression_data,
-                                                              swap_tables,
-                                                              mutable_matches_per_row_span,
-                                                              config,
-                                                              shmem_size_per_block,
-                                                              stream,
-                                                              mr);
+    join_size = launch_compute_mixed_join_output_size(has_nulls,
+                                                      *left_conditional_view,
+                                                      *right_conditional_view,
+                                                      *probe_view,
+                                                      *build_view,
+                                                      hash_probe,
+                                                      equality_probe,
+                                                      kernel_join_type,
+                                                      hash_table_view,
+                                                      parser.device_expression_data,
+                                                      swap_tables,
+                                                      mutable_matches_per_row_span,
+                                                      config,
+                                                      shmem_size_per_block,
+                                                      stream,
+                                                      mr);
   }
 
   // The initial early exit clauses guarantee that we will not reach this point
