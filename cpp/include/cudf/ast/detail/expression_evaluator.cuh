@@ -636,11 +636,11 @@ struct expression_evaluator {
    * @param right_row_index The row to pull the data from the right table.
    * @param output_row_index The row in the output to insert the result.
    */
-  __device__ void evaluate(expression_output output_object,
-                           cudf::size_type const left_row_index,
-                           cudf::size_type const right_row_index,
-                           cudf::size_type const output_row_index,
-                           char* thread_intermediate_storage) const
+  __device__ inline void evaluate(expression_output output_object,
+                                  cudf::size_type const left_row_index,
+                                  cudf::size_type const right_row_index,
+                                  cudf::size_type const output_row_index,
+                                  char* thread_intermediate_storage) const
   {
     cudf::size_type operator_source_index{0};
     expression_executor executor{left, right, plan, has_nulls};
