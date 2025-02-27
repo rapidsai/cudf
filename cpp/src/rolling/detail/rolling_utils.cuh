@@ -31,12 +31,12 @@ namespace detail::rolling {
  * @brief Information about group bounds of the current row's group.
  */
 struct range_group_info {
-  size_type group_start;
-  size_type group_end;
-  size_type null_start;
-  size_type null_end;
-  size_type non_null_start;
-  size_type non_null_end;
+  size_type const group_start;
+  size_type const group_end;
+  size_type const null_start;
+  size_type const null_end;
+  size_type const non_null_start;
+  size_type const non_null_end;
 };
 
 /**
