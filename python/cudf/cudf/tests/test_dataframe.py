@@ -11091,9 +11091,10 @@ def test_dataframe_columns_set_preserve_type(klass):
         pd.MultiIndex.from_arrays([[1]], names=["a"]),
     ],
 )
-def test_dataframe_binop_preserves_column_metadata(expected):
+@pytest.mark.parametrize("binop", [lambda df: df == df, lambda df: df - 1])
+def test_dataframe_binop_preserves_column_metadata(expected, binop):
     df = cudf.DataFrame([1], columns=expected)
-    result = (df == df).columns
+    result = binop(df).columns
     pd.testing.assert_index_equal(result, expected, exact=True)
 
 
