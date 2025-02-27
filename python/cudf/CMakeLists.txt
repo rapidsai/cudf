@@ -37,7 +37,3 @@ rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
-
-if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
-endif()
