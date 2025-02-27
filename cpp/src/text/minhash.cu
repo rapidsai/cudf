@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -272,7 +273,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       auto const values = block_values + (lane_idx * block_size);
       // cooperative groups does not have a min function and cub::BlockReduce was slower
       auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, thrust::minimum{});
+        thrust::reduce(thrust::seq, values, values + block_size, init, cudf::detail::minimum{});
       if constexpr (blocks_per_string > 1) {
         // accumulates mins for each block into d_output
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};

@@ -25,6 +25,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -134,12 +135,6 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
                                  int8_t* d_rerank_data           // and one more working memory
 )
 {
-#if CCCL_MAJOR_VERSION >= 3
-  using cuda::minimum;
-#else
-  using minimum = cub::Min;
-#endif
-
   // string per block
   auto const str_idx =
     static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id() / block_size);
@@ -218,7 +213,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     }
   }
   // compute the min rank across the block
-  auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, minimum{}, num_valid);
+  auto const reduce_rank =
+    block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
   if (lane_idx == 0) { block_min_rank = reduce_rank; }
   __syncthreads();
 
@@ -283,7 +279,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     }
 
     // re-compute the minimum rank across the block (since new pairs are created above)
-    auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, minimum{}, num_valid);
+    auto const reduce_rank =
+      block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
     if (lane_idx == 0) { block_min_rank = reduce_rank; }
     __syncthreads();
   }  // if no min ranks are found we are done, otherwise start again
