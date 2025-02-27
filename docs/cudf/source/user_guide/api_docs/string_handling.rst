@@ -21,6 +21,7 @@ strings and apply several methods to it. These can be accessed like
    center
    character_ngrams
    character_tokenize
+   characters_normalize
    code_points
    contains
    count
