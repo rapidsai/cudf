@@ -1679,12 +1679,7 @@ class MergeSorted(IR):
                 [right.table, left.table],
                 [left.column_names.index(key), right.column_names.index(key)],
                 [on_col_left.order, on_col_right.order],
-                [
-                    plc.types.NullOrder.BEFORE
-                    if on_col_left.order == plc.types.Order.ASCENDING
-                    else plc.types.NullOrder.AFTER
-                ]
-                * 2,
+                [on_col_left.null_order, on_col_right.null_order],
             ),
             left.column_names,
         )
