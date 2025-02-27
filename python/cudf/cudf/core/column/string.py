@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
         SeriesOrIndex,
     )
@@ -5971,17 +5972,15 @@ class StringColumn(column.ColumnBase):
         else:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = cudf.api.types.dtype(to_dtype)
-
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and not self.is_integer().all():
-            return False
-        elif to_dtype.kind == "f" and not self.is_float().all():
-            return False
-        else:
+        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
             return True
+        elif to_dtype.kind == "f" and self.is_float().all():
+            return True
+        else:
+            return False
 
     def find_and_replace(
         self,
@@ -6120,12 +6119,11 @@ class StringColumn(column.ColumnBase):
         return NotImplemented
 
     @copy_docstring(ColumnBase.view)
-    def view(self, dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         if self.null_count > 0:
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = cudf.api.types.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size
