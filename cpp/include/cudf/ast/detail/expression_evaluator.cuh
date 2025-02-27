@@ -143,104 +143,6 @@ using expression_output =
   cuda::std::variant<value_expression_result*, mutable_column_expression_result*>;
 
 /**
- * @brief The principal object for evaluating AST expressions on device.
- *
- * This class is designed for n-ary transform evaluation. It operates on two
- * tables.
- */
-struct expression_evaluator {
- public:
-  /**
-   * @brief Construct an expression evaluator acting on two tables.
-   *
-   * @param left View of the left table view used for evaluation.
-   * @param right View of the right table view used for evaluation.
-   * @param plan The collection of device references representing the expression to evaluate.
-   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
-   * storing intermediates.
-
-   */
-  __device__ inline expression_evaluator(table_device_view const& left,
-                                         table_device_view const& right,
-                                         expression_device_view const& plan,
-                                         bool has_nulls)
-    : left(left), right(right), plan(plan), has_nulls(has_nulls)
-  {
-  }
-
-  /**
-   * @brief Construct an expression evaluator acting on one table.
-   *
-   * @param table View of the table view used for evaluation.
-   * @param plan The collection of device references representing the expression to evaluate.
-   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
-   * storing intermediates.
-   */
-  __device__ inline expression_evaluator(table_device_view const& table,
-                                         expression_device_view const& plan,
-                                         bool has_nulls)
-    : expression_evaluator(table, table, plan, has_nulls)
-  {
-  }
-
-  /**
-   * @brief Resolves an input data reference into a value.
-   *
-   * Only input columns (COLUMN), literal values (LITERAL), and intermediates (INTERMEDIATE) are
-   * supported as input data references. Intermediates must be of fixed width less than or equal to
-   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
-   *
-   * @tparam Element Type of element to return.
-   * @tparam has_nulls Whether or not the result data is nullable.
-   * @param device_data_reference Data reference to resolve.
-   * @param row_index Row index of data column.
-   * @return Element The type- and null-resolved data.
-   */
-
-  /**
-   * @brief Evaluate an expression applied to a row.
-   *
-   * This function performs an n-ary transform for one row on one thread.
-   *
-   * @tparam OutputType The container type that data will be inserted into.
-   *
-   * @param output_object The container that data will be inserted into.
-   * @param row_index Row index of all input and output data column(s).
-   */
-  __device__ __forceinline__ void evaluate(expression_output output,
-                                           cudf::size_type const row_index,
-                                           char* thread_intermediate_storage) const
-  {
-    evaluate(output, row_index, row_index, row_index, thread_intermediate_storage);
-  }
-
-  /**
-   * @brief Evaluate an expression applied to a row.
-   *
-   * This function performs an n-ary transform for one row on one thread.
-   *
-   * @tparam OutputType The container type that data will be inserted into.
-   *
-   * @param output_object The container that data will be inserted into.
-   * @param left_row_index The row to pull the data from the left table.
-   * @param right_row_index The row to pull the data from the right table.
-   * @param output_row_index The row in the output to insert the result.
-   */
-  __device__ void evaluate(expression_output output,
-                           cudf::size_type const left_row_index,
-                           cudf::size_type const right_row_index,
-                           cudf::size_type const output_row_index,
-                           char* thread_intermediate_storage) const;
-
- protected:
-  table_device_view const& left;   ///< The left table to operate on.
-  table_device_view const& right;  ///< The right table to operate on.
-  expression_device_view const&
-    plan;  ///< The container of device data representing the expression to evaluate.
-  bool has_nulls;
-};
-
-/**
  * @brief Dispatch to a binary operator based on a single data type.
  *
  * This functor is a dispatcher for binary operations that assumes that both
@@ -461,9 +363,22 @@ struct binary_expression_output_handler : public expression_output_handler {
   }
 };
 
-class expression_executor : public expression_evaluator {
+class expression_executor {
  public:
-  using expression_evaluator::expression_evaluator;
+  __device__ inline expression_executor(table_device_view const& left,
+                                        table_device_view const& right,
+                                        expression_device_view const& plan,
+                                        bool has_nulls)
+    : left(left), right(right), plan(plan), has_nulls(has_nulls)
+  {
+  }
+
+  __device__ inline expression_executor(table_device_view const& table,
+                                        expression_device_view const& plan,
+                                        bool has_nulls)
+    : expression_executor(table, table, plan, has_nulls)
+  {
+  }
 
   template <bool has_nulls,
             typename Element,
@@ -517,6 +432,19 @@ class expression_executor : public expression_evaluator {
     return {};
   }
 
+  /**
+   * @brief Resolves an input data reference into a value.
+   *
+   * Only input columns (COLUMN), literal values (LITERAL), and intermediates (INTERMEDIATE) are
+   * supported as input data references. Intermediates must be of fixed width less than or equal to
+   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+   *
+   * @tparam Element Type of element to return.
+   * @tparam has_nulls Whether or not the result data is nullable.
+   * @param device_data_reference Data reference to resolve.
+   * @param row_index Row index of data column.
+   * @return Element The type- and null-resolved data.
+   */
   template <bool has_nulls,
             typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
@@ -630,73 +558,159 @@ class expression_executor : public expression_evaluator {
                               thread_intermediate_storage);
     }
   }
+
+ private:
+  table_device_view const& left;
+  table_device_view const& right;
+  expression_device_view const& plan;
+  bool has_nulls;
 };
 
-__device__ void expression_evaluator::evaluate(expression_output value_output,
-                                               cudf::size_type const left_row_index,
-                                               cudf::size_type const right_row_index,
-                                               cudf::size_type const output_row_index,
-                                               char* thread_intermediate_storage) const
-{
-  cudf::size_type operator_source_index{0};
-  expression_executor executor{left, right, plan, has_nulls};
-  for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
-       ++operator_index) {
-    // Execute operator
-    auto const op    = plan.operators[operator_index];
-    auto const arity = plan.operator_arities[operator_index];
-    if (arity == 1) {
-      // Unary operator
-      auto const& input =
-        plan.data_references[plan.operator_source_indices[operator_source_index++]];
-      auto const& output =
-        plan.data_references[plan.operator_source_indices[operator_source_index++]];
-      auto input_row_index =
-        input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
+/**
+ * @brief The principal object for evaluating AST expressions on device.
+ *
+ * This class is designed for n-ary transform evaluation. It operates on two
+ * tables.
+ */
+struct expression_evaluator {
+ public:
+  /**
+   * @brief Construct an expression evaluator acting on two tables.
+   *
+   * @param left View of the left table view used for evaluation.
+   * @param right View of the right table view used for evaluation.
+   * @param plan The collection of device references representing the expression to evaluate.
+   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
+   * storing intermediates.
 
-      cuda::std::visit(
-        [&](auto* ptr_value_output) {
-          type_dispatcher(input.data_type,
-                          executor,
-                          *ptr_value_output,
-                          input_row_index,
-                          input,
-                          output,
-                          output_row_index,
-                          op,
-                          thread_intermediate_storage);
-        },
-        value_output);
+   */
+  __device__ inline expression_evaluator(table_device_view const& left,
+                                         table_device_view const& right,
+                                         expression_device_view const& plan,
+                                         bool has_nulls)
+    : left(left), right(right), plan(plan), has_nulls(has_nulls)
+  {
+  }
 
-    } else if (arity == 2) {
-      // Binary operator
-      auto const& lhs = plan.data_references[plan.operator_source_indices[operator_source_index++]];
-      auto const& rhs = plan.data_references[plan.operator_source_indices[operator_source_index++]];
-      auto const& output =
-        plan.data_references[plan.operator_source_indices[operator_source_index++]];
+  /**
+   * @brief Construct an expression evaluator acting on one table.
+   *
+   * @param table View of the table view used for evaluation.
+   * @param plan The collection of device references representing the expression to evaluate.
+   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
+   * storing intermediates.
+   */
+  __device__ inline expression_evaluator(table_device_view const& table,
+                                         expression_device_view const& plan,
+                                         bool has_nulls)
+    : expression_evaluator(table, table, plan, has_nulls)
+  {
+  }
 
-      cuda::std::visit(
-        [&](auto* ptr_value_output) {
-          type_dispatcher(lhs.data_type,
-                          detail::single_dispatch_binary_operator{},
-                          executor,
-                          *ptr_value_output,
-                          left_row_index,
-                          right_row_index,
-                          lhs,
-                          rhs,
-                          output,
-                          output_row_index,
-                          op,
-                          thread_intermediate_storage);
-        },
-        value_output);
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param row_index Row index of all input and output data column(s).
+   */
+  __device__ __forceinline__ void evaluate(expression_output output,
+                                           cudf::size_type const row_index,
+                                           char* thread_intermediate_storage) const
+  {
+    evaluate(output, row_index, row_index, row_index, thread_intermediate_storage);
+  }
 
-    } else {
-      CUDF_UNREACHABLE("Invalid operator arity.");
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param left_row_index The row to pull the data from the left table.
+   * @param right_row_index The row to pull the data from the right table.
+   * @param output_row_index The row in the output to insert the result.
+   */
+  __device__ void evaluate(expression_output output_object,
+                           cudf::size_type const left_row_index,
+                           cudf::size_type const right_row_index,
+                           cudf::size_type const output_row_index,
+                           char* thread_intermediate_storage) const
+  {
+    cudf::size_type operator_source_index{0};
+    expression_executor executor{left, right, plan, has_nulls};
+    for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
+         ++operator_index) {
+      // Execute operator
+      auto const op    = plan.operators[operator_index];
+      auto const arity = plan.operator_arities[operator_index];
+      if (arity == 1) {
+        // Unary operator
+        auto const& input =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
+        auto const& output =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
+        auto input_row_index =
+          input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
+
+        cuda::std::visit(
+          [&](auto* ptr_value_output) {
+            type_dispatcher(input.data_type,
+                            executor,
+                            *ptr_value_output,
+                            input_row_index,
+                            input,
+                            output,
+                            output_row_index,
+                            op,
+                            thread_intermediate_storage);
+          },
+          output_object);
+
+      } else if (arity == 2) {
+        // Binary operator
+        auto const& lhs =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
+        auto const& rhs =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
+        auto const& output =
+          plan.data_references[plan.operator_source_indices[operator_source_index++]];
+
+        cuda::std::visit(
+          [&](auto* ptr_value_output) {
+            type_dispatcher(lhs.data_type,
+                            detail::single_dispatch_binary_operator{},
+                            executor,
+                            *ptr_value_output,
+                            left_row_index,
+                            right_row_index,
+                            lhs,
+                            rhs,
+                            output,
+                            output_row_index,
+                            op,
+                            thread_intermediate_storage);
+          },
+          output_object);
+
+      } else {
+        CUDF_UNREACHABLE("Invalid operator arity.");
+      }
     }
   }
-}
+
+ protected:
+  table_device_view const& left;   ///< The left table to operate on.
+  table_device_view const& right;  ///< The right table to operate on.
+  expression_device_view const&
+    plan;  ///< The container of device data representing the expression to evaluate.
+  bool has_nulls;
+};
 
 }  // namespace detail
 
