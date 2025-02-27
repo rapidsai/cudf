@@ -59,6 +59,24 @@ def test_groupby_agg(df, engine, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+def test_groupby_agg_config_options(df, op, keys):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="dask-experimental",
+        executor_options={
+            "max_rows_per_partition": 4,
+            # Trigger shuffle-based groupby
+            "cardinality_factor": {"z": 0.5},
+            # Check that we can change the n-ary factor
+            "groupby_n_ary": 8,
+        },
+    )
+    q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 def test_groupby_raises(df, engine):
     q = df.group_by("y").median()
     with pytest.raises(
