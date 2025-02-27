@@ -586,6 +586,7 @@ nitpick_ignore = [
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
     ("py:class", "pyarrow.lib.DataType"),
