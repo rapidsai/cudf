@@ -2226,6 +2226,28 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
           std::move(dict_order_owner)};
 }
 
+size_t find_largest_stream(hostdevice_2dvector<stripe_stream> const& ss,
+                           rmm::cuda_stream_view stream)
+
+{
+  auto const longest_stream = thrust::max_element(
+    rmm::exec_policy(stream),
+    ss.device_view().data(),
+    ss.device_view().data() + ss.count(),
+    cuda::proclaim_return_type<bool>([] __device__(auto const& lhs, auto const& rhs) {
+      return lhs.stream_size < rhs.stream_size;
+    }));
+
+  size_t max_stream_size = 0;
+  cudaMemcpyAsync(&max_stream_size,
+                  &longest_stream->stream_size,
+                  sizeof(size_t),
+                  cudaMemcpyDeviceToHost,
+                  stream.value());
+  stream.synchronize();
+  return max_stream_size;
+}
+
 /**
  * @brief Perform the processing steps needed to convert the input table into the output ORC data
  * for writing, such as compression and ORC encoding.
@@ -2319,7 +2341,9 @@ auto convert_table_to_orc_data(table_view const& input,
   size_t compressed_bfr_size   = 0;
   size_t num_compressed_blocks = 0;
 
-  auto const max_compressed_block_size = max_compressed_size(compression, compression_blocksize);
+  auto const largest_stream = find_largest_stream(strm_descs, stream);
+  auto const max_compressed_block_size =
+    max_compressed_size(compression, std::min(largest_stream, compression_blocksize));
   auto const padded_max_compressed_block_size =
     util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
   auto const padded_block_header_size =
