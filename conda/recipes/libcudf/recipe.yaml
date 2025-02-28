@@ -20,6 +20,15 @@ cache:
   build:
     script:
       content: |
+
+        # Remove `-fdebug-prefix-map` line from CFLAGS and CXXFLAGS so the
+        # incrementing version number in the compile line doesn't break the
+        # cache
+        set -x
+        export CFLAGS=$(echo $CFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
+        export CXXFLAGS=$(echo $CXXFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
+        set +x
+
         ./build.sh -n -v \
             libcudf libcudf_kafka benchmarks tests \
             --build_metrics --incl_cache_stats --allgpuarch \
