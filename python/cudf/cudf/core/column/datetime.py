@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
@@ -48,6 +47,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         DatetimeLikeScalar,
         Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -838,7 +838,7 @@ class DatetimeColumn(column.ColumnBase):
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
@@ -929,7 +929,7 @@ class DatetimeColumn(column.ColumnBase):
                 ambiguous_end.to_pylibcudf(mode="read"),
                 plc.labeling.Inclusive.NO,
             )
-            ambiguous = libcudf.column.Column.from_pylibcudf(plc_column)
+            ambiguous = ColumnBase.from_pylibcudf(plc_column)
         ambiguous = ambiguous.notnull()
 
         # At the start of a non-existent time period, Clock 2 reads less
@@ -948,10 +948,10 @@ class DatetimeColumn(column.ColumnBase):
                 nonexistent_end.to_pylibcudf(mode="read"),
                 plc.labeling.Inclusive.NO,
             )
-            nonexistent = libcudf.column.Column.from_pylibcudf(plc_column)
+            nonexistent = ColumnBase.from_pylibcudf(plc_column)
         nonexistent = nonexistent.notnull()
 
-        return ambiguous, nonexistent
+        return ambiguous, nonexistent  # type: ignore[return-value]
 
     def tz_localize(
         self,

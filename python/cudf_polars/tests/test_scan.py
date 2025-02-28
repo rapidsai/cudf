@@ -1,8 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -203,8 +201,11 @@ def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test*.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
-    os.chdir(tmp_path)
-    q = pl.scan_csv(filename, glob=glob, n_rows=n_rows, skip_rows=skiprows)
+    if isinstance(filename, list):
+        source = [tmp_path / fn for fn in filename]
+    else:
+        source = tmp_path / filename
+    q = pl.scan_csv(source, glob=glob, n_rows=n_rows, skip_rows=skiprows)
 
     assert_gpu_result_equal(q)
 
