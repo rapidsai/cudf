@@ -306,11 +306,7 @@ ConfigureTest(
   GPUS 1
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
-ConfigureTest(
-  ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
-  GPUS 1
-  PERCENT 30
-)
+ConfigureTest(ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp)
 ConfigureTest(
   PARQUET_TEST
   io/parquet_bloom_filter_test.cu
@@ -322,8 +318,6 @@ ConfigureTest(
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
-  GPUS 1
-  PERCENT 30
 )
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
@@ -337,11 +331,7 @@ ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(JSON_QUOTE_NORMALIZATION io/json/json_quote_normalization_test.cpp)
 ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json/json_whitespace_normalization_test.cu)
 ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
-ConfigureTest(
-  DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
-  GPUS 1
-  PERCENT 30
-)
+ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
