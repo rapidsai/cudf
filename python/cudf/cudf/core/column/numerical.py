@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import infer_dtype, is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
@@ -439,7 +439,7 @@ class NumericalColumn(NumericalBaseColumn):
         except (MixedTypeError, TypeError) as e:
             # There is a corner where `values` can be of `object` dtype
             # but have values of homogeneous type.
-            inferred_dtype = cudf.api.types.infer_dtype(values)
+            inferred_dtype = infer_dtype(values)
             if (
                 self.dtype.kind in {"i", "u"} and inferred_dtype == "integer"
             ) or (

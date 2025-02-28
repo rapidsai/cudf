@@ -14,6 +14,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf.api.types import is_scalar
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -622,12 +623,10 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
-        if cudf.api.types.is_scalar(
-            value
-        ) and cudf.utils.utils._is_null_host_scalar(value):
+        if is_scalar(value) and cudf.utils.utils._is_null_host_scalar(value):
             to_add_categories = 0
         else:
-            if cudf.api.types.is_scalar(value):
+            if is_scalar(value):
                 arr = column.as_column(value, length=1, nan_as_null=False)
             else:
                 arr = column.as_column(value, nan_as_null=False)
@@ -643,7 +642,7 @@ class CategoricalColumn(column.ColumnBase):
                 "category, set the categories first"
             )
 
-        if cudf.api.types.is_scalar(value):
+        if is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
             value = cudf.core.column.as_column(value).astype(self.dtype)
@@ -1044,7 +1043,7 @@ class CategoricalColumn(column.ColumnBase):
         self, fill_value: ScalarLike | ColumnLike
     ) -> cudf.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
-        if cudf.api.types.is_scalar(fill_value):
+        if is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:
                 try:
                     fill_value = self._encode(fill_value)

@@ -20,7 +20,6 @@ import pylibcudf as plc  # noqa: TC002
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_dict_like,
     is_integer,
@@ -64,6 +63,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
+    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     to_cudf_compatible_scalar,
 )
@@ -357,7 +357,9 @@ class _SeriesLocIndexer(_FrameIndexer):
                 "as labels (consistent with DataFrame behavior). To access "
                 "a value by position, use `ser.iloc[pos]`"
             )
-            if not _is_non_decimal_numeric_dtype(index_dtype) and not (
+            if not is_dtype_obj_numeric(
+                index_dtype, include_decimal=False
+            ) and not (
                 isinstance(index_dtype, cudf.CategoricalDtype)
                 and index_dtype.categories.dtype.kind in "iu"
             ):
