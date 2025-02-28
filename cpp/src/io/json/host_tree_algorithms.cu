@@ -47,6 +47,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <functional>
 
 namespace cudf::io::json::detail {
 

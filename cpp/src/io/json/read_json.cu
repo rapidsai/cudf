@@ -43,6 +43,7 @@
 #include <BS_thread_pool.hpp>
 #include <BS_thread_pool_utils.hpp>
 
+#include <functional>
 #include <numeric>
 
 namespace cudf::io::json::detail {
