@@ -182,7 +182,7 @@ class NumericalColumn(NumericalBaseColumn):
     @acquire_spill_lock()
     def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
         plc_column = plc.transform.transform(
-            self.to_pylibcudf(mode="read"),
+            [self.to_pylibcudf(mode="read")],
             compiled_op[0],
             plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
             True,
@@ -214,7 +214,7 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
-                return self.astype(truediv_type)._binaryop(other, op)
+                return self.astype(np.dtype(truediv_type))._binaryop(other, op)
         elif op in {
             "__lt__",
             "__gt__",

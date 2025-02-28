@@ -13,7 +13,6 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase
@@ -26,7 +25,7 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import cudf_dtype_to_pa_type
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, cudf_dtype_to_pa_type
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 if TYPE_CHECKING:
@@ -74,11 +73,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_decimal_column(
         self,
         dtype: Dtype,
-    ) -> "DecimalBaseColumn":
-        if (
-            isinstance(dtype, cudf.core.dtypes.DecimalDtype)
-            and dtype.scale < self.dtype.scale
-        ):
+    ) -> DecimalBaseColumn:
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -100,7 +96,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                cudf.core.column.column_empty(0, dtype="object"),
+                cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
     def __pow__(self, other):
@@ -224,22 +220,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     other = other.astype(self.dtype)
             return other
         if isinstance(other, cudf.Scalar) and isinstance(
+            other.dtype,
+            DecimalDtype,
+        ):
             # TODO: Should it be possible to cast scalars of other numerical
             # types to decimal?
-            other.dtype,
-            cudf.core.dtypes.DecimalDtype,
-        ):
             if _same_precision_and_scale(self.dtype, other.dtype):
                 other = other.astype(self.dtype)
             return other
-        elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            other = Decimal(other)
-            metadata = other.as_tuple()
-            precision = max(len(metadata.digits), metadata.exponent)
-            scale = -cast(int, metadata.exponent)
-            return cudf.Scalar(
-                other, dtype=self.dtype.__class__(precision, scale)
-            )
+        elif isinstance(other, (int, Decimal)):
+            dtype = self.dtype._from_decimal(Decimal(other))
+            return cudf.Scalar(other, dtype=dtype)
         return NotImplemented
 
     def as_numerical_column(
@@ -392,11 +383,6 @@ class Decimal64Column(DecimalBaseColumn):
             null_count=null_count,
             children=children,
         )
-
-    def __setitem__(self, key, value):
-        if isinstance(value, np.integer):
-            value = int(value)
-        super().__setitem__(key, value)
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
