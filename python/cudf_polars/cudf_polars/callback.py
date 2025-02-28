@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
 
@@ -20,6 +21,7 @@ import rmm
 from rmm._cuda import gpu
 
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -173,19 +175,53 @@ def set_device(device: int | None) -> Generator[int, None, None]:
         gpu.setDevice(previous)
 
 
+@overload
 def _callback(
     ir: IR,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
+    should_time: Literal[False],
     *,
     device: int | None,
     memory_resource: int | None,
     executor: Literal["pylibcudf", "dask-experimental"] | None,
-) -> pl.DataFrame:
+    timer: Timer | None,
+) -> pl.DataFrame: ...
+
+
+@overload
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: Literal[True],
+    *,
+    device: int | None,
+    memory_resource: int | None,
+    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    timer: Timer | None,
+) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
+
+
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: bool,  # noqa: FBT001
+    *,
+    device: int | None,
+    memory_resource: int | None,
+    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    timer: Timer | None,
+):
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
+    if timer is not None:
+        assert should_time
     with (
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
@@ -193,7 +229,11 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "pylibcudf":
-            return ir.evaluate(cache={}).to_polars()
+            df = ir.evaluate(cache={}, timer=timer).to_polars()
+            if timer is None:
+                return df
+            else:
+                return df, timer.timings
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 
@@ -242,7 +282,9 @@ def validate_config_options(config: dict) -> None:
         raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
 
 
-def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
+def execute_with_cudf(
+    nt: NodeTraverser, duration_since_start: int | None, *, config: GPUEngine
+) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -250,6 +292,10 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     ----------
     nt
         NodeTraverser
+
+    duration_since_start
+        Time since the user started executing the query (or None if no
+        profiling should occur).
 
     config
         GPUEngine configuration object
@@ -265,16 +311,22 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     -----
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
+    if duration_since_start is None:
+        timer = None
+    else:
+        start = time.monotonic_ns()
+        timer = Timer(start - duration_since_start)
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
     executor = config.config.get("executor", None)
     validate_config_options(config.config)
-
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
+        if timer is not None:
+            timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
@@ -299,5 +351,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                     device=device,
                     memory_resource=memory_resource,
                     executor=executor,
+                    timer=timer,
                 )
             )

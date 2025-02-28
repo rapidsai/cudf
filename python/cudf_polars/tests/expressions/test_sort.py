@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -68,7 +68,11 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     assert_gpu_result_equal(q)
 
-    df = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir().evaluate(cache={})
+    df = (
+        Translator(q._ldf.visit(), pl.GPUEngine())
+        .translate_ir()
+        .evaluate(cache={}, timer=None)
+    )
 
     a = df.column_map["a"]
 

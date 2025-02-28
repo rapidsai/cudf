@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import time
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import Schema, Slice as Zlice
+    from cudf_polars.utils.timer import Timer
 
 
 __all__ = [
@@ -181,7 +183,9 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
+    ) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -190,6 +194,9 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        timer
+            If not None, a Timer object to record timings for the
+            evaluation of the node.
 
         Notes
         -----
@@ -208,10 +215,16 @@ class IR(Node["IR"]):
             If evaluation fails. Ideally this should not occur, since the
             translation phase should fail earlier.
         """
-        return self.do_evaluate(
-            *self._non_child_args,
-            *(child.evaluate(cache=cache) for child in self.children),
-        )
+        children = [child.evaluate(cache=cache, timer=timer) for child in self.children]
+        if timer is not None:
+            start = time.monotonic_ns()
+            result = self.do_evaluate(*self._non_child_args, *children)
+            end = time.monotonic_ns()
+            # TODO: Set better names on each class object.
+            timer.store(start, end, type(self).__name__)
+            return result
+        else:
+            return self.do_evaluate(*self._non_child_args, *children)
 
 
 class ErrorNode(IR):
@@ -678,7 +691,9 @@ class Cache(IR):
         # return it.
         return df
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
@@ -686,7 +701,7 @@ class Cache(IR):
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            return cache.setdefault(self.key, value.evaluate(cache=cache, timer=timer))
 
 
 class DataFrameScan(IR):
