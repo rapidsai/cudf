@@ -23,7 +23,7 @@ build:
   string: cuda${{ cuda_major }}_py${{ py_buildstring }}_${{ date_string }}_${{ head_rev }}
   script:
     content: |
-      ./build.sh -v cudf_kafka
+      ./build.sh cudf_kafka
     secrets:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
