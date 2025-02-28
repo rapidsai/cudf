@@ -90,13 +90,13 @@ cdef extern from "cudf/io/json.hpp" \
             cudf_io_types.source_info src
         ) except +libcudf_exception_handler
         json_reader_options_builder& dtypes(
-            vector[string] types
-        ) except +libcudf_exception_handler
-        json_reader_options_builder& dtypes(
             vector[data_type] types
         ) except +libcudf_exception_handler
         json_reader_options_builder& dtypes(
             map[string, schema_element] types
+        ) except +libcudf_exception_handler
+        json_reader_options_builder& dtypes(
+            map[string, data_type] types
         ) except +libcudf_exception_handler
         json_reader_options_builder& dtypes(
             schema_element types

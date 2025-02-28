@@ -430,7 +430,9 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return np.float64("nan")
 
 
-def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
+def get_allowed_combinations_for_operator(
+    dtype_l: np.dtype, dtype_r: np.dtype, op: str
+) -> np.dtype:
     error = TypeError(
         f"{op} not supported between {dtype_l} and {dtype_r} scalars"
     )
@@ -456,18 +458,19 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
     # special rules for string
     if dtype_l == "object" or dtype_r == "object":
         if (dtype_l == dtype_r == "object") and op == "__add__":
-            return "str"
+            return CUDF_STRING_DTYPE
         else:
             raise error
 
     # Check if we can directly operate
 
     for valid_combo in allowed:
-        ltype, rtype, outtype = valid_combo
-        if np.can_cast(dtype_l.char, ltype) and np.can_cast(
-            dtype_r.char, rtype
+        ltype, rtype, outtype = valid_combo  # type: ignore[misc]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]
+            dtype_r.char,
+            rtype,  # type: ignore[has-type]
         ):
-            return outtype
+            return np.dtype(outtype)  # type: ignore[has-type]
 
     raise error
 
@@ -629,6 +632,35 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     else:
         dtype = np.dtype(dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
+
+
+def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == plc.TypeId.LIST:
+        child = col.list_view().child()
+        return cudf.ListDtype(dtype_from_pylibcudf_column(child))
+    elif tid == plc.TypeId.STRUCT:
+        fields = {
+            str(i): dtype_from_pylibcudf_column(col.child(i))
+            for i in range(col.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == plc.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=-type_.scale()
+        )
+    elif tid == plc.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION, scale=-type_.scale()
+        )
+    elif tid == plc.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION, scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
