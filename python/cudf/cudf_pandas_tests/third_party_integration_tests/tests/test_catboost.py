@@ -44,7 +44,7 @@ def classification_data():
     categorical_feature = rng.choice([0, 1, 2, 3], size=(1000, 2))
     X = np.hstack([X, categorical_feature])
     df = pd.DataFrame(X)
-    df.iloc[:, -2] = df.iloc[:, -2].astype("category")
+    df.iloc[:, -2] = df.iloc[:, -2].astype("int64").astype("category")
     df.iloc[:, -1] = df.iloc[:, -1].astype("int64")
     return df, pd.Series(y)
 
