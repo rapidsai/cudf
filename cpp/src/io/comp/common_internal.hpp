@@ -39,10 +39,11 @@ constexpr uint8_t fcomment = 0x10;  // Comment present
 inline std::optional<nvcomp::compression_type> to_nvcomp_compression(compression_type compression)
 {
   switch (compression) {
-    case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
-    case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
+    case compression_type::GZIP: return nvcomp::compression_type::GZIP;
     case compression_type::LZ4: return nvcomp::compression_type::LZ4;
+    case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
     case compression_type::ZLIB: return nvcomp::compression_type::DEFLATE;
+    case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
     default: return std::nullopt;
   }
 }
