@@ -15,10 +15,10 @@
 # Use CPM to find or clone libzstd
 function(find_and_configure_zstd)
 
-  set(CPM_DOWNLOAD_zstd ON)
+  # set(CPM_DOWNLOAD_zstd ON)
   rapids_cpm_find(
     zstd 1.5.7
-    GLOBAL_TARGETS libzstd_static
+    GLOBAL_TARGETS libzstd_shared
     CPM_ARGS
     GIT_REPOSITORY https://github.com/facebook/zstd.git
     GIT_TAG v1.5.7

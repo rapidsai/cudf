@@ -69,6 +69,7 @@ requirements:
     - flatbuffers {{ flatbuffers_version }}
     - rapids-logger =0.1
     - zlib {{ zlib_version }}
+    - zstandard {{ zstandard_version }}
 
 outputs:
   - name: libcudf
