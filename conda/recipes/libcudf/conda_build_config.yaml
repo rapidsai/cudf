@@ -33,6 +33,9 @@ nvcomp_version:
 
 zlib_version:
   - ">=1.2.13"
+
+zstandard_version:
+  - ">=0.23.0"
 # The CTK libraries below are missing from the conda-forge::cudatoolkit package
 # for CUDA 11. The "*_host_*" version specifiers correspond to `11.8` packages
 # and the "*_run_*" version specifiers correspond to `11.x` packages.
