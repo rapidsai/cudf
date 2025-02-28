@@ -21,6 +21,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    _BaseDtype,
 )
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
@@ -111,7 +112,7 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         else:
             dtype = value.dtype
 
-    if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+    if not isinstance(dtype, (np.dtype, _BaseDtype)):
         dtype = cudf.dtype(dtype)
 
     if not valid:
