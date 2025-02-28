@@ -278,10 +278,8 @@ class DatetimeColumn(column.ColumnBase):
             isinstance(fill_value, np.datetime64)
             and self.time_unit != np.datetime_data(fill_value)[0]
         ):
-            # TODO: Disallow this cast
             fill_value = fill_value.astype(self.dtype)
         elif isinstance(fill_value, str) and fill_value.lower() == "nat":
-            # TODO: Disallow this casting; user should be explicit
             fill_value = np.datetime64(fill_value, self.time_unit)
         return super()._validate_fillna_value(fill_value)
 
