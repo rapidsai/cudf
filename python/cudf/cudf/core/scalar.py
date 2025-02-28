@@ -26,6 +26,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
@@ -114,6 +115,8 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
 
     if not isinstance(dtype, (np.dtype, _BaseDtype)):
         dtype = cudf.dtype(dtype)
+    elif dtype.kind == "U":
+        dtype = CUDF_STRING_DTYPE
 
     if not valid:
         value = NaT if dtype.kind in "mM" else NA
