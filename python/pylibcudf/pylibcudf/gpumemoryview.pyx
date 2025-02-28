@@ -31,7 +31,7 @@ cdef class gpumemoryview:
         return self.obj.__cuda_array_interface__
 
     def __len__(self):
-        return self.obj.__cuda_array_interface["shape"][0]
+        return self.obj.__cuda_array_interface__["shape"][0]
 
     @property
     def nbytes(self):
