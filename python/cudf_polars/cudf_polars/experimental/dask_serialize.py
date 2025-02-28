@@ -17,6 +17,13 @@ from cudf_polars.containers import Column, DataFrame
 __all__ = ["register"]
 
 
+def frames_to_gpumemoryview(frames):
+    return [
+        plc.gpumemoryview(f) if hasattr(f, "__cuda_array_interface__") else f
+        for f in frames
+    ]
+
+
 def register() -> None:
     """Register dask serialization routines for DataFrames."""
 
@@ -29,12 +36,14 @@ def register() -> None:
     @cuda_deserialize.register(DataFrame)
     def _(header, frames):
         with log_errors():
+            frames = frames_to_gpumemoryview(frames)
             assert len(frames) == 2
             return DataFrame.deserialize(header, tuple(frames))
 
     @cuda_deserialize.register(Column)
     def _(header, frames):
         with log_errors():
+            frames = frames_to_gpumemoryview(frames)
             assert len(frames) == 2
             return Column.deserialize(header, tuple(frames))
 
