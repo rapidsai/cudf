@@ -26,6 +26,7 @@ rapids-logger "Run narwhals tests for cuDF"
 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -p cudf.testing.narwhals_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
