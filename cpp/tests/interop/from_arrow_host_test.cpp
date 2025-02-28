@@ -19,6 +19,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -749,6 +750,32 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col_view.child_begin(), got_cudf_col_view.child_end())};
   CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+}
+
+TEST_F(FromArrowHostDeviceTest, StringViewType)
+{
+  auto data = std::vector<std::string>(
+    {"hello", "world", "much longer string", "another even longer string"});
+
+  ArrowArray input;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(&input, NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(&input));
+
+  for (auto& s : data) {
+    auto item = ArrowStringView{s.c_str(), static_cast<int64_t>(s.size())};
+    NANOARROW_THROW_NOT_OK(ArrowArrayAppendString(&input, item));
+  }
+
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(&input, NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
+
+  auto result = cudf::from_arrow_column(&schema, &input);
+
+  auto expected = cudf::test::strings_column_wrapper(data.begin(), data.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 }
 
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)

@@ -17,21 +17,16 @@
 #include "arrow_utilities.hpp"
 #include "from_arrow_host.hpp"
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/interop.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/table/table_view.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -39,7 +34,10 @@
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
-#include <nanoarrow/nanoarrow_device.h>
+
+#include <numeric>
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -141,7 +139,41 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  return nullptr;
+  if (input->length == 0) { return make_empty_column(type_id::STRING); }
+
+  ArrowArrayView view;
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
+
+  cudf::size_type null_count = 0;
+  auto items                 = std::vector<std::string_view>(input->length);
+  for (auto i = 0L; i < input->length; ++i) {
+    if (ArrowArrayViewIsNull(&view, i)) {
+      null_count++;
+    } else {
+      auto const item = ArrowArrayViewGetStringUnsafe(&view, i);
+      items[i]        = std::string_view(item.data, item.size_bytes);
+    }
+  }
+
+  std::vector<int64_t> sizes{};
+  sizes.reserve(input->length);
+  for (auto& s : items) {
+    sizes.push_back(s.size());
+  }
+  auto d_sizes = cudf::detail::make_device_uvector_async(sizes, stream, mr);
+  auto [offsets, bytes] =
+    cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
+
+  std::vector<char> chars{};
+  chars.reserve(bytes);
+  for (auto& s : items) {
+    chars.insert(chars.end(), std::cbegin(s), std::cend(s));
+  }
+  auto d_chars = cudf::detail::make_device_uvector_async(chars, stream, mr);
+
+  return cudf::make_strings_column(
+    input->length, std::move(offsets), d_chars.release(), null_count, std::move(*mask));
 }
 
 }  // namespace
