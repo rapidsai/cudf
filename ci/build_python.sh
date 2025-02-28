@@ -28,7 +28,7 @@ source rapids-rattler-channel-string
 
 rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
-RATTLER_CHANNELS=("--channel ${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
+RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
 # TODO: Remove `--test skip` flag once importing on a CPU node works correctly
 
