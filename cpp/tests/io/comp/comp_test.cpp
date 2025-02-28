@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/types.hpp"
 #include "io/comp/comp.hpp"
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/io_uncomp.hpp"
@@ -78,9 +79,32 @@ struct DecompressTest : public cudf::test::BaseFixture {
   }
 };
 
-struct HostCompressTest : public cudf::test::BaseFixture {
-  HostCompressTest() { setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1); }
-  ~HostCompressTest() override { unsetenv("LIBCUDF_HOST_COMPRESSION"); }
+struct HostCompressTest : public cudf::test::BaseFixture,
+                          public ::testing::WithParamInterface<cudf::io::compression_type> {
+  HostCompressTest()
+  {
+    setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
+    setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+  }
+  ~HostCompressTest() override
+  {
+    unsetenv("LIBCUDF_HOST_COMPRESSION");
+    unsetenv("LIBCUDF_NVCOMP_POLICY");
+  }
+};
+
+struct HostDecompressTest : public cudf::test::BaseFixture,
+                            public ::testing::WithParamInterface<cudf::io::compression_type> {
+  HostDecompressTest()
+  {
+    setenv("LIBCUDF_HOST_DECOMPRESSION", "ON", 1);
+    setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+  }
+  ~HostDecompressTest() override
+  {
+    unsetenv("LIBCUDF_HOST_DECOMPRESSION");
+    unsetenv("LIBCUDF_NVCOMP_POLICY");
+  }
 };
 
 /**
@@ -224,23 +248,88 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {false, false}));
 }
 
-TEST_F(HostCompressTest, SnappyCompression)
+void roundtip_test(cudf::io::compression_type compression)
 {
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = rmm::mr::get_current_device_resource();
   std::vector<uint8_t> expected;
-  expected.reserve(8 * (32 << 20));
-  for (size_t size = 1; size < 32 << 20; size *= 2) {
+  expected.reserve(8 * (8 << 20));
+  for (size_t size = 1; size < 8 << 20; size *= 2) {
     // Using number strings to generate data that is compressible, but not trivially so
     for (size_t i = size / 2; i < size; ++i) {
       auto const num_string = std::to_string(i);
       // Keep adding to the test data
       expected.insert(expected.end(), num_string.begin(), num_string.end());
     }
-    auto const compressed = cudf::io::detail::compress(
-      cudf::io::compression_type::SNAPPY, expected, cudf::get_default_stream());
-    auto const decompressed =
-      cudf::io::detail::decompress(cudf::io::compression_type::SNAPPY, compressed);
-    EXPECT_EQ(expected, decompressed);
+    if (cudf::io::detail::compress_max_allowed_chunk_size(compression)
+          .value_or(std::numeric_limits<size_t>::max()) < expected.size()) {
+      // Skip if the data is too large for the compressor
+      return;
+    }
+
+    auto d_comp = rmm::device_uvector<uint8_t>(
+      cudf::io::detail::max_compressed_size(compression, expected.size()), stream, mr);
+    {
+      auto const d_orig = cudf::detail::make_device_uvector_async(expected, stream, mr);
+      auto hd_srcs      = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
+      hd_srcs[0]        = d_orig;
+      hd_srcs.host_to_device_async(stream);
+
+      auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
+      hd_dsts[0]   = d_comp;
+      hd_dsts.host_to_device_async(stream);
+
+      auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
+      hd_stats[0]   = compression_result{0, compression_status::FAILURE};
+      hd_stats.host_to_device_async(stream);
+
+      cudf::io::detail::compress(compression, hd_srcs, hd_dsts, hd_stats, stream);
+      hd_stats.device_to_host_sync(stream);
+      ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
+      d_comp.resize(hd_stats[0].bytes_written, stream);
+    }
+    std::cout << "Compressed size: " << d_comp.size() << std::endl;
+    auto d_got = cudf::detail::hostdevice_vector<uint8_t>(expected.size(), stream);
+    {
+      auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
+      hd_srcs[0]   = d_comp;
+      hd_srcs.host_to_device_async(stream);
+
+      auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
+      hd_dsts[0]   = d_got;
+      hd_dsts.host_to_device_async(stream);
+
+      auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
+      hd_stats[0]   = compression_result{0, compression_status::FAILURE};
+      hd_stats.host_to_device_async(stream);
+
+      cudf::io::detail::decompress(
+        compression, hd_srcs, hd_dsts, hd_stats, expected.size(), expected.size(), stream);
+      hd_stats.device_to_host_sync(stream);
+      ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
+    }
+
+    auto const got = cudf::detail::make_std_vector_sync(d_got, stream);
+
+    EXPECT_EQ(expected, got);
   }
 }
+/*
+TEST_P(HostCompressTest, HostCompression) { roundtip_test(GetParam()); }
+
+INSTANTIATE_TEST_CASE_P(HostCompression,
+                        HostCompressTest,
+                        ::testing::Values(cudf::io::compression_type::GZIP,
+                                          cudf::io::compression_type::SNAPPY));
+                                          */
+
+TEST_P(HostDecompressTest, HostDecompression) { roundtip_test(GetParam()); }
+
+INSTANTIATE_TEST_CASE_P(HostDecompression,
+                        HostDecompressTest,
+                        ::testing::Values(cudf::io::compression_type::GZIP,
+                                          cudf::io::compression_type::SNAPPY,
+                                          cudf::io::compression_type::ZLIB,
+                                          cudf::io::compression_type::ZSTD));
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -365,9 +365,8 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
-  CUDF_EXPECTS(
-    not host_compression_supported(compression) or device_compression_supported(compression),
-    "Unsupported compression type");
+  CUDF_EXPECTS(host_compression_supported(compression) or device_compression_supported(compression),
+               "Unsupported compression type");
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
