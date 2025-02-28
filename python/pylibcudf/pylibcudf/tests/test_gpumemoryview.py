@@ -31,7 +31,22 @@ def np_array(request):
     return np.empty((size,), dtype=dtype)
 
 
-def test_len_nbytes(np_array):
+def test_cuda_array_interface(np_array):
+    buf = rmm.DeviceBuffer(
+        ptr=np_array.__array_interface__["data"][0], size=np_array.nbytes
+    )
+    gpumemview = plc.gpumemoryview(buf)
+
+    np_array_view = np_array.view("u1")
+
+    ai = np_array_view.__array_interface__
+    cai = gpumemview.__cuda_array_interface__
+    assert cai["shape"] == ai["shape"]
+    assert cai["strides"] == ai["strides"]
+    assert cai["typestr"] == ai["typestr"]
+
+
+def test_len(np_array):
     buf = rmm.DeviceBuffer(
         ptr=np_array.__array_interface__["data"][0], size=np_array.nbytes
     )
