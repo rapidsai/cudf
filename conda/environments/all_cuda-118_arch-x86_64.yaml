@@ -54,9 +54,9 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.2.0,<0.3.0a0
-- numba>=0.59.1,<0.61.0a0
-- numpy>=1.23,<3.0a0
+- numba-cuda>=0.4.0,<0.5.0a0
+- numba>=0.59.1,<0.62.0a0
+- numpy>=1.23,<2.1
 - numpydoc
 - nvcc_linux-64=11.8
 - nvcomp==4.2.0.11
@@ -66,7 +66,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.20,<1.23
+- polars>=1.20,<1.24
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<20.0.0a0
