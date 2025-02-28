@@ -13,25 +13,27 @@
 # =============================================================================
 
 # Use CPM to find or clone libzstd
-function(find_and_configure_zstd VERSION)
-
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+function(find_and_configure_zstd)
 
   rapids_cpm_find(
-    zstd ${VERSION}
-    GLOBAL_TARGETS zstd
+    zstd 1.5.7
+    GLOBAL_TARGETS libzstd_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v${VERSION}
-    GIT_SHALLOW TRUE ${_exclude_from_all}
+    GIT_TAG v1.5.7
+    GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
+    OPTIONS "ZSTD_BUILD_STATIC OFF" "ZSTD_BUILD_SHARED ON" "ZSTD_BUILD_TESTS OFF"
+            "ZSTD_BUILD_PROGRAMS OFF"
   )
 
-  rapids_export_find_package_root(BUILD zstd "${zstd_BINARY_DIR}" EXPORT_SET cudf-exports)
+  if(DEFINED zstd_SOURCE_DIR)
+    # otherwise find_package(zstd) will set this variable
+    set(ZSTD_INCLUDE_DIR
+        "${zstd_SOURCE_DIR}/lib"
+        PARENT_SCOPE
+    )
+  endif()
 
 endfunction()
 
-find_and_configure_zstd(1.5.7)
+find_and_configure_zstd()
