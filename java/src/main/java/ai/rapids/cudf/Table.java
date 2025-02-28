@@ -475,6 +475,7 @@ public final class Table implements AutoCloseable {
                                                int compression,
                                                int[] precisions,
                                                boolean[] isMapValues,
+                                               int stripeSizeRows,
                                                String filename) throws CudfException;
 
   /**
@@ -501,6 +502,7 @@ public final class Table implements AutoCloseable {
                                                  int compression,
                                                  int[] precisions,
                                                  boolean[] isMapValues,
+                                                 int stripeSizeRows,
                                                  HostBufferConsumer consumer,
                                                  HostMemoryAllocator hostMemoryAllocator
                                                  ) throws CudfException;
@@ -1823,6 +1825,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
+          options.getStripeSizeRows(),
           outputFile.getAbsolutePath()));
       this.consumer = null;
     }
@@ -1838,6 +1841,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
+          options.getStripeSizeRows(),
           consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
