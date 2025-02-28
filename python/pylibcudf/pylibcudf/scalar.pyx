@@ -209,116 +209,105 @@ def _from_numpy(np_val):
     raise TypeError(f"{type(np_val).__name__} cannot be converted to pylibcudf.Scalar")
 
 
-@_from_numpy.register(np.datetime64)
-@_from_numpy.register(np.timedelta64)
-def _(np_val):
-    raise NotImplementedError(
-        f"{type(np_val).__name__} is currently not supported."
-    )
+if np is not None:
+    @_from_numpy.register(np.datetime64)
+    @_from_numpy.register(np.timedelta64)
+    def _(np_val):
+        raise NotImplementedError(
+            f"{type(np_val).__name__} is currently not supported."
+        )
 
+    @_from_numpy.register(np.bool_)
+    def _(np_val):
+        cdef DataType dtype = DataType(type_id.BOOL8)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[cbool]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.bool_)
-def _(np_val):
-    cdef DataType dtype = DataType(type_id.BOOL8)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[cbool]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.str_)
+    def _(np_val):
+        cdef DataType dtype = DataType(type_id.STRING)
+        cdef unique_ptr[scalar] c_obj = make_string_scalar(np_val.item().encode())
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
+    @_from_numpy.register(np.int8)
+    def _(np_val):
+        dtype = DataType(type_id.INT8)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.str_)
-def _(np_val):
-    cdef DataType dtype = DataType(type_id.STRING)
-    cdef unique_ptr[scalar] c_obj = make_string_scalar(np_val.item().encode())
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.int16)
+    def _(np_val):
+        dtype = DataType(type_id.INT16)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
+    @_from_numpy.register(np.int32)
+    def _(np_val):
+        dtype = DataType(type_id.INT32)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.int8)
-def _(np_val):
-    dtype = DataType(type_id.INT8)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[int8_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.int64)
+    def _(np_val):
+        dtype = DataType(type_id.INT64)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
+    @_from_numpy.register(np.uint8)
+    def _(np_val):
+        dtype = DataType(type_id.UINT8)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.int16)
-def _(np_val):
-    dtype = DataType(type_id.INT16)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[int16_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.uint16)
+    def _(np_val):
+        dtype = DataType(type_id.UINT16)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
+    @_from_numpy.register(np.uint32)
+    def _(np_val):
+        dtype = DataType(type_id.UINT32)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.int32)
-def _(np_val):
-    dtype = DataType(type_id.INT32)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[int32_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.uint64)
+    def _(np_val):
+        dtype = DataType(type_id.UINT64)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
+    @_from_numpy.register(np.float32)
+    def _(np_val):
+        dtype = DataType(type_id.FLOAT32)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[float]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
 
-@_from_numpy.register(np.int64)
-def _(np_val):
-    dtype = DataType(type_id.INT64)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[int64_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.uint8)
-def _(np_val):
-    dtype = DataType(type_id.UINT8)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.uint16)
-def _(np_val):
-    dtype = DataType(type_id.UINT16)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.uint32)
-def _(np_val):
-    dtype = DataType(type_id.UINT32)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.uint64)
-def _(np_val):
-    dtype = DataType(type_id.UINT64)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.float32)
-def _(np_val):
-    dtype = DataType(type_id.FLOAT32)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[float]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
-
-
-@_from_numpy.register(np.float64)
-def _(np_val):
-    dtype = DataType(type_id.FLOAT64)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    @_from_numpy.register(np.float64)
+    def _(np_val):
+        dtype = DataType(type_id.FLOAT64)
+        cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+        (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
+        cdef Scalar slr = _new_scalar(move(c_obj), dtype)
+        return slr
