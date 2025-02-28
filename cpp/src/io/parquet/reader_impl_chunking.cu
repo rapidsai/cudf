@@ -1539,7 +1539,9 @@ void reader::impl::create_global_chunk_info()
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
-    auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
+    // Add `skip_rows` to the first row group's total rows for proper chunking across subpass and
+    // output chunks
+    auto const row_group_rows = std::min<size_t>(remaining_rows, row_group.num_rows) + skip_rows;
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -1714,7 +1716,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                    iter,
                    iter + subpass.pages.size(),
                    set_row_index{pass.chunks, subpass.pages, c_info, subpass_max_row});
-  // print_cumulative_page_info(subpass.pages, c_info, _stream);
+  // print_cumulative_page_info(subpass.pages, pass.chunks, c_info, _stream);
 
   // compute the splits
   subpass.output_chunk_read_info = compute_page_splits_by_row(
