@@ -73,7 +73,10 @@ def test_groupby_agg_config_options(df, op, keys):
             "groupby_n_ary": 8,
         },
     )
-    q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
+    agg = getattr(pl.col("x"), op)()
+    if op in ("sum", "mean"):
+        agg = agg.round(2)  # Unary test coverage
+    q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
