@@ -448,7 +448,6 @@ class Scan(IR):
         """Evaluate and return a dataframe."""
 
         def _include_file_paths_column(include_file_paths: str | None, df: DataFrame):
-            assert include_file_paths not in df.column_names
             plc_col = plc.interop.from_arrow(
                 pa.array(
                     [
@@ -674,7 +673,7 @@ class Scan(IR):
                 name=name,
             )
             df = DataFrame([index, *df.columns])
-        # assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
         else:
