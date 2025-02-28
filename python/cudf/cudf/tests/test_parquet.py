@@ -3894,7 +3894,7 @@ def test_parquet_chunked_reader_string_decoders(
 
 
 @pytest.mark.parametrize(
-    "nrows,skip_rows",
+    "nrows, skip_rows",
     [
         (0, 0),
         (1000, 0),
@@ -3902,13 +3902,28 @@ def test_parquet_chunked_reader_string_decoders(
         (1000, 10000),
     ],
 )
-def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
-    df = pd.DataFrame(
+@pytest.mark.parametrize(
+    "row_group_size_rows, page_size_rows",
+    [
+        (100000, 100000),  # 1 RG, 1 page per RG
+        (100000, 10000),  # 1 RG, multiple pages per RG
+        (10000, 10000),  # multiple RGs, 1 page per RG
+        (10000, 1000),  # multiple RGs, multiple pages per RG
+    ],
+)
+def test_parquet_reader_nrows_skiprows(
+    nrows, skip_rows, row_group_size_rows, page_size_rows
+):
+    df = cudf.DataFrame(
         {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
     )
     expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(
+        buffer,
+        row_group_size_rows=row_group_size_rows,
+        max_page_size_rows=page_size_rows,
+    )
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
     assert_eq(expected, got)
 

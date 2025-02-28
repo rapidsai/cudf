@@ -1537,14 +1537,15 @@ void reader::impl::create_global_chunk_info()
   // Initialize column chunk information
   auto remaining_rows = num_rows;
   auto skip_rows      = _file_itm_data.global_skip_rows;
+  // Adjust row_group_rows for `skip_rows` if only reading one row group to correctly
+  // `set_row_index` while chunking across subpass and output chunks
+  auto const adjusted_row_group_rows =
+    (skip_rows and row_groups_info.size() == 1) ? skip_rows - row_groups_info[0].start_row : 0;
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
-    auto row_group_rows        = std::min<size_t>(remaining_rows, row_group.num_rows);
-    // Adjust for `skip_rows` for the first row group's num rows for chunking across subpass and
-    // output chunks
-    if (skip_rows) { row_group_rows += skip_rows - rg.start_row; }
-
+    auto const row_group_rows =
+      std::min<size_t>(remaining_rows, row_group.num_rows) + adjusted_row_group_rows;
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
       auto col = _input_columns[i];
