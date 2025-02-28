@@ -207,6 +207,7 @@ language = "en"
 exclude_patterns = [
     "venv",
     "**/includes/**",
+    "narwhals_test_plugin",
 ]
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -585,6 +586,7 @@ nitpick_ignore = [
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
     ("py:class", "pyarrow.lib.DataType"),
