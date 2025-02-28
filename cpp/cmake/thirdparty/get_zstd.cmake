@@ -27,7 +27,6 @@ function(find_and_configure_zstd)
   )
 
   if(DEFINED zstd_SOURCE_DIR)
-    # otherwise find_package(zstd) will set this variable
     set(ZSTD_INCLUDE_DIR
         "${zstd_SOURCE_DIR}/lib"
         PARENT_SCOPE
