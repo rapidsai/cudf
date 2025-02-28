@@ -221,7 +221,8 @@ if np is not None:
     def _(np_val):
         cdef DataType dtype = DataType(type_id.BOOL8)
         cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-        (<numeric_scalar[cbool]*>c_obj.get()).set_value(np_val)
+        cdef cbool c_val = np_val
+        (<numeric_scalar[cbool]*>c_obj.get()).set_value(c_val)
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
 
