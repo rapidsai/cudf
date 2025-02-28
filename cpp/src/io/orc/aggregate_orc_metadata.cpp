@@ -19,6 +19,7 @@
 #include "io/utilities/row_selection.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 
 namespace cudf::io::orc::detail {

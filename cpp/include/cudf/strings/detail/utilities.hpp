@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,18 @@ bool is_large_strings_enabled();
 int64_t get_offset_value(cudf::column_view const& offsets,
                          size_type index,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Return the first and last offset in the given strings column
+ *
+ * This accounts for sliced input columns as well.
+ *
+ * @param input Strings column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return First and last offset values
+ */
+std::pair<int64_t, int64_t> get_first_and_last_offset(cudf::strings_column_view const& input,
+                                                      rmm::cuda_stream_view stream);
 
 }  // namespace strings::detail
 }  // namespace CUDF_EXPORT cudf
