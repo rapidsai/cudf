@@ -37,7 +37,7 @@ from functools import singledispatch
 try:
     import numpy as np
     np_error = None
-except (ImportError, ModuleNotFoundError) as err:
+except ImportError as err:
     np = None
     np_error = err
 
