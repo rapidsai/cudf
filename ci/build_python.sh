@@ -26,6 +26,10 @@ export RAPIDS_PACKAGE_VERSION
 # populates `RATTLER_CHANNELS` array
 source rapids-rattler-channel-string
 
+rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
+
+RATTLER_CHANNELS=("--channel ${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
+
 # TODO: Remove `--test skip` flag once importing on a CPU node works correctly
 
 # --no-build-id allows for caching with `sccache`
@@ -37,7 +41,6 @@ rattler-build build --recipe conda/recipes/pylibcudf \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
@@ -49,7 +52,6 @@ rattler-build build --recipe conda/recipes/cudf \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
@@ -61,7 +63,6 @@ rattler-build build --recipe conda/recipes/dask-cudf \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
@@ -73,7 +74,6 @@ rattler-build build --recipe conda/recipes/cudf_kafka \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
@@ -85,7 +85,6 @@ rattler-build build --recipe conda/recipes/custreamz \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
@@ -97,7 +96,6 @@ rattler-build build --recipe conda/recipes/cudf-polars \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     --test skip \
-                    --channel "${CPP_CHANNEL}" \
                     "${RATTLER_CHANNELS[@]}"
 
 sccache --show-adv-stats
