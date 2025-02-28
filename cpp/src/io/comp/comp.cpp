@@ -351,6 +351,7 @@ void host_compress(compression_type compression,
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
+    case compression_type::GZIP:
     case compression_type::LZ4:
     case compression_type::ZLIB:
     case compression_type::ZSTD: return not nvcomp::is_compression_disabled(nvcomp_type.value());

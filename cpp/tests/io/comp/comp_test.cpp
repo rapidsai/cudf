@@ -288,7 +288,7 @@ void roundtip_test(cudf::io::compression_type compression)
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
-    std::cout << "Compressed size: " << d_comp.size() << std::endl;
+
     auto d_got = cudf::detail::hostdevice_vector<uint8_t>(expected.size(), stream);
     {
       auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
@@ -314,14 +314,13 @@ void roundtip_test(cudf::io::compression_type compression)
     EXPECT_EQ(expected, got);
   }
 }
-/*
+
 TEST_P(HostCompressTest, HostCompression) { roundtip_test(GetParam()); }
 
 INSTANTIATE_TEST_CASE_P(HostCompression,
                         HostCompressTest,
                         ::testing::Values(cudf::io::compression_type::GZIP,
                                           cudf::io::compression_type::SNAPPY));
-                                          */
 
 TEST_P(HostDecompressTest, HostDecompression) { roundtip_test(GetParam()); }
 
