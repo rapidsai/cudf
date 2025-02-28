@@ -1042,6 +1042,18 @@ if(CUDF_BUILD_TESTUTIL)
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
 
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudf_test_base OBJECT)
+  target_link_libraries(
+    cudf_test_base
+    PUBLIC cudf::cudftestutil
+    PRIVATE cudf::cudftestutil_impl
+    PUBLIC GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+  )
+  add_library(cudf::cudf_test_base ALIAS cudf_test_base)
+
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(
     FILES tests/utilities/column_utilities.cu
