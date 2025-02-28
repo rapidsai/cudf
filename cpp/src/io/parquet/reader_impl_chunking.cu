@@ -1540,9 +1540,10 @@ void reader::impl::create_global_chunk_info()
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
-    // Add `skip_rows` to the first row group's total rows for proper chunking across subpass and
+    auto row_group_rows        = std::min<size_t>(remaining_rows, row_group.num_rows);
+    // Adjust for `skip_rows` for the first row group's num rows for chunking across subpass and
     // output chunks
-    auto const row_group_rows = std::min<size_t>(remaining_rows, row_group.num_rows) + skip_rows;
+    if (skip_rows) { row_group_rows += skip_rows - rg.start_row; }
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {

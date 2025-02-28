@@ -3912,6 +3912,50 @@ def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
     assert_eq(expected, got)
 
+    # Check for chunked parquet reader
+    with cudf.option_context("io.parquet.low_memory", True):
+        # Check with small chunk read and pass read limits
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=1000,
+            _pass_read_limit=5000,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        # Reset index for comparison
+        expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
+
+        # Check with zero chunk read and small pass read limit
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=0,
+            _pass_read_limit=5000,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        assert_eq(expected, got)
+
+        # Check with small chunk read and zero pass read limit
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=1000,
+            _pass_read_limit=0,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        assert_eq(expected, got)
+
+        # Check with large chunk read and pass read limits
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=1000000,
+            _pass_read_limit=2000000,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        assert_eq(expected, got)
+
 
 def test_parquet_reader_pandas_compatibility():
     df = pd.DataFrame(
