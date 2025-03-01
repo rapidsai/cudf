@@ -15,7 +15,6 @@
  */
 
 #include "io/utilities/getenv_or.hpp"
-#include "sys/sysinfo.h"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/logger.hpp>
@@ -29,14 +28,6 @@
 namespace cudf {
 
 namespace {
-
-std::size_t get_free_system_memory()
-{
-  struct sysinfo memInfo;
-
-  sysinfo(&memInfo);
-  return memInfo.freeram;
-}
 
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
@@ -54,21 +45,13 @@ class fixed_pinned_pool_memory_resource {
  public:
   fixed_pinned_pool_memory_resource(size_t size)
     :  // rmm requires the pool size to be a multiple of 256 bytes
-      pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)}
+      pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
+      pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
   {
-    try {
-      pool_ = new host_pooled_mr{upstream_mr_, pool_size_, pool_size_};
-    } catch (...) {
-      CUDF_LOG_WARN("Failed to create pinned pool, pinned allocations will potentially be slower");
-    }
-    CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
-
-    if (pool_ != nullptr) {
-      // Allocate full size from the pinned pool to figure out the beginning and end address
-      pool_begin_ = pool_->allocate_async(pool_size_, stream_);
-      pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-      pool_->deallocate_async(pool_begin_, pool_size_, stream_);
-    }
+    // Allocate full size from the pinned pool to figure out the beginning and end address
+    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
+    pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
+    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
   }
 
   fixed_pinned_pool_memory_resource(fixed_pinned_pool_memory_resource const&)            = delete;
@@ -78,7 +61,7 @@ class fixed_pinned_pool_memory_resource {
 
   void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
-    if (pool_ != nullptr && bytes <= pool_size_) {
+    if (bytes <= pool_size_) {
       try {
         return pool_->allocate_async(bytes, alignment, stream);
       } catch (...) {
@@ -106,7 +89,7 @@ class fixed_pinned_pool_memory_resource {
                         std::size_t alignment,
                         cuda::stream_ref stream)
   {
-    if (pool_ != nullptr && bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
+    if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
     } else {
       upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
@@ -167,7 +150,7 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
       if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
         return std::atol(env_val);
       }
-      CUDF_LOG_WARN("Free system memory: %ld", get_free_system_memory());
+
       if (config_size.has_value()) { return *config_size; }
 
       auto const total = rmm::available_device_memory().second;
