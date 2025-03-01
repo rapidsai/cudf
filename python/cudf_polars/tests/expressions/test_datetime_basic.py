@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -52,6 +52,15 @@ datetime_extract_fields = [
     "millisecond",
     "microsecond",
     "nanosecond",
+]
+
+duration_extract_fields = [
+    "total_seconds",
+    "total_milliseconds",
+    "total_microseconds",
+    "total_nanoseconds",
+    "total_days",
+    "total_hours",
 ]
 
 
@@ -133,5 +142,23 @@ def test_date_extract(field):
     )
 
     q = ldf.select(field(pl.col("dates").dt))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_component_extract(field, dtype):
+    ldf = pl.LazyFrame(
+        {
+            "durations": [
+                datetime.timedelta(days=1, seconds=1),
+                datetime.timedelta(days=2, seconds=2),
+            ]
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)())
 
     assert_gpu_result_equal(q)
