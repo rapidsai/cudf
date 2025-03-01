@@ -3897,25 +3897,35 @@ def test_parquet_chunked_reader_string_decoders(
     "nrows, skip_rows",
     [
         (0, 0),
-        (1000, 0),
-        (0, 1000),
-        (1000, 10000),
+        (10000, 0),
+        (99, 1),
+        (10999, 1),
+        (99, 101),
+        (10999, 101),
+        (1, 999),
+        (999, 10001),
+        (1, 10101),
+        (1001, 11001),
     ],
 )
 @pytest.mark.parametrize(
     "row_group_size_rows, page_size_rows",
     [
-        (100000, 100000),  # 1 RG, 1 page per RG
-        (100000, 10000),  # 1 RG, multiple pages per RG
-        (10000, 10000),  # multiple RGs, 1 page per RG
-        (10000, 1000),  # multiple RGs, multiple pages per RG
+        (10000, 10000),  # 1 RG, 1 page per RG
+        (10000, 1000),  # 1 RG, multiple pages per RG
+        (1000, 1000),  # multiple RGs, 1 page per RG
+        (1000, 100),  # multiple RGs, multiple pages per RG
     ],
 )
 def test_parquet_reader_nrows_skiprows(
     nrows, skip_rows, row_group_size_rows, page_size_rows
 ):
     df = cudf.DataFrame(
-        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+        {
+            "a": list([["cat", "lion", "deer"], ["bear", "bull", "ibex"]])
+            * 10000,
+            "b": ["av", "qw", "hi", "xyz"] * 5000,
+        }
     )
     expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
