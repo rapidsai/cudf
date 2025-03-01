@@ -25,6 +25,7 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+
 namespace cudf {
 
 namespace {
@@ -48,16 +49,13 @@ class fixed_pinned_pool_memory_resource {
       pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
       pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
   {
+    CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
+
     // Allocate full size from the pinned pool to figure out the beginning and end address
     pool_begin_ = pool_->allocate_async(pool_size_, stream_);
     pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
     pool_->deallocate_async(pool_begin_, pool_size_, stream_);
   }
-
-  fixed_pinned_pool_memory_resource(fixed_pinned_pool_memory_resource const&)            = delete;
-  fixed_pinned_pool_memory_resource(fixed_pinned_pool_memory_resource&&)                 = delete;
-  fixed_pinned_pool_memory_resource& operator=(fixed_pinned_pool_memory_resource const&) = delete;
-  fixed_pinned_pool_memory_resource& operator=(fixed_pinned_pool_memory_resource&&)      = delete;
 
   void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
