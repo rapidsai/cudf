@@ -2228,7 +2228,6 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
 [[nodiscard]] uint32_t find_largest_stream_size(device_2dspan<stripe_stream const> ss,
                                                 rmm::cuda_stream_view stream)
-
 {
   auto const longest_stream = thrust::max_element(
     rmm::exec_policy(stream),
