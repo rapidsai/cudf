@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 
 import pyarrow as pa
@@ -52,6 +52,39 @@ def test_read_parquet_basic(
     )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
+
+    # No filtering done
+    assert res.num_row_groups_after_stats_filter is None
+    assert res.num_row_groups_after_bloom_filter is None
+
+
+def test_read_parquet_filters_metadata(tmp_path):
+    tbl1 = pa.Table.from_pydict({"a": [1, 2, 3]})
+    path1 = tmp_path / "tbl1.parquet"
+    pa.parquet.write_table(tbl1, path1)
+    source = plc.io.SourceInfo([path1])
+
+    # rowgroup pruned
+    filter = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("a"),
+        Literal(plc.interop.from_arrow(pa.scalar(10))),
+    )
+    options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+    options.set_filter(filter)
+    plc_table_w_meta = plc.io.parquet.read_parquet(options)
+    assert plc_table_w_meta.num_row_groups_after_stats_filter == 0
+
+    # rowgroup not pruned
+    filter = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("a"),
+        Literal(plc.interop.from_arrow(pa.scalar(0))),
+    )
+    options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+    options.set_filter(filter)
+    plc_table_w_meta = plc.io.parquet.read_parquet(options)
+    assert plc_table_w_meta.num_row_groups_after_stats_filter == 1
 
 
 @pytest.mark.parametrize(
