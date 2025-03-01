@@ -16,7 +16,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
