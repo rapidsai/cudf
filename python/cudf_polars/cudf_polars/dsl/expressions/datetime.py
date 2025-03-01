@@ -116,7 +116,10 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if self.name not in self._COMPONENT_MAP:
+        if (
+            self.name not in self._COMPONENT_MAP
+            and self.name is not TemporalFunction.Name.ToString
+        ):
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -132,6 +135,17 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name == TemporalFunction.Name.ToString:
+            if plc.traits.is_timestamp(column.obj.type()):
+                func = plc.strings.convert.convert_datetime.from_timestamps
+            elif plc.traits.is_duration(column.obj.type()):
+                func = plc.strings.convert.convert_durations.from_durations
+            else:
+                raise ValueError("Unsupported type for ToString")
+            (format,) = self.options
+            names = plc.interop.from_arrow(pa.array([], type=pa.string()))
+            result = func(column.obj, format, names)
+            return Column(result)
         if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
