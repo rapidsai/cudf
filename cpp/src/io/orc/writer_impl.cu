@@ -2226,8 +2226,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
           std::move(dict_order_owner)};
 }
 
-[[nodiscard]] size_t find_largest_stream_size(device_2dspan<stripe_stream const> ss,
-                                              rmm::cuda_stream_view stream)
+[[nodiscard]] uint32_t find_largest_stream_size(device_2dspan<stripe_stream const> ss,
+                                                rmm::cuda_stream_view stream)
 
 {
   auto const longest_stream = thrust::max_element(
@@ -2238,14 +2238,9 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       return lhs.stream_size < rhs.stream_size;
     }));
 
-  size_t max_stream_size = 0;
-  cudaMemcpyAsync(&max_stream_size,
-                  &longest_stream->stream_size,
-                  sizeof(size_t),
-                  cudaMemcpyDeviceToHost,
-                  stream.value());
-  stream.synchronize();
-  return max_stream_size;
+  auto const h_longest_stream = cudf::detail::make_host_vector_sync(
+    device_span<stripe_stream const>{longest_stream, 1}, stream);
+  return h_longest_stream[0].stream_size;
 }
 
 /**
@@ -2343,7 +2338,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   auto const largest_stream_size = find_largest_stream_size(strm_descs, stream);
   auto const max_compressed_block_size =
-    max_compressed_size(compression, std::min(largest_stream_size, compression_blocksize));
+    max_compressed_size(compression, std::min<size_t>(largest_stream_size, compression_blocksize));
   auto const padded_max_compressed_block_size =
     util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
   auto const padded_block_header_size =
