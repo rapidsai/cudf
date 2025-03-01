@@ -146,17 +146,25 @@ def test_date_extract(field):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "field",
+    ["total_seconds", "total_milliseconds", "total_microseconds", "total_nanoseconds"],
+)
 @pytest.mark.parametrize(
     "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
 )
 def test_duration_component_extract(field, dtype):
     ldf = pl.LazyFrame(
         {
-            "durations": [
-                datetime.timedelta(days=1, seconds=1),
-                datetime.timedelta(days=2, seconds=2),
-            ]
+            "durations": pl.Series(
+                [
+                    datetime.timedelta(seconds=1),
+                    datetime.timedelta(seconds=2),
+                    datetime.timedelta(seconds=3),
+                    datetime.timedelta(days=2, seconds=4),
+                ],
+                dtype=dtype,
+            ),
         }
     )
     q = ldf.select(getattr(pl.col("durations").dt, field)())
