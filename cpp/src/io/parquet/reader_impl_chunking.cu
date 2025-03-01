@@ -540,7 +540,7 @@ struct get_page_span {
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
     // list rows can span page boundaries, so it is not always safe to filter page spans simply
-    // based on `start_row` so select all pages.
+    // based on `start_row` and `end_row` so select all pages.
     if (is_list) {
       return {static_cast<size_t>(first_page_index),
               static_cast<size_t>(first_page_index + num_pages)};
