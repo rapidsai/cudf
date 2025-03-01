@@ -3791,11 +3791,10 @@ def test_parquet_chunked_reader(
 
 @pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [997, 2997, None])
+@pytest.mark.parametrize("num_rows", [997, 99, None])
+@pytest.mark.parametrize("skip_rows", [1, 101, 6001])
 def test_parquet_chunked_reader_structs(
-    chunk_read_limit,
-    pass_read_limit,
-    num_rows,
+    chunk_read_limit, pass_read_limit, num_rows, skip_rows
 ):
     data = [
         {
@@ -3821,10 +3820,10 @@ def test_parquet_chunked_reader_structs(
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
 
     # Number of rows to read
-    nrows = num_rows if num_rows is not None else len(df)
+    nrows = num_rows if num_rows is not None else len(df) - skip_rows
 
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
@@ -3832,11 +3831,11 @@ def test_parquet_chunked_reader_structs(
             _chunk_read_limit=chunk_read_limit,
             _pass_read_limit=pass_read_limit,
             nrows=nrows,
-        )
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
     expected = cudf.read_parquet(
-        buffer,
-        nrows=nrows,
-    )
+        buffer, nrows=nrows, skip_rows=skip_rows
+    ).reset_index(drop=True)
     assert_eq(expected, actual)
 
 
@@ -3897,15 +3896,14 @@ def test_parquet_chunked_reader_string_decoders(
     "nrows, skip_rows",
     [
         (0, 0),
-        (10000, 0),
         (99, 1),
-        (10999, 1),
         (99, 101),
-        (10999, 101),
-        (1, 999),
-        (999, 10001),
-        (1, 10101),
-        (1001, 11001),
+        (1, 1001),
+        (9898, 10001),
+        (999, 11001),
+        (1, 16101),
+        (1001, 17001),
+        (999, 19001),
     ],
 )
 @pytest.mark.parametrize(
@@ -3922,9 +3920,16 @@ def test_parquet_reader_nrows_skiprows(
 ):
     df = cudf.DataFrame(
         {
-            "a": list([["cat", "lion", "deer"], ["bear", "bull", "ibex"]])
-            * 10000,
-            "b": ["av", "qw", "hi", "xyz"] * 5000,
+            "a": list(
+                [
+                    ["cat", "lion", "deer"],
+                    ["bear", "ibex", None],
+                    ["tiger", None, "bull"],
+                    [None, "wolf", "fox"],
+                ]
+            )
+            * 5000,
+            "b": ["av", "qw", None, "xyz"] * 5000,
         }
     )
     expected = df[skip_rows : skip_rows + nrows]

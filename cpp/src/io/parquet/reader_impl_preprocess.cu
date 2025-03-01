@@ -1483,11 +1483,8 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // rows as the smallest batch (by column) we have decompressed.
   size_t first_page_index = 0;
   size_t max_row          = std::numeric_limits<size_t>::max();
-  // last_pass_row must be capped by the global skip_rows + num_rows to correctly identify the
-  // corner case with 1 chunk, 1 page or 1 row.
-  auto const last_pass_row = std::min<size_t>(
-    _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
-    _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows);
+  auto const last_pass_row =
+    _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1];
   // for each column
   for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
     // compute max row for this column in the subpass
