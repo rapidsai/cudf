@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
-#include "join/mixed_join_kernels_semi.cuh"
 
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
+
+#include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/span.hpp>
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>

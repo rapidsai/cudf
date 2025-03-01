@@ -16,7 +16,7 @@
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
-#include "mixed_join_kernels_semi.cuh"
+#include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -45,6 +45,19 @@
 
 namespace cudf {
 namespace detail {
+
+void launch_mixed_join_semi(bool has_nulls,
+                            table_device_view left_table,
+                            table_device_view right_table,
+                            table_device_view probe,
+                            table_device_view build,
+                            row_equality const equality_probe,
+                            hash_set_ref_type set_ref,
+                            cudf::device_span<bool> left_table_keep_mask,
+                            cudf::ast::detail::expression_device_view device_expression_data,
+                            detail::grid_1d const config,
+                            int64_t shmem_size_per_block,
+                            rmm::cuda_stream_view stream);
 
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   table_view const& left_equality,
