@@ -2719,8 +2719,16 @@ def as_column(
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
+            try:
+                pa_array = pa.array(arbitrary, from_pandas=from_pandas)
+            except pa.ArrowNotImplementedError:
+                # Byte-swapped arrays not supported
+                pa_array = pa.array(
+                    arbitrary.astype(arbitrary.dtype.newbyteorder()),
+                    from_pandas=from_pandas,
+                )
             return as_column(
-                pa.array(arbitrary, from_pandas=from_pandas),
+                pa_array,
                 dtype=dtype,
                 nan_as_null=nan_as_null,
             )
