@@ -263,17 +263,28 @@ cdef class ChunkedParquetReader:
     def __init__(
         self,
         ParquetReaderOptions options,
+        Stream stream = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
         with nogil:
-            self.reader.reset(
-                new cpp_chunked_parquet_reader(
-                    chunk_read_limit,
-                    pass_read_limit,
-                    options.c_obj,
+            if stream is not None:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        options.c_obj,
+                        stream.view(),
+                    )
                 )
-            )
+            else:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        options.c_obj,
+                    )
+                )
 
     __hash__ = None
 

@@ -273,6 +273,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t chunk_read_limit,
             size_t pass_read_limit,
             const parquet_reader_options& options) except +libcudf_exception_handler
+        chunked_parquet_reader(
+            size_t chunk_read_limit,
+            size_t pass_read_limit,
+            const parquet_reader_options& options,
+            cuda_stream_view stream,
+        ) except +libcudf_exception_handler
         bool has_next() except +libcudf_exception_handler
         table_with_metadata read_chunk() except +libcudf_exception_handler
 
