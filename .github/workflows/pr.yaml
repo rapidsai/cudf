@@ -24,7 +24,6 @@ jobs:
       - conda-python-cudf-tests
       - conda-python-other-tests
       - conda-java-tests
-      - static-configure
       - conda-notebook-tests
       - docs-build
       - wheel-build-libcudf
@@ -192,16 +191,6 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
-  static-configure:
-    needs: checks
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
-    with:
-      build_type: pull-request
-      # Use the wheel container so we can skip conda solves and since our
-      # primary static consumers (Spark) are not in conda anyway.
-      container_image: "rapidsai/ci-wheel:latest"
-      run_script: "ci/configure_cpp_static.sh"
   conda-notebook-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
@@ -362,13 +351,17 @@ jobs:
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.04
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: ci/test_narwhals.sh
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      continue-on-error: true
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml

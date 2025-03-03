@@ -24,9 +24,9 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
@@ -284,7 +284,7 @@ class _ResampleGrouping(_Grouping):
                 if closed == "right"
                 else plc.labeling.Inclusive.NO,
             )
-            bin_numbers = Column.from_pylibcudf(plc_column)
+            bin_numbers = ColumnBase.from_pylibcudf(plc_column)
 
         if label == "right":
             cast_bin_labels = cast_bin_labels[1:]

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -178,6 +178,18 @@ int64_t get_offset_value(cudf::column_view const& offsets,
                std::invalid_argument);
   return otid == type_id::INT64 ? cudf::detail::get_value<int64_t>(offsets, index, stream)
                                 : cudf::detail::get_value<int32_t>(offsets, index, stream);
+}
+
+std::pair<int64_t, int64_t> get_first_and_last_offset(cudf::strings_column_view const& input,
+                                                      rmm::cuda_stream_view stream)
+{
+  if (input.is_empty()) { return {0L, 0L}; }
+  auto const first_offset = (input.offset() == 0) ? 0
+                                                  : cudf::strings::detail::get_offset_value(
+                                                      input.offsets(), input.offset(), stream);
+  auto const last_offset =
+    cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
+  return {first_offset, last_offset};
 }
 
 }  // namespace detail

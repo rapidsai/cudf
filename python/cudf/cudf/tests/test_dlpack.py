@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -140,7 +140,7 @@ def test_to_dlpack_cupy_2d(data_2d):
 def test_from_dlpack_cupy_1d(data_1d):
     cupy_array = cupy.array(data_1d)
     cupy_host_array = cupy_array.get()
-    dlt = cupy_array.toDlpack()
+    dlt = cupy_array.__dlpack__()
 
     gs = cudf.from_dlpack(dlt)
     cudf_host_array = gs.to_numpy(na_value=np.nan)
@@ -151,7 +151,7 @@ def test_from_dlpack_cupy_1d(data_1d):
 def test_from_dlpack_cupy_2d(data_2d):
     cupy_array = cupy.array(data_2d, order="F")
     cupy_host_array = cupy_array.get().flatten()
-    dlt = cupy_array.toDlpack()
+    dlt = cupy_array.__dlpack__()
 
     gdf = cudf.from_dlpack(dlt)
     cudf_host_array = np.array(gdf.to_pandas()).flatten()
