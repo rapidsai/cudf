@@ -539,8 +539,10 @@ struct get_page_span {
     auto const column_page_end   = page_row_index + page_offsets[column_index + 1];
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
-    // list rows can span page boundaries, so it is not always safe to filter page spans simply
-    // based on `start_row` and `end_row` so select all pages.
+
+    // For list cols, we only have estimated row counts so it is not safe to get a page span here.
+    // Instead get all pages here as they will be trimmed later on when actual row counts are
+    // available.
     if (is_list) {
       return {static_cast<size_t>(first_page_index),
               static_cast<size_t>(first_page_index + num_pages)};
@@ -551,8 +553,6 @@ struct get_page_span {
         column_page_start,
         thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row)) +
       first_page_index;
-
-    if (page_row_index[start_page] == start_row) { start_page++; }
 
     auto end_page = thrust::distance(column_page_start,
                                      thrust::lower_bound(
@@ -1653,8 +1653,7 @@ void reader::impl::compute_input_passes()
       get_row_group_size(row_group);
 
     // We must use the effective size of the first row group we are reading to accurately calculate
-    // the first non-zero input_pass_start_row_count. In case of only one row group, we have already
-    // accommodated for `skip_rows`
+    // the first non-zero `input_pass_start_row_count` unless we are reading only one row group
     auto const row_group_rows = (skip_rows and row_groups_info.size() > 1)
                                   ? rgi.start_row + row_group.num_rows - skip_rows
                                   : row_group.num_rows;
