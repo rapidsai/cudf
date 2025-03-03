@@ -26,6 +26,7 @@
 #include <cudf/filling.hpp>
 #include <cudf/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -60,12 +61,27 @@ struct null75_generator {
 
 enum class join_t { CONDITIONAL, MIXED, HASH };
 
+namespace {
+void print_statistics(cudf::table_view t)
+{
+  std::cout << "=====================================\n";
+  std::cout << "Number of rows = " << t.num_rows() << ", number of columns = " << t.num_columns()
+            << "\n";
+  for (cudf::size_type i = 0; i < t.num_columns(); i++) {
+    auto num_unique =
+      cudf::distinct_count(t.column(i), cudf::null_policy::EXCLUDE, cudf::nan_policy::NAN_IS_NULL);
+    std::cout << "Number of unique elements in row " << i << " = " << num_unique << std::endl;
+  }
+  std::cout << "=====================================\n";
+}
+}  // namespace
+
 template <typename Key,
           bool Nullable,
           join_t join_type = join_t::HASH,
           typename state_type,
           typename Join>
-void BM_join(state_type& state, Join JoinFunc)
+void BM_join(state_type& state, Join JoinFunc, double selectivity = 0.3, int multiplicity = 1)
 {
   auto const right_size = static_cast<cudf::size_type>(state.get_int64("right_size"));
   auto const left_size  = static_cast<cudf::size_type>(state.get_int64("left_size"));
@@ -75,8 +91,10 @@ void BM_join(state_type& state, Join JoinFunc)
     return;
   }
 
+  /*
   double const selectivity = 0.3;
   int const multiplicity   = 1;
+  */
 
   // Generate build and probe tables
   auto right_random_null_mask = [](int size) {
@@ -146,6 +164,11 @@ void BM_join(state_type& state, Join JoinFunc)
     {right_key_column0->view(), right_key_column1->view(), *right_payload_column});
   cudf::table_view left_table(
     {left_key_column0->view(), left_key_column1->view(), *left_payload_column});
+
+  std::cout << "Probe table stats\n";
+  print_statistics(left_table);
+  std::cout << "Build table stats\n";
+  print_statistics(right_table);
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
