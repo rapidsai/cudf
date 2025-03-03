@@ -34,6 +34,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+      node_type: "cpu16"
   python-build:
     needs: [cpp-build]
     secrets: inherit
@@ -77,6 +78,7 @@ jobs:
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      node_type: "cpu16"
       script: ci/build_wheel_libcudf.sh
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
