@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ auto to_cat = [](auto v) -> std::string {
 };
 auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
 auto print_vec = [](auto const& cpu, auto const name, auto converter) {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
   for (auto const& v : cpu)
     printf("%3s,", converter(v).c_str());
   std::cout << name << std::endl;
@@ -69,6 +70,7 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
   print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.node_categories, stream),
             "node_categories",
             to_cat);
@@ -535,12 +537,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
       stream,
       cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
-#ifdef NJP_DEBUG_PRINT
+        // #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
-#endif
+  // #endif
 
   bool const is_array_of_arrays = [&]() {
+    if (options.is_enabled_experimental()) return false;
     auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     if (size_to_copy == 0) return false;
     auto const h_node_categories = cudf::detail::make_host_vector_sync(
@@ -559,6 +562,14 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   options.is_enabled_experimental(),
                                   stream,
                                   cudf::get_current_device_resource_ref());
+  {
+    auto h_gpu_col_id = cudf::detail::make_host_vector_sync(gpu_col_id, stream);
+    print_vec(h_gpu_col_id, "gpu_col_id", to_int);
+    auto h_gpu_row_offsets = cudf::detail::make_host_vector_sync(gpu_row_offsets, stream);
+    print_vec(h_gpu_row_offsets, "gpu_row_offsets", to_int);
+  }
+  if (std::getenv("NJP_DEBUG_PRINT") != nullptr)
+    std::cout << "is_array_of_arrays: " << is_array_of_arrays << std::endl;
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
@@ -586,6 +597,36 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
+  }
+
+  // check if row root is list. (mixed types are taken care by prune_columns)
+  if (options.is_enabled_experimental() and
+      (  // data_root.child_columns.begin()->second.child_columns.empty() or
+        data_root.child_columns.begin()->second.type == json_col_t::ListColumn)) {
+    std::cout << "root list column\n";
+    std::cout << "root list column size: " << data_root.child_columns.size() << std::endl;
+    std::cout << "root list column num_rows: " << data_root.num_rows << std::endl;
+    std::cout << "root list column child num_rows: "
+              << data_root.child_columns.begin()->second.num_rows << std::endl;
+    // insert only root list column as single column in table.
+    if (data_root.type == json_col_t::ListColumn) {
+      std::cout << "root list column\n";
+      std::cout << "root list column size: " << data_root.child_columns.size() << std::endl;
+      if (data_root.child_columns.begin()->second.type != json_col_t::ListColumn) {
+        std::cout << "root list column Not List\n";
+      }
+      auto [cudf_col, col_name_info] =
+        device_json_column_to_cudf_column(data_root.child_columns.begin()->second,
+                                          d_input,
+                                          parsing_options(options, stream),
+                                          options.is_enabled_prune_columns(),
+                                          unified_schema(options),
+                                          stream,
+                                          mr);
+      std::vector<std::unique_ptr<column>> out_columns;
+      out_columns.emplace_back(std::move(cudf_col));
+      return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {col_name_info}};
+    }
   }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
