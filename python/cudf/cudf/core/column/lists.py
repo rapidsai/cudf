@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
+from cudf.api.extensions import no_default
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -27,7 +28,13 @@ from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        NoDefault,
+        ScalarLike,
+    )
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
 
@@ -329,9 +336,13 @@ class ListColumn(ColumnBase):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if nullable is no_default:
+            nullable = False
+        if arrow_type is no_default:
+            arrow_type = False
         if arrow_type or nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:

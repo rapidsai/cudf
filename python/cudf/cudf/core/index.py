@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
+    from cudf._typing import NoDefault
     from cudf.core.frame import Frame
 
 
@@ -539,11 +540,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_performance_tracking
     def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.RangeIndex:
-        if nullable:
+        if nullable is True:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        elif arrow_type:
+        elif arrow_type is True:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
         return pd.RangeIndex(
             start=self.start,
@@ -1663,7 +1667,10 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.any()
 
     def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
         result = self._column.to_pandas(
             nullable=nullable, arrow_type=arrow_type
@@ -2575,7 +2582,10 @@ class DatetimeIndex(Index):
 
     @_performance_tracking
     def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:

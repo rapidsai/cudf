@@ -23,6 +23,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    is_pandas_nullable_extension_dtype,
 )
 
 if PANDAS_GE_210:
@@ -74,15 +75,16 @@ def dtype(arbitrary):
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
-    if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
-        if cudf.get_option("mode.pandas_compatible"):
-            raise NotImplementedError(
-                "Nullable types not supported in pandas compatibility mode"
-            )
-        elif isinstance(pd_dtype, pd.StringDtype):
-            return CUDF_STRING_DTYPE
-        else:
-            return dtype(pd_dtype.numpy_dtype)
+    if is_pandas_nullable_extension_dtype(pd_dtype):
+        return pd_dtype
+        # if cudf.get_option("mode.pandas_compatible"):
+        #     raise NotImplementedError(
+        #         "Nullable types not supported in pandas compatibility mode"
+        #     )
+        # elif isinstance(pd_dtype, pd.StringDtype):
+        #     return CUDF_STRING_DTYPE
+        # else:
+        #     return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):

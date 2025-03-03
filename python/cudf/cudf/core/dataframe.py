@@ -101,7 +101,7 @@ from cudf.utils.utils import (
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, NotImplementedType
+    from cudf._typing import ColumnLike, Dtype, NoDefault, NotImplementedType
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -5422,7 +5422,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.DataFrame:
         """
         Convert to a Pandas DataFrame.

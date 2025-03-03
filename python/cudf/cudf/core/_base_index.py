@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     import cupy
 
+    from cudf._typing import NoDefault
     from cudf.core.column_accessor import ColumnAccessor
 
 
@@ -859,7 +860,12 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
+    def to_pandas(
+        self,
+        *,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
+    ) -> pd.Index:
         """
         Convert to a Pandas Index.
 

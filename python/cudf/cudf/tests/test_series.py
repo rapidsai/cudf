@@ -3040,3 +3040,13 @@ def test_series_dataframe_count_float():
             gs.to_frame().count(),
             gs.to_frame().to_pandas(nullable=True).count(),
         )
+
+
+@pytest.mark.parametrize(
+    "dtype", [pd.Int64Dtype(), pd.BooleanDtype(), pd.Float32Dtype()]
+)
+def test_roundtrip_pd_extensiondtype(dtype):
+    expected = pd.Series([1], dtype=dtype)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.Series.from_pandas(expected).to_pandas()
+    pd.testing.assert_series_equal(result, expected)

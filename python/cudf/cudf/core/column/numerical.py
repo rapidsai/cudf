@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
+from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
@@ -26,6 +27,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     find_common_type,
+    is_pandas_nullable_extension_dtype,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
         ColumnLike,
         Dtype,
         DtypeObj,
+        NoDefault,
         ScalarLike,
     )
     from cudf.core.buffer import Buffer
@@ -69,9 +72,15 @@ class NumericalColumn(NumericalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+        if not (
+            (
+                isinstance(dtype, np.dtype)
+                or is_pandas_nullable_extension_dtype(dtype)
+            )
+            and dtype.kind in "iufb"
+        ):
             raise ValueError(
-                "dtype must be a floating, integer or boolean numpy dtype."
+                "dtype must be a floating, integer or boolean dtype."
             )
 
         if data.size % dtype.itemsize:
@@ -411,6 +420,19 @@ class NumericalColumn(NumericalBaseColumn):
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         if dtype == self.dtype:
             return self
+        elif (
+            is_pandas_nullable_extension_dtype(dtype)
+            and dtype.numpy_dtype == self.dtype  # type: ignore[union-attr]
+        ):
+            return type(self)(
+                data=self.base_data,  # type: ignore[arg-type]
+                size=self.base_size,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.base_children,
+            )
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -678,13 +700,28 @@ class NumericalColumn(NumericalBaseColumn):
     def to_pandas(
         self,
         *,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Index:
+        if not isinstance(nullable, bool):
+            if cudf.get_option("mode.pandas_compatible"):
+                nullable = is_pandas_nullable_extension_dtype(
+                    self.dtype
+                ) and not isinstance(self.dtype, pd.ArrowDtype)
+            else:
+                nullable = False
+        if not isinstance(arrow_type, bool):
+            if cudf.get_option("mode.pandas_compatible"):
+                arrow_type = isinstance(self.dtype, pd.ArrowDtype)
+            else:
+                arrow_type = False
         if arrow_type and nullable:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable and is_pandas_nullable_extension_dtype(self.dtype):
+            pandas_array = self.dtype.__from_arrow__(self.to_arrow())  # type: ignore[attr-defined]
+            return pd.Index(pandas_array, copy=False)
         elif (
             nullable
             and (

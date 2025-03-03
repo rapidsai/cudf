@@ -77,6 +77,7 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
+        NoDefault,
         NotImplementedType,
         ScalarLike,
     )
@@ -2003,8 +2004,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         *,
         index: bool = True,
-        nullable: bool = False,
-        arrow_type: bool = False,
+        nullable: bool | NoDefault = no_default,
+        arrow_type: bool | NoDefault = no_default,
     ) -> pd.Series:
         """
         Convert to a pandas Series.
