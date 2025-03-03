@@ -127,16 +127,3 @@ class ConfigOptions:
             raise ValueError(
                 f"Unsupported executor_options for {executor}: {unsupported}"
             )
-
-        # Check that keys are free of periods
-        def _find_periods(options: dict) -> None:
-            assert isinstance(options, dict)
-            for key, val in options.items():
-                if isinstance(val, dict):
-                    _find_periods(val)
-                if "." in key:
-                    raise ValueError(
-                        f"Configuration key cannot contain a period: {key}"
-                    )
-
-        _find_periods(config)
