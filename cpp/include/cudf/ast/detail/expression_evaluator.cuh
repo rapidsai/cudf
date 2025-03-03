@@ -35,6 +35,20 @@ namespace ast {
 
 namespace detail {
 
+constexpr bool is_complex_type(cudf::type_id type)
+{
+  // TODO: only decimals? impact of dictionary types?
+  return type == cudf::type_id::STRUCT || type == cudf::type_id::LIST ||
+         type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
+         type == cudf::type_id::DECIMAL128;
+}
+
+template <cudf::type_id t>
+struct dispatch_void_if_complex {
+  /// The type to dispatch to if the type is complex
+  using type = std::conditional_t<t == type_id::EMPTY || is_complex_type(t), void, id_to_type<t>>;
+};
+
 /**
  * @brief A container for capturing the output of an evaluated expression.
  *
@@ -345,7 +359,11 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename Input, typename ResultSubclass, typename T, bool result_has_nulls>
+  template <typename Input,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(!std::is_void_v<Input>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const input_row_index,
@@ -366,6 +384,23 @@ struct expression_evaluator {
                             thread_intermediate_storage);
   }
 
+  template <typename Input,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(std::is_void_v<Input>)>
+  __device__ inline void operator()(
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    cudf::size_type const input_row_index,
+    detail::device_data_reference const& input,
+    detail::device_data_reference const& output,
+    cudf::size_type const output_row_index,
+    ast_operator const op,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Unsupported type in operator().");
+  }
+
   /**
    * @brief Callable to perform a binary operation.
    *
@@ -382,7 +417,12 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename LHS, typename RHS, typename ResultSubclass, typename T, bool result_has_nulls>
+  template <typename LHS,
+            typename RHS,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(!std::is_void_v<LHS> && !std::is_void_v<RHS>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
@@ -406,6 +446,26 @@ struct expression_evaluator {
                             typed_rhs,
                             output,
                             thread_intermediate_storage);
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(std::is_void_v<LHS> || std::is_void_v<RHS>)>
+  __device__ inline void operator()(
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    cudf::size_type const left_row_index,
+    cudf::size_type const right_row_index,
+    detail::device_data_reference const& lhs,
+    detail::device_data_reference const& rhs,
+    detail::device_data_reference const& output,
+    cudf::size_type const output_row_index,
+    ast_operator const op,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Unsupported type in operator().");
   }
 
   /**
@@ -461,15 +521,27 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        type_dispatcher(input.data_type,
-                        *this,
-                        output_object,
-                        input_row_index,
-                        input,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
+        if (is_complex_type(input.data_type.id())) {
+          type_dispatcher(input.data_type,
+                          *this,
+                          output_object,
+                          input_row_index,
+                          input,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        } else {
+          type_dispatcher<dispatch_void_if_complex>(input.data_type,
+                                                    *this,
+                                                    output_object,
+                                                    input_row_index,
+                                                    input,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
+        }
       } else if (arity == 2) {
         // Binary operator
         auto const& lhs =
@@ -478,18 +550,33 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        type_dispatcher(lhs.data_type,
-                        detail::single_dispatch_binary_operator{},
-                        *this,
-                        output_object,
-                        left_row_index,
-                        right_row_index,
-                        lhs,
-                        rhs,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
+        if (is_complex_type(lhs.data_type.id())) {
+          type_dispatcher(lhs.data_type,
+                          detail::single_dispatch_binary_operator{},
+                          *this,
+                          output_object,
+                          left_row_index,
+                          right_row_index,
+                          lhs,
+                          rhs,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        } else {
+          type_dispatcher<dispatch_void_if_complex>(lhs.data_type,
+                                                    detail::single_dispatch_binary_operator{},
+                                                    *this,
+                                                    output_object,
+                                                    left_row_index,
+                                                    right_row_index,
+                                                    lhs,
+                                                    rhs,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
+        }
       } else {
         CUDF_UNREACHABLE("Invalid operator arity.");
       }
