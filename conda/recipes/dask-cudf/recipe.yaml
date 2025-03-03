@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 schema_version: 1
 
