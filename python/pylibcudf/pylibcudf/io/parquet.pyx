@@ -36,6 +36,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 
 __all__ = [
     "ChunkedParquetReader",
@@ -334,11 +335,9 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     stream: Stream
         CUDA stream used for device memory operations and kernel launches
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
-        else:
-            c_result = move(cpp_read_parquet(options.c_obj))
+        c_result = move(cpp_read_parquet(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -413,14 +412,10 @@ cdef class ParquetChunkedWriter:
         cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
             ParquetChunkedWriter
         )
-        if stream is not None:
-            parquet_writer.c_obj.reset(
-                new cpp_parquet_chunked_writer(options.c_obj, stream.view())
-            )
-        else:
-            parquet_writer.c_obj.reset(
-                new cpp_parquet_chunked_writer(options.c_obj)
-            )
+        cdef Stream s = _get_stream(stream)
+        parquet_writer.c_obj.reset(
+            new cpp_parquet_chunked_writer(options.c_obj, s.view())
+        )
         return parquet_writer
 
 
@@ -961,12 +956,10 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
         parquet_writer_options (empty blob otherwise).
     """
     cdef unique_ptr[vector[uint8_t]] c_result
+    cdef Stream s = _get_stream(stream)
 
     with nogil:
-        if stream is not None:
-            c_result = cpp_write_parquet(move(options.c_obj), stream.view())
-        else:
-            c_result = cpp_write_parquet(move(options.c_obj))
+        c_result = cpp_write_parquet(move(options.c_obj), s.view())
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 

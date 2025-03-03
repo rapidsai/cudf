@@ -40,6 +40,7 @@ from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
 )
 from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 
 
 __all__ = [
@@ -424,12 +425,10 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
         CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
+    cdef Stream s = _get_stream(stream)
 
     with nogil:
-        if stream is not None:
-            c_result = move(cpp_read_orc(options.c_obj, stream.view()))
-        else:
-            c_result = move(cpp_read_orc(options.c_obj))
+        c_result = move(cpp_read_orc(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -631,11 +630,9 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     -------
     None
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            cpp_write_orc(move(options.c_obj), stream.view())
-        else:
-            cpp_write_orc(move(options.c_obj))
+        cpp_write_orc(move(options.c_obj), s.view())
 
 
 cdef class OrcChunkedWriter:
@@ -685,10 +682,8 @@ cdef class OrcChunkedWriter:
         cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
             OrcChunkedWriter
         )
-        if stream is not None:
-            orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, stream.view()))
-        else:
-            orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj))
+        cdef Stream s = _get_stream(stream)
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, s.view()))
         return orc_writer
 
 

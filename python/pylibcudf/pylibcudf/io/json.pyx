@@ -21,6 +21,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 
 
 __all__ = [
@@ -690,6 +691,7 @@ cpdef tuple chunked_read_json(
     meta_names = None
     child_names = None
     i = 0
+    cdef Stream s = _get_stream(stream)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -697,10 +699,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                if stream is not None:
-                    c_result = move(cpp_read_json(options.c_obj, stream.view()))
-                else:
-                    c_result = move(cpp_read_json(options.c_obj))
+                c_result = move(cpp_read_json(options.c_obj, s.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -752,12 +751,9 @@ cpdef TableWithMetadata read_json(
         The Table and its corresponding metadata (column names) that were read in.
     """
     cdef table_with_metadata c_result
-
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            c_result = move(cpp_read_json(options.c_obj, stream.view()))
-        else:
-            c_result = move(cpp_read_json(options.c_obj))
+        c_result = move(cpp_read_json(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -960,8 +956,6 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     -------
     None
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            cpp_write_json(options.c_obj, stream.view())
-        else:
-            cpp_write_json(options.c_obj)
+        cpp_write_json(options.c_obj, s.view())

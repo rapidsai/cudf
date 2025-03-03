@@ -23,6 +23,7 @@ from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.table cimport Table
 from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 
 __all__ = [
     "read_csv",
@@ -649,11 +650,9 @@ cpdef TableWithMetadata read_csv(
         CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            c_result = move(cpp_read_csv(options.c_obj, stream.view()))
-        else:
-            c_result = move(cpp_read_csv(options.c_obj))
+        c_result = move(cpp_read_csv(options.c_obj, s.view()))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
     return tbl_meta
@@ -856,8 +855,6 @@ cpdef void write_csv(
     stream: Stream
         CUDA stream used for device memory operations and kernel launches
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            cpp_write_csv(move(options.c_obj), stream.view())
-        else:
-            cpp_write_csv(move(options.c_obj))
+        cpp_write_csv(move(options.c_obj), s.view())

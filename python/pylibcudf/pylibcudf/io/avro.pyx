@@ -10,6 +10,7 @@ from pylibcudf.libcudf.io.avro cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 
 
 __all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
@@ -146,10 +147,8 @@ cpdef TableWithMetadata read_avro(
     stream: Stream
         CUDA stream used for device memory operations and kernel launches
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        if stream is not None:
-            c_result = move(cpp_read_avro(options.c_obj, stream.view()))
-        else:
-            c_result = move(cpp_read_avro(options.c_obj))
+        c_result = move(cpp_read_avro(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
