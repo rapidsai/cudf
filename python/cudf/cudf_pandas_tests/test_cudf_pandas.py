@@ -44,6 +44,7 @@ from cudf.pandas.fast_slow_proxy import (
     OOMFallbackError,
     TypeFallbackError,
     _Unusable,
+    as_proxy_object,
     is_proxy_object,
 )
 from cudf.testing import assert_eq
@@ -1095,6 +1096,7 @@ def test_np_array_of_timestamps():
         xpd.Series([1, 2, 3]),
         # Index (doesn't support nullary construction)
         xpd.Index([1, 2, 3]),
+        xpd.RangeIndex(0, 10),
         xpd.Index(["a", "b", "c"]),
         # Complex index
         xpd.to_datetime(
@@ -1104,6 +1106,8 @@ def test_np_array_of_timestamps():
                 datetime.datetime(2018, 1, 1),
             ]
         ),
+        xpd.TimedeltaIndex([100, 200, 300], dtype="timedelta64[ns]"),
+        xpd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
         # Objects where the underlying store is the slow type.
         xpd.Series(["a", 2, 3]),
         xpd.Index(["a", 2, 3]),
@@ -1115,18 +1119,13 @@ def test_np_array_of_timestamps():
         xpd.Timedelta(1, "D"),
     ],
 )
-def test_pickle(obj):
+@pytest.mark.parametrize("pickle_func", [pickle.dump, xpd.to_pickle])
+@pytest.mark.parametrize("read_pickle_func", [pickle.load, xpd.read_pickle])
+def test_pickle(obj, pickle_func, read_pickle_func):
     with tempfile.TemporaryFile() as f:
-        pickle.dump(obj, f)
+        pickle_func(obj, f)
         f.seek(0)
-        copy = pickle.load(f)
-
-    tm.assert_equal(obj, copy)
-
-    with tempfile.TemporaryFile() as f:
-        xpd.to_pickle(obj, f)
-        f.seek(0)
-        copy = xpd.read_pickle(f)
+        copy = read_pickle_func(f)
 
     tm.assert_equal(obj, copy)
 
@@ -1552,8 +1551,8 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
-def test_excelwriter_pathlike():
-    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+def test_excelwriter_pathlike(tmpdir):
+    assert isinstance(pd.ExcelWriter(tmpdir.join("foo.xlsx")), os.PathLike)
 
 
 def test_is_proxy_object():
@@ -1979,6 +1978,93 @@ def test_numpy_data_access():
     actual = xs.values.data
 
     assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame({"a": [1, 2, 3]}),
+        pd.Series([1, 2, 3]),
+        pd.Index([1, 2, 3]),
+        pd.Categorical([1, 2, 3]),
+        pd.to_datetime(["2021-01-01", "2021-01-02"]),
+        pd.to_timedelta(["1 days", "2 days"]),
+        xpd.DataFrame({"a": [1, 2, 3]}),
+        xpd.Series([1, 2, 3]),
+        xpd.Index([1, 2, 3]),
+        xpd.Categorical([1, 2, 3]),
+        xpd.to_datetime(["2021-01-01", "2021-01-02"]),
+        xpd.to_timedelta(["1 days", "2 days"]),
+        cudf.DataFrame({"a": [1, 2, 3]}),
+        cudf.Series([1, 2, 3]),
+        cudf.Index([1, 2, 3]),
+        cudf.Index([1, 2, 3], dtype="category"),
+        cudf.to_datetime(["2021-01-01", "2021-01-02"]),
+        cudf.Index([1, 2, 3], dtype="timedelta64[ns]"),
+        [1, 2, 3],
+        {"a": 1, "b": 2},
+        (1, 2, 3),
+    ],
+)
+def test_as_proxy_object(obj):
+    proxy_obj = as_proxy_object(obj)
+    if isinstance(
+        obj,
+        (
+            pd.DataFrame,
+            pd.Series,
+            pd.Index,
+            pd.Categorical,
+            xpd.DataFrame,
+            xpd.Series,
+            xpd.Index,
+            xpd.Categorical,
+            cudf.DataFrame,
+            cudf.Series,
+            cudf.Index,
+        ),
+    ):
+        assert is_proxy_object(proxy_obj)
+        if isinstance(proxy_obj, xpd.DataFrame):
+            tm.assert_frame_equal(proxy_obj, xpd.DataFrame(obj))
+        elif isinstance(proxy_obj, xpd.Series):
+            tm.assert_series_equal(proxy_obj, xpd.Series(obj))
+        elif isinstance(proxy_obj, xpd.Index):
+            tm.assert_index_equal(proxy_obj, xpd.Index(obj))
+        else:
+            tm.assert_equal(proxy_obj, obj)
+    else:
+        assert not is_proxy_object(proxy_obj)
+        assert proxy_obj == obj
+
+
+def test_as_proxy_object_doesnot_copy_series():
+    s = pd.Series([1, 2, 3])
+    proxy_obj = as_proxy_object(s)
+    s[0] = 10
+    assert proxy_obj[0] == 10
+    tm.assert_series_equal(s, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_dataframe():
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    proxy_obj = as_proxy_object(df)
+    df.iloc[0, 0] = 10
+    assert proxy_obj.iloc[0, 0] == 10
+    tm.assert_frame_equal(df, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_index():
+    idx = pd.Index([1, 2, 3])
+    proxy_obj = as_proxy_object(idx)
+    assert proxy_obj._fsproxy_wrapped is idx
+
+
+def test_as_proxy_object_no_op_for_intermediates():
+    s = pd.Series(["abc", "def", "ghi"])
+    str_attr = s.str
+    proxy_obj = as_proxy_object(str_attr)
+    assert proxy_obj is str_attr
 
 
 def test_pickle_round_trip_proxy_numpy_array(array):
