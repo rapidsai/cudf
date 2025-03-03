@@ -105,7 +105,7 @@ class _CuDFBuffer:
         # DLPack not implemented in NumPy yet, so leave it out here.
         try:
             cuda_array = as_cuda_array(self._buf).view(self._dtype)
-            return cp.asarray(cuda_array).toDlpack()
+            return cp.asarray(cuda_array).__dlpack__()
         except ValueError:
             raise TypeError(f"dtype {self._dtype} unsupported by `dlpack`")
 
