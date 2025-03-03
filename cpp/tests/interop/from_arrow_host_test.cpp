@@ -755,7 +755,7 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
 TEST_F(FromArrowHostDeviceTest, StringViewType)
 {
   auto data = std::vector<std::string>(
-    {"hello", "world", "much longer string", "another even longer string"});
+    {"hello", "worldy", "much longer string", "another even longer string"});
 
   ArrowArray input;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(&input, NANOARROW_TYPE_STRING_VIEW));

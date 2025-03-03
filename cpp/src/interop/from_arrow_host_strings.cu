@@ -24,13 +24,19 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/transform.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -145,35 +151,45 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
   NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));
   NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
 
-  cudf::size_type null_count = 0;
-  auto items                 = std::vector<std::string_view>(input->length);
-  for (auto i = 0L; i < input->length; ++i) {
-    if (ArrowArrayViewIsNull(&view, i)) {
-      null_count++;
-    } else {
-      auto const item = ArrowArrayViewGetStringUnsafe(&view, i);
-      items[i]        = std::string_view(item.data, item.size_bytes);
-    }
+  auto items   = view.buffer_views[1].data.as_binary_view;
+  auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                                items,
+                                input->length * sizeof(ArrowBinaryView),
+                                cudaMemcpyDefault,
+                                stream.value()));
+
+  auto variadics     = std::vector<rmm::device_buffer>();
+  auto variadic_ptrs = std::vector<char const*>();
+  for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
+    variadics.emplace_back(view.variadic_buffers[i], view.variadic_buffer_sizes[i], stream);
+    variadic_ptrs.push_back(static_cast<char const*>(variadics.back().data()));
   }
 
-  std::vector<int64_t> sizes{};
-  sizes.reserve(input->length);
-  for (auto& s : items) {
-    sizes.push_back(s.size());
-  }
-  auto d_sizes = cudf::detail::make_device_uvector_async(sizes, stream, mr);
-  auto [offsets, bytes] =
-    cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
+  auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
+    variadic_ptrs, stream, cudf::get_current_device_resource_ref());
+  auto d_ptrs = d_variadic_ptrs.data();
+  auto d_mask = static_cast<cudf::bitmask_type*>(mask->data());
 
-  std::vector<char> chars{};
-  chars.reserve(bytes);
-  for (auto& s : items) {
-    chars.insert(chars.end(), std::cbegin(s), std::cend(s));
-  }
-  auto d_chars = cudf::detail::make_device_uvector_async(chars, stream, mr);
+  using string_index_pair = cudf::strings::detail::string_index_pair;
 
-  return cudf::make_strings_column(
-    input->length, std::move(offsets), d_chars.release(), null_count, std::move(*mask));
+  auto d_indices = rmm::device_uvector<string_index_pair>(input->length, stream, mr);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(input->length),
+    d_indices.begin(),
+    [d_items = d_items.data(), d_ptrs, d_mask] __device__(auto idx) -> string_index_pair {
+      if (d_mask && !cudf::bit_is_set(d_mask, idx)) { return string_index_pair{nullptr, 0}; }
+      auto const& item = d_items[idx];
+      auto const size  = static_cast<cudf::size_type>(item.inlined.size);
+      auto const data  = (size <= NANOARROW_BINARY_VIEW_INLINE_SIZE)
+                           ? reinterpret_cast<char const*>(item.inlined.data)
+                           : d_ptrs[item.ref.buffer_index] + item.ref.offset;
+      return {data, size};
+    });
+
+  return cudf::strings::detail::make_strings_column(d_indices.begin(), d_indices.end(), stream, mr);
 }
 
 }  // namespace
