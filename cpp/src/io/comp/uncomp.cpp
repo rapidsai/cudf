@@ -538,7 +538,7 @@ source_properties get_source_properties(compression_type compression, host_span<
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
-    default: CUDF_FAIL("Unsupported compressed stream type");
+    default: CUDF_FAIL("Unsupported compressed stream type: " + compression_type_name(compression));
   }
 
   return source_properties{compression, comp_data, comp_len, uncomp_len};
@@ -561,7 +561,7 @@ size_t decompress(compression_type compression,
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
     case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
-    default: CUDF_FAIL("Unsupported compression type");
+    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
 
@@ -734,7 +734,7 @@ void host_decompress(compression_type compression,
 {
   CUDF_EXPECTS(
     host_decompression_supported(compression) or device_decompression_supported(compression),
-    "Unsupported compression type");
+    "Unsupported compression type: " + compression_type_name(compression));
   if (not host_decompression_supported(compression)) { return false; }
   if (not device_decompression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set

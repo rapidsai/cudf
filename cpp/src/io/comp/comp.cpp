@@ -367,7 +367,7 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
   CUDF_EXPECTS(host_compression_supported(compression) or device_compression_supported(compression),
-               "Unsupported compression type");
+               "Unsupported compression type: " + compression_type_name(compression));
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
@@ -403,7 +403,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   if (auto nvcomp_type = to_nvcomp_compression(compression); nvcomp_type.has_value()) {
     return nvcomp::compress_max_output_chunk_size(*nvcomp_type, uncompressed_size);
   }
-  CUDF_FAIL("Unsupported compression type");
+  CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
 }
 
 std::vector<std::uint8_t> compress(compression_type compression,
@@ -414,7 +414,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return snappy::compress(src);
-    default: CUDF_FAIL("Unsupported compression type");
+    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
 
