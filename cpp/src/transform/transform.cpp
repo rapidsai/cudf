@@ -88,7 +88,8 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
 
 cudf::jit::column_device_view to_jit_view(column_view const& view)
 {
-  return {const_cast<void*>(view.head()), nullptr, view.null_mask(), view.type()};
+  return cudf::jit::column_device_view{
+    const_cast<void*>(view.head()), nullptr, view.null_mask(), view.type(), view.size()};
 }
 
 rmm::device_uvector<cudf::jit::column_device_view> build_views(

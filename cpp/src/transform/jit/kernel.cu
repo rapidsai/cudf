@@ -40,13 +40,15 @@ struct accessor {
   using type                     = T;
   static constexpr int32_t INDEX = index;
 
-  static constexpr T& get(cudf::jit::column_device_view const* views, int64_t row)
+  static __device__ T& get(cudf::jit::column_device_view const* views, cudf::size_type row)
   {
     T* data = reinterpret_cast<T*>(views[INDEX].data);
     return data[row];
   }
 
-  static constexpr void set(cudf::jit::column_device_view const* views, int64_t row, T const& value)
+  static __device__ void set(cudf::jit::column_device_view const* views,
+                             cudf::size_type row,
+                             T const& value)
   {
     T* data   = reinterpret_cast<T*>(views[INDEX].data);
     data[row] = value;
@@ -59,16 +61,16 @@ struct accessor<numeric::fixed_point<Rep, rad>, index> {
   using rep                      = Rep;
   static constexpr int32_t INDEX = index;
 
-  static constexpr type get(cudf::jit::column_device_view const* views, int64_t row)
+  static __device__ type get(cudf::jit::column_device_view const* views, cudf::size_type row)
   {
     rep* data                 = reinterpret_cast<rep*>(views[INDEX].data);
     numeric::scale_type scale = static_cast<numeric::scale_type>(views[INDEX].type.scale());
     return type{numeric::scaled_integer<rep>{data[row], scale}};
   }
 
-  static constexpr void set(cudf::jit::column_device_view const* views,
-                            int64_t row,
-                            type const& value)
+  static __device__ void set(cudf::jit::column_device_view const* views,
+                             cudf::size_type row,
+                             type const& value)
   {
     rep* data = reinterpret_cast<rep*>(views[INDEX].data);
     data[row] = value.value();
@@ -80,14 +82,15 @@ struct scalar {
   using type                     = typename accessor::type;
   static constexpr int32_t INDEX = accessor::INDEX;
 
-  static constexpr decltype(auto) get(cudf::jit::column_device_view const* views, int64_t row)
+  static __device__ decltype(auto) get(cudf::jit::column_device_view const* views,
+                                       cudf::size_type row)
   {
     return accessor::get(views, 0);
   }
 
-  static constexpr void set(cudf::jit::column_device_view const* views,
-                            int64_t row,
-                            type const& value)
+  static __device__ void set(cudf::jit::column_device_view const* views,
+                             cudf::size_type row,
+                             type const& value)
   {
     return accessor::set(views, 0, value);
   }

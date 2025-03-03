@@ -337,11 +337,11 @@ __device__ inline void transform(
 }
 
 template <typename T>
-struct TenaryDecimalOperationTest : public cudf::test::BaseFixture {};
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {};
 
-TYPED_TEST_SUITE(TenaryDecimalOperationTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(TenaryDecimalOperationTest, TransformDecimalsAndScalar)
+TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
 {
   using T = TypeParam;
 
