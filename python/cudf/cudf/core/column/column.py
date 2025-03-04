@@ -23,13 +23,10 @@ import rmm
 
 import cudf
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
-    is_decimal_dtype,
     is_dtype_equal,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import (
@@ -69,6 +66,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_time_unit,
     is_column_like,
+    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -858,7 +856,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        if not inplace or is_string_dtype(self.dtype):
+        if not inplace or self.dtype == CUDF_STRING_DTYPE:
             with acquire_spill_lock():
                 result = type(self).from_pylibcudf(
                     plc.filling.fill(
@@ -868,7 +866,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         fill_value,
                     )
                 )
-            if is_string_dtype(self.dtype):
+            if self.dtype == CUDF_STRING_DTYPE:
                 return self._mimic_inplace(result, inplace=True)
             return result  # type: ignore[return-value]
 
@@ -1599,7 +1597,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
             )
         )
-        if is_decimal_dtype(result.dtype):
+        if isinstance(
+            result.dtype,
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
+        ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result
 
@@ -2993,7 +2994,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        is_dtype_obj_numeric(dtype, include_decimal=False)
+        and dtype.kind == "M"
         for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)

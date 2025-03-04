@@ -9,7 +9,6 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -25,6 +24,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
@@ -191,7 +191,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     if isinstance(dtype, cudf.core.dtypes._BaseDtype):
         pa_type = dtype.to_arrow()
-    elif pd.api.types.is_string_dtype(dtype):
+    elif dtype == CUDF_STRING_DTYPE:
         # Have to manually convert object types, which we use internally
         # for strings but pyarrow only supports as unicode 'U'
         pa_type = pa.string()
