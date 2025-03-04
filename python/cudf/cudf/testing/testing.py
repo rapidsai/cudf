@@ -10,15 +10,15 @@ import pandas as pd
 from pandas import testing as tm
 
 import cudf
-from cudf.api.types import is_numeric_dtype, is_string_dtype
 from cudf.core.missing import NA, NaT
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
 
 
 def dtype_can_compare_equal_to_other(dtype):
     # return True if values of this dtype can compare
     # as equal to equal values of a different dtype
     return not (
-        is_string_dtype(dtype)
+        dtype == CUDF_STRING_DTYPE
         or isinstance(
             dtype,
             (
@@ -218,10 +218,10 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right.dtype)
+            and is_dtype_obj_numeric(right.dtype)
         )
         or (
-            is_numeric_dtype(left.dtype)
+            is_dtype_obj_numeric(left.dtype)
             and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
@@ -234,7 +234,7 @@ def assert_column_equal(
             if (
                 columns_equal
                 and not check_exact
-                and is_numeric_dtype(left.dtype)
+                and is_dtype_obj_numeric(left.dtype)
             ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
