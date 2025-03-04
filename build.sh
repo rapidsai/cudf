@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -303,17 +303,11 @@ if buildAll || hasArg libcudf; then
     cd ${LIB_BUILD_DIR}
 
     compile_start=$(date +%s)
-    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG} 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-libcudf.log
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
     compile_end=$(date +%s)
     compile_total=$(( compile_end - compile_start ))
 
-    cp ${LIB_BUILD_DIR}/.ninja_log ${REPODIR}/telemetry-artifacts/ninja-libcudf.log
-    sccache --show-adv-stats | tee ${REPODIR}/telemetry-artifacts/sccache-stats.txt
-    LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
-    echo "libcudf.so=$LIBCUDF_FS" >> ${REPODIR}/telemetry-artifacts/filesizes.log
-
-    # Record build times. TODO: this is replaced by the telemetry script, but leaving this here for now
-    # until people get used to finding this info on Grafana.
+    # Record build times
     if [[ "$BUILD_REPORT_METRICS" == "ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build metrics"
         MSG=""
@@ -349,7 +343,7 @@ if buildAll || hasArg pylibcudf; then
 
     cd ${REPODIR}/python/pylibcudf
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
-        python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-pylibcudf.log
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # Build and install the cudf Python package
@@ -357,21 +351,21 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
-        python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-cudf.log
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # Build and install the cudf_polars Python package
 if buildAll || hasArg cudf_polars; then
 
     cd ${REPODIR}/python/cudf_polars
-    python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-cudf_polars.log
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-dask_cudf.log
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 if hasArg cudfjar; then
@@ -388,7 +382,7 @@ if hasArg libcudf_kafka; then
 
 
     cd ${KAFKA_LIB_BUILD_DIR}
-    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG} | tee ${REPODIR}/telemetry-artifacts/build-libcudf_kafka.log
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
@@ -399,11 +393,11 @@ fi
 if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS}"
-        python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-cudf_kafka.log
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
     cd ${REPODIR}/python/custreamz
-    python ${PYTHON_ARGS_FOR_INSTALL} . 2>&1 | tee ${REPODIR}/telemetry-artifacts/build-custreamz.log
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
