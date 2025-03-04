@@ -43,7 +43,16 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
   // the first column of the first row group will have the first column index, the last
   // column of the last row group will have the final offset index.
 
-  // Check if we have page_index buffer, and non-zoro row groups and columnchunks
+  // FIXME: Remove this. Only temporary stuff to get PageIndex offsets.
+  if (page_index_bytes.empty() and row_groups.size() and row_groups.front().columns.size()) {
+    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+    auto const& last_col     = row_groups.back().columns.back();
+    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+
+    CUDF_EXPECTS(max_offset > min_offset, "");
+  }
+
+  // Check if we have page_index buffer, and non-zero row groups and columnchunks
   if (page_index_bytes.size() and row_groups.size() and row_groups.front().columns.size()) {
     // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
     int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
@@ -110,7 +119,7 @@ aggregate_reader_metadata::select_filter_columns(
 {
   // Only extract filter columns
   return select_columns(
-    filter_columns_names, std::nullopt, include_index, strings_to_categorical, timestamp_type_id);
+    std::nullopt, filter_columns_names, include_index, strings_to_categorical, timestamp_type_id);
 }
 std::tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
 aggregate_reader_metadata::add_row_groups(

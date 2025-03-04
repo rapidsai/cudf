@@ -19,7 +19,9 @@
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
 
-namespace cudf::experimental::io::parquet {
+namespace cudf::experimental::io {
+
+using hybrid_scan_reader = parquet::hybrid_scan_reader;
 
 // API # 1
 std::unique_ptr<hybrid_scan_reader> make_hybrid_scan_reader(
@@ -31,7 +33,7 @@ std::unique_ptr<hybrid_scan_reader> make_hybrid_scan_reader(
 }
 
 // API # 2
-std::vector<size_type> get_valid_row_groups(std::unique_ptr<hybrid_scan_reader> reader,
+std::vector<size_type> get_valid_row_groups(std::unique_ptr<hybrid_scan_reader> const& reader,
                                             cudf::io::parquet_reader_options const& options)
 {
   return reader->get_valid_row_groups(options);
@@ -39,21 +41,20 @@ std::vector<size_type> get_valid_row_groups(std::unique_ptr<hybrid_scan_reader> 
 
 // API # 3
 std::vector<size_type> filter_row_groups_with_stats(
-  std::unique_ptr<hybrid_scan_reader> reader,
+  std::unique_ptr<hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
-  return reader->filter_row_groups_with_stats(input_row_group_indices, options, stream, mr)[0];
+  return reader->filter_row_groups_with_stats(input_row_group_indices, options, stream)[0];
 }
 
 // API # 4
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                         std::vector<cudf::io::text::byte_range_info>>
-get_secondary_filters(std::unique_ptr<hybrid_scan_reader> reader,
+get_secondary_filters(std::unique_ptr<hybrid_scan_reader> const& reader,
                       cudf::host_span<size_type const> row_group_indices,
                       cudf::io::parquet_reader_options const& options)
 {
@@ -64,37 +65,35 @@ get_secondary_filters(std::unique_ptr<hybrid_scan_reader> reader,
 
 // API # 5
 std::vector<size_type> filter_row_groups_with_dictionary_pages(
-  std::unique_ptr<hybrid_scan_reader> reader,
+  std::unique_ptr<hybrid_scan_reader> const& reader,
   std::vector<rmm::device_buffer>& dictionary_page_data,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
   return reader->filter_row_groups_with_dictionary_pages(
-    dictionary_page_data, input_row_group_indices, options, stream, mr)[0];
+    dictionary_page_data, input_row_group_indices, options, stream)[0];
 }
 
 // API # 6
 std::vector<size_type> filter_row_groups_with_bloom_filters(
-  std::unique_ptr<hybrid_scan_reader> reader,
+  std::unique_ptr<hybrid_scan_reader> const& reader,
   std::vector<rmm::device_buffer>& bloom_filter_data,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
   return reader->filter_row_groups_with_bloom_filters(
-    bloom_filter_data, input_row_group_indices, options, stream, mr)[0];
+    bloom_filter_data, input_row_group_indices, options, stream)[0];
 }
 
 // API # 7
 std::unique_ptr<cudf::column> filter_data_pages_with_stats(
-  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
@@ -107,7 +106,7 @@ std::unique_ptr<cudf::column> filter_data_pages_with_stats(
 
 // API # 8
 std::vector<std::vector<cudf::io::text::byte_range_info>> get_filter_columns_data_pages(
-  std::unique_ptr<parquet::hybrid_scan_reader> reader,
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::column_view input_rows,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
@@ -119,4 +118,4 @@ std::vector<std::vector<cudf::io::text::byte_range_info>> get_filter_columns_dat
     input_rows, input_row_group_indices, options, stream);
 }
 
-}  // namespace cudf::experimental::io::parquet
+}  // namespace cudf::experimental::io

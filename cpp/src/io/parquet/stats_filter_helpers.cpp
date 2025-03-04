@@ -26,7 +26,7 @@
 namespace cudf::io::parquet::detail {
 
 stats_expression_converter::stats_expression_converter(ast::expression const& expr,
-                                                       size_type const& num_columns)
+                                                       size_type num_columns)
   : _num_columns{num_columns}
 {
   expr.accept(*this);

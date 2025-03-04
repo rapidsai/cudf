@@ -20,7 +20,6 @@
 #include "io/parquet/reader_impl_chunking.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
-#include <cudf/io/detail/experimental/hybrid_scan.hpp>
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/types.hpp>
@@ -42,13 +41,12 @@ struct metadata : private cudf::io::parquet::detail::metadata {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes,
                     cudf::host_span<uint8_t const> page_index_bytes);
 
-  cudf::io::parquet::detail::metadata get_file_metadata() { return *this; }
+  cudf::io::parquet::detail::metadata get_file_metadata() && { return std::move(*this); }
 };
 
 class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_reader_metadata {
  private:
- 
-   /**
+  /**
    * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
    *
    * @param dictionary_page_data Dictionary page data device buffers for each input row group
@@ -61,7 +59,7 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
    * @return A flattened list of `cuco::static_set_ref` device buffers for each predicate column
    * across row groups
    */
-   [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
+  [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
     cudf::host_span<rmm::device_buffer> dictionary_page_data,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<data_type const> output_dtypes,

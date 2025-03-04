@@ -35,14 +35,13 @@ hybrid_scan_reader::~hybrid_scan_reader() = default;
 std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   // Prefer user provided row group indices, else use the ones in options.
   auto const input_row_group_indices =
     row_group_indices.size() ? row_group_indices : options.get_row_groups();
 
-  return _impl->filter_row_groups_with_stats(input_row_group_indices, options, stream, mr);
+  return _impl->filter_row_groups_with_stats(input_row_group_indices, options, stream);
 }
 
 std::vector<size_type> hybrid_scan_reader::get_valid_row_groups(
@@ -67,26 +66,24 @@ std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_d
   std::vector<rmm::device_buffer>& dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
   CUDF_EXPECTS(row_group_indices[0].size() == dictionary_page_data.size(), "");
   return _impl->filter_row_groups_with_dictionary_pages(
-    dictionary_page_data, row_group_indices, options, stream, mr);
+    dictionary_page_data, row_group_indices, options, stream);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
   CUDF_EXPECTS(row_group_indices[0].size() == bloom_filter_data.size(), "");
   return _impl->filter_row_groups_with_bloom_filters(
-    bloom_filter_data, row_group_indices, options, stream, mr);
+    bloom_filter_data, row_group_indices, options, stream);
 }
 
 std::unique_ptr<cudf::column> hybrid_scan_reader::filter_data_pages_with_stats(

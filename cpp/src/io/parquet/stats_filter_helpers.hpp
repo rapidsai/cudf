@@ -215,7 +215,7 @@ class stats_caster_base {
  */
 class stats_expression_converter : public ast::detail::expression_transformer {
  public:
-  stats_expression_converter(ast::expression const& expr, size_type const& num_columns);
+  stats_expression_converter(ast::expression const& expr, size_type num_columns);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )

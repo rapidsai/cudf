@@ -60,7 +60,12 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
   }
 
   // Only need to select columns if filter is available
-  if (filter_columns_names.has_value()) {
+  if (options.get_filter().has_value()) {
+    if (not filter_columns_names.has_value()) {
+      filter_columns_names =
+        cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
+    }
+
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _metadata->select_filter_columns(filter_columns_names,
                                        options.is_enabled_use_pandas_metadata(),
@@ -87,8 +92,7 @@ std::vector<size_type> impl::get_valid_row_groups(
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -142,8 +146,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_page
   std::vector<rmm::device_buffer>& dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -171,8 +174,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+  rmm::cuda_stream_view stream) const
 {
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -202,7 +204,7 @@ std::unique_ptr<cudf::column> impl::filter_data_pages_with_stats(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (_file_preprocessed) { prepare_row_groups(row_group_indices, options); }
+  if (not _file_preprocessed) { prepare_row_groups(row_group_indices, options); }
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");

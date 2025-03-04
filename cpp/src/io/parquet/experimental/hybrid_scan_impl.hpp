@@ -25,7 +25,6 @@
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/parquet/reader_impl_chunking.hpp"
 
-#include <cudf/io/detail/experimental/hybrid_scan.hpp>
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/types.hpp>
@@ -64,8 +63,7 @@ class impl {
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    rmm::cuda_stream_view stream) const;
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
@@ -76,15 +74,13 @@ class impl {
     std::vector<rmm::device_buffer>& dictionary_page_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    rmm::cuda_stream_view stream) const;
 
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
     std::vector<rmm::device_buffer>& bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    rmm::cuda_stream_view stream) const;
 
   [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
