@@ -2727,6 +2727,9 @@ def as_column(
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
+            if not arbitrary.dtype.isnative:
+                # Not supported by pyarrow
+                arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
             return as_column(
                 pa.array(arbitrary, from_pandas=from_pandas),
                 dtype=dtype,
