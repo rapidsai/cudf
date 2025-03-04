@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t, uint64_t
 from pylibcudf.column cimport Column
@@ -23,4 +23,20 @@ cpdef Column minhash64(
     Column a,
     Column b,
     size_type width
+)
+
+cpdef Column minhash_ngrams(
+    Column input,
+    size_type width,
+    uint32_t seed,
+    Column a,
+    Column b
+)
+
+cpdef Column minhash64_ngrams(
+    Column input,
+    size_type width,
+    uint64_t seed,
+    Column a,
+    Column b
 )
