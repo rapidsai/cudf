@@ -19,6 +19,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>  // for meanvar
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -28,7 +29,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
-#include <cuda/std/functional>
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -59,7 +60,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum{},
+                              cudf::detail::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -72,7 +73,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum{},
+                              cudf::detail::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -98,7 +99,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
-                      thrust::equal_to{});
+                      cuda::std::equal_to{});
     auto result = thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
                                  dev_results.begin(),
                                  dev_results.end(),
