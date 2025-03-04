@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/join.hpp>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>

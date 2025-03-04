@@ -16,8 +16,8 @@
 #include "join_common_utils.cuh"
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/hash_join.cu>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
