@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -87,17 +86,6 @@ if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
 else:
     NumpyExtensionArray = pd.arrays.PandasArray
-
-
-def is_np_native_byteorder(dtype: np.dtype) -> bool:
-    """
-    Check if the numpy dtype is native byteorder.
-    """
-    if dtype.byteorder in {"=", "|"}:
-        return True
-    if sys.byteorder == "big":
-        return dtype.byteorder == ">"
-    return dtype.byteorder == "<"
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):
@@ -2731,9 +2719,9 @@ def as_column(
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
-            if not is_np_native_byteorder(arbitrary.dtype):
+            if not arbitrary.dtype.isnative:
                 # Not supported by pyarrow
-                arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder())
+                arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
             pa_array = pa.array(
                 pa.array(arbitrary, from_pandas=from_pandas),
                 from_pandas=from_pandas,
