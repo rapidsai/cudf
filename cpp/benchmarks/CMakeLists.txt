@@ -344,11 +344,22 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(
+  BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+)
+
+# ##################################################################################################
+# * transform benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp)
+
+# ##################################################################################################
+# * transform benchmark ----------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/transform.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------

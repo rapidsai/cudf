@@ -28,7 +28,14 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -136,6 +143,19 @@ class TimeDeltaColumn(ColumnBase):
         return item.view(np.dtype(np.int64)) in cast(
             "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            isinstance(fill_value, np.timedelta64)
+            and self.time_unit != np.datetime_data(fill_value)[0]
+        ):
+            fill_value = fill_value.astype(self.dtype)
+        elif isinstance(fill_value, str) and fill_value.lower() == "nat":
+            fill_value = np.timedelta64(fill_value, self.time_unit)
+        return super()._validate_fillna_value(fill_value)
 
     @property
     def values(self):
@@ -309,7 +329,9 @@ class TimeDeltaColumn(ColumnBase):
         # https://github.com/rapidsai/cudf/issues/17664
         return (
             (self.astype(np.dtype(np.int64)) * conversion)
-            .astype(cudf.Decimal128Dtype(38, 9))
+            .astype(
+                cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
+            )
             .round(decimals=abs(int(math.log10(conversion))))
             .astype(np.dtype(np.float64))
         )
@@ -378,10 +400,10 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if to_dtype.kind == "m":  # type: ignore[union-attr]
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
+        if to_dtype.kind == "m":
             to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            self_res = self.time_unit
 
             max_int = np.iinfo(np.int64).max
 
