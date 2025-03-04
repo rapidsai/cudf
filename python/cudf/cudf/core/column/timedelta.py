@@ -301,7 +301,7 @@ class TimeDeltaColumn(ColumnBase):
             other = pd.Timedelta(other).to_timedelta64()
 
         if isinstance(other, np.timedelta64):
-            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
                 return cudf.Scalar(
                     None,
