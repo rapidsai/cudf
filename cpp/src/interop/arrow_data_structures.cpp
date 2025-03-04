@@ -132,6 +132,9 @@ void ArrayReleaseCallback(ArrowArray* array)
  * This function shallow copies an ArrowArray and all of its children. It is
  * used to export cudf arrow objects to user-provided ArrowDeviceArrays.
  *
+ * The @p input must be the ``owner`` member of the @p container OR a child of
+ * the ``owner`` member of the @p container. If not, the behavior is undefined.
+ *
  * @param output The ArrowArray to copy to
  * @param input The ArrowArray to copy from
  * @param container The container that owns the data
@@ -140,7 +143,7 @@ void copy_array(ArrowArray* output,
                 ArrowArray const* input,
                 std::shared_ptr<arrow_array_container> container)
 {
-  auto private_data  = new ArrowArrayPrivateData{container};
+  auto private_data  = new ArrowArrayPrivateData{std::move(container)};
   output->length     = input->length;
   output->null_count = input->null_count;
   output->offset     = input->offset;
@@ -227,7 +230,13 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       if (input->array.release != nullptr) { ArrowArrayRelease(&input->array); }
       break;
     }
-    default: container = std::make_shared<arrow_array_container>(schema, input, stream, mr);
+    default: {
+      // Move to a temporary before forwarding to ensure that the caller's release callback has been
+      // nullified.
+      ArrowDeviceArray tmp;
+      ArrowDeviceArrayMove(input, &tmp);
+      container = std::make_shared<arrow_array_container>(schema, &tmp, stream, mr);
+    }
   }
 }
 
@@ -319,7 +328,13 @@ arrow_table::arrow_table(ArrowSchema const* schema,
       if (input->array.release != nullptr) { ArrowArrayRelease(&input->array); }
       break;
     }
-    default: container = std::make_shared<arrow_array_container>(schema, input, stream, mr);
+    default: {
+      // Move to a temporary before forwarding to ensure that the caller's release callback has been
+      // nullified.
+      ArrowDeviceArray tmp;
+      ArrowDeviceArrayMove(input, &tmp);
+      container = std::make_shared<arrow_array_container>(schema, &tmp, stream, mr);
+    }
   }
 }
 

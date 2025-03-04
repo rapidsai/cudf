@@ -283,6 +283,9 @@ class arrow_column {
   /**
    * @brief Convert the column to an ArrowSchema
    *
+   * The resulting schema is a deep copy of the arrow_column's schema and is
+   * not tied to its lifetime.
+   *
    * @param output ArrowSchema to populate with the column's schema
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
@@ -404,6 +407,9 @@ class arrow_table {
 
   /**
    * @brief Convert the table to an ArrowSchema
+   *
+   * The resulting schema is a deep copy of the arrow_column's schema and is
+   * not tied to its lifetime.
    *
    * @param output ArrowSchema to populate with the table's schema
    * @param stream CUDA stream used for device memory operations and kernel launches
