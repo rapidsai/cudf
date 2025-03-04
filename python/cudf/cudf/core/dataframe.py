@@ -6669,12 +6669,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
