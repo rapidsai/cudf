@@ -26,8 +26,8 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core
 import cudf.core.algorithms
+import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -3908,7 +3908,7 @@ class IndexedFrame(Frame):
         }
 
         result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=ColumnAccessor(
                 cols,
                 multiindex=multiindex,
                 level_names=level_names,
@@ -4888,20 +4888,16 @@ class IndexedFrame(Frame):
         (
             operands,
             out_index,
-            can_use_self_column_name,
+            ca_attributes,
         ) = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
-
-        level_names = (
-            self._data._level_names if can_use_self_column_name else None
-        )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
-                level_names=level_names,
+                **ca_attributes,
             ),
             index=out_index,
         )
@@ -4917,7 +4913,7 @@ class IndexedFrame(Frame):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         cudf.BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         raise NotImplementedError(
             f"Binary operations are not supported for {self.__class__}"
