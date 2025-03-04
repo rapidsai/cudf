@@ -8,10 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expressions.base import (
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -19,6 +16,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 
 __all__ = ["Slice"]
@@ -26,16 +24,18 @@ __all__ = ["Slice"]
 
 class Slice(Expr):
     __slots__ = ("length", "offset")
-    _non_child = ("dtype", "offset", "length")
+    _non_child = ("dtype", "context", "offset", "length")
 
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         offset: int,
         length: int,
         column: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         self.offset = offset
         self.length = length
         self.children = (column,)
@@ -44,7 +44,6 @@ class Slice(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
