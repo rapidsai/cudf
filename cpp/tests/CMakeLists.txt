@@ -319,6 +319,7 @@ ConfigureTest(
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
+  io/parquet_experimental_reader_test.cpp
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
