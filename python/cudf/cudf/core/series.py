@@ -1531,7 +1531,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         # Specialize binops to align indices.
         if isinstance(other, Series):
@@ -1547,15 +1547,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         else:
             lhs = self
 
-        try:
-            can_use_self_column_name = cudf.utils.utils._is_same_name(
-                self.name, other.name
-            )
-        except AttributeError:
-            can_use_self_column_name = False
+        ca_attributes = {}
+        if hasattr(other, "name") and cudf.utils.utils._is_same_name(
+            self.name, other.name
+        ):
+            ca_attributes["level_names"] = self._data._level_names
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
-        return operands, lhs.index, can_use_self_column_name
+        return operands, lhs.index, ca_attributes
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property

@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
         SeriesOrIndex,
         SeriesOrSingleColumnIndex,
@@ -811,21 +812,15 @@ class CategoricalColumn(column.ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array."""
-        # arrow doesn't support unsigned codes
+        # pyarrow.Table doesn't support unsigned codes
         signed_type = (
             min_signed_type(self.codes.max())
             if self.codes.size > 0
-            else np.int8
+            else np.dtype(np.int8)
         )
-        codes = self.codes.astype(signed_type)
-        categories = self.categories
-
-        out_indices = codes.to_arrow()
-        out_dictionary = categories.to_arrow()
-
         return pa.DictionaryArray.from_arrays(
-            out_indices,
-            out_dictionary,
+            self.codes.astype(signed_type).to_arrow(),
+            self.categories.to_arrow(),
             ordered=self.ordered,
         )
 
@@ -1174,7 +1169,7 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col.codes
         return out
 
-    def view(self, dtype: Dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )

@@ -26,8 +26,8 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core
 import cudf.core.algorithms
+import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -1328,7 +1328,6 @@ class IndexedFrame(Frame):
         self,
         axis=no_default,
         skipna=True,
-        dtype=None,
         numeric_only=False,
         min_count=0,
         **kwargs,
@@ -1342,8 +1341,6 @@ class IndexedFrame(Frame):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        dtype: data type
-            Data type to cast the result to.
         numeric_only : bool, default False
             If True, includes only float, int, boolean columns.
             If False, will raise error in-case there are
@@ -1373,7 +1370,6 @@ class IndexedFrame(Frame):
             "sum",
             axis=axis,
             skipna=skipna,
-            dtype=dtype,
             numeric_only=numeric_only,
             min_count=min_count,
             **kwargs,
@@ -1384,7 +1380,6 @@ class IndexedFrame(Frame):
         self,
         axis=no_default,
         skipna=True,
-        dtype=None,
         numeric_only=False,
         min_count=0,
         **kwargs,
@@ -1398,8 +1393,6 @@ class IndexedFrame(Frame):
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-        dtype: data type
-            Data type to cast the result to.
         numeric_only : bool, default False
             If True, includes only float, int, boolean columns.
             If False, will raise error in-case there are
@@ -1432,7 +1425,6 @@ class IndexedFrame(Frame):
             "prod" if axis in {1, "columns"} else "product",
             axis=axis,
             skipna=skipna,
-            dtype=dtype,
             numeric_only=numeric_only,
             min_count=min_count,
             **kwargs,
@@ -3308,9 +3300,13 @@ class IndexedFrame(Frame):
             splits,
         )
 
+        @acquire_spill_lock()
+        def split_from_pylibcudf(split: list[plc.Column]) -> list[ColumnBase]:
+            return [ColumnBase.from_pylibcudf(col) for col in split]
+
         return [
             self._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in split],
+                split_from_pylibcudf(split),
                 self._column_names,
                 self.index.names if keep_index else None,
             )
@@ -3912,7 +3908,7 @@ class IndexedFrame(Frame):
         }
 
         result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=ColumnAccessor(
                 cols,
                 multiindex=multiindex,
                 level_names=level_names,
@@ -4892,20 +4888,16 @@ class IndexedFrame(Frame):
         (
             operands,
             out_index,
-            can_use_self_column_name,
+            ca_attributes,
         ) = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
-
-        level_names = (
-            self._data._level_names if can_use_self_column_name else None
-        )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
-                level_names=level_names,
+                **ca_attributes,
             ),
             index=out_index,
         )
@@ -4921,7 +4913,7 @@ class IndexedFrame(Frame):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         cudf.BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         raise NotImplementedError(
             f"Binary operations are not supported for {self.__class__}"
@@ -6517,7 +6509,7 @@ class IndexedFrame(Frame):
             for col in self._columns:
                 if col.dtype.kind == "f":
                     col = col.fillna(0)
-                    as_int = col.astype("int64")
+                    as_int = col.astype(np.dtype(np.int64))
                     if cp.allclose(col, as_int):
                         cols.append(as_int)
                         continue
