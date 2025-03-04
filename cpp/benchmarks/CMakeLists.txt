@@ -355,11 +355,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * transform benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp)
-
-# ##################################################################################################
-# * transform benchmark ----------------------------------------------------------------------------
-ConfigureNVBench(TRANSFORM_NVBENCH transform/transform.cpp)
+ConfigureNVBench(TRANSFORM_NVBENCH transform/transform.cpp transform/polynomials.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
