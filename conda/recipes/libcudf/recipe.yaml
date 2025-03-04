@@ -138,13 +138,15 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
-          - cudatoolkit
           - flatbuffers
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf.so
@@ -185,6 +187,9 @@ outputs:
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_kafka.so
@@ -261,6 +266,9 @@ outputs:
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
@@ -318,6 +326,9 @@ outputs:
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
