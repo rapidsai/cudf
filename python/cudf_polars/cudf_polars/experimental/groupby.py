@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import itertools
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
@@ -21,10 +23,108 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.typing import Schema
 
 
 # Supported multi-partition aggregations
 _GB_AGG_SUPPORTED = ("sum", "count", "mean")
+
+
+def decompose_groupby_reduction(
+    schema: Schema,
+    request: NamedExpr,
+) -> tuple[list[NamedExpr], list[NamedExpr], list[NamedExpr]]:
+    """Decompose a groupby request."""
+    complex_expr_map: MutableMapping[str, Any] = {}
+    piecewise_exprs: list[NamedExpr] = []
+    reduction_exprs: list[NamedExpr] = []
+    selection_exprs: list[NamedExpr] = []
+    unary_op: dict[str, Any] = {}
+
+    name = request.name
+    agg: Expr = request.value
+    dtype = agg.dtype
+    agg = agg.children[0] if isinstance(agg, Cast) else agg
+
+    if isinstance(agg, Len):
+        piecewise_exprs.append(request)
+        reduction_exprs.append(
+            NamedExpr(
+                name,
+                Cast(
+                    dtype,
+                    Agg(dtype, "sum", None, Col(dtype, name)),
+                ),
+            )
+        )
+    elif isinstance(agg, (Agg, UnaryFunction)):
+        if (
+            isinstance(agg, UnaryFunction)
+            and agg.is_pointwise
+            and isinstance(agg.children[0], Agg)
+        ):
+            # TODO: Handle sequential unary ops
+            unary_op = {"name": agg.name, "options": agg.options}
+            agg = agg.children[0]
+
+        if agg.name not in _GB_AGG_SUPPORTED:
+            raise NotImplementedError(
+                "GroupBy does not support multiple partitions "
+                f"for this expression:\n{agg}"
+            )
+
+        if agg.name in ("sum", "count"):
+            piecewise_exprs.append(request)
+            reduction_exprs.append(
+                NamedExpr(
+                    name,
+                    Cast(
+                        dtype,
+                        Agg(dtype, "sum", agg.options, Col(dtype, name)),
+                    ),
+                )
+            )
+        elif agg.name == "mean":
+            complex_expr_map[name] = {"mean": {}}
+            for sub in ["sum", "count"]:
+                # Partwise
+                tmp_name = f"{name}__{sub}"
+                complex_expr_map[name]["mean"][sub] = tmp_name
+                agg_pwise = Agg(dtype, sub, agg.options, *agg.children)
+                piecewise_exprs.append(NamedExpr(tmp_name, agg_pwise))
+                # Tree
+                agg_tree = Agg(dtype, "sum", agg.options, Col(dtype, tmp_name))
+                reduction_exprs.append(NamedExpr(tmp_name, agg_tree))
+    else:
+        # Unsupported expression
+        raise NotImplementedError(
+            f"GroupBy does not support multiple partitions for this expression:\n{agg}"
+        )  # pragma: no cover
+
+    # Construct final selection expressions
+    col_expr: Col | BinOp | UnaryFunction
+    dtype = schema[name]
+    complex_expr = complex_expr_map.get(name, None)
+    if complex_expr is None:
+        col_expr = Col(dtype, name)
+    elif "mean" in complex_expr:
+        mean_cols = complex_expr["mean"]
+        col_expr = BinOp(
+            dtype,
+            plc.binaryop.BinaryOperator.DIV,
+            Col(dtype, mean_cols["sum"]),
+            Col(dtype, mean_cols["count"]),
+        )
+    if unary_op:
+        col_expr = UnaryFunction(
+            dtype,
+            unary_op["name"],
+            unary_op["options"],
+            col_expr,
+        )
+    selection_exprs.append(NamedExpr(name, col_expr))
+
+    return piecewise_exprs, reduction_exprs, selection_exprs
 
 
 @lower_ir_node.register(GroupBy)
@@ -68,78 +168,22 @@ def _(
             1,
         )
 
-    name_map: MutableMapping[str, Any] = {}
-    agg_tree: Cast | Agg | None = None
-    agg_requests_pwise = []  # Partition-wise requests
-    agg_requests_tree = []  # Tree-node requests
-    unary_ops: dict[str, dict[str, Any]] = {}
-
-    for ne in ir.agg_requests:
-        name = ne.name
-        agg: Expr = ne.value
-        dtype = agg.dtype
-        agg = agg.children[0] if isinstance(agg, Cast) else agg
-        if isinstance(agg, Len):
-            agg_requests_pwise.append(ne)
-            agg_requests_tree.append(
-                NamedExpr(
-                    name,
-                    Cast(
-                        dtype,
-                        Agg(dtype, "sum", None, Col(dtype, name)),
-                    ),
-                )
-            )
-        elif isinstance(agg, (Agg, UnaryFunction)):
-            if (
-                isinstance(agg, UnaryFunction)
-                and agg.is_pointwise
-                and isinstance(agg.children[0], Agg)
-            ):
-                # TODO: Handle sequential unary ops
-                unary_ops[name] = {"name": agg.name, "options": agg.options}
-                agg = agg.children[0]
-
-            if agg.name not in _GB_AGG_SUPPORTED:
-                raise NotImplementedError(
-                    "GroupBy does not support multiple partitions "
-                    f"for this expression:\n{agg}"
-                )
-
-            if agg.name in ("sum", "count"):
-                agg_requests_pwise.append(ne)
-                agg_requests_tree.append(
-                    NamedExpr(
-                        name,
-                        Cast(
-                            dtype,
-                            Agg(dtype, "sum", agg.options, Col(dtype, name)),
-                        ),
-                    )
-                )
-            elif agg.name == "mean":
-                name_map[name] = {agg.name: {}}
-                for sub in ["sum", "count"]:
-                    # Partwise
-                    tmp_name = f"{name}__{sub}"
-                    name_map[name][agg.name][sub] = tmp_name
-                    agg_pwise = Agg(dtype, sub, agg.options, *agg.children)
-                    agg_requests_pwise.append(NamedExpr(tmp_name, agg_pwise))
-                    # Tree
-                    agg_tree = Agg(dtype, "sum", agg.options, Col(dtype, tmp_name))
-                    agg_requests_tree.append(NamedExpr(tmp_name, agg_tree))
-        else:
-            # Unsupported expression
-            raise NotImplementedError(
-                "GroupBy does not support multiple partitions "
-                f"for this expression:\n{agg}"
-            )  # pragma: no cover
+    piecewise_exprs, reduction_exprs, selection_exprs = (
+        list(itertools.chain.from_iterable(x))
+        for x in zip(
+            *map(
+                partial(decompose_groupby_reduction, ir.schema),
+                ir.agg_requests,
+            ),
+            strict=False,
+        )
+    )
 
     # Partition-wise groupby operation
     gb_pwise = GroupBy(
         ir.schema,
         ir.keys,
-        agg_requests_pwise,
+        piecewise_exprs,
         ir.maintain_order,
         ir.options,
         ir.config_options,
@@ -165,7 +209,7 @@ def _(
     gb_reduce = GroupBy(
         ir.schema,
         ir.keys,
-        agg_requests_tree,
+        reduction_exprs,
         ir.maintain_order,
         ir.options,
         ir.config_options,
@@ -173,33 +217,15 @@ def _(
     )
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
 
-    schema = ir.schema
-    output_exprs = []
-    col_expr: Col | BinOp | UnaryFunction
-    for name, dtype in schema.items():
-        agg_mapping = name_map.get(name, None)
-        if agg_mapping is None:
-            col_expr = Col(dtype, name)
-        elif "mean" in agg_mapping:
-            mean_cols = agg_mapping["mean"]
-            col_expr = BinOp(
-                dtype,
-                plc.binaryop.BinaryOperator.DIV,
-                Col(dtype, mean_cols["sum"]),
-                Col(dtype, mean_cols["count"]),
-            )
-        if name in unary_ops:
-            col_expr = UnaryFunction(
-                dtype,
-                unary_ops[name]["name"],
-                unary_ops[name]["options"],
-                col_expr,
-            )
-        output_exprs.append(NamedExpr(name, col_expr))
     should_broadcast: bool = False
+    aggregated = {ne.name: ne for ne in selection_exprs}
     new_node = Select(
-        schema,
-        output_exprs,
+        ir.schema,
+        [
+            # Select the aggregated data or the original column
+            aggregated.get(name, NamedExpr(name, Col(dtype, name)))
+            for name, dtype in ir.schema.items()
+        ],
         should_broadcast,
         gb_reduce,
     )
