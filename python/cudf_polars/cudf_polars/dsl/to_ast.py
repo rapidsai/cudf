@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -275,6 +275,7 @@ def _insert_colrefs(node: expr.Expr, rec: ExprTransformer) -> expr.Expr:
     if isinstance(node, expr.Col):
         return expr.ColRef(
             node.dtype,
+            node.context,
             rec.state["name_to_index"][node.name],
             rec.state["table_ref"],
             node,

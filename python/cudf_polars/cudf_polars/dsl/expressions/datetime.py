@@ -14,7 +14,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["TemporalFunction"]
 
@@ -90,7 +91,7 @@ class TemporalFunction(Expr):
             return getattr(cls, name)
 
     __slots__ = ("name", "options")
-    _non_child = ("dtype", "name", "options")
+    _non_child = ("dtype", "context", "name", "options")
     _COMPONENT_MAP: ClassVar[dict[Name, plc.datetime.DatetimeComponent]] = {
         Name.Year: plc.datetime.DatetimeComponent.YEAR,
         Name.Month: plc.datetime.DatetimeComponent.MONTH,
@@ -113,6 +114,7 @@ class TemporalFunction(Expr):
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         name: TemporalFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -120,6 +122,7 @@ class TemporalFunction(Expr):
         self.dtype = dtype
         self.options = options
         self.name = name
+        self.context = context
         self.children = children
         self.is_pointwise = True
         if self.name not in self._valid_ops:
@@ -129,14 +132,10 @@ class TemporalFunction(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, mapping=mapping) for child in self.children]
         (column,) = columns
         if self.name is TemporalFunction.Name.IsLeapYear:
             return Column(

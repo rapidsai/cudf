@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -36,20 +36,21 @@ class ExecutionContext(IntEnum):
 class Expr(Node["Expr"]):
     """An abstract expression object."""
 
-    __slots__ = ("dtype", "is_pointwise")
+    __slots__ = ("context", "dtype", "is_pointwise")
     dtype: plc.DataType
     """Data type of the expression."""
     is_pointwise: bool
     """Whether this expression acts pointwise on its inputs."""
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
-    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
+    _non_child: ClassVar[tuple[str, ...]] = ("dtype", "context")
     """Names of non-child data (not Exprs) for reconstruction."""
+    context: ExecutionContext
+    """What context is this expression being executed in?"""
 
     def do_evaluate(
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """
@@ -59,8 +60,6 @@ class Expr(Node["Expr"]):
         ----------
         df
             DataFrame that will provide columns.
-        context
-            What context are we performing this evaluation in?
         mapping
             Substitution mapping from expressions to Columns, used to
             override the evaluation of a given expression if we're
@@ -90,7 +89,6 @@ class Expr(Node["Expr"]):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """
@@ -100,8 +98,6 @@ class Expr(Node["Expr"]):
         ----------
         df
             DataFrame that will provide columns.
-        context
-            What context are we performing this evaluation in?
         mapping
             Substitution mapping from expressions to Columns, used to
             override the evaluation of a given expression if we're
@@ -125,11 +121,11 @@ class Expr(Node["Expr"]):
             are not perfect.
         """
         if mapping is None:
-            return self.do_evaluate(df, context=context, mapping=mapping)
+            return self.do_evaluate(df, mapping=mapping)
         try:
             return mapping[self]
         except KeyError:
-            return self.do_evaluate(df, context=context, mapping=mapping)
+            return self.do_evaluate(df, mapping=mapping)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """
@@ -159,12 +155,15 @@ class Expr(Node["Expr"]):
 
 class ErrorExpr(Expr):
     __slots__ = ("error",)
-    _non_child = ("dtype", "error")
+    _non_child = ("dtype", "context", "error")
     error: str
 
-    def __init__(self, dtype: plc.DataType, error: str) -> None:
+    def __init__(
+        self, dtype: plc.DataType, context: ExecutionContext, error: str
+    ) -> None:
         self.dtype = dtype
         self.error = error
+        self.context = context
         self.children = ()
         self.is_pointwise = True
 
@@ -205,7 +204,6 @@ class NamedExpr:
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """
@@ -229,9 +227,7 @@ class NamedExpr:
         :meth:`Expr.evaluate` for details, this function just adds the
         name to a column produced from an expression.
         """
-        return self.value.evaluate(df, context=context, mapping=mapping).rename(
-            self.name
-        )
+        return self.value.evaluate(df, mapping=mapping).rename(self.name)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -240,12 +236,15 @@ class NamedExpr:
 
 class Col(Expr):
     __slots__ = ("name",)
-    _non_child = ("dtype", "name")
+    _non_child = ("dtype", "context", "name")
     name: str
 
-    def __init__(self, dtype: plc.DataType, name: str) -> None:
+    def __init__(
+        self, dtype: plc.DataType, context: ExecutionContext, name: str
+    ) -> None:
         self.dtype = dtype
         self.name = name
+        self.context = context
         self.is_pointwise = True
         self.children = ()
 
@@ -253,7 +252,6 @@ class Col(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
@@ -268,13 +266,14 @@ class Col(Expr):
 
 class ColRef(Expr):
     __slots__ = ("index", "table_ref")
-    _non_child = ("dtype", "index", "table_ref")
+    _non_child = ("dtype", "context", "index", "table_ref")
     index: int
     table_ref: plc.expressions.TableReference
 
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         index: int,
         table_ref: plc.expressions.TableReference,
         column: Expr,
@@ -285,13 +284,13 @@ class ColRef(Expr):
         self.index = index
         self.table_ref = table_ref
         self.is_pointwise = True
+        self.context = context
         self.children = (column,)
 
     def do_evaluate(
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""

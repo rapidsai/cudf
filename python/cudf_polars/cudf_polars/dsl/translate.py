@@ -21,6 +21,7 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
@@ -120,7 +121,7 @@ class Translator:
 
             return result
 
-    def translate_expr(self, *, n: int) -> expr.Expr:
+    def translate_expr(self, *, n: int, context: ExecutionContext) -> expr.Expr:
         """
         Translate a polars-internal expression IR into our representation.
 
@@ -128,6 +129,8 @@ class Translator:
         ----------
         n
             Node to translate, an integer referencing a polars internal node.
+        context
+            The IR node context the expression is appearing in.
 
         Returns
         -------
@@ -143,10 +146,10 @@ class Translator:
         node = self.visitor.view_expression(n)
         dtype = dtypes.from_polars(self.visitor.get_dtype(n))
         try:
-            return _translate_expr(node, self, dtype)
+            return _translate_expr(node, self, dtype, context)
         except Exception as e:
             self.errors.append(e)
-            return expr.ErrorExpr(dtype, str(e))
+            return expr.ErrorExpr(dtype, context, str(e))
 
 
 class set_node(AbstractContextManager[None]):
@@ -202,7 +205,9 @@ def _(
     scan_fn, with_columns, source_type, predicate, nrows = node.options
     options = (scan_fn, with_columns, source_type, nrows)
     predicate = (
-        translate_named_expr(translator, n=predicate) if predicate is not None else None
+        translate_named_expr(translator, n=predicate, context=ExecutionContext.FRAME)
+        if predicate is not None
+        else None
     )
     return ir.PythonScan(schema, options, predicate)
 
@@ -239,7 +244,9 @@ def _(
         skip_rows,
         n_rows,
         row_index,
-        translate_named_expr(translator, n=node.predicate)
+        translate_named_expr(
+            translator, n=node.predicate, context=ExecutionContext.FRAME
+        )
         if node.predicate is not None
         else None,
     )
@@ -270,7 +277,10 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [translate_named_expr(translator, n=e) for e in node.expr]
+        exprs = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            for e in node.expr
+        ]
     return ir.Select(schema, exprs, node.should_broadcast, inp)
 
 
@@ -280,8 +290,14 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
-        keys = [translate_named_expr(translator, n=e) for e in node.keys]
+        aggs = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.GROUPBY)
+            for e in node.aggs
+        ]
+        keys = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            for e in node.keys
+        ]
     return ir.GroupBy(
         schema,
         keys,
@@ -305,22 +321,31 @@ def _(
             plc_int64 = plc.types.DataType(plc.types.TypeId.INT64)
             return expr.Literal(
                 plc_int64,
+                ExecutionContext.FRAME,
                 pa.scalar(literal.value.as_py(), type=plc.interop.to_arrow(plc_int64)),
             )
         return literal
 
-    def maybe_adjust_binop(e) -> expr.Expr:  # pragma: no cover
+    def maybe_adjust_binop(e: expr.NamedExpr) -> expr.NamedExpr:  # pragma: no cover
         if isinstance(e.value, expr.BinOp):
-            left, right = e.value.children
+            value = e.value
+            children = value.children
+            left, right = children
             if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
-                e.value.children = (left, adjust_literal_dtype(right))
+                children = (left, adjust_literal_dtype(right))
             elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
-                e.value.children = (adjust_literal_dtype(left), right)
+                children = (adjust_literal_dtype(left), right)
+            return expr.NamedExpr(
+                e.name, expr.BinOp(value.dtype, value.context, value.op, *children)
+            )
         return e
 
     def translate_expr_and_maybe_fix_binop_args(translator, exprs):
         return [
-            maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
+            maybe_adjust_binop(
+                translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            )
+            for e in exprs
         ]
 
     with set_node(translator.visitor, node.input_left):
@@ -357,11 +382,15 @@ def _(
         dtype = plc.DataType(plc.TypeId.BOOL8)
         predicate = functools.reduce(
             functools.partial(
-                expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
+                expr.BinOp,
+                dtype,
+                ExecutionContext.FRAME,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
             ),
             (
                 expr.BinOp(
                     dtype,
+                    ExecutionContext.FRAME,
                     expr.BinOp._MAPPING[op],
                     insert_colrefs(
                         left.value,
@@ -391,7 +420,10 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [translate_named_expr(translator, n=e) for e in node.exprs]
+        exprs = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            for e in node.exprs
+        ]
     return ir.HStack(schema, exprs, node.should_broadcast, inp)
 
 
@@ -401,7 +433,10 @@ def _(
 ) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        exprs = [translate_named_expr(translator, n=e) for e in node.expr]
+        exprs = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            for e in node.expr
+        ]
     return ir.Reduce(schema, exprs, inp)
 
 
@@ -428,7 +463,10 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        by = [translate_named_expr(translator, n=e) for e in node.by_column]
+        by = [
+            translate_named_expr(translator, n=e, context=ExecutionContext.FRAME)
+            for e in node.by_column
+        ]
     stable, nulls_last, descending = node.sort_options
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
@@ -451,7 +489,9 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        mask = translate_named_expr(translator, n=node.predicate)
+        mask = translate_named_expr(
+            translator, n=node.predicate, context=ExecutionContext.FRAME
+        )
     return ir.Filter(schema, mask, inp)
 
 
@@ -509,7 +549,10 @@ def _(
 
 
 def translate_named_expr(
-    translator: Translator, *, n: pl_expr.PyExprIR
+    translator: Translator,
+    *,
+    n: pl_expr.PyExprIR,
+    context: ExecutionContext,
 ) -> expr.NamedExpr:
     """
     Translate a polars-internal named expression IR object into our representation.
@@ -520,6 +563,8 @@ def translate_named_expr(
         Translator object
     n
         Node to translate, a named expression node.
+    context
+        The IR node context the expression is appearing in.
 
     Returns
     -------
@@ -537,12 +582,17 @@ def translate_named_expr(
     NotImplementedError
         If any translation fails due to unsupported functionality.
     """
-    return expr.NamedExpr(n.output_name, translator.translate_expr(n=n.node))
+    return expr.NamedExpr(
+        n.output_name, translator.translate_expr(n=n.node, context=context)
+    )
 
 
 @singledispatch
 def _translate_expr(
-    node: Any, translator: Translator, dtype: plc.DataType
+    node: Any,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
 ) -> expr.Expr:
     raise NotImplementedError(
         f"Translation for {type(node).__name__}"
@@ -550,7 +600,12 @@ def _translate_expr(
 
 
 @_translate_expr.register
-def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+def _(
+    node: pl_expr.Function,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
     name, *options = node.function_data
     options = tuple(options)
     if isinstance(name, pl_expr.StringFunction):
@@ -559,7 +614,9 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             pl_expr.StringFunction.StripCharsStart,
             pl_expr.StringFunction.StripCharsEnd,
         }:
-            column, chars = (translator.translate_expr(n=n) for n in node.input)
+            column, chars = (
+                translator.translate_expr(n=n, context=context) for n in node.input
+            )
             if isinstance(chars, expr.Literal):
                 if chars.value == pa.scalar(""):
                     # No-op in polars, but libcudf uses empty string
@@ -569,10 +626,12 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                     # Polars uses None to mean "strip all whitespace"
                     chars = expr.Literal(
                         column.dtype,
+                        context,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
             return expr.StringFunction(
                 dtype,
+                context,
                 expr.StringFunction.Name.from_polars(name),
                 options,
                 column,
@@ -580,26 +639,31 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         return expr.StringFunction(
             dtype,
+            context,
             expr.StringFunction.Name.from_polars(name),
             options,
-            *(translator.translate_expr(n=n) for n in node.input),
+            *(translator.translate_expr(n=n, context=context) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
         if name == pl_expr.BooleanFunction.IsBetween:
-            column, lo, hi = (translator.translate_expr(n=n) for n in node.input)
+            column, lo, hi = (
+                translator.translate_expr(n=n, context=context) for n in node.input
+            )
             (closed,) = options
             lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
             return expr.BinOp(
                 dtype,
+                context,
                 plc.binaryop.BinaryOperator.LOGICAL_AND,
-                expr.BinOp(dtype, lop, column, lo),
-                expr.BinOp(dtype, rop, column, hi),
+                expr.BinOp(dtype, context, lop, column, lo),
+                expr.BinOp(dtype, context, rop, column, hi),
             )
         return expr.BooleanFunction(
             dtype,
+            context,
             expr.BooleanFunction.Name.from_polars(name),
             options,
-            *(translator.translate_expr(n=n) for n in node.input),
+            *(translator.translate_expr(n=n, context=context) for n in node.input),
         )
     elif isinstance(name, pl_expr.TemporalFunction):
         # functions for which evaluation of the expression may not return
@@ -617,179 +681,278 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }
         result_expr = expr.TemporalFunction(
             dtype,
+            context,
             expr.TemporalFunction.Name.from_polars(name),
             options,
-            *(translator.translate_expr(n=n) for n in node.input),
+            *(translator.translate_expr(n=n, context=context) for n in node.input),
         )
         if name in needs_cast:
-            return expr.Cast(dtype, result_expr)
+            return expr.Cast(dtype, context, result_expr)
         return result_expr
 
     elif isinstance(name, str):
-        children = (translator.translate_expr(n=n) for n in node.input)
+        children = (
+            translator.translate_expr(
+                n=n,
+                context=context,
+            )
+            for n in node.input
+        )
         if name == "log":
             (base,) = options
             (child,) = children
             return expr.BinOp(
                 dtype,
+                context,
                 plc.binaryop.BinaryOperator.LOG_BASE,
                 child,
-                expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
+                expr.Literal(
+                    dtype, context, pa.scalar(base, type=plc.interop.to_arrow(dtype))
+                ),
             )
         elif name == "pow":
-            return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+            return expr.BinOp(dtype, context, plc.binaryop.BinaryOperator.POW, *children)
         elif name in "top_k":
             (col, k) = children
             assert isinstance(k, expr.Literal)
             (descending,) = options
             return expr.Slice(
                 dtype,
+                context,
                 0,
                 k.value.as_py(),
-                expr.Sort(dtype, (False, True, not descending), col),
+                expr.Sort(dtype, context, (False, True, not descending), col),
             )
 
-        return expr.UnaryFunction(dtype, name, options, *children)
+        return expr.UnaryFunction(dtype, context, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
     )  # pragma: no cover; polars raises on the rust side for now
 
 
 @_translate_expr.register
-def _(node: pl_expr.Window, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+def _(
+    node: pl_expr.Window,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
     # TODO: raise in groupby?
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
         return expr.RollingWindow(
-            dtype, node.options, translator.translate_expr(n=node.function)
+            dtype,
+            context,
+            node.options,
+            translator.translate_expr(
+                n=node.function, context=ExecutionContext.ROLLING
+            ),
         )
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
         return expr.GroupedRollingWindow(
             dtype,
+            context,
             node.options,
-            translator.translate_expr(n=node.function),
-            *(translator.translate_expr(n=n) for n in node.partition_by),
+            translator.translate_expr(
+                n=node.function, context=ExecutionContext.ROLLING
+            ),
+            *(
+                translator.translate_expr(n=n, context=context)
+                for n in node.partition_by
+            ),
         )
     assert_never(node.options)
 
 
 @_translate_expr.register
-def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+def _(
+    node: pl_expr.Literal,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
         data = pl.Series._from_pyseries(node.value).to_arrow()
         return expr.LiteralColumn(
-            dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
+            dtype, context, data.cast(dtypes.downcast_arrow_lists(data.type))
         )
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
-    return expr.Literal(dtype, value)
+    return expr.Literal(dtype, context, value)
 
 
 @_translate_expr.register
-def _(node: pl_expr.Sort, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+def _(
+    node: pl_expr.Sort,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
     # TODO: raise in groupby
-    return expr.Sort(dtype, node.options, translator.translate_expr(n=node.expr))
-
-
-@_translate_expr.register
-def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    options = node.sort_options
-    return expr.SortBy(
+    return expr.Sort(
         dtype,
-        (options[0], tuple(options[1]), tuple(options[2])),
-        translator.translate_expr(n=node.expr),
-        *(translator.translate_expr(n=n) for n in node.by),
-    )
-
-
-@_translate_expr.register
-def _(node: pl_expr.Slice, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    offset = translator.translate_expr(n=node.offset)
-    length = translator.translate_expr(n=node.length)
-    assert isinstance(offset, expr.Literal)
-    assert isinstance(length, expr.Literal)
-    return expr.Slice(
-        dtype,
-        offset.value.as_py(),
-        length.value.as_py(),
-        translator.translate_expr(n=node.input),
-    )
-
-
-@_translate_expr.register
-def _(node: pl_expr.Gather, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    return expr.Gather(
-        dtype,
-        translator.translate_expr(n=node.expr),
-        translator.translate_expr(n=node.idx),
-    )
-
-
-@_translate_expr.register
-def _(node: pl_expr.Filter, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    return expr.Filter(
-        dtype,
-        translator.translate_expr(n=node.input),
-        translator.translate_expr(n=node.by),
-    )
-
-
-@_translate_expr.register
-def _(node: pl_expr.Cast, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    inner = translator.translate_expr(n=node.expr)
-    # Push casts into literals so we can handle Cast(Literal(Null))
-    if isinstance(inner, expr.Literal):
-        return expr.Literal(dtype, inner.value.cast(plc.interop.to_arrow(dtype)))
-    elif isinstance(inner, expr.Cast):
-        # Translation of Len/Count-agg put in a cast, remove double
-        # casts if we have one.
-        (inner,) = inner.children
-    return expr.Cast(dtype, inner)
-
-
-@_translate_expr.register
-def _(node: pl_expr.Column, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    return expr.Col(dtype, node.name)
-
-
-@_translate_expr.register
-def _(node: pl_expr.Agg, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    value = expr.Agg(
-        dtype,
-        node.name,
+        context,
         node.options,
-        *(translator.translate_expr(n=n) for n in node.arguments),
-    )
-    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
-        return expr.Cast(value.dtype, value)
-    return value
-
-
-@_translate_expr.register
-def _(node: pl_expr.Ternary, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    return expr.Ternary(
-        dtype,
-        translator.translate_expr(n=node.predicate),
-        translator.translate_expr(n=node.truthy),
-        translator.translate_expr(n=node.falsy),
+        translator.translate_expr(n=node.expr, context=context),
     )
 
 
 @_translate_expr.register
 def _(
-    node: pl_expr.BinaryExpr, translator: Translator, dtype: plc.DataType
+    node: pl_expr.SortBy,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
 ) -> expr.Expr:
-    return expr.BinOp(
+    options = node.sort_options
+    return expr.SortBy(
         dtype,
-        expr.BinOp._MAPPING[node.op],
-        translator.translate_expr(n=node.left),
-        translator.translate_expr(n=node.right),
+        context,
+        (options[0], tuple(options[1]), tuple(options[2])),
+        translator.translate_expr(n=node.expr, context=context),
+        *(translator.translate_expr(n=n, context=context) for n in node.by),
     )
 
 
 @_translate_expr.register
-def _(node: pl_expr.Len, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    value = expr.Len(dtype)
+def _(
+    node: pl_expr.Slice,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    offset = translator.translate_expr(n=node.offset, context=context)
+    length = translator.translate_expr(n=node.length, context=context)
+    assert isinstance(offset, expr.Literal)
+    assert isinstance(length, expr.Literal)
+    return expr.Slice(
+        dtype,
+        context,
+        offset.value.as_py(),
+        length.value.as_py(),
+        translator.translate_expr(n=node.input, context=context),
+    )
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Gather,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    return expr.Gather(
+        dtype,
+        context,
+        translator.translate_expr(n=node.expr, context=context),
+        translator.translate_expr(n=node.idx, context=context),
+    )
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Filter,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    return expr.Filter(
+        dtype,
+        context,
+        translator.translate_expr(n=node.input, context=context),
+        translator.translate_expr(n=node.by, context=context),
+    )
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Cast,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    inner = translator.translate_expr(n=node.expr, context=context)
+    # Push casts into literals so we can handle Cast(Literal(Null))
+    if isinstance(inner, expr.Literal):
+        return expr.Literal(
+            dtype, context, inner.value.cast(plc.interop.to_arrow(dtype))
+        )
+    elif isinstance(inner, expr.Cast):
+        # Translation of Len/Count-agg put in a cast, remove double
+        # casts if we have one.
+        (inner,) = inner.children
+    return expr.Cast(dtype, context, inner)
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Column,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    return expr.Col(dtype, context, node.name)
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Agg,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    value = expr.Agg(
+        dtype,
+        context,
+        node.name,
+        node.options,
+        *(translator.translate_expr(n=n, context=context) for n in node.arguments),
+    )
+    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(value.dtype, context, value)
+    return value
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Ternary,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        context,
+        translator.translate_expr(n=node.predicate, context=context),
+        translator.translate_expr(n=node.truthy, context=context),
+        translator.translate_expr(n=node.falsy, context=context),
+    )
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.BinaryExpr,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    return expr.BinOp(
+        dtype,
+        context,
+        expr.BinOp._MAPPING[node.op],
+        translator.translate_expr(n=node.left, context=context),
+        translator.translate_expr(n=node.right, context=context),
+    )
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.Len,
+    translator: Translator,
+    dtype: plc.DataType,
+    context: ExecutionContext,
+) -> expr.Expr:
+    value = expr.Len(dtype, context)
     if dtype.id() != plc.TypeId.INT32:
-        return expr.Cast(dtype, value)
+        return expr.Cast(dtype, context, value)
     return value  # pragma: no cover; never reached since polars len has uint32 dtype

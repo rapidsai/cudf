@@ -32,13 +32,19 @@ __all__ = ["Agg"]
 
 class Agg(Expr):
     __slots__ = ("name", "op", "options", "request")
-    _non_child = ("dtype", "name", "options")
+    _non_child = ("dtype", "context", "name", "options")
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        name: str,
+        options: Any,
+        *children: Expr,
     ) -> None:
         self.dtype = dtype
         self.name = name
+        self.context = context
         self.options = options
         self.is_pointwise = False
         self.children = children
@@ -154,7 +160,7 @@ class Agg(Expr):
             assert expr is not None
             # Ignore nans in these groupby aggs, do this by masking
             # nans in the input
-            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
+            expr = UnaryFunction(self.dtype, self.context, "mask_nans", (), expr)
         return AggInfo([(expr, request, self)])
 
     def _reduce(
@@ -231,16 +237,15 @@ class Agg(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if context is not ExecutionContext.FRAME:
+        if self.context is not ExecutionContext.FRAME:
             raise NotImplementedError(
-                f"Agg in context {context}"
+                f"Agg in context {self.context}"
             )  # pragma: no cover; unreachable
 
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return self.op(child.evaluate(df, mapping=mapping))

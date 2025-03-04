@@ -13,28 +13,31 @@ from polars.polars import _expr_nodes as pl_expr
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import AggInfo, Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["BinOp"]
 
 
 class BinOp(Expr):
     __slots__ = ("op",)
-    _non_child = ("dtype", "op")
+    _non_child = ("dtype", "context", "op")
 
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         if plc.traits.is_boolean(self.dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
@@ -88,14 +91,10 @@ class BinOp(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left, right = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        left, right = (child.evaluate(df, mapping=mapping) for child in self.children)
         lop = left.obj
         rop = right.obj
         if left.size != right.size:

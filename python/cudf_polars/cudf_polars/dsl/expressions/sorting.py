@@ -11,25 +11,31 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import Expr
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["Sort", "SortBy"]
 
 
 class Sort(Expr):
     __slots__ = ("options",)
-    _non_child = ("dtype", "options")
+    _non_child = ("dtype", "context", "options")
 
     def __init__(
-        self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        options: tuple[bool, bool, bool],
+        column: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         self.options = options
         self.children = (column,)
         self.is_pointwise = False
@@ -38,12 +44,11 @@ class Sort(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
-        column = child.evaluate(df, context=context, mapping=mapping)
+        column = child.evaluate(df, mapping=mapping)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
             [descending], nulls_last=[nulls_last], num_keys=1
@@ -60,16 +65,18 @@ class Sort(Expr):
 
 class SortBy(Expr):
     __slots__ = ("options",)
-    _non_child = ("dtype", "options")
+    _non_child = ("dtype", "context", "options")
 
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         options: tuple[bool, tuple[bool], tuple[bool]],
         column: Expr,
         *by: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         self.options = options
         self.children = (column, *by)
         self.is_pointwise = False
@@ -78,14 +85,10 @@ class SortBy(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        column, *by = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        column, *by = (child.evaluate(df, mapping=mapping) for child in self.children)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
             descending, nulls_last=nulls_last, num_keys=len(by)

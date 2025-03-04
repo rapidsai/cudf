@@ -13,22 +13,30 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["Filter", "Gather"]
 
 
 class Gather(Expr):
     __slots__ = ()
-    _non_child = ("dtype",)
+    _non_child = ("dtype", "context")
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        values: Expr,
+        indices: Expr,
+    ) -> None:
         self.dtype = dtype
+        self.context = context
         self.children = (values, indices)
         self.is_pointwise = False
 
@@ -36,13 +44,11 @@ class Gather(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, indices = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
+            child.evaluate(df, mapping=mapping) for child in self.children
         )
         lo, hi = plc.reduce.minmax(indices.obj)
         lo = plc.interop.to_arrow(lo).as_py()
@@ -67,25 +73,28 @@ class Gather(Expr):
 
 class Filter(Expr):
     __slots__ = ()
-    _non_child = ("dtype",)
+    _non_child = ("dtype", "context")
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        values: Expr,
+        indices: Expr,
+    ):
         self.dtype = dtype
         self.children = (values, indices)
+        self.context = context
         self.is_pointwise = True
 
     def do_evaluate(
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        values, mask = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        values, mask = (child.evaluate(df, mapping=mapping) for child in self.children)
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )

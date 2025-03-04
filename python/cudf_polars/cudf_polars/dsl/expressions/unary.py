@@ -12,7 +12,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import AggInfo, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -28,10 +29,13 @@ class Cast(Expr):
     """Class representing a cast of an expression."""
 
     __slots__ = ()
-    _non_child = ("dtype",)
+    _non_child = ("dtype", "context")
 
-    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
+    def __init__(
+        self, dtype: plc.DataType, context: ExecutionContext, value: Expr
+    ) -> None:
         self.dtype = dtype
+        self.context = context
         self.children = (value,)
         self.is_pointwise = True
         if not dtypes.can_cast(value.dtype, self.dtype):
@@ -43,12 +47,11 @@ class Cast(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
-        column = child.evaluate(df, context=context, mapping=mapping)
+        column = child.evaluate(df, mapping=mapping)
         return column.astype(self.dtype)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
@@ -61,8 +64,9 @@ class Cast(Expr):
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    def __init__(self, dtype: plc.DataType) -> None:
+    def __init__(self, dtype: plc.DataType, context: ExecutionContext) -> None:
         self.dtype = dtype
+        self.context = context
         self.children = ()
         self.is_pointwise = False
 
@@ -70,7 +74,6 @@ class Len(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
@@ -95,7 +98,7 @@ class UnaryFunction(Expr):
     """Class representing unary functions of an expression."""
 
     __slots__ = ("name", "options")
-    _non_child = ("dtype", "name", "options")
+    _non_child = ("dtype", "context", "name", "options")
 
     # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
@@ -144,9 +147,15 @@ class UnaryFunction(Expr):
     )
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        name: str,
+        options: tuple[Any, ...],
+        *children: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         self.name = name
         self.options = options
         self.children = children
@@ -172,19 +181,15 @@ class UnaryFunction(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name == "mask_nans":
             (child,) = self.children
-            return child.evaluate(df, context=context, mapping=mapping).mask_nans()
+            return child.evaluate(df, mapping=mapping).mask_nans()
         if self.name == "round":
             (decimal_places,) = self.options
-            (values,) = (
-                child.evaluate(df, context=context, mapping=mapping)
-                for child in self.children
-            )
+            (values,) = (child.evaluate(df, mapping=mapping) for child in self.children)
             return Column(
                 plc.round.round(
                     values.obj, decimal_places, plc.round.RoundingMethod.HALF_UP
@@ -192,10 +197,7 @@ class UnaryFunction(Expr):
             ).sorted_like(values)
         elif self.name == "unique":
             (maintain_order,) = self.options
-            (values,) = (
-                child.evaluate(df, context=context, mapping=mapping)
-                for child in self.children
-            )
+            (values,) = (child.evaluate(df, mapping=mapping) for child in self.children)
             # Only one column, so keep_any is the same as keep_first
             # for stable distinct
             keep = plc.stream_compaction.DuplicateKeepOption.KEEP_ANY
@@ -225,10 +227,7 @@ class UnaryFunction(Expr):
                 return Column(column).sorted_like(values)
             return Column(column)
         elif self.name == "set_sorted":
-            (column,) = (
-                child.evaluate(df, context=context, mapping=mapping)
-                for child in self.children
-            )
+            (column,) = (child.evaluate(df, mapping=mapping) for child in self.children)
             (asc,) = self.options
             order = (
                 plc.types.Order.ASCENDING
@@ -252,34 +251,29 @@ class UnaryFunction(Expr):
                 null_order=null_order,
             )
         elif self.name == "drop_nulls":
-            (column,) = (
-                child.evaluate(df, context=context, mapping=mapping)
-                for child in self.children
-            )
+            (column,) = (child.evaluate(df, mapping=mapping) for child in self.children)
             return Column(
                 plc.stream_compaction.drop_nulls(
                     plc.Table([column.obj]), [0], 1
                 ).columns()[0]
             )
         elif self.name == "fill_null":
-            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            column = self.children[0].evaluate(df, mapping=mapping)
             if isinstance(self.children[1], Literal):
                 arg = plc.interop.from_arrow(self.children[1].value)
             else:
-                evaluated = self.children[1].evaluate(
-                    df, context=context, mapping=mapping
-                )
+                evaluated = self.children[1].evaluate(df, mapping=mapping)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
         elif self.name in self._OP_MAPPING:
-            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            column = self.children[0].evaluate(df, mapping=mapping)
             if column.obj.type().id() != self.dtype.id():
                 arg = plc.unary.cast(column.obj, self.dtype)
             else:
                 arg = column.obj
             return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
         elif self.name in UnaryFunction._supported_cum_aggs:
-            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            column = self.children[0].evaluate(df, mapping=mapping)
             plc_col = column.obj
             col_type = column.obj.type()
             # cum_sum casts
