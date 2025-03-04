@@ -3915,8 +3915,22 @@ def test_parquet_chunked_reader_string_decoders(
         (1000, 100),  # multiple RGs, multiple pages per RG
     ],
 )
+@pytest.mark.parametrize(
+    "chunk_read_limit, pass_read_limit",
+    [
+        (1000, 5000),  # small chunk and pass read limits
+        (0, 5000),  # zero chunk and small pass read limit
+        (1000, 0),  # small chunk and zero pass read limit
+        (1000000, 2000000),  # large chunk and pass read limits
+    ],
+)
 def test_parquet_reader_nrows_skiprows(
-    nrows, skip_rows, row_group_size_rows, page_size_rows
+    nrows,
+    skip_rows,
+    row_group_size_rows,
+    page_size_rows,
+    chunk_read_limit,
+    pass_read_limit,
 ):
     df = cudf.DataFrame(
         {
@@ -3944,46 +3958,15 @@ def test_parquet_reader_nrows_skiprows(
 
     # Check for chunked parquet reader
     with cudf.option_context("io.parquet.low_memory", True):
-        # Check with small chunk read and pass read limits
         got = cudf.read_parquet(
             [buffer],
-            _chunk_read_limit=1000,
-            _pass_read_limit=5000,
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
             nrows=nrows,
             skip_rows=skip_rows,
         ).reset_index(drop=True)
         # Reset index for comparison
         expected = expected.reset_index(drop=True)
-        assert_eq(expected, got)
-
-        # Check with zero chunk read and small pass read limit
-        got = cudf.read_parquet(
-            [buffer],
-            _chunk_read_limit=0,
-            _pass_read_limit=5000,
-            nrows=nrows,
-            skip_rows=skip_rows,
-        ).reset_index(drop=True)
-        assert_eq(expected, got)
-
-        # Check with small chunk read and zero pass read limit
-        got = cudf.read_parquet(
-            [buffer],
-            _chunk_read_limit=1000,
-            _pass_read_limit=0,
-            nrows=nrows,
-            skip_rows=skip_rows,
-        ).reset_index(drop=True)
-        assert_eq(expected, got)
-
-        # Check with large chunk read and pass read limits
-        got = cudf.read_parquet(
-            [buffer],
-            _chunk_read_limit=1000000,
-            _pass_read_limit=2000000,
-            nrows=nrows,
-            skip_rows=skip_rows,
-        ).reset_index(drop=True)
         assert_eq(expected, got)
 
 
