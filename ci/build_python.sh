@@ -41,7 +41,7 @@ RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
   conda/recipes/cudf
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
 sccache --zero-stats
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
@@ -51,6 +51,10 @@ RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
         --channel "${CPP_CHANNEL}" \
         --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
         conda/recipes/dask-cudf
+
+
+rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
+sccache --zero-stats
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
     rapids-telemetry-record build-cudf_kafka.log \
