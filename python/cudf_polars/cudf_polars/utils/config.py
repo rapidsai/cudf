@@ -4,10 +4,11 @@
 """Config utilities."""
 
 from __future__ import annotations
+from typing_extensions import Self
 
 import copy
 import json
-from typing import Any, Self
+from typing import Any
 
 __all__ = ["ConfigOptions"]
 
