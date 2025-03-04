@@ -643,7 +643,7 @@ struct range_window_clamper {
                  cudf::data_type_error);
     if (row_delta && row_delta->type().scale() != orderby.type().scale()) {
       auto const value =
-        dynamic_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
+        static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
       auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
         value.rescaled(numeric::scale_type{orderby.type().scale()}), true, stream};
       return window_bounds<OrderbyT>(
