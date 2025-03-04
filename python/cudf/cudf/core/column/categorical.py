@@ -20,6 +20,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -1042,7 +1043,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if cudf.api.types.is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:
@@ -1052,7 +1053,11 @@ class CategoricalColumn(column.ColumnBase):
                     raise ValueError(
                         f"{fill_value=} must be in categories"
                     ) from err
-            return cudf.Scalar(fill_value, dtype=self.codes.dtype)
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(
+                    fill_value, type=cudf_dtype_to_pa_type(self.codes.dtype)
+                )
+            )
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             if isinstance(fill_value.dtype, CategoricalDtype):

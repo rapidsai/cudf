@@ -559,15 +559,20 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
-            if not as_column(cudf_obj).can_cast_safely(self.dtype):
+            cudf_obj = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
+                )
+            )
+            if not cudf_obj.can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
                     f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
+            return super()._validate_fillna_value(fill_value)
         else:
             cudf_obj = as_column(fill_value, nan_as_null=False)
             if not cudf_obj.can_cast_safely(self.dtype):  # type: ignore[attr-defined]
@@ -576,7 +581,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{cudf_obj.dtype.type.__name__} to "
                     f"{self.dtype.type.__name__}"
                 )
-        return cudf_obj.astype(self.dtype)
+            return cudf_obj.astype(self.dtype)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
