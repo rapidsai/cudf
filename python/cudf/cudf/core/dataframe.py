@@ -35,17 +35,13 @@ from typing_extensions import Self, assert_never
 import pylibcudf as plc
 
 import cudf
-import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
-    is_numeric_dtype,
-    is_object_dtype,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core import column, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
@@ -91,6 +87,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
+    is_dtype_obj_numeric,
     min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -146,7 +143,7 @@ class _DataFrameIndexer(_FrameIndexer):
         return self._setitem_tuple_arg(key, value)
 
     @_performance_tracking
-    def _can_downcast_to_series(self, df, arg):
+    def _can_downcast_to_series(self, df: DataFrame, arg):
         """
         This method encapsulates the logic used
         to determine whether or not the result of a loc/iloc
@@ -171,8 +168,8 @@ class _DataFrameIndexer(_FrameIndexer):
                     arg[1], slice
                 ):
                     return True
-            dtypes = df.dtypes.values.tolist()
-            all_numeric = all(is_numeric_dtype(t) for t in dtypes)
+            dtypes = [dtype for _, dtype in df._dtypes]
+            all_numeric = all(is_dtype_obj_numeric(t) for t in dtypes)
             if all_numeric or (
                 len(dtypes) and all(t == dtypes[0] for t in dtypes)
             ):
@@ -349,7 +346,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df.index.name = columns_df.index.name
                     if not isinstance(
                         df.index, MultiIndex
-                    ) and is_numeric_dtype(df.index.dtype):
+                    ) and is_dtype_obj_numeric(df.index.dtype):
                         # Preserve the original index type.
                         df.index = df.index.astype(self._frame.index.dtype)
                     df = df.sort_values(by=[tmp_col_name, cantor_name])
@@ -2055,18 +2052,28 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         lhs, rhs = self._data, other
         index = self.index
         fill_requires_key = False
         left_default: Any = False
         equal_columns = False
-        can_use_self_column_name = True
+        ca_attributes: dict[str, Any] = {}
+
+        def _fill_same_ca_attributes(
+            attrs: dict[str, Any], ca: ColumnAccessor
+        ) -> dict[str, Any]:
+            attrs["rangeindex"] = ca.rangeindex
+            attrs["multiindex"] = ca.multiindex
+            attrs["label_dtype"] = ca.label_dtype
+            attrs["level_names"] = ca.level_names
+            return attrs
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
             equal_columns = True
+            ca_attributes = _fill_same_ca_attributes(ca_attributes, self._data)
         elif isinstance(other, Series):
             if (
                 not (self_pd_columns := self._data.to_pandas_index).equals(
@@ -2085,9 +2092,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
             equal_columns = other_pd_index.equals(self_pd_columns)
-            can_use_self_column_name = (
-                equal_columns or other_pd_index.names == self_pd_columns.names
-            )
+            if equal_columns:
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
+            elif other_pd_index.names == self_pd_columns.names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -2110,17 +2120,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
             equal_columns = self._column_names == other._column_names
-            can_use_self_column_name = (
-                equal_columns
-                or self._data._level_names == other._data._level_names
-            )
+            if self._data.to_pandas_index.equals(other._data.to_pandas_index):
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
+            elif self._data._level_names == other._data._level_names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, (dict, abc.Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         if not isinstance(rhs, (dict, abc.Mapping)):
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         operands = {
             k: (
@@ -2150,8 +2162,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("other must be a DataFrame or Series.")
 
             sorted_dict = {key: operands[key] for key in column_names_list}
-            return sorted_dict, index, can_use_self_column_name
-        return operands, index, can_use_self_column_name
+            return sorted_dict, index, ca_attributes
+        return operands, index, ca_attributes
 
     @classmethod
     @_performance_tracking
@@ -3144,7 +3156,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # If other was provided, process that next.
         if isinstance(other, DataFrame):
             other_cols = [other._data[col] for col in self._column_names]
-        elif cudf.api.types.is_scalar(other):
+        elif is_scalar(other):
             other_cols = [other] * len(self._column_names)
         elif isinstance(other, cudf.Series):
             other_cols = other.to_pandas()
@@ -3774,14 +3786,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
-        dtypes = [self[col].dtype for col in self._column_names]
+        dtypes = [dtype for _, dtype in self._dtypes]
         common_dtype = find_common_type(dtypes)
         if common_dtype.kind != "b" and any(
             dtype.kind == "b" for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
-        if any(is_string_dtype(dt) for dt in dtypes):
+        if any(dt == CUDF_STRING_DTYPE for dt in dtypes):
             raise NotImplementedError(
                 "DataFrame.agg() is not supported for "
                 "frames containing string columns"
@@ -4920,7 +4932,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         for col in incols:
             current_col_dtype = self._data[col].dtype
-            if is_string_dtype(current_col_dtype) or isinstance(
+            if current_col_dtype == CUDF_STRING_DTYPE or isinstance(
                 current_col_dtype, cudf.CategoricalDtype
             ):
                 raise TypeError(
@@ -6280,8 +6292,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     else:
                         # These checks must happen after the conversions above
                         # since numpy can't handle categorical dtypes.
-                        self_is_str = is_string_dtype(self_col.dtype)
-                        other_is_str = is_string_dtype(other_col.dtype)
+                        self_is_str = self_col.dtype == CUDF_STRING_DTYPE
+                        other_is_str = other_col.dtype == CUDF_STRING_DTYPE
 
                     if self_is_str != other_is_str:
                         # Strings can't compare to anything else.
@@ -6338,8 +6350,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         common_dtype = find_common_type(filtered.dtypes)
         if (
             not numeric_only
-            and is_string_dtype(common_dtype)
-            and any(not is_string_dtype(dt) for dt in filtered.dtypes)
+            and common_dtype == CUDF_STRING_DTYPE
+            and any(dtype != CUDF_STRING_DTYPE for dtype in filtered._dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -6462,7 +6474,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if numeric_only:
             numeric_cols = (
-                name for name, dtype in self._dtypes if is_numeric_dtype(dtype)
+                name
+                for name, dtype in self._dtypes
+                if is_dtype_obj_numeric(dtype)
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
@@ -6493,7 +6507,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         raise NotImplementedError(
                             f"Column {col_label} with type {col.dtype} does not support {op}"
                         ) from err
-                    elif not is_numeric_dtype(col.dtype):
+                    elif not is_dtype_obj_numeric(col.dtype):
                         raise TypeError(
                             "Non numeric columns passed with "
                             "`numeric_only=False`, pass `numeric_only=True` "
@@ -6509,9 +6523,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 source_dtypes = [dtype for _, dtype in source._dtypes]
                 common_dtype = find_common_type(source_dtypes)
                 if (
-                    is_object_dtype(common_dtype)
+                    common_dtype == CUDF_STRING_DTYPE
                     and any(
-                        not is_object_dtype(dtype) for dtype in source_dtypes
+                        dtype != CUDF_STRING_DTYPE for dtype in source_dtypes
                     )
                     or common_dtype.kind != "b"
                     and any(dtype.kind == "b" for dtype in source_dtypes)
@@ -8589,7 +8603,7 @@ def _find_common_dtypes_and_categories(
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numeric_dtype(col.dtype) for col in cols):
+        if all(is_dtype_obj_numeric(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(
