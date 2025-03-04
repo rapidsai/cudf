@@ -20,12 +20,11 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     is_dtype_equal,
+    is_hashable,
     is_integer,
     is_list_like,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
@@ -57,6 +56,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
+    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -232,7 +232,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
-        if not cudf.api.types.is_hashable(name):
+        if not is_hashable(name):
             raise ValueError("Name must be a hashable value.")
         self._name = name
         if dtype is not None and cudf.dtype(dtype).kind != "i":
@@ -1786,7 +1786,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @property
     @_performance_tracking
     def str(self):
-        if is_string_dtype(self.dtype):
+        if self.dtype == CUDF_STRING_DTYPE:
             return StringMethods(parent=self)
         else:
             raise AttributeError(
@@ -3366,7 +3366,7 @@ def interval_range(
             "freq, exactly three must be specified"
         )
 
-    if periods is not None and not cudf.api.types.is_integer(periods):
+    if periods is not None and not is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
@@ -3390,7 +3390,9 @@ def interval_range(
     pa_freq = pa.scalar(freq)
 
     if any(
-        not _is_non_decimal_numeric_dtype(cudf_dtype_from_pa_type(x.type))
+        not is_dtype_obj_numeric(
+            cudf_dtype_from_pa_type(x.type), include_decimal=False
+        )
         for x in (pa_start, pa.scalar(periods), pa_freq, pa_end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")

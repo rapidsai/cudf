@@ -15,7 +15,6 @@ import pylibcudf as plc
 import rmm
 
 import cudf
-import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_buffer
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
