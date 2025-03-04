@@ -151,14 +151,16 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
   NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));
   NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
 
+  // first copy stringview array to device
   auto items   = view.buffer_views[1].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                                items,
+                                items + input->offset,
                                 input->length * sizeof(ArrowBinaryView),
                                 cudaMemcpyDefault,
                                 stream.value()));
 
+  // then copy variadic buffers to device
   auto variadics     = std::vector<rmm::device_buffer>();
   auto variadic_ptrs = std::vector<char const*>();
   for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
@@ -166,6 +168,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
     variadic_ptrs.push_back(static_cast<char const*>(variadics.back().data()));
   }
 
+  // copy variadic device pointers to device
   auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
     variadic_ptrs, stream, cudf::get_current_device_resource_ref());
   auto d_ptrs = d_variadic_ptrs.data();
@@ -173,6 +176,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
 
   using string_index_pair = cudf::strings::detail::string_index_pair;
 
+  // create indices to string fragments for the make_strings_column gather
   auto d_indices = rmm::device_uvector<string_index_pair>(input->length, stream, mr);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
