@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
@@ -145,7 +146,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
                         tie_iter,
                         thrust::make_discard_iterator(),
                         tie_sorted.begin(),
-                        thrust::equal_to{},
+                        cuda::std::equal_to{},
                         tie_breaker);
   using TransformerReturnType =
     cuda::std::decay_t<cuda::std::invoke_result_t<Transformer, TieType>>;
@@ -202,7 +203,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::minimum{},
+                                       cudf::detail::minimum{},
                                        cuda::std::identity{},
                                        stream);
 }
@@ -220,7 +221,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::maximum{},
+                                       cudf::detail::maximum{},
                                        cuda::std::identity{},
                                        stream);
 }
