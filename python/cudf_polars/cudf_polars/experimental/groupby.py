@@ -34,7 +34,23 @@ def decompose_groupby_reduction(
     schema: Schema,
     request: NamedExpr,
 ) -> tuple[list[NamedExpr], list[NamedExpr], list[NamedExpr]]:
-    """Decompose a groupby request."""
+    """
+    Decompose a groupby-aggregation request.
+
+    Parameters
+    ----------
+    schema
+        Output schema.
+    request
+        The `NamedExpr` representing the aggregation logic for a
+        single column.
+
+    Returns
+    -------
+    Tuple containing a list of `NamedExpr` for each of the
+    three parallel-aggregation phases:
+    (1) Piecewise, (2) reduction, and (3) selection
+    """
     complex_expr_map: MutableMapping[str, Any] = {}
     piecewise_exprs: list[NamedExpr] = []
     reduction_exprs: list[NamedExpr] = []
@@ -168,6 +184,7 @@ def _(
             1,
         )
 
+    # Decompose the aggregation requests into three distinct phases
     piecewise_exprs, reduction_exprs, selection_exprs = (
         list(itertools.chain.from_iterable(x))
         for x in zip(
@@ -217,6 +234,7 @@ def _(
     )
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
 
+    # Final Select phase
     should_broadcast: bool = False
     aggregated = {ne.name: ne for ne in selection_exprs}
     new_node = Select(
