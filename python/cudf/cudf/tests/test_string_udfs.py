@@ -12,14 +12,14 @@ import rmm
 
 import cudf
 from cudf._lib.strings_udf import (
-    column_from_udf_string_array,
+    column_from_managed_udf_string_array,
     column_to_string_view_array,
 )
 from cudf.core.column import ColumnBase
 from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
-    udf_string,
+    managed_udf_string,
 )
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing import assert_eq
@@ -33,7 +33,7 @@ def get_kernels(func, dtype, size):
     """
     Create two kernels for testing a single scalar string function.
     The first tests the function's action on a string_view object and
-    the second tests the same except using a udf_string object.
+    the second tests the same except using a managed_udf_string object.
     Allocates an output vector with a dtype specified by the caller
     The returned kernels execute the input function on each data
     element of the input and returns the output into the output vector
@@ -42,7 +42,7 @@ def get_kernels(func, dtype, size):
     func = cuda.jit(device=True)(func)
 
     if dtype == "str":
-        outty = CPointer(udf_string)
+        outty = CPointer(managed_udf_string)
     else:
         outty = numba.np.numpy_support.from_dtype(dtype)[::1]
     sig = nb_signature(void, CPointer(string_view), outty)
@@ -56,8 +56,8 @@ def get_kernels(func, dtype, size):
             output_col[id] = result
 
     @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler])
-    def udf_string_kernel(input_strings, output_col):
-        # test the string function with a udf_string as input
+    def managed_udf_string_kernel(input_strings, output_col):
+        # test the string function with a managed_udf_string as input
         id = cuda.grid(1)
         if id < size:
             st = input_strings[id]
@@ -65,7 +65,7 @@ def get_kernels(func, dtype, size):
             result = func(st)
             output_col[id] = result
 
-    return string_view_kernel, udf_string_kernel
+    return string_view_kernel, managed_udf_string_kernel
 
 
 def run_udf_test(data, func, dtype):
@@ -79,7 +79,7 @@ def run_udf_test(data, func, dtype):
     """
     if dtype == "str":
         output = rmm.DeviceBuffer(
-            size=len(data) * _get_extensionty_size(udf_string)
+            size=len(data) * _get_extensionty_size(managed_udf_string)
         )
     else:
         dtype = np.dtype(dtype)
@@ -98,7 +98,7 @@ def run_udf_test(data, func, dtype):
         sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = ColumnBase.from_pylibcudf(
-            column_from_udf_string_array(output)
+            column_from_managed_udf_string_array(output)
         )
     else:
         result = output
@@ -109,7 +109,7 @@ def run_udf_test(data, func, dtype):
         udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = ColumnBase.from_pylibcudf(
-            column_from_udf_string_array(output)
+            column_from_managed_udf_string_array(output)
         )
     else:
         result = output

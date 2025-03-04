@@ -15,8 +15,8 @@ from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
 from numba.core.extending import register_model
 from numba.np import numpy_support
-from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
-
+from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void, voidptr
+from numba.cuda.runtime.nrt import rtsys
 import rmm
 
 from cudf._lib import strings_udf
@@ -27,7 +27,7 @@ from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
-    udf_string,
+    managed_udf_string,
 )
 from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
@@ -78,6 +78,14 @@ def _ptx_file():
         "shim_",
     )
 
+@functools.cache
+def _ptx_file_udf_apis():
+    return _get_ptx_file(
+        os.path.join(
+            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
+        ),
+        "udf_apis_",
+    )
 
 @_performance_tracking
 def _get_udf_return_type(argty, func: Callable, args=()):
@@ -326,9 +334,14 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 def _return_arr_from_dtype(dtype, size):
     if dtype == _cudf_str_dtype:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+        return rmm.DeviceBuffer(size=size * _get_extensionty_size(managed_udf_string))
     return cp.empty(size, dtype=dtype)
 
+def _finalize_string_column(col):
+    """
+    Call the freeing kernel and attach the memsys.
+    """
+    udf_apis_ptx = _ptx_file_udf_apis()
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
@@ -337,6 +350,13 @@ def _post_process_output_col(col, retty):
         )
     return as_column(col, retty)
 
+nrt_decref = cuda.declare_device(
+    "external_NRT_Decref",
+    void(voidptr)
+)
+
+#@cuda.jit
+#def free_udf_string_array
 
 # The only supported data layout in NVVM.
 # See: https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html?#data-layout

@@ -31,7 +31,9 @@ rapids_cpm_cccl(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
-  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+  cudf_strings_udf PUBLIC 
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+  "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
 )
 
 set_target_properties(
@@ -56,7 +58,7 @@ target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # Create the shim library for each architecture.
-set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true --expt-extended-lambda)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
@@ -75,8 +77,32 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
   target_include_directories(
-    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+    ${tgt} PUBLIC 
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+    "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
+)
+  target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
+  target_link_libraries(${tgt} PUBLIC cudf::cudf)
+
+  install(
+    FILES $<TARGET_OBJECTS:${tgt}>
+    DESTINATION cudf/core/udf/
+    RENAME ${tgt}.ptx
   )
+endforeach()
+
+foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
+  set(tgt udf_apis_${arch})
+
+  add_library(${tgt} OBJECT strings/src/strings/udf/udf_apis.cu)
+
+  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
+
+  target_include_directories(
+    ${tgt} PUBLIC 
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+    "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
+)
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 

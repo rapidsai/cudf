@@ -21,7 +21,7 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
     parametrize_numeric_dtypes_pairwise,
-    sv_to_udf_str,
+    sv_to_managed_udf_str,
 )
 
 
@@ -96,7 +96,7 @@ def run_masked_string_udf_test(func, data, args=(), **kwargs):
     # prior to running the input function
     def udf_string_wrapper(row):
         masked_udf_str = Masked(
-            sv_to_udf_str(row["str_col"].value), row["str_col"].valid
+            sv_to_managed_udf_str(row["str_col"].value), row["str_col"].valid
         )
         return func(masked_udf_str)
 

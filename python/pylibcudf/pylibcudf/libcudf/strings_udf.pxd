@@ -13,7 +13,7 @@ from rmm.librmm.device_buffer cimport device_buffer
 
 cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
         "cudf::strings::udf" nogil:
-    cdef cppclass udf_string
+    cdef cppclass managed_udf_string
 
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         "cudf::strings::udf" nogil:
@@ -21,11 +21,8 @@ cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
     cdef unique_ptr[device_buffer] to_string_view_array(
         column_view
     ) except +libcudf_exception_handler
-    cdef unique_ptr[column] column_from_udf_string_array(
-        udf_string* strings, size_type size,
-    ) except +libcudf_exception_handler
-    cdef void free_udf_string_array(
-        udf_string* strings, size_type size
+    cdef unique_ptr[column] column_from_managed_udf_string_array(
+        managed_udf_string* strings, size_type size,
     ) except +libcudf_exception_handler
 
 cdef extern from "cudf/strings/detail/char_tables.hpp" namespace \
