@@ -35,7 +35,6 @@ from typing_extensions import Self, assert_never
 import pylibcudf as plc
 
 import cudf
-import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,

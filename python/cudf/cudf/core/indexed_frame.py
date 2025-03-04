@@ -26,8 +26,8 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core
 import cudf.core.algorithms
+import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -3908,7 +3908,7 @@ class IndexedFrame(Frame):
         }
 
         result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=ColumnAccessor(
                 cols,
                 multiindex=multiindex,
                 level_names=level_names,
