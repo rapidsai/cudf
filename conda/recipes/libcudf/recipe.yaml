@@ -1,0 +1,323 @@
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+schema_version: 1
+
+context:
+  version: ${{ env.get("RAPIDS_PACKAGE_VERSION") }}
+  minor_version: ${{ (version | split("."))[:2] | join(".") }}
+  cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
+  cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
+  date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
+  head_rev: ${{ git.head_rev(".")[:8] }}
+
+recipe:
+  name: libcudf-split
+
+cache:
+  source:
+    path: ../../..
+
+  build:
+    script:
+      content: |
+
+        # Remove `-fdebug-prefix-map` line from CFLAGS and CXXFLAGS so the
+        # incrementing version number in the compile line doesn't break the
+        # cache
+        set -x
+        export CFLAGS=$(echo $CFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
+        export CXXFLAGS=$(echo $CXXFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
+        set +x
+
+        ./build.sh -n -v \
+            libcudf libcudf_kafka benchmarks tests \
+            --build_metrics --incl_cache_stats --allgpuarch \
+            --cmake-args=\"-DCUDF_ENABLE_ARROW_S3=ON\"
+      secrets:
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
+        - AWS_SESSION_TOKEN
+      env:
+        CMAKE_C_COMPILER_LAUNCHER: ${{ env.get("CMAKE_C_COMPILER_LAUNCHER") }}
+        CMAKE_CUDA_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CUDA_COMPILER_LAUNCHER") }}
+        CMAKE_CXX_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CXX_COMPILER_LAUNCHER") }}
+        CMAKE_GENERATOR: ${{ env.get("CMAKE_GENERATOR") }}
+        PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL") }}
+        RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR") }}
+        SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET") }}
+        SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT") }}
+        SCCACHE_REGION: ${{ env.get("SCCACHE_REGION") }}
+        SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL") }}
+        SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS") }}
+        SCCACHE_S3_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}
+
+  requirements:
+    build:
+      - ${{ compiler("c") }}
+      - ${{ compiler("cxx") }}
+      - ${{ compiler("cuda") }}
+      - cuda-version =${{ cuda_version }}
+      - cmake ${{ cmake_version }}
+      - ninja
+      - ${{ stdlib("c") }}
+    host:
+      - librmm =${{ minor_version }}
+      - libkvikio =${{ minor_version }}
+      - if: cuda_major == "11"
+        then:
+          - cudatoolkit
+          - libcurand =${{ cuda11_libcurand_host_version }}
+          - libcurand-dev =${{ cuda11_libcurand_host_version }}
+          - cuda-nvrtc =${{ cuda_version }}
+          - cuda-nvrtc-dev =${{ cuda_version }}
+          - cuda-nvtx =${{ cuda_version }}
+          - if: linux64
+            then:
+              - libcufile =${{ cuda11_libcufile_host_version }}
+              - libcufile-dev =${{ cuda11_libcufile_host_version }}
+        else:
+          - cuda-nvrtc-dev
+          - cuda-nvtx-dev
+          - libcurand-dev
+          - if: linux64
+            then:
+              - libcufile-dev
+      - cuda-version =${{ cuda_version }}
+      - nvcomp ${{ nvcomp_version }}
+      - dlpack ${{ dlpack_version }}
+      - librdkafka ${{ librdkafka_version }}
+      - flatbuffers =${{ flatbuffers_version }}
+      - rapids-logger =0.1
+      - zlib ${{ zlib_version }}
+
+outputs:
+  - package:
+      name: libcudf
+      version: ${{ version }}
+    build:
+      script:
+        - cmake --install cpp/build
+      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
+    requirements:
+      build:
+        - cmake ${{ cmake_version }}
+        - ${{ compiler("c") }}
+      host:
+        - cuda-version =${{ cuda_version }}
+        - libkvikio =${{ minor_version }}
+        - nvcomp ${{ nvcomp_version }}
+        - rapids-logger =0.1
+        - zlib ${{ zlib_version }}
+        - if: cuda_major == "11"
+          then: cudatoolkit
+          else: cuda-cudart-dev
+      run:
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+        - if: cuda_major == "11"
+          then:
+            - cudatoolkit
+            - if: linux64
+              then:
+                - libcufile ${{ cuda11_libcufile_run_version }}
+          else:
+            - cuda-nvrtc
+            - if: linux64
+              then:
+                - libcufile
+        - nvcomp ${{ nvcomp_version }}
+        - librmm =${{ minor_version }}
+        - libkvikio =${{ minor_version }}
+        - dlpack ${{ dlpack_version }}
+        - rapids-logger =0.1
+      run_exports:
+        - ${{ pin_subpackage("libcudf", upper_bound="x.x") }}
+      ignore_run_exports:
+        by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
+          - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
+    tests:
+      - script:
+        - test -f $PREFIX/lib/libcudf.so
+        - test -f $PREFIX/include/cudf/column/column.hpp
+    about:
+      homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      summary: ${{ load_from_file("python/libcudf/pyproject.toml").project.description }}
+
+  - package:
+      name: libcudf_kafka
+      version: ${{ version }}
+    build:
+      script:
+        - cmake --install cpp/libcudf_kafka/build
+      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
+    requirements:
+      build:
+        - cmake ${{ cmake_version }}
+        - ${{ stdlib("c") }}
+      host:
+        - librdkafka ${{ librdkafka_version }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+      run:
+        - librdkafka ${{ librdkafka_version }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+      ignore_run_exports:
+        by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
+          - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
+    tests:
+      - script:
+        - test -f $PREFIX/lib/libcudf_kafka.so
+    about:
+      homepage: https://rapids.ai/
+      license: Apache-2.0
+      summary: libcudf_kafka library
+
+  - package:
+      name: libcudf-example
+      version: ${{ version }}
+    build:
+      script:
+        content: |
+          ./cpp/examples/build.sh --install
+        secrets:
+          - AWS_ACCESS_KEY_ID
+          - AWS_SECRET_ACCESS_KEY
+          - AWS_SESSION_TOKEN
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ${{ env.get("CMAKE_C_COMPILER_LAUNCHER") }}
+          CMAKE_CUDA_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CUDA_COMPILER_LAUNCHER") }}
+          CMAKE_CXX_COMPILER_LAUNCHER: ${{ env.get("CMAKE_CXX_COMPILER_LAUNCHER") }}
+          CMAKE_GENERATOR: ${{ env.get("CMAKE_GENERATOR") }}
+          PARALLEL_LEVEL: ${{ env.get("PARALLEL_LEVEL") }}
+          RAPIDS_ARTIFACTS_DIR: ${{ env.get("RAPIDS_ARTIFACTS_DIR") }}
+          SCCACHE_BUCKET: ${{ env.get("SCCACHE_BUCKET") }}
+          SCCACHE_IDLE_TIMEOUT: ${{ env.get("SCCACHE_IDLE_TIMEOUT") }}
+          SCCACHE_REGION: ${{ env.get("SCCACHE_REGION") }}
+          SCCACHE_S3_USE_SSL: ${{ env.get("SCCACHE_S3_USE_SSL") }}
+          SCCACHE_S3_NO_CREDENTIALS: ${{ env.get("SCCACHE_S3_NO_CREDENTIALS") }}
+          SCCACHE_S3_KEY_PREFIX: libcudf-${{ env.get("RAPIDS_CONDA_ARCH") }}
+      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
+    requirements:
+      build:
+        - ${{ compiler("c") }}
+        - ${{ compiler("cuda") }}
+        - ${{ compiler("cxx") }}
+        - ${{ stdlib("c") }}
+        - cmake ${{ cmake_version }}
+        - cuda-version =${{ cuda_version }}
+        - ninja
+      host:
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - cuda-version =${{ cuda_version }}
+        - if: cuda_major == "11"
+          then:
+            - cuda-nvtx =${{ cuda_version }}
+            - cudatoolkit
+          else:
+            - cuda-nvtx-dev
+            - cuda-cudart-dev
+      run:
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+        - if: cuda_major != "11"
+          then:
+            - cuda-nvtx
+      ignore_run_exports:
+        from_package:
+          - if: cuda_major != "11"
+            then:
+              - cuda-nvtx-dev
+        by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
+          - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
+    about:
+      homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      summary: libcudf example executables
+
+  - package:
+      name: libcudf-tests
+      version: ${{ version }}
+    build:
+      script:
+        - cmake --install cpp/build --component testing
+        - cmake --install cpp/libcudf_kafka/build --component testing
+      string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+      dynamic_linking:
+        overlinking_behavior: "error"
+        missing_dso_allowlist:
+          - "libnvidia-ml.so.1"
+    requirements:
+      build:
+        - cmake ${{ cmake_version }}
+        - ${{ stdlib("c") }}
+      host:
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
+        - cuda-version =${{ cuda_version }}
+        - if: cuda_major == "11"
+          then:
+            - libcurand ${{ cuda11_libcurand_run_version }}
+            - cudatoolkit
+          else:
+            - libcurand-dev
+            - cuda-cudart-dev
+      run:
+        - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
+        - ${{ pin_subpackage("libcudf", exact=True) }}
+        - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
+        - if: cuda_major == "11"
+          then:
+            - libcurand ${{ cuda11_libcurand_run_version }}
+          else:
+            - libcurand
+      ignore_run_exports:
+        from_package:
+          - if: cuda_major != "11"
+            then:
+              - libcurand-dev
+        by_name:
+          - cuda-cudart
+          - cuda-nvrtc
+          - cuda-nvtx
+          - cuda-version
+          - flatbuffers
+          - libcurand
+          - libkvikio
+          - librdkafka
+          - librmm
+          - nvcomp
+    about:
+      homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
+      license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
+      summary: libcudf test & benchmark executables

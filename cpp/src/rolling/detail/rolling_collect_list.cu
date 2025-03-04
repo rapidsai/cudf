@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -53,6 +54,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   //   offsets        == [0, 2, 5, 5, 8, 11, 13]
   //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
   //
+
   auto const num_child_rows{
     cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
   auto per_row_mapping = make_fixed_width_column(
@@ -83,7 +85,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
-                         thrust::maximum{});
+                         cudf::detail::maximum{});
   return per_row_mapping;
 }
 
