@@ -137,7 +137,7 @@ void copy_array(ArrowArray* output,
                 ArrowArray const* input,
                 std::shared_ptr<arrow_array_container> container)
 {
-  auto private_data  = new ArrowArrayPrivateData{std::move(container)};
+  auto private_data  = new ArrowArrayPrivateData{container};
   output->length     = input->length;
   output->null_count = input->null_count;
   output->offset     = input->offset;
