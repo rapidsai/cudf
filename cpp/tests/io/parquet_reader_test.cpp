@@ -1350,7 +1350,7 @@ TEST_F(ParquetReaderTest, NoFilter)
 
 TEST_F(ParquetReaderTest, FilterSimple)
 {
-  srand(31337);
+  srand(96503);
   auto written_table = create_random_fixed_table<int>(9, 9, false);
 
   auto filepath = temp_env->get_temp_filepath("FilterSimple.parquet");
