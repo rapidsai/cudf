@@ -12,7 +12,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_scalar
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     ColumnBase,
@@ -1362,7 +1362,7 @@ def _one_hot_encode_column(
 
 
 def _length_check_params(obj, columns, name):
-    if cudf.api.types.is_list_like(obj):
+    if is_list_like(obj):
         if len(obj) != len(columns):
             raise ValueError(
                 f"Length of '{name}' ({len(obj)}) did not match the "

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
@@ -135,7 +136,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    thrust::maximum{});
+    cudf::detail::maximum{});
 
   // build strings columns for each token position
   for (size_type col = 0; col < columns_count; ++col) {
@@ -346,7 +347,7 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 
   // column count is the maximum number of tokens for any string
   size_type const columns_count = thrust::reduce(
-    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, cudf::detail::maximum{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
