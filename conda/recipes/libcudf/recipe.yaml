@@ -138,6 +138,7 @@ outputs:
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
+          - cudatoolkit
           - flatbuffers
           - libcurand
           - libkvikio
