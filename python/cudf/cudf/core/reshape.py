@@ -824,7 +824,7 @@ def get_dummies(
     dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = [CUDF_STRING_DTYPE, cudf.CategoricalDtype()]
+        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
