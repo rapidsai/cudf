@@ -41,12 +41,12 @@ struct arrow_array_container {
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
   {
-    ArrowSchemaMove(schema_, &schema);
     auto output = cudf::to_arrow_device(std::move(input_), stream, mr);
+    ArrowSchemaMove(schema_, &schema);
     ArrowDeviceArrayMove(output.get(), &owner);
   }
 
-  arrow_array_container(ArrowSchema const* schema_,
+  arrow_array_container(ArrowSchema* schema_,
                         ArrowDeviceArray* input_,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
@@ -55,14 +55,8 @@ struct arrow_array_container {
       case ARROW_DEVICE_CUDA:
       case ARROW_DEVICE_CUDA_HOST:
       case ARROW_DEVICE_CUDA_MANAGED: {
-        ArrowSchemaDeepCopy(schema_, &schema);
-        auto& device_arr = owner;
-        ArrowArrayMove(&input_->array, &device_arr.array);
-        device_arr.device_type = input_->device_type;
-        // Pointing to the existing sync event is safe because the underlying
-        // event must be managed by the private data and the release callback.
-        device_arr.sync_event = input_->sync_event;
-        device_arr.device_id  = input_->device_id;
+        ArrowSchemaMove(schema_, &schema);
+        ArrowDeviceArrayMove(input_, &owner);
         break;
       }
       default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
@@ -215,7 +209,7 @@ arrow_column::arrow_column(cudf::column&& input,
 {
 }
 
-arrow_column::arrow_column(ArrowSchema const* schema,
+arrow_column::arrow_column(ArrowSchema* schema,
                            ArrowDeviceArray* input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
@@ -230,17 +224,11 @@ arrow_column::arrow_column(ArrowSchema const* schema,
       if (input->array.release != nullptr) { ArrowArrayRelease(&input->array); }
       break;
     }
-    default: {
-      // Move to a temporary before forwarding to ensure that the caller's release callback has been
-      // nullified.
-      ArrowDeviceArray tmp;
-      ArrowDeviceArrayMove(input, &tmp);
-      container = std::make_shared<arrow_array_container>(schema, &tmp, stream, mr);
-    }
+    default: container = std::make_shared<arrow_array_container>(schema, input, stream, mr);
   }
 }
 
-arrow_column::arrow_column(ArrowSchema const* schema,
+arrow_column::arrow_column(ArrowSchema* schema,
                            ArrowArray* input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
@@ -311,7 +299,7 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-arrow_table::arrow_table(ArrowSchema const* schema,
+arrow_table::arrow_table(ArrowSchema* schema,
                          ArrowDeviceArray* input,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
@@ -328,17 +316,11 @@ arrow_table::arrow_table(ArrowSchema const* schema,
       if (input->array.release != nullptr) { ArrowArrayRelease(&input->array); }
       break;
     }
-    default: {
-      // Move to a temporary before forwarding to ensure that the caller's release callback has been
-      // nullified.
-      ArrowDeviceArray tmp;
-      ArrowDeviceArrayMove(input, &tmp);
-      container = std::make_shared<arrow_array_container>(schema, &tmp, stream, mr);
-    }
+    default: container = std::make_shared<arrow_array_container>(schema, input, stream, mr);
   }
 }
 
-arrow_table::arrow_table(ArrowSchema const* schema,
+arrow_table::arrow_table(ArrowSchema* schema,
                          ArrowArray* input,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
