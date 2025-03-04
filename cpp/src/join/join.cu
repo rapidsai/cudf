@@ -25,14 +25,16 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace detail {
-
+namespace {
 enum class strategy : int32_t {
   SMALLER_BUILD_TABLE_HASH_JOIN,
   FIXED_BUILD_TABLE_HASH_JOIN,
   SORT_BASED_JOIN
 };
+}  // namespace
+
+namespace cudf {
+namespace detail {
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -62,12 +64,10 @@ inner_join(table_view const& left_input,
   // build the hash map from the smaller table.
   if (strat == strategy::FIXED_BUILD_TABLE_HASH_JOIN ||
       (strat == strategy::SMALLER_BUILD_TABLE_HASH_JOIN && right.num_rows() > left.num_rows())) {
-    std::cout << "Hashing left table\n";
     cudf::hash_join hj_obj(left, has_nulls, compare_nulls, stream);
     auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
     return std::pair(std::move(left_result), std::move(right_result));
   }
-  std::cout << "Hashing right table\n";
   cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
   return hj_obj.inner_join(left, std::nullopt, stream, mr);
 }
@@ -134,7 +134,7 @@ inner_join(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::inner_join(
-    left, right, compare_nulls, detail::strategy::SMALLER_BUILD_TABLE_HASH_JOIN, stream, mr);
+    left, right, compare_nulls, strategy::SMALLER_BUILD_TABLE_HASH_JOIN, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -147,7 +147,7 @@ lchm_inner_join(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::inner_join(
-    left, right, compare_nulls, detail::strategy::FIXED_BUILD_TABLE_HASH_JOIN, stream, mr);
+    left, right, compare_nulls, strategy::FIXED_BUILD_TABLE_HASH_JOIN, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,

@@ -23,14 +23,21 @@ void nvbench_inner_join(nvbench::state& state,
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const selectivity = static_cast<float>(state.get_float64("selectivity"));
   auto const strategy    = state.get_string("join_strategy");
-  auto join              = [strategy](cudf::table_view const& left_input,
-                         cudf::table_view const& right_input,
-                         cudf::null_equality compare_nulls) {
-    if (strategy == "fixed_build_table")
-      return cudf::lchm_inner_join(left_input, right_input, compare_nulls);
+  auto join              = [](cudf::table_view const& left_input,
+                 cudf::table_view const& right_input,
+                 cudf::null_equality compare_nulls) {
     return cudf::inner_join(left_input, right_input, compare_nulls);
   };
-  BM_join<Key, Nullable>(state, join, selectivity, cardinality);
+  auto lchm_join = [](cudf::table_view const& left_input,
+                      cudf::table_view const& right_input,
+                      cudf::null_equality compare_nulls) {
+    return cudf::lchm_inner_join(left_input, right_input, compare_nulls);
+  };
+  if (strategy == "fixed_build_table") {
+    BM_join<Key, Nullable>(state, lchm_join, selectivity, cardinality);
+  } else {
+    BM_join<Key, Nullable>(state, join, selectivity, cardinality);
+  }
 }
 
 template <typename Key, bool Nullable>
