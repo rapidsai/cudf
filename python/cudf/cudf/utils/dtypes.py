@@ -612,6 +612,20 @@ def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
         return dtype.base
 
 
+def is_dtype_obj_numeric(
+    dtype: DtypeObj, include_decimal: bool = True
+) -> bool:
+    """Like is_numeric_dtype but does not introspect argument."""
+    is_non_decimal = dtype.kind in set("iufb")
+    if include_decimal:
+        return is_non_decimal or isinstance(
+            dtype,
+            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+        )
+    else:
+        return is_non_decimal
+
+
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)

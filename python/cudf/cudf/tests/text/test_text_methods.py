@@ -930,6 +930,48 @@ def test_minhash():
         strings.str.minhash64(1, a=params, b=params, width=8)
 
 
+def test_minhash_ngrams():
+    strings = cudf.Series(
+        [["this", "is", "my"], ["favorite", "book", "today"]]
+    )
+
+    params = cudf.Series([1, 2, 3], dtype=np.uint32)
+    expected = cudf.Series(
+        [
+            cudf.Series([416367548, 832735096, 1249102644], dtype=np.uint32),
+            cudf.Series([1408797893, 2817595786, 4226393679], dtype=np.uint32),
+        ]
+    )
+    actual = strings.str.minhash_ngrams(ngrams=2, seed=0, a=params, b=params)
+    assert_eq(expected, actual)
+
+    params = cudf.Series([1, 2, 3], dtype=np.uint64)
+    expected = cudf.Series(
+        [
+            cudf.Series(
+                [652146669912597278, 1304293339825194556, 1956440009737791826],
+                dtype=np.uint64,
+            ),
+            cudf.Series(
+                [1776622609581023632, 1247402209948353305, 718181810315682986],
+                dtype=np.uint64,
+            ),
+        ]
+    )
+    actual = strings.str.minhash64_ngrams(ngrams=2, seed=0, a=params, b=params)
+    assert_eq(expected, actual)
+
+    # test wrong input types
+    with pytest.raises(ValueError):
+        strings.str.minhash_ngrams(ngrams=7, seed=1, a="a", b="b")
+    with pytest.raises(ValueError):
+        params = cudf.Series([0, 1, 2], dtype=np.int32)
+        strings.str.minhash_ngrams(ngrams=6, seed=1, a=params, b=params)
+    with pytest.raises(ValueError):
+        params = cudf.Series([0, 1, 2], dtype=np.uint32)
+        strings.str.minhash64_ngrams(ngrams=8, seed=1, a=params, b=params)
+
+
 def test_jaccard_index():
     str1 = cudf.Series(["the brown dog", "jumped about"])
     str2 = cudf.Series(["the black cat", "jumped around"])
