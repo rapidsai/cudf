@@ -17,9 +17,6 @@ rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
-sccache --zero-stats
-
-
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
 
@@ -30,8 +27,11 @@ rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
-# TODO: Remove `--test skip` flag once importing on a CPU node works correctly
+sccache --zero-stats
 
+rapids-logger "Building pylibcudf"
+
+# TODO: Remove `--test skip` flag once importing on a CPU node works correctly
 # --no-build-id allows for caching with `sccache`
 # more info is available at
 # https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
@@ -46,6 +46,8 @@ rattler-build build --recipe conda/recipes/pylibcudf \
 sccache --show-adv-stats
 sccache --zero-stats
 
+rapids-logger "Building cudf"
+
 rattler-build build --recipe conda/recipes/cudf \
                     --experimental \
                     --no-build-id \
@@ -56,6 +58,8 @@ rattler-build build --recipe conda/recipes/cudf \
 
 sccache --show-adv-stats
 sccache --zero-stats
+
+rapids-logger "Building dask-cudf"
 
 rattler-build build --recipe conda/recipes/dask-cudf \
                     --experimental \
@@ -68,6 +72,8 @@ rattler-build build --recipe conda/recipes/dask-cudf \
 sccache --show-adv-stats
 sccache --zero-stats
 
+rapids-logger "Building cudf_kafka"
+
 rattler-build build --recipe conda/recipes/cudf_kafka \
                     --experimental \
                     --no-build-id \
@@ -79,6 +85,8 @@ rattler-build build --recipe conda/recipes/cudf_kafka \
 sccache --show-adv-stats
 sccache --zero-stats
 
+rapids-logger "Building custreamz"
+
 rattler-build build --recipe conda/recipes/custreamz \
                     --experimental \
                     --no-build-id \
@@ -89,6 +97,8 @@ rattler-build build --recipe conda/recipes/custreamz \
 
 sccache --show-adv-stats
 sccache --zero-stats
+
+rapids-logger "Building cudf-polars"
 
 rattler-build build --recipe conda/recipes/cudf-polars \
                     --experimental \
