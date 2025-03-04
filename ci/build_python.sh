@@ -25,12 +25,14 @@ sccache --zero-stats
 # node works correctly
 # With boa installed conda build forwards to the boa builder
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  conda/recipes/pylibcudf
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
+    rapids-telemetry-record build-pylibcudf.log \
+        rapids-conda-retry build \
+        --no-test \
+        --channel "${CPP_CHANNEL}" \
+        conda/recipes/pylibcudf
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
 sccache --zero-stats
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
@@ -42,30 +44,43 @@ RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
 sccache --show-adv-stats
 sccache --zero-stats
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
+    rapids-telemetry-record build-dask-cudf.log \
+        rapids-conda-retry build \
+        --no-test \
+        --channel "${CPP_CHANNEL}" \
+        --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
+        conda/recipes/dask-cudf
+
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
+    rapids-telemetry-record build-cudf_kafka.log \
+        rapids-conda-retry build \
+        --no-test \
+        --channel "${CPP_CHANNEL}" \
+        --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
+        conda/recipes/cudf_kafka
+
+rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
+sccache --zero-stats
+
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
+    rapids-telemetry-record build-custreamz.log \
+        rapids-conda-retry build \
+        --no-test \
+        --channel "${CPP_CHANNEL}" \
   --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/dask-cudf
+        conda/recipes/custreamz
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/cudf_kafka
+rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
+sccache --zero-stats
 
-sccache --show-adv-stats
+RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) \
+    rapids-telemetry-record build-cudf-polars.log \
+        rapids-conda-retry build \
+        --no-test \
+        --channel "${CPP_CHANNEL}" \
+        --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
+        conda/recipes/cudf-polars
 
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/custreamz
-
-RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION) rapids-conda-retry build \
-  --no-test \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${RAPIDS_CONDA_BLD_OUTPUT_DIR}" \
-  conda/recipes/cudf-polars
-
+rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
 rapids-upload-conda-to-s3 python

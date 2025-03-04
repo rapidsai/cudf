@@ -18,9 +18,11 @@ rapids-logger "Begin cpp build"
 sccache --zero-stats
 
 # With boa installed conda build forward to boa
-RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry build \
-    conda/recipes/libcudf
+RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) \
+    rapids-telemetry-record build.log \
+        rapids-conda-retry build \
+        conda/recipes/libcudf
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats.txt sccache --show-adv-stats
 
 rapids-upload-conda-to-s3 cpp
