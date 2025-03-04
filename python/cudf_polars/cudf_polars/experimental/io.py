@@ -274,8 +274,9 @@ def _(
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = ir.config_options.copy()
-            config_options.set(name="parquet_options.chunked", value=False)
+            config_options = ir.config_options.set(
+                name="parquet_options.chunked", value=False
+            )
 
             slices: list[SplitScan] = []
             for path in paths:

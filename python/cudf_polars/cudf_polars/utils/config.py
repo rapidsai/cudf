@@ -20,6 +20,8 @@ class ConfigOptions:
     dictionary of user-accessible `GPUEngine` options.
     """
 
+    __slots__ = ("_hash_value", "config_options")
+    _hash_value: int
     config_options: dict[str, Any]
     """The underlying (nested) config-option dictionary."""
 
@@ -27,18 +29,14 @@ class ConfigOptions:
         self.validate(options)
         self.config_options = options
 
-    def copy(self) -> Self:
-        """Return a deep ConfigOptions copy."""
-        return type(self)(copy.deepcopy(self.config_options.copy()))
-
-    def set(self, name: str, value: Any) -> None:
+    def set(self, name: str, value: Any) -> Self:
         """
         Set a user config option.
 
         Nested dictionary keys should be separated by periods.
         For example::
 
-            >>> config_options.set("parquet_options.chunked", False)
+            >>> options = options.set("parquet_options.chunked", False)
 
         Parameters
         ----------
@@ -47,14 +45,15 @@ class ConfigOptions:
         value
             New config value.
         """
-        options: dict[str, Any] = self.config_options
-        keys: list[str] = name.split(".")
+        options = config_options = copy.deepcopy(self.config_options)
+        keys = name.split(".")
         for k in keys[:-1]:
             assert isinstance(options, dict)
             if k not in options:
                 options[k] = {}
             options = options[k]
         options[keys[-1]] = value
+        return type(self)(config_options)
 
     def get(self, name: str, *, default: Any = None) -> Any:
         """
@@ -77,8 +76,8 @@ class ConfigOptions:
         The user-specified config value, or `default`
         if the config is not found.
         """
-        options: dict[str, Any] = self.config_options
-        keys: list[str] = name.split(".")
+        options = self.config_options
+        keys = name.split(".")
         for k in keys[:-1]:
             assert isinstance(options, dict)
             options = options.get(k, {})
@@ -86,7 +85,11 @@ class ConfigOptions:
 
     def __hash__(self) -> int:
         """Hash a ConfigOptions object."""
-        return hash(json.dumps(self.config_options))
+        try:
+            return self._hash_value
+        except AttributeError:
+            self._hash_value = hash(json.dumps(self.config_options))
+            return self._hash_value
 
     @staticmethod
     def validate(config: dict) -> None:
