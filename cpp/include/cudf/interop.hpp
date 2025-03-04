@@ -629,6 +629,8 @@ unique_device_array_t to_arrow_host(
  *
  * @throws cudf::data_type_error if the input array is not a struct array.
  *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
+ *
  * The conversion will not call release on the input Array.
  *
  * @param schema `ArrowSchema` pointer to describe the type of the data
@@ -668,6 +670,8 @@ std::unique_ptr<cudf::column> from_arrow_column(
  * @throws std::invalid_argument if either schema or input are NULL
  *
  * @throws std::invalid_argument if the device_type is not `ARROW_DEVICE_CPU`
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * @throws cudf::data_type_error if the input array is not a struct array,
  * non-struct arrays should be passed to `from_arrow_host_column` instead.
@@ -713,6 +717,8 @@ std::unique_ptr<table> from_arrow_stream(
  *
  * @throws cudf::data_type_error if input arrow data type is not supported in cudf.
  *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
+ *
  * The conversion will not call release on the input Array.
  *
  * @param schema `ArrowSchema` pointer to describe the type of the data
@@ -744,6 +750,8 @@ std::unique_ptr<column> from_arrow_host_column(
  * arrays should be passed to `from_arrow_device_column` instead.
  *
  * @throws cudf::data_type_error if the input arrow data type is not supported.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * Each child of the input struct will be the columns of the resulting table_view.
  *
@@ -782,6 +790,8 @@ unique_table_view_t from_arrow_device(
  * or `ARROW_DEVICE_CUDA_MANAGED`
  *
  * @throws cudf::data_type_error input arrow data type is not supported.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * @note The custom deleter used for the unique_ptr to the table_view maintains ownership
  * over any memory which is allocated, such as converting boolean columns from the bitmap

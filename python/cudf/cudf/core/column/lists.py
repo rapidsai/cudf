@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods, ParentType
@@ -22,7 +22,7 @@ from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -718,8 +718,8 @@ class ListMethods(ColumnMethods):
                 "lists_indices and list column is of different size."
             )
         if (
-            not _is_non_decimal_numeric_dtype(
-                lists_indices_col.children[1].dtype
+            not is_dtype_obj_numeric(
+                lists_indices_col.children[1].dtype, include_decimal=False
             )
             or lists_indices_col.children[1].dtype.kind not in "iu"
         ):
