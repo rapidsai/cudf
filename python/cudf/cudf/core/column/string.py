@@ -16,10 +16,9 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
@@ -76,7 +75,7 @@ class StringMethods(ColumnMethods):
             if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
-        if not is_string_dtype(value_type):
+        if value_type != CUDF_STRING_DTYPE:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )

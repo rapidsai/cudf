@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -212,7 +213,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     }
   }
   // compute the min rank across the block
-  auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+  auto const reduce_rank =
+    block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
   if (lane_idx == 0) { block_min_rank = reduce_rank; }
   __syncthreads();
 
@@ -277,7 +279,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     }
 
     // re-compute the minimum rank across the block (since new pairs are created above)
-    auto const reduce_rank = block_reduce(temp_storage).Reduce(min_rank, cub::Min(), num_valid);
+    auto const reduce_rank =
+      block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
     if (lane_idx == 0) { block_min_rank = reduce_rank; }
     __syncthreads();
   }  // if no min ranks are found we are done, otherwise start again
