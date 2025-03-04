@@ -13,6 +13,7 @@
 # =============================================================================
 
 set(cython_sources
+    byte_pair_encode.pyx
     edit_distance.pyx
     generate_ngrams.pyx
     jaccard.pyx
@@ -22,7 +23,6 @@ set(cython_sources
     replace.pyx
     stemmer.pyx
     tokenize.pyx
-    byte_pair_encode.pyx
     subword_tokenize.pyx
     wordpiece_tokenize.pyx
 )
