@@ -2722,12 +2722,8 @@ def as_column(
             if not arbitrary.dtype.isnative:
                 # Not supported by pyarrow
                 arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
-            pa_array = pa.array(
-                pa.array(arbitrary, from_pandas=from_pandas),
-                from_pandas=from_pandas,
-            )
             return as_column(
-                pa_array,
+                pa.array(arbitrary, from_pandas=from_pandas),
                 dtype=dtype,
                 nan_as_null=nan_as_null,
             )
