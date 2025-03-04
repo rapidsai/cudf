@@ -23,13 +23,10 @@ import rmm
 
 import cudf
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
-    is_decimal_dtype,
     is_dtype_equal,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import (
@@ -69,6 +66,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_time_unit,
     is_column_like,
+    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -858,7 +856,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        if not inplace or is_string_dtype(self.dtype):
+        if not inplace or self.dtype == CUDF_STRING_DTYPE:
             with acquire_spill_lock():
                 result = type(self).from_pylibcudf(
                     plc.filling.fill(
@@ -868,7 +866,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         fill_value,
                     )
                 )
-            if is_string_dtype(self.dtype):
+            if self.dtype == CUDF_STRING_DTYPE:
                 return self._mimic_inplace(result, inplace=True)
             return result  # type: ignore[return-value]
 
@@ -891,12 +889,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        if not isinstance(fill_value, cudf.Scalar):
-            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        plc_fill_value = self._scalar_to_plc_scalar(fill_value)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
-            fill_value.device_value,
+            plc_fill_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
@@ -1188,13 +1185,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 f"{num_keys}"
             )
 
+    def _scalar_to_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
+        """Return a pylibcudf.Scalar that matches the type of self.dtype"""
+        if not isinstance(scalar, pa.Scalar):
+            scalar = pa.scalar(scalar)
+        return pa_scalar_to_plc_scalar(
+            scalar.cast(cudf_dtype_to_pa_type(self.dtype))
+        )
+
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            return cudf.Scalar(fill_value, dtype=self.dtype)
-        return as_column(fill_value)
+            return self._scalar_to_plc_scalar(fill_value)
+        return as_column(fill_value).astype(self.dtype)
 
     @acquire_spill_lock()
     def replace(
@@ -1240,8 +1245,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     if method == "ffill"
                     else plc.replace.ReplacePolicy.FOLLOWING
                 )
-            elif is_scalar(fill_value):
-                plc_replace = cudf.Scalar(fill_value).device_value
+            elif isinstance(fill_value, plc.Scalar):
+                plc_replace = fill_value
             else:
                 plc_replace = fill_value.to_pylibcudf(mode="read")
             plc_column = plc.replace.replace_nulls(
@@ -1592,7 +1597,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
             )
         )
-        if is_decimal_dtype(result.dtype):
+        if isinstance(
+            result.dtype,
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
+        ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result
 
@@ -2719,6 +2727,9 @@ def as_column(
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
+            if not arbitrary.dtype.isnative:
+                # Not supported by pyarrow
+                arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
             return as_column(
                 pa.array(arbitrary, from_pandas=from_pandas),
                 dtype=dtype,
@@ -2986,7 +2997,8 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
-        _is_non_decimal_numeric_dtype(dtype) and dtype.kind == "M"
+        is_dtype_obj_numeric(dtype, include_decimal=False)
+        and dtype.kind == "M"
         for dtype in not_null_col_dtypes
     ):
         common_dtype = find_common_type(not_null_col_dtypes)
