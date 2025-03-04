@@ -39,13 +39,13 @@ struct ArrowArray;
 
 struct ArrowArrayStream;
 
-#ifndef DOXYGEN_SHOULD_SKIP_THIS
+///@cond
 // These are types from arrow that we are forward declaring for our API to
 // avoid needing to include nanoarrow headers.
 typedef int32_t ArrowDeviceType;  // NOLINT
 
 #define ARROW_DEVICE_CUDA 2
-#endif
+///@endcond
 
 namespace CUDF_EXPORT cudf {
 /**
