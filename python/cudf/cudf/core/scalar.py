@@ -26,6 +26,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
+    find_common_type,
     to_cudf_compatible_scalar,
 )
 
@@ -656,7 +657,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
                     return np.dtype(f"m8[{res}]")
-                return np.result_type(self.dtype, other.dtype)
+                return find_common_type((self.dtype, other.dtype))
 
         return out_dtype
 

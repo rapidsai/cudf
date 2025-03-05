@@ -257,7 +257,7 @@ class NumericalColumn(NumericalBaseColumn):
             # not a binary operator, so no need to promote
             out_dtype = self.dtype
         elif out_dtype is None:
-            out_dtype = np.result_type(self.dtype, other.dtype)
+            out_dtype = find_common_type((self.dtype, other.dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.

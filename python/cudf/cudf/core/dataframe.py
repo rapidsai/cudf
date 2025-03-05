@@ -216,11 +216,10 @@ class _DataFrameIndexer(_FrameIndexer):
             return df[df._column_names[0]]
         else:
             if df._num_columns > 0:
-                dtypes = df.dtypes.values.tolist()
-                normalized_dtype = np.result_type(*dtypes)
-                for name, col in df._column_labels_and_values:
-                    df[name] = col.astype(normalized_dtype)
-
+                normalized_dtype = find_common_type(
+                    [dtype for _, dtype in df._dtypes]
+                )
+                df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -6345,13 +6344,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
+        dtypes = [dtype for _, dtype in filtered._dtypes]
+        is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
             and common_dtype == CUDF_STRING_DTYPE
-            and any(dtype != CUDF_STRING_DTYPE for dtype in filtered._dtypes)
+            and any(dtype != CUDF_STRING_DTYPE for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -7331,8 +7331,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ]
 
             # Collect datatypes and cast columns as that type
-            common_type = np.result_type(
-                *(col.dtype for col in columns if col is not None)
+            common_type = find_common_type(
+                [col.dtype for col in columns if col is not None]
             )
 
             all_nulls = functools.cache(
