@@ -528,6 +528,7 @@ add_library(
   src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
+  src/io/parquet/stats_filter_helpers.cpp
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
@@ -756,6 +757,7 @@ add_library(
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
+  src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
