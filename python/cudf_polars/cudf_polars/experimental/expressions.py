@@ -152,35 +152,43 @@ def rename_agg(agg: Agg, new_name: str, *, new_options: Any = None):
     return replace(agg, {agg: Agg(agg.dtype, new_name, new_options, *agg.children)})
 
 
-def decompose_expr_graph(expr: Expr) -> FusedExpr:
+def _decompose(expr: Expr, rec: ExprTransformer):
+    # Used by `decompose_expr_graph`
+
+    # Transform child expressions first
+    new_children = tuple(map(rec, expr.children))
+
+    if new_children:
+        # Non-leaf node.
+        # Construct child lists for new expressions
+        # (both the fused expression and the sub-expression)
+        sub_expr_children, fused_children = [], []
+        for child in new_children:
+            # All children should be FusedExpr
+            assert isinstance(child, FusedExpr)
+            if child.is_pointwise:
+                # Pointwise children must be fused into the
+                # "new" FusedExpr node with root `expr`
+                fused_children.extend(list(child.children))
+                sub_expr_children.append(child.sub_expr)
+            else:
+                # Non-pointwise children must remain as
+                # distinct FusedExpr nodes
+                fused_children.append(child)
+                sub_expr_children.append(child)
+        # Reconstruct and return the new FusedExpr
+        sub_expr = expr.reconstruct(sub_expr_children)
+        return FusedExpr(sub_expr.dtype, sub_expr, *fused_children)
+    else:
+        # Leaf node.
+        # Convert to simple FusedExpr with no children
+        return FusedExpr(expr.dtype, expr)
+
+
+def decompose_expr_graph(expr):
     """Transform an Expr into a graph of FusedExpr nodes."""
-    root = expr
-    while True:
-        exprs = [
-            e
-            for e in list(traversal([root]))[::-1]
-            if not (isinstance(e, FusedExpr) or e.is_pointwise)
-        ]
-        if not exprs:
-            if isinstance(root, FusedExpr):
-                break  # We are done rewriting root
-            exprs = [root]
-        old = exprs[0]
-
-        # Check that we can handle old
-        if not old.is_pointwise and not (
-            isinstance(old, Agg) and old.name in _SUPPORTED_AGGS
-        ):
-            raise NotImplementedError(
-                f"Selection does not support {expr} for multiple partitions."
-            )
-
-        # Rewrite root to replace old with FusedExpr(old)
-        children = [child for child in traversal([old]) if isinstance(child, FusedExpr)]
-        new = FusedExpr(old.dtype, old, *children)
-        root = replace(root, {old: new})
-
-    return root
+    mapper = CachingVisitor(_decompose)
+    return mapper(expr)
 
 
 def evaluate_chunk(
