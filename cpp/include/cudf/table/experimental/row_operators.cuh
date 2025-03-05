@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/tuple>
@@ -1466,9 +1467,9 @@ class device_row_comparator {
           auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
-                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
+                  thrust::seq, lvalid, lvalid + lcol.size(), cuda::std::logical_not<bool>()) or
                 thrust::any_of(
-                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
+                  thrust::seq, rvalid, rvalid + rcol.size(), cuda::std::logical_not<bool>())) {
               return false;
             }
           } else {
