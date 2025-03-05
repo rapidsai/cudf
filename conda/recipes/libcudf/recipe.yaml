@@ -273,10 +273,10 @@ outputs:
         - cmake --install cpp/build --component testing
         - cmake --install cpp/libcudf_kafka/build --component testing
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
-      #dynamic_linking:
-      #  overlinking_behavior: "error"
-      #  missing_dso_allowlist:
-      #    - "libnvidia-ml.so.1"
+      dynamic_linking:
+        overlinking_behavior: "error"
+        missing_dso_allowlist:
+          - "libnvidia-ml.so.1"
     requirements:
       build:
         - cmake ${{ cmake_version }}
