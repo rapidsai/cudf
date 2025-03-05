@@ -35,7 +35,7 @@
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
-class CUDF_EXPORT preprocessed_table;
+class preprocessed_table;
 }
 
 namespace CUDF_EXPORT cudf {
