@@ -18,6 +18,7 @@
 
 #include "generate_input_tables.cuh"
 
+#include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/ast/expressions.hpp>
