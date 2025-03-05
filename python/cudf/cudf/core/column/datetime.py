@@ -179,13 +179,27 @@ def infer_format(element: str, **kwargs) -> str:
     return fmt
 
 
+def _get_time_unit(obj: ColumnBinaryOperand) -> str:
+    if isinstance(
+        obj,
+        (
+            cudf.core.column.datetime.DatetimeColumn,
+            cudf.core.column.timedelta.TimeDeltaColumn,
+        ),
+    ):
+        return obj.time_unit
+
+    time_unit, _ = np.datetime_data(obj.dtype)
+    return time_unit
+
+
 def _resolve_mixed_dtypes(
     lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
 ) -> Dtype:
     units = ["s", "ms", "us", "ns"]
-    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+    lhs_time_unit = _get_time_unit(lhs)
     lhs_unit = units.index(lhs_time_unit)
-    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+    rhs_time_unit = _get_time_unit(rhs)
     rhs_unit = units.index(rhs_time_unit)
     return np.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
@@ -551,7 +565,7 @@ class DatetimeColumn(column.ColumnBase):
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+                other_time_unit = np.datetime_data(other.dtype)[0]
                 if other_time_unit not in {"s", "ms", "ns", "us"}:
                     other_time_unit = "ns"
 
@@ -562,8 +576,7 @@ class DatetimeColumn(column.ColumnBase):
             other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
-            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
-
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
                 return cudf.Scalar(
                     None,
