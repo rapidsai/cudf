@@ -19,7 +19,11 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    find_common_type,
+    np_to_pa_dtype,
+)
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -238,9 +242,9 @@ class TimeDeltaColumn(ColumnBase):
             }:
                 out_dtype = np.dtype(np.bool_)
             elif op == "__mod__":
-                out_dtype = determine_out_dtype(self.dtype, other.dtype)
+                out_dtype = find_common_type((self.dtype, other.dtype))
             elif op in {"__truediv__", "__floordiv__"}:
-                common_dtype = determine_out_dtype(self.dtype, other.dtype)
+                common_dtype = find_common_type((self.dtype, other.dtype))
                 out_dtype = (
                     np.dtype(np.float64)
                     if op == "__truediv__"
@@ -257,7 +261,7 @@ class TimeDeltaColumn(ColumnBase):
                 else:
                     other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
-                out_dtype = determine_out_dtype(self.dtype, other.dtype)
+                out_dtype = find_common_type((self.dtype, other.dtype))
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
@@ -311,9 +315,9 @@ class TimeDeltaColumn(ColumnBase):
                 )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
-                common_dtype = "timedelta64[s]"
+                common_dtype = np.dtype("timedelta64[s]")
             else:
-                common_dtype = determine_out_dtype(self.dtype, other.dtype)
+                common_dtype = find_common_type((self.dtype, other.dtype))
             return cudf.Scalar(other.astype(common_dtype))
         elif is_scalar(other):
             return cudf.Scalar(other)
@@ -652,12 +656,3 @@ class TimeDeltaColumn(ColumnBase):
         return (
             self % get_np_td_unit_conversion("us", None)
         ) // get_np_td_unit_conversion("ns", None)
-
-
-def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
-    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
-        return rhs_dtype
-    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
-        return lhs_dtype
-    else:
-        raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
