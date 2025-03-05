@@ -80,13 +80,13 @@ def _check_and_cast_columns_with_other(
             raise TypeError(mixed_err)
 
         if other.dtype != source_dtype:
-            warn = False
             try:
-                common_dtype = find_common_type((other.dtype, source_dtype))
+                warn = (
+                    find_common_type((other.dtype, source_dtype))
+                    == CUDF_STRING_DTYPE
+                )
             except NotImplementedError:
                 warn = True
-            else:
-                warn = common_dtype == CUDF_STRING_DTYPE
             if warn:
                 warnings.warn(
                     f"Type-casting from {other.dtype} "
