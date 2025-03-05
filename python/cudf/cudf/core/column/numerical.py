@@ -741,7 +741,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.dtype
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            return np.result_dtype(self.dtype, np.dtype("uint64"))
+            return find_common_type((self.dtype, np.dtype(np.uint64)))
         elif reduction_op in {"var", "std", "mean"}:
             return np.dtype("float64")
 
