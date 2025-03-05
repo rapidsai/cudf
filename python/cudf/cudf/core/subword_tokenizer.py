@@ -20,7 +20,7 @@ def _cast_to_appropriate_type(ar, cast_type):
     elif cast_type == "tf":
         from tensorflow.experimental.dlpack import from_dlpack
 
-    return from_dlpack(ar.astype(np.dtype(np.int32)).toDlpack())
+    return from_dlpack(ar.astype(np.dtype(np.int32)).__dlpack__())
 
 
 class SubwordTokenizer:
