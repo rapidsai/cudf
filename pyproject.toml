@@ -124,6 +124,7 @@ exclude = [
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
 "numpy.result_type".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.issubdtype".msg = "Check the .kind attributes on dtype objects instead"
 
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook

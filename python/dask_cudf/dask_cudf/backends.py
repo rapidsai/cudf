@@ -354,7 +354,8 @@ def percentile_cudf(a, q, interpolation="linear"):
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], a.min())
         return result.to_pandas(), n
-    if not np.issubdtype(a.dtype, np.number):
+    if a.dtype.kind not in "iufm":
+        # TODO: Do we want to include timedelta?
         interpolation = "nearest"
     return (
         a.quantile(

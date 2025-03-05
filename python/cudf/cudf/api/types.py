@@ -551,4 +551,4 @@ is_dtype_equal = pd_types.is_dtype_equal
 
 
 # Aliases of numpy dtype functionality.
-issubdtype = np.issubdtype
+issubdtype = np.issubdtype  # noqa: TID251
