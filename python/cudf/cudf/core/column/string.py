@@ -6528,6 +6528,20 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
+    def wordpiece_tokenize(
+        self,
+        vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
+        max_words_per_row: int,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
+                self.to_pylibcudf(mode="read"),
+                vocabulary,
+                max_words_per_row,
+            )
+        )
+
+    @acquire_spill_lock()
     def detokenize(self, indices: ColumnBase, separator: plc.Scalar) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.tokenize.detokenize(
