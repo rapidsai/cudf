@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from packaging.version import Version
-from pandas.api.types import is_scalar
 
 from dask import config
 from dask.array.dispatch import percentile_lookup
@@ -43,7 +42,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
-from cudf.api.types import is_string_dtype
+from cudf.api.types import is_scalar, is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 # Required for Arrow filesystem support in read_parquet

@@ -6139,7 +6139,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if isinstance(q, numbers.Number):
             q_is_number = True
             qs = [float(q)]
-        elif pd.api.types.is_list_like(q):
+        elif not is_scalar(q):
             q_is_number = False
             qs = q
         else:
