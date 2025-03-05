@@ -26,8 +26,8 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     find_common_type,
-    min_column_type,
     min_signed_type,
+    min_unsigned_type,
     np_dtypes_to_pandas_dtypes,
 )
 
@@ -469,6 +469,34 @@ class NumericalColumn(NumericalBaseColumn):
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
 
+    def _min_column_type(self, expected_type: np.dtype) -> np.dtype:
+        """
+        Return the smallest dtype which can represent all elements of self.
+        """
+        if self.null_count == len(self):
+            return self.dtype
+
+        min_value, max_value = self.min(), self.max()
+        either_is_inf = np.isinf(min_value) or np.isinf(max_value)
+        if not either_is_inf and expected_type.kind == "i":
+            max_bound_dtype = min_signed_type(max_value)
+            min_bound_dtype = min_signed_type(min_value)
+            return np.promote_types(max_bound_dtype, min_bound_dtype)
+        elif not either_is_inf and expected_type.kind == "u":
+            max_bound_dtype = min_unsigned_type(max_value)
+            min_bound_dtype = min_unsigned_type(min_value)
+            return np.promote_types(max_bound_dtype, min_bound_dtype)
+        elif self.dtype.kind == "f" or expected_type.kind == "f":
+            return np.promote_types(
+                expected_type,
+                np.promote_types(
+                    np.min_scalar_type(float(max_value)),
+                    np.min_scalar_type(float(min_value)),
+                ),
+            )
+        else:
+            return self.dtype
+
     def find_and_replace(
         self,
         to_replace: ColumnLike,
@@ -767,8 +795,8 @@ def _normalize_find_and_replace_input(
             normalized_column = normalized_column.astype(input_column_dtype)
         if normalized_column.can_cast_safely(input_column_dtype):
             return normalized_column.astype(input_column_dtype)
-        col_to_normalize_dtype = min_column_type(
-            normalized_column, input_column_dtype
+        col_to_normalize_dtype = normalized_column._min_column_type(  # type: ignore[attr-defined]
+            input_column_dtype
         )
         # Scalar case
         if len(col_to_normalize) == 1:
