@@ -540,19 +540,17 @@ struct get_page_span {
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
 
-    // For list cols, we only have estimated row counts so it is not safe to get a page span here.
-    // Instead get all pages here as they will be trimmed later on when actual row counts are
-    // available.
-    if (is_list) {
-      return {static_cast<size_t>(first_page_index),
-              static_cast<size_t>(first_page_index + num_pages)};
-    }
-
     auto start_page =
       thrust::distance(
         column_page_start,
         thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row)) +
       first_page_index;
+
+    // list rows can span page boundaries, so it is not always safe to assume that the row
+    // represented by end_row_index starts on the subsequent page. It is possible that
+    // the values for row end_row_index start within the page itself. so we must
+    // include the page in that case.
+    if (page_row_index[start_page] == start_row && !is_list) { start_page++; }
 
     auto end_page = thrust::distance(column_page_start,
                                      thrust::lower_bound(
@@ -1154,7 +1152,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 page_keys + pages.size(),
                                 decomp_iter,
                                 decomp_info.begin(),
-                                cuda::std::equal_to<int32_t>{},
+                                thrust::equal_to<int32_t>{},
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
@@ -1393,7 +1391,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                   page_keys + pass.pages.size(),
                                   page_size,
                                   c_info.begin(),
-                                  cuda::std::equal_to{},
+                                  thrust::equal_to{},
                                   cumulative_page_sum{});
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
@@ -1713,7 +1711,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                                 page_keys + subpass.pages.size(),
                                 page_input,
                                 c_info.begin(),
-                                cuda::std::equal_to{},
+                                thrust::equal_to{},
                                 cumulative_page_sum{});
   auto iter = thrust::make_counting_iterator(0);
   // cap the max row in all pages by the max row we expect in the subpass. input chunking
