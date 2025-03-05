@@ -63,7 +63,7 @@ requirements:
       else:
         - cuda-cudart-dev
         - cuda-nvrtc
-        - if: linux-64
+        - if: linux
           then:
             - libcufile-dev
     - cuda-version =${{ cuda_version }}
@@ -88,7 +88,7 @@ requirements:
       - if: cuda_major != "11"
         then:
           - cuda-cudart-dev
-          - if: linux-64
+          - if: linux
             then:
               - libcufile-dev
     by_name:
