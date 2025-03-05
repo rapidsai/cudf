@@ -108,47 +108,41 @@ struct greater_equal {
  * @brief Select the appropriate ordering comparator for the window type.
  *
  * @tparam T The type being compared.
- * @tparam Tag The type of the window.
+ * @tparam WindowType The type of the window.
  */
-template <typename T, typename Tag>
+template <typename T, typename WindowType>
 struct comparator_impl {
-  using op     = void;
-  using rev_op = void;
-};
-
-template <typename T>
-struct comparator_impl<T, bounded_closed> {
+  static_assert(cuda::std::is_same_v<WindowType, bounded_closed> ||
+                  cuda::std::is_same_v<WindowType, current_row>,
+                "Invalid window type");
   using op     = less<T>;
   using rev_op = greater<T>;
 };
+
 template <typename T>
 struct comparator_impl<T, bounded_open> {
   using op     = less_equal<T>;
   using rev_op = greater_equal<T>;
 };
-template <typename T>
-struct comparator_impl<T, current_row> {
-  using op     = less<T>;
-  using rev_op = greater<T>;
-};
 
 /**
  * @brief Select the appropriate ordering comparator for the window type.
  *
- * @tparam Tag The type of the window.
- * @tparam Order The sort order of the column used to define the windows.
+ * @tparam T The type being compared.
+ * @tparam WindowType The type of the window.
+ * @param order The sort order of the column being searched in.
  */
-template <typename T, typename Tag>
+template <typename T, typename WindowType>
 struct comparator_t {
   order const order;
 
   __device__ constexpr bool operator()(T const& x, T const& y) const noexcept
   {
     if (order == order::ASCENDING) {
-      using op = typename comparator_impl<T, Tag>::op;
+      using op = typename comparator_impl<T, WindowType>::op;
       return op{}(x, y);
     } else {
-      using op = typename comparator_impl<T, Tag>::rev_op;
+      using op = typename comparator_impl<T, WindowType>::rev_op;
       return op{}(x, y);
     }
   }
@@ -187,9 +181,11 @@ struct saturating {
                 "Only for addition or subtraction");
   template <typename T, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<T>)>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
-    T x, T y) noexcept
+    T x, T y) const noexcept
   {
     // Mimicking spark requirements, inf/nan x propagates
+    // Other consumers (pandas, polars) of this functionality do not
+    // support orderby columns that have floating point type.
     if (cuda::std::isinf(x) || cuda::std::isnan(x)) { return {x, false}; }
     // Requirement, not checked, y is not inf or nan.
     T result = Op{}(x, y);
@@ -206,7 +202,7 @@ struct saturating {
 
   template <typename T, CUDF_ENABLE_IF(cuda::std::is_integral_v<T>&& cuda::std::is_signed_v<T>)>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
-    T x, T y) noexcept
+    T x, T y) const noexcept
   {
     using U  = cuda::std::make_unsigned_t<T>;
     U ux     = static_cast<U>(x);
@@ -227,7 +223,7 @@ struct saturating {
 
   template <typename T, CUDF_ENABLE_IF(cuda::std::is_integral_v<T>&& cuda::std::is_unsigned_v<T>)>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
-    T x, T y) noexcept
+    T x, T y) const noexcept
   {
     T result = Op{}(x, y);
     if constexpr (cuda::std::is_same_v<Op, cuda::std::plus<>>) {
@@ -244,7 +240,7 @@ struct saturating {
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
-    T x, typename T::duration y) noexcept
+    T x, typename T::duration y) const noexcept
   {
     using Duration                   = typename T::duration;
     auto const [value, did_overflow] = saturating<Op>{}(x.time_since_epoch().count(), y.count());
@@ -253,7 +249,7 @@ struct saturating {
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   [[nodiscard]] __host__ __device__ constexpr inline cuda::std::pair<T, bool> operator()(
-    T x, typename T::rep y) noexcept
+    T x, typename T::rep y) const noexcept
   {
     using Rep                        = typename T::rep;
     auto const [value, did_overflow] = saturating<Op>{}(x.value(), y);
@@ -272,10 +268,6 @@ struct saturating {
  */
 template <typename Grouping>
 struct unbounded_distance_functor {
-  unbounded_distance_functor(Grouping groups, direction direction)
-    : groups{groups}, direction{direction}
-  {
-  }
   Grouping const groups;
   direction const direction;
   [[nodiscard]] __device__ size_type operator()(size_type i) const noexcept
@@ -288,6 +280,9 @@ struct unbounded_distance_functor {
     }
   }
 };
+// TODO: Remove this deduction guide when we require C++20
+template <typename Grouping>
+unbounded_distance_functor(Grouping, direction) -> unbounded_distance_functor<Grouping>;
 
 /**
  * @brief Functor to compute distance from current row for `current_row` windows.
@@ -303,13 +298,6 @@ struct unbounded_distance_functor {
  */
 template <typename Grouping, typename OrderbyT>
 struct current_row_distance_functor {
-  current_row_distance_functor(Grouping groups,
-                               direction direction,
-                               order order,
-                               column_device_view::const_iterator<OrderbyT> begin)
-    : groups{groups}, direction{direction}, order{order}, begin{begin}
-  {
-  }
   Grouping const groups;
   direction const direction;
   order const order;
@@ -338,6 +326,13 @@ struct current_row_distance_functor {
     }
   }
 };
+// TODO: Remove this deduction guide when we require C++20
+template <typename Grouping, typename OrderbyT>
+current_row_distance_functor(Grouping,
+                             direction,
+                             order,
+                             column_device_view::const_iterator<OrderbyT>)
+  -> current_row_distance_functor<Grouping, OrderbyT>;
 
 /**
  * @brief Functor to compute distance from current row for `bounded_open` and `bounded_closed`
@@ -346,11 +341,11 @@ struct current_row_distance_functor {
  * A `bounded_open` window contains all rows up to but not including the computed endpoint.
  * A `bounded_closed` window contains all rows up to and including the computed endpoint.
  *
- * @tparam WindowType type of window we're computing the distance for.
  * @tparam Grouping type of object defining groups in the orderby column.
  * @tparam OrderbyT type of elements in the orderby columns.
  * @tparam DeltaT type of the elements in the scalar delta (returned
  * by `scalar.data()`).
+ * @tparam WindowType type of window we're computing the distance for.
  * @param groups object defining groups in the orderby column.
  * @param direction direction of the window `PRECEDING` or `FOLLOWING`.
  * @param order sort order of the orderby column.
@@ -372,14 +367,6 @@ struct bounded_distance_functor {
   static_assert(cuda::std::is_same_v<WindowType, bounded_open> ||
                   cuda::std::is_same_v<WindowType, bounded_closed>,
                 "Invalid WindowType, expecting bounded_open or bounded_closed.");
-  bounded_distance_functor(Grouping groups,
-                           direction const direction,
-                           order const order,
-                           column_device_view::const_iterator<OrderbyT> begin,
-                           DeltaT const* row_delta)
-    : groups{groups}, direction{direction}, order{order}, begin{begin}, row_delta{row_delta}
-  {
-  }
   Grouping const groups;
   direction const direction;
   order const order;
@@ -394,8 +381,10 @@ struct bounded_distance_functor {
    */
   [[nodiscard]] __device__ size_type operator()(size_type i) const
   {
-    using Comp          = comparator_t<OrderbyT, WindowType>;
-    auto const row_info = groups.row_info(i);
+    using Comp           = comparator_t<OrderbyT, WindowType>;
+    using saturating_sub = saturating<cuda::std::minus<>>;
+    using saturating_add = saturating<cuda::std::plus<>>;
+    auto const row_info  = groups.row_info(i);
     if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
       // TODO: If the window is BOUNDED_OPEN, what does it mean for a row to fall in the null
       // group? Not that important because only spark allows nulls in the orderby column, and it
@@ -403,16 +392,14 @@ struct bounded_distance_functor {
       return direction == direction::PRECEDING ? i - row_info.null_start + 1
                                                : row_info.null_end - i - 1;
     }
-    auto const offset_value_overflow =
-      [subtract = (order == order::ASCENDING && direction == direction::PRECEDING) ||
-                  (order == order::DESCENDING && direction == direction::FOLLOWING),
-       delta     = *row_delta,
-       row_value = begin[i]]() {
-        return subtract ? saturating<cuda::std::minus<>>{}(row_value, delta)
-                        : saturating<cuda::std::plus<>>{}(row_value, delta);
-      }();
-    OrderbyT const offset_value = cuda::std::get<0>(offset_value_overflow);
-    bool const did_overflow     = cuda::std::get<1>(offset_value_overflow);
+    auto const offset_value_did_overflow = [subtract = (order == order::ASCENDING) ==
+                                                       (direction == direction::PRECEDING),
+                                            delta     = *row_delta,
+                                            row_value = begin[i]]() {
+      return subtract ? saturating_sub{}(row_value, delta) : saturating_add{}(row_value, delta);
+    }();
+    OrderbyT const offset_value = cuda::std::get<0>(offset_value_did_overflow);
+    bool const did_overflow     = cuda::std::get<1>(offset_value_did_overflow);
     auto const distance         = [preceding    = direction == direction::PRECEDING,
                            current      = begin + i,
                            start        = begin + row_info.non_null_start,
@@ -488,9 +475,9 @@ struct range_window_clamper {
 
   template <typename Grouping, typename OrderbyT>
   void expand_current_row(Grouping grouping,
-                          column_device_view::const_iterator<OrderbyT> begin,
                           direction direction,
                           order order,
+                          column_device_view::const_iterator<OrderbyT> begin,
                           size_type size,
                           mutable_column_view& result,
                           rmm::cuda_stream_view stream) const
@@ -558,9 +545,9 @@ struct range_window_clamper {
         expand_unbounded(grouping, direction, orderby.size(), result_view, stream);
       } else if constexpr (cuda::std::is_same_v<WindowType, current_row>) {
         expand_current_row(
-          grouping, d_begin, direction, order, orderby.size(), result_view, stream);
+          grouping, direction, order, d_begin, orderby.size(), result_view, stream);
       } else {
-        auto const* d_row_delta = dynamic_cast<ScalarT const*>(row_delta)->data();
+        auto const* d_row_delta = static_cast<ScalarT const*>(row_delta)->data();
         expand_bounded(
           grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
       }

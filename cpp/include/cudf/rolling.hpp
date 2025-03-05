@@ -39,11 +39,17 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Strongly typed wrapper for bounded closed rolling windows.
  *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
  * The endpoints of this window are included.
  */
 struct bounded_closed {
   cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
                                ///< behaviour is undefined if not.
+
   /**
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
@@ -54,11 +60,19 @@ struct bounded_closed {
 /**
  * @brief Strongly typed wrapper for bounded open rolling windows.
  *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
  * The endpoints of this window are excluded.
  */
 struct bounded_open {
   cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
                                ///< behaviour is undefined if not.
+  ///< Similarly, if the delta is a floating point type the value must be neither inf nor nan
+  ///< otherwise behaviour is undefined.
+
   /**
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
