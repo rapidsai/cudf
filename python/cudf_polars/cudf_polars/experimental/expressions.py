@@ -134,14 +134,6 @@ def extract_partition_counts(
     return expr_partition_counts
 
 
-def replace_sub_expr(e: Expr, rec: ExprTransformer):
-    """Replace a target expression node."""
-    mapping = rec.state["mapping"]
-    if e in mapping:
-        return mapping[e]
-    return reuse_if_unchanged(e, rec)
-
-
 def _replace(e: Expr, rec: ExprTransformer) -> Expr:
     mapping = rec.state["mapping"]
     if e in mapping:
