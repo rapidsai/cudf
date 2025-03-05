@@ -70,7 +70,7 @@ cache:
           - cuda-nvrtc =${{ cuda_version }}
           - cuda-nvrtc-dev =${{ cuda_version }}
           - cuda-nvtx =${{ cuda_version }}
-          - if: x86
+          - if: linux and x86_64
             then:
               - libcufile =${{ cuda11_libcufile_host_version }}
               - libcufile-dev =${{ cuda11_libcufile_host_version }}
@@ -78,7 +78,7 @@ cache:
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - libcurand-dev
-          - if: x86
+          - if: linux and x86_64
             then:
               - libcufile-dev
       - cuda-version =${{ cuda_version }}
@@ -117,12 +117,12 @@ outputs:
         - if: cuda_major == "11"
           then:
             - cudatoolkit
-            - if: x86
+            - if: linux and x86_64
               then:
                 - libcufile ${{ cuda11_libcufile_run_version }}
           else:
             - cuda-nvrtc
-            - if: x86
+            - if: linux and x86_64
               then:
                 - libcufile
         - nvcomp ${{ nvcomp_version }}
