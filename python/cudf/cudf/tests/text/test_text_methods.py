@@ -1089,17 +1089,12 @@ def test_byte_pair_encoding(separator, input, results):
 
 def test_substring_deduplicate():
     text = (
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt "  #  90
-        "01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation     "  # 180
-        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   "  # 270
-        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         "  # 360
-        "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.    "  # 450
-        "Ea esse numquam et recusandae quia et voluptatem sint quo explicabo repudiandae. At nihil "  # 540
-        "sunt non architecto doloremque eos dolorem consequuntur. Vel adipisci quod et voluptatum  "  # 630
-        "quis est fuga tempore qui dignissimos aliquam et sint repellendus ut autem voluptas quo   "  # 720
-        "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur "  # 810
-        "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit "  # 900
-        "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  "  # 990
+        " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    "
+        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   "
+        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         "
+        "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur "
+        "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit "
+        "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  "
     )
     input = cudf.Series([text])
     actual = input.str.substring_deduplicate(15)

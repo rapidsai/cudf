@@ -22,6 +22,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -96,9 +97,11 @@ struct find_duplicates_fn {
     auto const lh_str = cudf::string_view(d_chars + lhs, lhs_size);
     auto const rh_str = cudf::string_view(d_chars + rhs, rhs_size);
 
-    auto const size =
-      cuda::std::min(count_common_bytes(lh_str, rh_str),
-                     static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max()));
+    constexpr auto max_run_length =
+      static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max());
+
+    auto const size = cuda::std::min(count_common_bytes(lh_str, rh_str), max_run_length);
+
     return size >= width ? static_cast<int16_t>(size) : 0;
   }
 };
@@ -114,6 +117,9 @@ struct collapse_overlaps_fn {
     if ((idx > 0) && ((offset - 1) == d_offsets[idx - 1]) && (size < d_sizes[idx - 1])) {
       return string_index{nullptr, 0};
     }
+    // TODO: need to handle chains longer than max<int16_t>
+    // size == d_sizes[idx-1] == max<int16_t>
+
     auto d_ptr = d_chars + offset;
     return string_index(d_ptr, size);
   }
@@ -129,16 +135,18 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
   CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
   auto d_strings = cudf::column_device_view::create(input.parent(), stream);
 
-  // need to handle slicing
-  auto d_input_chars = input.chars_begin(stream);
-  auto chars_size    = input.chars_size(stream);
-  CUDF_EXPECTS(min_width < chars_size, "min_width value larger than the input");
+  auto [first_offset, last_offset] =
+    cudf::strings::detail::get_first_and_last_offset(input, stream);
 
-  auto indices = rmm::device_uvector<int64_t>(chars_size - min_width, stream);
+  auto d_input_chars = input.chars_begin(stream) + first_offset;
+  auto chars_size    = last_offset - first_offset;
+  CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+
+  auto indices = rmm::device_uvector<int64_t>(chars_size - min_width + 1, stream);
   auto sizes   = rmm::device_uvector<int16_t>(indices.size(), stream);
 
   thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
-  // thrust::sort may be limited to a 32-bit range
+  // note: thrust::sort may be limited to a 32-bit range
   thrust::sort(rmm::exec_policy_nosync(stream),
                indices.begin(),
                indices.end(),

@@ -56,4 +56,12 @@ TEST_F(TextDedupTest, StringDedup)
   expected = cudf::test::strings_column_wrapper(
     {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  // Test with sliced input
+  auto const sliced_input = cudf::slice(input, {1, 10}).front();
+
+  sv       = cudf::strings_column_view(sliced_input);
+  results  = nvtext::substring_deduplicate(sv, 15);
+  expected = cudf::test::strings_column_wrapper({"01234567890123456789 ", " reprehenderit "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }

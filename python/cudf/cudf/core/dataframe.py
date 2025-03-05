@@ -6729,8 +6729,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 prepared._data[col] = (
                     prepared._data[col]
                     .astype(
-                        cudf.utils.dtypes.get_min_float_dtype(
-                            prepared._data[col]
+                        prepared._data[col]._min_column_type(
+                            np.dtype(np.float32)
                         )
                         if common_dtype.kind != "M"
                         else np.dtype(np.float64)

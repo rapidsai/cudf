@@ -13,6 +13,7 @@ from . import (
     stemmer,
     subword_tokenize,
     tokenize,
+    wordpiece_tokenize,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "stemmer",
     "subword_tokenize",
     "tokenize",
+    "wordpiece_tokenize",
 ]

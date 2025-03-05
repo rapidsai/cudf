@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -9,40 +9,19 @@ import pylibcudf as plc
 
 @pytest.fixture(scope="module")
 def input_col():
-    arr = ["trouble", "toy", "syzygy"]
+    arr = [
+        "01234567890123456789",
+        "01234567890123456789",
+        "01234567890123456789",
+    ]
     return pa.array(arr)
 
 
-@pytest.mark.parametrize("check_vowels", [True, False])
-@pytest.mark.parametrize("indices", [[3, 1, 4], 1])
-def test_is_letter(input_col, check_vowels, indices):
-    def is_letter(s, i, check):
-        vowels = "aeiouy"
-        return (s[i] in vowels) == check
-
-    result = plc.nvtext.stemmer.is_letter(
+@pytest.mark.parametrize("min_width", [10, 20])
+def test_substring_deduplicate(input_col, min_width):
+    result = plc.nvtext.dedup.substring_deduplicate(
         plc.interop.from_arrow(input_col),
-        check_vowels,
-        plc.interop.from_arrow(pa.array(indices))
-        if isinstance(indices, list)
-        else indices,
+        min_width,
     )
-    expected = pa.array(
-        [
-            is_letter(
-                s,
-                indices[i] if isinstance(indices, list) else indices,
-                check_vowels,
-            )
-            for i, s in enumerate(input_col.to_pylist())
-        ]
-    )
-    assert_column_eq(result, expected)
-
-
-def test_porter_stemmer_measure(input_col):
-    result = plc.nvtext.stemmer.porter_stemmer_measure(
-        plc.interop.from_arrow(input_col),
-    )
-    expected = pa.array([1, 1, 2], type=pa.int32())
+    expected = pa.array(["01234567890123456789012345678901234567890123456789"])
     assert_column_eq(result, expected)
