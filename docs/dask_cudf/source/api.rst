@@ -2,8 +2,8 @@
  API reference
 ===============
 
-As recommended in the introduction, we recommend that you use ``dask_cudf``
-through the `Dask DataFrame`_ API with the backend set to cudf.
+As recommended in the introduction, ``dask_cudf`` should be used through the
+`Dask DataFrame`_ API with the backend set to cudf.
 
 .. code-block:: python
 
@@ -26,6 +26,7 @@ documented there, Dask-cuDF provides some cuDF-specific methods:
 .. automodule:: dask_cudf
    :members:
       from_cudf,
+      read_text
 
 For on-disk data that are not supported directly in Dask or Dask-cuDF, we
 recommend using Dask's data reading facilities, followed by calling
