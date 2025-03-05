@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -17,6 +17,8 @@ from cudf_polars.dsl.nodebase import Node
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from typing_extensions import Self
 
     from cudf_polars.containers import Column, DataFrame
 
@@ -236,6 +238,24 @@ class NamedExpr:
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         return self.value.collect_agg(depth=depth)
+
+    def reconstruct(self, expr: Expr) -> Self:
+        """
+        Rebuild with a new `Expr` value.
+
+        Parameters
+        ----------
+        expr
+            New `Expr` value
+
+        Returns
+        -------
+        New `NamedExpr` with `expr` as the underlying expression.
+        The name of the original `NamedExpr` is preserved.
+        """
+        if expr is self.value:
+            return self
+        return type(self)(self.name, expr)
 
 
 class Col(Expr):

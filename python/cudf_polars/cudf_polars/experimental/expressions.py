@@ -12,7 +12,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     reuse_if_unchanged,
@@ -72,7 +72,7 @@ class FusedExpr(Expr):
 
 
 def extract_partition_counts(
-    exprs: Sequence[Expr],
+    exprs: Sequence[Expr | NamedExpr],
     child_ir_count: int,
     *,
     update: MutableMapping[Expr, int] | None = None,
@@ -100,7 +100,8 @@ def extract_partition_counts(
     Mapping between Expr nodes and partition counts.
     """
     expr_partition_counts: MutableMapping[Expr, int] = update or {}
-    for expr in exprs:
+    for e in exprs:
+        expr = e.value if isinstance(e, NamedExpr) else e
         for node in list(traversal([expr]))[::-1]:
             if isinstance(node, FusedExpr):
                 # Process the fused sub-expression graph first
@@ -236,8 +237,7 @@ def combine_chunks_multi(
         # Perform optional BinOp on combined columns
         dt, op_name = finalize
         op = getattr(plc.binaryop.BinaryOperator, op_name)
-        cols = [c.obj for c in combined]
-        return Column(plc.binaryop.binary_operation(*cols, op, dt))
+        return Column(plc.binaryop.binary_operation(*(c.obj for c in combined), op, dt))
 
     assert len(combined) == 1
     return combined[0]

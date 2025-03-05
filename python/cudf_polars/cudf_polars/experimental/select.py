@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expressions.base import NamedExpr
 from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
@@ -34,16 +33,18 @@ def decompose_select(
     partition_info: MutableMapping[IR, PartitionInfo],
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Decompose a Select expression (if possible)."""
-    exprs = [decompose_expr_graph(ne.value) for ne in ir.exprs]
+    named_exprs = [e.reconstruct(decompose_expr_graph(e.value)) for e in ir.exprs]
     new_node = Select(
         ir.schema,
-        [NamedExpr(ir.exprs[i].name, exprs[i]) for i in range(len(exprs))],
+        named_exprs,
         ir.should_broadcast,
         child,
     )
-    expr_partition_info = extract_partition_counts(exprs, partition_info[child].count)
+    expr_partition_info = extract_partition_counts(
+        named_exprs, partition_info[child].count
+    )
     partition_info[new_node] = PartitionInfo(
-        count=max(expr_partition_info[e] for e in exprs)
+        count=max(expr_partition_info[ne.value] for ne in named_exprs)
     )
     return new_node, partition_info
 
@@ -68,7 +69,7 @@ def _(
 def construct_dataframe(columns: Sequence[Column], names: Sequence[str]) -> DataFrame:
     """Construct a DataFrame from a sequence of Columns."""
     return DataFrame(
-        [column.rename(name) for column, name in zip(columns, names, strict=False)]
+        [column.rename(name) for column, name in zip(columns, names, strict=True)]
     )
 
 
@@ -94,7 +95,7 @@ def build_fusedexpr_select_graph(
             child_count,
             update=expr_partition_counts,
         )
-        for node in list(traversal([expr]))[::-1]:
+        for node in traversal([expr]):
             assert isinstance(node, FusedExpr), f"{node} is not a FusedExpr"
             graph.update(make_fusedexpr_graph(node, child_name, expr_partition_counts))
 
@@ -108,7 +109,7 @@ def build_fusedexpr_select_graph(
             construct_dataframe,
             [
                 (name, 0) if bcast else (name, i)
-                for name, bcast in zip(expr_names, expr_bcast, strict=False)
+                for name, bcast in zip(expr_names, expr_bcast, strict=True)
             ],
             [ne.name for ne in ir.exprs],
         )
