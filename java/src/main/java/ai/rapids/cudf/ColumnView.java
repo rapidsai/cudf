@@ -341,6 +341,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     StripType(int nativeId) { this.nativeId = nativeId; }
   }
 
+  public enum DuplicateKeepOption {
+    KEEP_ANY(0),
+    KEEP_FIRST(1),
+    KEEP_LAST(2),
+    KEEP_NONE(3);
+    final int nativeId;
+
+    DuplicateKeepOption(int nativeId) { this.nativeId = nativeId; }
+  }
+
   /**
    * Returns a new ColumnVector with NaNs converted to nulls, preserving the existing null values.
    */
@@ -2538,13 +2548,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
    * producing a LIST column in which each list contain only unique elements.
    *
-   * Order of the output elements within each list are not guaranteed to be preserved as in the
-   * input.
+   * Order of the output elements within each list will be preserved as in the input
    *
    * @return A new LIST column having unique list elements.
    */
   public final ColumnVector dropListDuplicates() {
-    return new ColumnVector(dropListDuplicates(getNativeView()));
+    return new ColumnVector(dropListDuplicates(getNativeView(), DuplicateKeepOption.KEEP_ANY.nativeId));
+  }
+
+  /**
+   * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
+   * producing a LIST column in which each list contain only unique elements.
+   *
+   * Order of the output elements within each list will be preserved as in the input
+   *
+   * @param keepOption
+   * @return A new LIST column having unique list elements.
+   */
+  public final ColumnVector dropListDuplicates(DuplicateKeepOption keepOption) {
+    return new ColumnVector(dropListDuplicates(getNativeView(), keepOption.nativeId));
   }
 
   /**
@@ -4614,7 +4636,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElementV(long nativeView, long indicesView);
 
-  private static native long dropListDuplicates(long nativeView);
+  private static native long dropListDuplicates(long nativeView, int keep_option);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
 

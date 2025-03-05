@@ -39,7 +39,8 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 rmm::device_async_resource_ref mr,
+                                 duplicate_keep_option keep_option)
 {
   // Algorithm:
   // - Generate labels for the child elements.
@@ -55,7 +56,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
   auto const distinct_table =
     cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table
                                   std::vector<size_type>{0, 1},         // keys
-                                  duplicate_keep_option::KEEP_ANY,
+                                  keep_option,
                                   nulls_equal,
                                   nans_equal,
                                   stream,
@@ -79,10 +80,11 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr)
+                                 rmm::device_async_resource_ref mr,
+                                 duplicate_keep_option keep_option)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, stream, mr);
+  return detail::distinct(input, nulls_equal, nans_equal, stream, mr, keep_option);
 }
 
 }  // namespace cudf::lists

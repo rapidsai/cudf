@@ -19,6 +19,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -84,6 +85,7 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
+ * @param keep_option Flag to specify which element to keep (first, last, any)
  * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
@@ -91,7 +93,8 @@ std::unique_ptr<column> distinct(
   null_equality nulls_equal         = null_equality::EQUAL,
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
+  duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY);
 
 /** @} */  // end of group
 
