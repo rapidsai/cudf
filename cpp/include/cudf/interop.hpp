@@ -243,8 +243,8 @@ class arrow_column {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  arrow_column(ArrowSchema* schema,
-               ArrowDeviceArray* input,
+  arrow_column(ArrowSchema&& schema,
+               ArrowDeviceArray&& input,
                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -259,8 +259,8 @@ class arrow_column {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  arrow_column(ArrowSchema* schema,
-               ArrowArray* input,
+  arrow_column(ArrowSchema&& schema,
+               ArrowArray&& input,
                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -346,19 +346,22 @@ class arrow_table {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  arrow_table(ArrowSchema* schema,
-              ArrowDeviceArray* input,
+  arrow_table(ArrowSchema&& schema,
+              ArrowDeviceArray&& input,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Construct a new arrow table object
    *
+   * The stream will be released after the table is created, so it is no longer
+   * suitable for use afterwards.
+   *
    * @param input ArrowArrayStream data for the table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  arrow_table(ArrowArrayStream* input,
+  arrow_table(ArrowArrayStream&& input,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -373,8 +376,8 @@ class arrow_table {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  arrow_table(ArrowSchema* schema,
-              ArrowArray* input,
+  arrow_table(ArrowSchema&& schema,
+              ArrowArray&& input,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
