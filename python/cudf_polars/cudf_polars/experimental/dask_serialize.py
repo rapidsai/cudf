@@ -17,32 +17,6 @@ from cudf_polars.containers import Column, DataFrame
 __all__ = ["register"]
 
 
-def frames_to_gpumemoryview(frames):
-    """
-    Convert the elements of `frames` to gpumemoryview.
-
-    UCX transfers produce `rmm.DeviceBuffer` objects instead of `gpumemoryview`.
-    This function leverages CUDA array interface to convert the elements of
-    `frames` to `gpumemoryview`, if necessary.
-
-    Parameters
-    ----------
-    frames: list[Any]
-        List of frames to convert to `gpumemoryview` if they implement CUDA
-        array interface.
-
-    Returns
-    -------
-    converted: list[Any]
-        List of frames where all frames implementing CUDA array interface have
-        been converted to `plc.gpumemoryview`.
-    """
-    return [
-        plc.gpumemoryview(f) if hasattr(f, "__cuda_array_interface__") else f
-        for f in frames
-    ]
-
-
 def register() -> None:
     """Register dask serialization routines for DataFrames."""
 
