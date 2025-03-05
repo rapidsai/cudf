@@ -274,9 +274,9 @@ struct unbounded_distance_functor {
   {
     auto const row_info = groups.row_info(i);
     if (direction == direction::PRECEDING) {
-      return i - row_info.group_start + 1;
+      return i - row_info.group_start() + 1;
     } else {
-      return row_info.group_end - i - 1;
+      return row_info.group_end() - i - 1;
     }
   }
 };
@@ -307,21 +307,21 @@ struct current_row_distance_functor {
   {
     using Comp          = comparator_t<OrderbyT, current_row>;
     auto const row_info = groups.row_info(i);
-    if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
-      return direction == direction::PRECEDING ? i - row_info.null_start + 1
-                                               : row_info.null_end - i - 1;
+    if (row_info.is_null(i)) {
+      return direction == direction::PRECEDING ? i - row_info.null_start() + 1
+                                               : row_info.null_end() - i - 1;
     }
     if (direction == direction::PRECEDING) {
       return 1 +
              thrust::distance(
                thrust::lower_bound(
-                 thrust::seq, begin + row_info.non_null_start, begin + i, begin[i], Comp{order}),
+                 thrust::seq, begin + row_info.non_null_start(), begin + i, begin[i], Comp{order}),
                begin + i);
     } else {
       return thrust::distance(
                begin + i,
                thrust::upper_bound(
-                 thrust::seq, begin + i, begin + row_info.non_null_end, begin[i], Comp{order})) -
+                 thrust::seq, begin + i, begin + row_info.non_null_end(), begin[i], Comp{order})) -
              1;
     }
   }
@@ -385,12 +385,12 @@ struct bounded_distance_functor {
     using saturating_sub = saturating<cuda::std::minus<>>;
     using saturating_add = saturating<cuda::std::plus<>>;
     auto const row_info  = groups.row_info(i);
-    if (Grouping::has_nulls && i >= row_info.null_start && i < row_info.null_end) {
+    if (row_info.is_null(i)) {
       // TODO: If the window is BOUNDED_OPEN, what does it mean for a row to fall in the null
       // group? Not that important because only spark allows nulls in the orderby column, and it
       // doesn't have BOUNDED_OPEN windows.
-      return direction == direction::PRECEDING ? i - row_info.null_start + 1
-                                               : row_info.null_end - i - 1;
+      return direction == direction::PRECEDING ? i - row_info.null_start() + 1
+                                               : row_info.null_end() - i - 1;
     }
     auto const offset_value_did_overflow = [subtract = (order == order::ASCENDING) ==
                                                        (direction == direction::PRECEDING),
@@ -402,8 +402,8 @@ struct bounded_distance_functor {
     bool const did_overflow     = cuda::std::get<1>(offset_value_did_overflow);
     auto const distance         = [preceding    = direction == direction::PRECEDING,
                            current      = begin + i,
-                           start        = begin + row_info.non_null_start,
-                           end          = begin + row_info.non_null_end,
+                           start        = begin + row_info.non_null_start(),
+                           end          = begin + row_info.non_null_end(),
                            offset_value = offset_value](auto&& cmp) {
       if (preceding) {
         // Search for first slot we can place the offset value
