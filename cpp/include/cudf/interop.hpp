@@ -187,6 +187,8 @@ using unique_table_view_t =
 using unique_column_view_t =
   std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
 
+namespace interop {
+
 /**
  * @brief A wrapper around ArrowDeviceArray data used for flexible lifetime management.
  */
@@ -440,6 +442,8 @@ class arrow_table {
     container;  ///< Shared pointer to container for the ArrowDeviceArray data; shared_ptr allows
                 ///< re-export via to_arrow
 };
+
+}  // namespace interop
 
 /**
  * @brief Create ArrowSchema from cudf table and metadata

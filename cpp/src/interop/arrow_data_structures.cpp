@@ -30,7 +30,7 @@
 #include <memory>
 #include <utility>
 
-namespace cudf {
+namespace cudf::interop {
 
 struct arrow_array_container {
   arrow_array_container() = default;
@@ -344,4 +344,4 @@ arrow_table::arrow_table(ArrowArrayStream&& input,
   auto tmp  = arrow_table(std::move(*tbl), get_table_metadata(tbl->view()), stream, mr);
   container = tmp.container;
 }
-}  // namespace cudf
+}  // namespace cudf::interop
