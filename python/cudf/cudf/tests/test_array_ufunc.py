@@ -8,6 +8,7 @@ from functools import reduce
 import cupy as cp
 import numpy as np
 import pytest
+from packaging.version import parse
 
 import cudf
 from cudf.core._compat import (
@@ -85,6 +86,13 @@ def test_ufunc_index(request, ufunc):
         pytest.mark.xfail(
             condition=fname == "matmul" and PANDAS_LT_300,
             reason="Fixed by https://github.com/pandas-dev/pandas/pull/57079",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=fname in {"ceil", "floor", "trunc"}
+            and parse(np.__version__) >= parse("2.1"),
+            reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
 
@@ -387,6 +395,14 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         pytest.mark.xfail(
             condition=not hasattr(cp, fname),
             reason=f"cupy has no support for '{fname}'",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=fname in {"ceil", "floor", "trunc"}
+            and not has_nulls
+            and parse(np.__version__) >= parse("2.1"),
+            reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
 
