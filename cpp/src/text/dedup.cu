@@ -115,9 +115,11 @@ struct collapse_overlaps_fn {
     auto size   = d_sizes[idx];
     auto offset = d_offsets[idx];
     if ((idx > 0) && ((offset - 1) == d_offsets[idx - 1]) && (size < d_sizes[idx - 1])) {
-      // TODO: need to handle chains longer than max<int16_t>
       return string_index{nullptr, 0};
     }
+    // TODO: need to handle chains longer than max<int16_t>
+    // size == d_sizes[idx-1] == max<int16_t>
+
     auto d_ptr = d_chars + offset;
     return string_index(d_ptr, size);
   }
