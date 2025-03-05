@@ -27,7 +27,6 @@
 #include <cudf/filling.hpp>
 #include <cudf/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -61,21 +60,6 @@ struct null75_generator {
 };
 
 enum class join_t { CONDITIONAL, MIXED, HASH };
-
-namespace {
-void print_statistics(cudf::table_view t)
-{
-  std::cout << "=====================================\n";
-  std::cout << "Number of rows = " << t.num_rows() << ", number of columns = " << t.num_columns()
-            << "\n";
-  for (cudf::size_type i = 0; i < t.num_columns(); i++) {
-    auto num_unique =
-      cudf::distinct_count(t.column(i), cudf::null_policy::EXCLUDE, cudf::nan_policy::NAN_IS_NULL);
-    std::cout << "Number of unique elements in column " << i << " = " << num_unique << std::endl;
-  }
-  std::cout << "=====================================\n";
-}
-}  // namespace
 
 template <typename Key,
           bool Nullable,
@@ -160,11 +144,6 @@ void BM_join(state_type& state, Join JoinFunc, double selectivity = 0.3, int mul
     {right_key_column0->view(), right_key_column1->view(), *right_payload_column});
   cudf::table_view left_table(
     {left_key_column0->view(), left_key_column1->view(), *left_payload_column});
-
-  std::cout << "Probe table stats\n";
-  print_statistics(left_table);
-  std::cout << "Build table stats\n";
-  print_statistics(right_table);
 
   auto table_bytes = [](cudf::table_view tbl) {
     size_t bytes = 0;
