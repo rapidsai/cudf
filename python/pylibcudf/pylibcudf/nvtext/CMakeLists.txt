@@ -13,8 +13,19 @@
 # =============================================================================
 
 set(cython_sources
-    dedup.pyx edit_distance.pyx generate_ngrams.pyx jaccard.pyx minhash.pyx ngrams_tokenize.pyx
-    normalize.pyx replace.pyx stemmer.pyx tokenize.pyx byte_pair_encode.pyx subword_tokenize.pyx
+    byte_pair_encode.pyx
+    dedup.pyx
+    edit_distance.pyx
+    generate_ngrams.pyx
+    jaccard.pyx
+    minhash.pyx
+    ngrams_tokenize.pyx
+    normalize.pyx
+    replace.pyx
+    stemmer.pyx
+    tokenize.pyx
+    subword_tokenize.pyx
+    wordpiece_tokenize.pyx
 )
 
 set(linked_libraries cudf::cudf)
