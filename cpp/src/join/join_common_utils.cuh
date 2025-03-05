@@ -164,7 +164,6 @@ get_trivial_left_join_indices(table_view const& left,
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 template <typename MultimapType>
 void build_join_hash_table(
@@ -197,7 +196,6 @@ void build_join_hash_table(
     // insert valid rows
     hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
   }
-  return std::move(a);
 }
 
 // Convenient alias for a pair of unique pointers to device uvectors.
