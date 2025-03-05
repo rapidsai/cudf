@@ -198,7 +198,7 @@ def evaluate_chunk(
     *references: Column,
 ) -> Column:
     """Evaluate a single aggregation."""
-    return expr.evaluate(df, mapping=dict(zip(children, references, strict=False)))
+    return expr.evaluate(df, mapping=dict(zip(children, references, strict=True)))
 
 
 def evaluate_chunk_multi(
@@ -209,7 +209,7 @@ def evaluate_chunk_multi(
 ) -> tuple[Column, ...]:
     """Evaluate multiple aggregations."""
     return tuple(
-        expr.evaluate(df, mapping=dict(zip(children, references, strict=False)))
+        expr.evaluate(df, mapping=dict(zip(children, references, strict=True)))
         for expr in exprs
     )
 
@@ -220,7 +220,7 @@ def combine_chunks_multi(
     finalize: tuple[plc.DataType, str] | None,
 ) -> Column:
     """Aggregate Column chunks."""
-    column_chunk_lists = zip(*column_chunks, strict=False)
+    column_chunk_lists = zip(*column_chunks, strict=True)
 
     combined = [
         agg.op(
@@ -229,9 +229,7 @@ def combine_chunks_multi(
                 name=column_chunk_list[0].name,
             )
         )
-        for agg, column_chunk_list in zip(
-            combine_aggs, column_chunk_lists, strict=False
-        )
+        for agg, column_chunk_list in zip(combine_aggs, column_chunk_lists, strict=True)
     ]
 
     if finalize:
@@ -295,7 +293,7 @@ def make_agg_graph(
             expr.children,
             *[
                 (name, 0) if bcast else (name, i)
-                for name, bcast in zip(expr_child_names, expr_bcast, strict=False)
+                for name, bcast in zip(expr_child_names, expr_bcast, strict=True)
             ],
         )
 
@@ -328,7 +326,7 @@ def make_pointwise_graph(
             expr.children,
             *[
                 (name, 0) if bcast else (name, i)
-                for name, bcast in zip(expr_child_names, expr_bcast, strict=False)
+                for name, bcast in zip(expr_child_names, expr_bcast, strict=True)
             ],
         )
         for i in range(count)
