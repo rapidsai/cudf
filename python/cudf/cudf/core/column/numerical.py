@@ -342,7 +342,7 @@ class NumericalColumn(NumericalBaseColumn):
         #   => np.int64
         # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
         #   => np.int64
-        common_dtype = np.result_type(self.dtype, other)
+        common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
         if common_dtype.kind in {"b", "i", "u", "f"}:
             if self.dtype.kind == "b":
                 common_dtype = min_signed_type(other)

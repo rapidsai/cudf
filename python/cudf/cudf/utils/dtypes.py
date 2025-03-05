@@ -460,7 +460,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "not supported"
         )
 
-    common_dtype = np.result_type(*dtypes)
+    common_dtype = np.result_type(*dtypes)  # noqa: TID251
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
     return common_dtype
