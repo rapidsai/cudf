@@ -159,6 +159,8 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
         host_column<T> min(total_pages, stream);
         host_column<T> max(total_pages, stream);
 
+        auto page_offset_idx = 0;
+
         // For each source
         std::for_each(
           thrust::counting_iterator<size_t>(0),
@@ -177,12 +179,11 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
 
               // No need to check column_index and offset_index again
               if (col != std::end(row_group.columns)) {
-                auto const& colchunk             = *col;
-                auto const& column_index         = colchunk.column_index.value();
-                auto const& offset_index         = colchunk.offset_index.value();
-                auto const num_pages_in_colchunk = column_index.min_values.size();
-                auto const page_offset_in_colchunk =
-                  row_group_page_offsets[src_idx * row_group_indices.size() + rg_idx];
+                auto const& colchunk               = *col;
+                auto const& column_index           = colchunk.column_index.value();
+                auto const& offset_index           = colchunk.offset_index.value();
+                auto const num_pages_in_colchunk   = column_index.min_values.size();
+                auto const page_offset_in_colchunk = row_group_page_offsets[page_offset_idx++];
 
                 // For all pages in this chunk
                 std::for_each(
@@ -212,13 +213,13 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
 
         // Generate index mapping
         auto indices =
-          cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_pages, stream, mr);
+          cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
         thrust::scatter_if(rmm::exec_policy_nosync(stream),
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(counts.size()),
                            offsets.begin(),
                            counts.begin(),
-                           offsets.begin());
+                           indices.begin());
 
         // Fill gaps with previous values
         thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
@@ -231,22 +232,32 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
         auto const gather_data_and_nullmask = [&](mutable_column_view column,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr) {
-          // Buffers for output data and bitmask
-          auto output_data    = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
-          auto output_bitmask = rmm::device_buffer(sizeof(bitmask_type) * total_rows, stream, mr);
-
-          // Gather output data and bitmask in a single thrust gather using zip iterators
-          auto input_iter = thrust::make_zip_iterator(
-            thrust::make_tuple(column.template begin<T>(), column.null_mask()));
-          auto output_iter = thrust::make_zip_iterator(
-            thrust::make_tuple(reinterpret_cast<T*>(output_data.data()),
-                               reinterpret_cast<bitmask_type*>(output_bitmask.data())));
-
+          // Buffer for output data
+          auto output_data = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
           thrust::gather(rmm::exec_policy_nosync(stream),
                          indices.begin(),
                          indices.end(),
-                         input_iter,
-                         output_iter);
+                         column.template begin<T>(),
+                         reinterpret_cast<T*>(output_data.data()));
+
+          // Buffer for output bitmask. Set all bits valid
+          auto output_bitmask =
+            cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
+
+          // Clear (invalidate) the output bitmask bit at row index if the bit at correponding page
+          // index is invalid
+          thrust::for_each(rmm::exec_policy_nosync(stream),
+                           thrust::counting_iterator(0),
+                           thrust::counting_iterator(total_rows),
+                           [indices        = indices.begin(),
+                            input_bitmask  = column.null_mask(),
+                            output_bitmask = reinterpret_cast<bitmask_type*>(
+                              output_bitmask.data())] __device__(auto const row_bit_index) {
+                             auto const page_bit_index = indices[row_bit_index];
+                             if (not bit_is_set(input_bitmask, page_bit_index)) {
+                               clear_bit_unsafe(output_bitmask, row_bit_index);
+                             }
+                           });
 
           return std::pair{std::move(output_data), std::move(output_bitmask)};
         };
@@ -334,8 +345,34 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   rmm::device_async_resource_ref mr) const
 {
   // Return if empty row group indices
-  if (row_group_indices.empty()) { return {}; }
+  if (row_group_indices.empty()) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
 
+  // Check if we have page index for all columns in all row groups
+  auto const has_page_index = std::all_of(
+    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const schema_idx) {
+      return std::all_of(
+        thrust::counting_iterator<size_t>(0),
+        thrust::counting_iterator(row_group_indices.size()),
+        [&](auto const src_index) {
+          auto const& rg_indices = row_group_indices[src_index];
+          return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
+            auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
+            auto col =
+              std::find_if(row_group.columns.begin(),
+                           row_group.columns.end(),
+                           [schema_idx](cudf::io::parquet::detail::ColumnChunk const& col) {
+                             return col.schema_idx == schema_idx;
+                           });
+            return col != per_file_metadata[src_index].row_groups[rg_index].columns.end() and
+                   col->offset_index.has_value() and col->column_index.has_value();
+          });
+        });
+    });
+
+  // Return if page index is not present
+  if (not has_page_index) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
+
+  // Total number of rows
   auto const total_rows = std::accumulate(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(row_group_indices.size()),
@@ -343,7 +380,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
     [&](auto sum, auto const src_index) {
       auto const& rg_indices = row_group_indices[src_index];
       return std::accumulate(
-        rg_indices.begin(), rg_indices.end(), sum, [&](auto sum, auto const& rg_index) {
+        rg_indices.begin(), rg_indices.end(), sum, [&](auto sum, auto const rg_index) {
           CUDF_EXPECTS(sum + per_file_metadata[src_index].row_groups[rg_index].num_rows <=
                          std::numeric_limits<size_type>::max(),
                        "Total rows exceed the maximum value");
@@ -447,10 +484,13 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
           });
         });
 
-      CUDF_EXPECTS(rows_so_far == total_rows, "Mismatch in total rows");
       // Insert the last offset of the last page
       page_row_offsets[col_idx].emplace_back(total_rows);
     });
+
+  if (input_rows.is_empty()) { return all_page_byte_ranges; }
+
+  CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
 
   // Get the validity column bitmask
   auto const host_bitmask = [&] {
@@ -464,6 +504,12 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
       return bitmask;
     }
   }();
+
+  auto const total_input_pages =
+    std::accumulate(page_row_offsets.cbegin(),
+                    page_row_offsets.cend(),
+                    size_t{0},
+                    [](auto sum, auto const& offsets) { return sum + offsets.size() - 1; });
 
   // Create a validity iterator
   auto validity_it = cudf::detail::make_counting_transform_iterator(
@@ -511,6 +557,18 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                   // Move the vector into the global list.
                   data_page_bytes.emplace_back(std::move(page_ranges));
                 });
+
+  auto const filtered_num_pages = std::accumulate(
+    data_page_bytes.cbegin(),
+    data_page_bytes.cend(),
+    size_t{0},
+    [](auto sum, auto const& data_page_bytes) { return sum + data_page_bytes.size(); });
+
+  CUDF_EXPECTS(filtered_num_pages < total_input_pages,
+               "Number of filtered pages must be smaller than total number of input pages");
+
+  std::cout << "Num pages after filter: " << filtered_num_pages << " out of " << total_input_pages
+            << std::endl;
 
   // Return the final lists of data page byte ranges for all columns
   return data_page_bytes;

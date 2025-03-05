@@ -48,20 +48,22 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
     int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
     auto const& last_col     = row_groups.back().columns.back();
     int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
-
-    CUDF_EXPECTS(max_offset > min_offset, "");
+    std::cout << "min_offset: " << min_offset << " max_offset: " << max_offset << std::endl;
+    CUDF_EXPECTS(!page_index_bytes.empty(), "Empty page index");
   }
 
   // Check if we have page_index buffer, and non-zero row groups and columnchunks
+  // MH: TODO: We will be passed a span of the page index buffer instead of the whole file, so we
+  // can uncomment the use of `min_offset`
   if (page_index_bytes.size() and row_groups.size() and row_groups.front().columns.size()) {
     // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+    // int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
     // now loop over row groups
     for (auto& rg : row_groups) {
       for (auto& col : rg.columns) {
         // Read the ColumnIndex for this ColumnChunk
         if (col.column_index_length > 0 && col.column_index_offset > 0) {
-          int64_t const offset = col.column_index_offset - min_offset;
+          int64_t const offset = col.column_index_offset;  // - min_offset;
           cp.init(page_index_bytes.data() + offset, col.column_index_length);
           cudf::io::parquet::detail::ColumnIndex ci;
           cp.read(&ci);
@@ -69,7 +71,7 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
         }
         // Read the OffsetIndex for this ColumnChunk
         if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-          int64_t const offset = col.offset_index_offset - min_offset;
+          int64_t const offset = col.offset_index_offset;  // - min_offset;
           cp.init(page_index_bytes.data() + offset, col.offset_index_length);
           cudf::io::parquet::detail::OffsetIndex oi;
           cp.read(&oi);
