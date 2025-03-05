@@ -219,6 +219,7 @@ def combine_chunks_multi(
     column_chunks: Sequence[tuple[Column]],
     combine_aggs: Sequence[Agg],
     finalize: tuple[plc.DataType, str] | None,
+    name: str,
 ) -> Column:
     """Aggregate Column chunks."""
     column_chunk_lists = zip(*column_chunks, strict=True)
@@ -237,18 +238,22 @@ def combine_chunks_multi(
         # Perform optional BinOp on combined columns
         dt, op_name = finalize
         op = getattr(plc.binaryop.BinaryOperator, op_name)
-        return Column(plc.binaryop.binary_operation(*(c.obj for c in combined), op, dt))
+        col = Column(plc.binaryop.binary_operation(*(c.obj for c in combined), op, dt))
+    else:
+        assert len(combined) == 1
+        col = combined[0]
 
-    assert len(combined) == 1
-    return combined[0]
+    return col.rename(name)
 
 
 def make_agg_graph(
-    expr: FusedExpr,
+    named_expr: NamedExpr,
     child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph."""
+    expr = named_expr.value
+    assert isinstance(expr, FusedExpr)
     agg = expr.sub_expr
     assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
     assert agg.name in _SUPPORTED_AGGS, f"Agg {agg} not supported"
@@ -303,26 +308,30 @@ def make_agg_graph(
         list(graph.keys()),
         combine_aggs,
         finalize,
+        named_expr.name,
     )
 
     return graph
 
 
 def make_pointwise_graph(
-    expr: FusedExpr,
+    named_expr: NamedExpr,
     child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
 ) -> MutableMapping[Any, Any]:
     """Build simple pointwise FusedExpr graph."""
+    expr = named_expr.value
+    assert isinstance(expr, FusedExpr)
     key_name = get_key_name(expr)
     expr_child_names = [get_key_name(c) for c in expr.children]
     expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
     count = expr_partition_counts[expr]
+    sub_expr = named_expr.reconstruct(expr.sub_expr)
     return {
         (key_name, i): (
             evaluate_chunk,
             (child_name, i),
-            expr.sub_expr,
+            sub_expr,
             expr.children,
             *[
                 (name, 0) if bcast else (name, i)
@@ -334,16 +343,18 @@ def make_pointwise_graph(
 
 
 def make_fusedexpr_graph(
-    expr: FusedExpr,
+    named_expr: NamedExpr,
     child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
 ) -> MutableMapping[Any, Any]:
     """Build task graph for a FusedExpr node."""
+    expr = named_expr.value
+    assert isinstance(expr, FusedExpr)
     sub_expr = expr.sub_expr
     if isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
-        return make_agg_graph(expr, child_name, expr_partition_counts)
+        return make_agg_graph(named_expr, child_name, expr_partition_counts)
     elif expr.is_pointwise:
-        return make_pointwise_graph(expr, child_name, expr_partition_counts)
+        return make_pointwise_graph(named_expr, child_name, expr_partition_counts)
     else:
         # TODO: Implement "complex" aggs (e.g. mean, std, etc)
         raise NotImplementedError(

@@ -19,9 +19,8 @@ from cudf_polars.experimental.expressions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import MutableMapping
 
-    from cudf_polars.containers import Column
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
@@ -66,13 +65,6 @@ def _(
     return new_node, partition_info
 
 
-def construct_dataframe(columns: Sequence[Column], names: Sequence[str]) -> DataFrame:
-    """Construct a DataFrame from a sequence of Columns."""
-    return DataFrame(
-        [column.rename(name) for column, name in zip(columns, names, strict=True)]
-    )
-
-
 def build_fusedexpr_select_graph(
     ir: Select, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
@@ -88,30 +80,34 @@ def build_fusedexpr_select_graph(
     roots = []
     for ne in ir.exprs:
         assert isinstance(ne.value, FusedExpr), f"{ne.value} is not a FusedExpr"
-        expr: FusedExpr = ne.value
-        roots.append(expr)
+        roots.append(ne)
         expr_partition_counts = extract_partition_counts(
-            [expr],
+            [ne],
             child_count,
             update=expr_partition_counts,
         )
-        for node in traversal([expr]):
+        for node in traversal([ne.value]):
             assert isinstance(node, FusedExpr), f"{node} is not a FusedExpr"
-            graph.update(make_fusedexpr_graph(node, child_name, expr_partition_counts))
+            graph.update(
+                make_fusedexpr_graph(
+                    ne.reconstruct(node),
+                    child_name,
+                    expr_partition_counts,
+                )
+            )
 
     # Add task(s) to select the final columns
     name = get_key_name(ir)
-    count = max(expr_partition_counts[root] for root in roots)
-    expr_names = [get_key_name(root) for root in roots]
-    expr_bcast = [expr_partition_counts[root] == 1 for root in roots]
+    count = max(expr_partition_counts[root.value] for root in roots)
+    expr_names = [get_key_name(root.value) for root in roots]
+    expr_bcast = [expr_partition_counts[root.value] == 1 for root in roots]
     for i in range(count):
         graph[(name, i)] = (
-            construct_dataframe,
+            DataFrame,
             [
                 (name, 0) if bcast else (name, i)
                 for name, bcast in zip(expr_names, expr_bcast, strict=True)
             ],
-            [ne.name for ne in ir.exprs],
         )
 
     return graph
