@@ -414,9 +414,9 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                     ).unique()
                 )
             else:
-                raise ValueError(
+                raise NotImplementedError(
                     "Only unordered categories of the same underlying type "
-                    "may be coerced to a common type."
+                    "may be currently coerced to a common type."
                 )
         else:
             # TODO: Should this be an error case (mixing categorical with other
