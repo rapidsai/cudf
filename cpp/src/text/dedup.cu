@@ -112,13 +112,30 @@ struct collapse_overlaps_fn {
   int16_t const* d_sizes;
   __device__ string_index operator()(int64_t idx) const
   {
+    constexpr auto max_run_length =
+      static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max());
+
     auto size   = d_sizes[idx];
     auto offset = d_offsets[idx];
-    if ((idx > 0) && ((offset - 1) == d_offsets[idx - 1]) && (size < d_sizes[idx - 1])) {
-      return string_index{nullptr, 0};
+    if ((idx > 0) && ((offset - 1) == d_offsets[idx - 1])) {
+      if (size < d_sizes[idx - 1]) { return string_index{nullptr, 0}; }
+      if (size == d_sizes[idx - 1] && size == max_run_length) {
+        // check if we are in the middle of a chain
+        auto prev_idx    = idx - max_run_length;
+        auto prev_offset = offset;
+        while (prev_idx >= 0) {
+          if (d_offsets[prev_idx] != (prev_offset - max_run_length)) {
+            prev_idx = -1;
+          } else {
+            if (d_sizes[idx + 1] < size) { break; }  // final edge
+            prev_offset = d_offsets[prev_idx];
+            if ((prev_idx == 0) || ((prev_offset - 1) != d_offsets[prev_idx - 1])) { break; }
+            prev_idx -= max_run_length;
+          }
+        }
+        if (prev_idx < 0) { return string_index{nullptr, 0}; }
+      }
     }
-    // TODO: need to handle chains longer than max<int16_t>
-    // size == d_sizes[idx-1] == max<int16_t>
 
     auto d_ptr = d_chars + offset;
     return string_index(d_ptr, size);
