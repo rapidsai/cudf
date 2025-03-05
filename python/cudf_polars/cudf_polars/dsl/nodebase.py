@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Base class for IR nodes, and utilities."""
@@ -57,6 +57,13 @@ class Node(Generic[T]):
         New node with new children. Non-child data is shared with the input.
         """
         return type(self)(*self._ctor_arguments(children))
+
+    def __reduce__(self):
+        """Pickle a Node object."""
+        return (
+            type(self),
+            self._ctor_arguments(self.children),
+        )
 
     def get_hashable(self) -> Hashable:
         """

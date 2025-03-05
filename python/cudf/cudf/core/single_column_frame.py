@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
@@ -12,11 +12,12 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_numeric_dtype,
+    is_scalar,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable
 
@@ -53,7 +54,7 @@ class SingleColumnFrame(Frame, NotIterable):
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if numeric_only and not is_numeric_dtype(self.dtype):
+        if numeric_only and not is_dtype_obj_numeric(self.dtype):
             raise TypeError(
                 f"Series.{op} does not allow numeric_only={numeric_only} "
                 "with non-numeric dtypes."
@@ -346,7 +347,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = cudf.core.column.column_empty(0, dtype="int32")
+                arg = cudf.core.column.column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if arg.dtype.kind == "b":
@@ -373,7 +374,7 @@ class SingleColumnFrame(Frame, NotIterable):
                 """Array conditional must be same shape as self"""
             )
 
-        if not cudf.api.types.is_scalar(other):
+        if not is_scalar(other):
             other = cudf.core.column.as_column(other)
 
         input_col, other = _check_and_cast_columns_with_other(

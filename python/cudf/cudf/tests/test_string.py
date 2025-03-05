@@ -13,8 +13,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
 from cudf import concat
+from cudf.core.buffer import as_buffer
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index
 from cudf.testing import assert_eq
@@ -1202,7 +1205,12 @@ def test_string_misc_name(ps_gs, name):
 
 
 def test_string_no_children_properties():
-    empty_col = StringColumn(children=())
+    empty_col = StringColumn(
+        as_buffer(rmm.DeviceBuffer(size=0)),
+        size=0,
+        dtype=np.dtype("object"),
+        children=(),
+    )
     assert empty_col.base_children == ()
     assert empty_col.base_size == 0
 
@@ -3575,3 +3583,15 @@ def test_replace_invalid_scalar_repl():
     ser = cudf.Series(["1"])
     with pytest.raises(TypeError):
         ser.str.replace("1", 2)
+
+
+def test_string_methods_setattr():
+    ser = cudf.Series(["ab", "cd", "ef"])
+    pser = ser.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=ser.str.__setattr__,
+        rfunc=pser.str.__setattr__,
+        lfunc_args_and_kwargs=(("a", "b"),),
+        rfunc_args_and_kwargs=(("a", "b"),),
+    )

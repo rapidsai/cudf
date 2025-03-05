@@ -48,7 +48,7 @@ std::size_t gather_stream_info_and_column_desc(
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
   std::vector<orc_stream_info>* stream_info,
-  cudf::detail::hostdevice_2dvector<ColumnDesc>* chunks)
+  cudf::detail::hostdevice_2dvector<column_desc>* chunks)
 {
   CUDF_EXPECTS((stream_info == nullptr) ^ (chunks == nullptr),
                "Either stream_info or chunks must be provided, but not both.");
@@ -486,13 +486,11 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   // Load stripe data into memory:
   //
 
-  // If we load data from sources into host buffers, we need to transfer (async) data to device
-  // memory. Such host buffers need to be kept alive until we sync the transfers.
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
-
-  // If we load data directly from sources into device memory, the loads are also async.
-  // Thus, we need to make sure to sync all them at the end.
+  // Storing the future and the expected size of the read data
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> device_read_tasks;
+  // Storing the future, the expected size of the read data and the device destination pointer
+  std::vector<std::tuple<std::future<std::unique_ptr<datasource::buffer>>, std::size_t, uint8_t*>>
+    host_read_tasks;
 
   // Range of the read info (offset, length) to read for the current being loaded stripes.
   auto const [read_begin, read_end] =
@@ -518,24 +516,22 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         source_ptr->device_read_async(
           read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
         read_info.length);
-
     } else {
-      auto buffer = source_ptr->host_read(read_info.offset, read_info.length);
-      CUDF_EXPECTS(buffer->size() == read_info.length, "Unexpected discrepancy in bytes read.");
-      CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read_info.dst_pos,
-                                    buffer->data(),
-                                    read_info.length,
-                                    cudaMemcpyDefault,
-                                    _stream.value()));
-      host_read_buffers.emplace_back(std::move(buffer));
+      host_read_tasks.emplace_back(source_ptr->host_read_async(read_info.offset, read_info.length),
+                                   read_info.length,
+                                   dst_base + read_info.dst_pos);
     }
   }
-
-  if (host_read_buffers.size() > 0) {  // if there was host read
-    _stream.synchronize();
-    host_read_buffers.clear();  // its data was copied to device memory after stream sync
+  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
+  for (auto& [fut, expected_size, dev_dst] : host_read_tasks) {  // if there were host reads
+    host_read_buffers.emplace_back(fut.get());
+    auto* host_buffer = host_read_buffers.back().get();
+    CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
   }
-  for (auto& task : device_read_tasks) {  // if there was device read
+
+  for (auto& task : device_read_tasks) {  // if there were device reads
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
@@ -649,7 +645,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
-    return cudf::detail::hostdevice_vector<CompressedStreamInfo>(max_num_streams, _stream);
+    return cudf::detail::hostdevice_vector<compressed_stream_info>(max_num_streams, _stream);
   }();
 
   for (std::size_t level = 0; level < num_levels; ++level) {
@@ -666,23 +662,23 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      auto compinfo = cudf::detail::hostdevice_span<CompressedStreamInfo>{hd_compinfo}.subspan(
+      auto compinfo = cudf::detail::hostdevice_span<compressed_stream_info>{hd_compinfo}.subspan(
         0, stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
         compinfo[stream_idx - stream_range.begin] =
-          CompressedStreamInfo(dst_base + info.dst_pos, info.length);
+          compressed_stream_info(dst_base + info.dst_pos, info.length);
       }
 
       // Estimate the uncompressed data.
       compinfo.host_to_device_async(_stream);
-      ParseCompressedStripeData(compinfo.device_ptr(),
-                                compinfo.size(),
-                                decompressor.GetBlockSize(),
-                                decompressor.GetLog2MaxCompressionRatio(),
-                                _stream);
+      parse_compressed_stripe_data(compinfo.device_ptr(),
+                                   compinfo.size(),
+                                   decompressor.GetBlockSize(),
+                                   decompressor.GetLog2MaxCompressionRatio(),
+                                   _stream);
       compinfo.device_to_host_sync(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {

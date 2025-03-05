@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import decimal
@@ -15,12 +15,12 @@ import pylibcudf as plc
 import rmm
 
 import cudf
-import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_buffer
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 # The size of the mask in bytes
-mask_dtype = cudf.api.types.dtype(np.int32)
+mask_dtype = SIZE_TYPE_DTYPE
 mask_bitsize = mask_dtype.itemsize * 8
 
 # Mapping from ufuncs to the corresponding binary operators.
@@ -409,7 +409,7 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
         result_mask = None
 
     result_col = column.as_column(
-        bool_fill_value, dtype=cudf.dtype(np.bool_), length=len(lhs)
+        bool_fill_value, dtype=np.dtype(np.bool_), length=len(lhs)
     )
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
@@ -439,12 +439,12 @@ def _datetime_timedelta_find_and_replace(
         if replacement.can_cast_safely(original_column.dtype):
             replacement = replacement.astype(original_column.dtype)
     if isinstance(to_replace, original_col_class):
-        to_replace = to_replace.as_numerical_column(dtype=np.dtype("int64"))
+        to_replace = to_replace.astype(np.dtype(np.int64))
     if isinstance(replacement, original_col_class):
-        replacement = replacement.as_numerical_column(dtype=np.dtype("int64"))
+        replacement = replacement.astype(np.dtype(np.int64))
     try:
         result_col = (
-            original_column.as_numerical_column(dtype=np.dtype("int64"))
+            original_column.astype(np.dtype(np.int64))
             .find_and_replace(to_replace, replacement, all_nan)
             .astype(original_column.dtype)
         )

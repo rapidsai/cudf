@@ -954,3 +954,34 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     )
     ser = cudf.Series._from_column(col_empty_offset)
     assert ser.memory_usage() == 8
+
+
+def test_list_methods_setattr():
+    ser = cudf.Series([["a", "b", "c"], ["d", "e", "f"]])
+
+    with pytest.raises(AttributeError):
+        ser.list.a = "b"
+
+
+def test_dataframe_list_round_trip():
+    data = [{"text": "hello", "list_col": np.asarray([1, 2], dtype="uint32")}]
+    cudf_arrow = cudf.DataFrame(data).to_arrow()
+    pdf_arrow = pa.Table.from_pandas(pd.DataFrame(data))
+
+    for metadata in [
+        None,
+        pdf_arrow.schema.metadata,
+        cudf_arrow.schema.metadata,
+    ]:
+        schema = pa.schema(
+            [
+                pa.field("text", pa.string()),
+                pa.field("list_col", pa.list_(pa.uint32())),
+            ],
+            metadata=metadata,
+        )
+
+        data = {"text": ["asd", "pqr"], "list_col": [[1, 2, 3], [4, 5]]}
+
+        table = pa.Table.from_pydict(data, schema=schema)
+        assert_eq(table.to_pandas(), pd.DataFrame(data))
