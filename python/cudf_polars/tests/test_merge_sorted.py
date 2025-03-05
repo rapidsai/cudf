@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     [
         pytest.param(
             True,
-            marks=pytest.mark.xfail(reason="polars/issues/21464"),
+            marks=pytest.mark.xfail(reason="polars/issues/21511"),
         ),
         False,
     ],
