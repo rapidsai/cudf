@@ -64,7 +64,6 @@ from cudf.utils.dtypes import (
     dtype_from_pylibcudf_column,
     dtype_to_pylibcudf_type,
     find_common_type,
-    get_time_unit,
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
@@ -2736,7 +2735,7 @@ def as_column(
                 nan_as_null=nan_as_null,
             )
         elif arbitrary.dtype.kind in "mM":
-            time_unit = get_time_unit(arbitrary)
+            time_unit = np.datetime_data(arbitrary.dtype)[0]
             if time_unit in ("D", "W", "M", "Y"):
                 # TODO: Raise in these cases instead of downcasting to s?
                 new_type = f"{arbitrary.dtype.type.__name__}[s]"
