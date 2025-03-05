@@ -39,7 +39,7 @@ def test_merge_sorted_without_nulls(descending):
     [
         pytest.param(
             True,
-            marks=pytest.mark.xfail(reason="polars/issues/21464"),
+            marks=pytest.mark.xfail(reason="polars/issues/21511"),
         ),
         False,
     ],
