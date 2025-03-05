@@ -142,12 +142,22 @@ def replace_sub_expr(e: Expr, rec: ExprTransformer):
     return reuse_if_unchanged(e, rec)
 
 
+def _replace(e: Expr, rec: ExprTransformer) -> Expr:
+    mapping = rec.state["mapping"]
+    if e in mapping:
+        return mapping[e]
+    return reuse_if_unchanged(e, rec)
+
+
+def replace(e: Expr, mapping: Mapping[Expr, Expr]) -> Expr:
+    """Replace one or more expression nodes."""
+    mapper = CachingVisitor(_replace, state={"mapping": mapping})
+    return mapper(e)
+
+
 def rename_agg(agg: Agg, new_name: str):
     """Modify the name of an aggregation expression."""
-    return CachingVisitor(
-        replace_sub_expr,
-        state={"mapping": {agg: Agg(agg.dtype, new_name, agg.options, *agg.children)}},
-    )(agg)
+    return replace(agg, {agg: Agg(agg.dtype, new_name, agg.options, *agg.children)})
 
 
 def decompose_expr_graph(expr: Expr) -> FusedExpr:
@@ -176,8 +186,7 @@ def decompose_expr_graph(expr: Expr) -> FusedExpr:
         # Rewrite root to replace old with FusedExpr(old)
         children = [child for child in traversal([old]) if isinstance(child, FusedExpr)]
         new = FusedExpr(old.dtype, old, *children)
-        mapper = CachingVisitor(replace_sub_expr, state={"mapping": {old: new}})
-        root = mapper(root)
+        root = replace(root, {old: new})
 
     return root
 
