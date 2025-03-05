@@ -31,6 +31,7 @@ from cudf.core.udf._ops import (
 from cudf.core.udf.strings_typing import (
     StringView,
     UDFString,
+    ManagedUDFString,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
@@ -72,6 +73,7 @@ SUPPORTED_NUMBA_TYPES = (
     types.NPTimedelta,
     StringView,
     UDFString,
+    ManagedUDFString
 )
 
 

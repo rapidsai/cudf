@@ -346,7 +346,7 @@ def _finalize_string_column(col):
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
         return ColumnBase.from_pylibcudf(
-            strings_udf.column_from_udf_string_array(col)
+            strings_udf.column_from_managed_udf_string_array(col)
         )
     return as_column(col, retty)
 

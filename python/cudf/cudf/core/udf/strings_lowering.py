@@ -192,7 +192,7 @@ def cast_managed_udf_string_to_string_view(
 
 # Utilities
 _new_meminfo_from_udf_str = cuda.declare_device(
-    "meminfo_from_new_udf_str", types.voidptr(_UDF_STRING_PTR, types.voidptr)
+    "meminfo_from_new_udf_str", types.voidptr(_UDF_STRING_PTR)
 )
 
 
@@ -218,7 +218,7 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
     mi = context.compile_internal(
         builder,
         new_meminfo_from_udf_str,
-        types.voidptr(_UDF_STRING_PTR, types.uintp),
+        types.voidptr(_UDF_STRING_PTR),
         (udf_str_ptr,),
     )
 
@@ -562,7 +562,6 @@ def create_upper_or_lower(id_func):
             udf_str_ptr = builder.gep(
                 managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
             )
-
             _ = context.compile_internal(
                 builder,
                 cuda_func,

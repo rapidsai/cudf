@@ -49,7 +49,7 @@ set_target_properties(
 )
 
 set(UDF_CXX_FLAGS)
-set(UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
+set(UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr -g -G)
 target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
@@ -58,7 +58,7 @@ target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # Create the shim library for each architecture.
-set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true --expt-extended-lambda)
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true --expt-extended-lambda -g -G)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context

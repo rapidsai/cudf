@@ -10,6 +10,7 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
+from cudf.core.udf.strings_typing import managed_udf_string
 
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
@@ -277,8 +278,12 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
 # else packs it up into a new one that is valid from the get go
 @cuda_lower(api.pack_return, MaskedType)
 def pack_return_masked_impl(context, builder, sig, args):
+    if sig.args[0].value_type is managed_udf_string:
+        struct = cgutils.create_struct_proxy(MaskedType(managed_udf_string))(
+            context, builder, value=args[0]
+        )
+        context.nrt.incref(builder, managed_udf_string, struct.value)
     return args[0]
-
 
 @cuda_lower(api.pack_return, types.Boolean)
 @cuda_lower(api.pack_return, types.Number)

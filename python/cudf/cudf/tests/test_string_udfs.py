@@ -23,7 +23,7 @@ from cudf.core.udf.strings_typing import (
 )
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing import assert_eq
-from cudf.testing._utils import sv_to_udf_str
+from cudf.testing._utils import sv_to_managed_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
 _PTX_FILE = _ptx_file()
@@ -61,7 +61,7 @@ def get_kernels(func, dtype, size):
         id = cuda.grid(1)
         if id < size:
             st = input_strings[id]
-            st = sv_to_udf_str(st)
+            st = sv_to_managed_udf_str(st)
             result = func(st)
             output_col[id] = result
 
