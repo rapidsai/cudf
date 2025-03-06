@@ -57,7 +57,7 @@ abstract public class MemoryBuffer implements AutoCloseable {
 
   public static abstract class MemoryBufferCleaner extends MemoryCleaner.Cleaner{}
 
-  private static final class SlicedBufferCleaner extends MemoryBufferCleaner {
+  static final class SlicedBufferCleaner extends MemoryBufferCleaner {
     private MemoryBuffer parent;
 
     SlicedBufferCleaner(MemoryBuffer parent) {
