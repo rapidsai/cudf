@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -17,7 +17,7 @@ import pyarrow as pa
 from pyarrow import parquet as pq
 
 import cudf
-from cudf.utils.dtypes import np_to_pa_dtype
+from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
 class ColumnParameters:
@@ -137,7 +137,7 @@ def _generate_column(column_params, num_rows, rng):
         if hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         elif column_params.dtype is not None:
-            arrow_type = np_to_pa_dtype(cudf.dtype(column_params.dtype))
+            arrow_type = cudf_dtype_to_pa_type(cudf.dtype(column_params.dtype))
         else:
             arrow_type = None
 
@@ -254,14 +254,14 @@ def get_dataframe(parameters, use_threads):
         ):
             arrow_type = pa.dictionary(
                 index_type=pa.int64(),
-                value_type=np_to_pa_dtype(
+                value_type=cudf_dtype_to_pa_type(
                     cudf.dtype(type(next(iter(column_params.generator))))
                 ),
             )
         elif hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         else:
-            arrow_type = np_to_pa_dtype(
+            arrow_type = cudf_dtype_to_pa_type(
                 cudf.dtype(type(next(iter(column_params.generator))))
                 if column_params.dtype is None
                 else column_params.dtype
