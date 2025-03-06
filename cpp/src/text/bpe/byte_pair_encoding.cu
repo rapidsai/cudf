@@ -18,16 +18,18 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/offsets_iterator_factory.cuh>
-#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/split/split.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -35,17 +37,25 @@
 #include <nvtext/byte_pair_encoding.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_map.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/merge.h>
+#include <thrust/pair.h>
 #include <thrust/remove.h>
 #include <thrust/unique.h>
+
+#include <cstdint>
+#include <type_traits>
 
 namespace nvtext {
 
@@ -63,6 +73,283 @@ bpe_merge_pairs::bpe_merge_pairs_impl const* get_bpe_merge_pairs_impl(bpe_merge_
 }
 
 namespace detail {
+namespace {
+
+using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
+using hash_value_type    = string_hasher_type::result_type;
+using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
+using cuco_storage       = cuco::storage<1>;
+
+/**
+ * @brief Hasher function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * The merge-pairs are in adjacent rows so each index will access two rows of string values.
+ * The hash of each string is combined for the returned result.
+ */
+struct bpe_hasher {
+  cudf::column_device_view const d_strings;
+  string_hasher_type hasher{};
+  // used by insert
+  __device__ hash_value_type operator()(cudf::size_type index) const
+  {
+    index *= 2;
+    auto const lhs = d_strings.element<cudf::string_view>(index);
+    auto const rhs = d_strings.element<cudf::string_view>(index + 1);
+    return cudf::hashing::detail::hash_combine(hasher(lhs), hasher(rhs));
+  }
+  // used by find
+  __device__ hash_value_type operator()(merge_pair_type const& mp) const
+  {
+    return cudf::hashing::detail::hash_combine(hasher(mp.first), hasher(mp.second));
+  }
+};
+
+/**
+ * @brief Equal function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * The merge-pairs are in adjacent rows so each index will access two rows of string values.
+ * All rows from the input merge-pairs are unique.
+ */
+struct bpe_equal {
+  cudf::column_device_view const d_strings;
+  // used by insert
+  __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
+  {
+    return lhs == rhs;  // all rows are unique
+  }
+  // used by find
+  __device__ bool operator()(merge_pair_type const& lhs, cudf::size_type rhs) const noexcept
+  {
+    rhs *= 2;
+    auto const left  = d_strings.element<cudf::string_view>(rhs);
+    auto const right = d_strings.element<cudf::string_view>(rhs + 1);
+    return (left == lhs.first) && (right == lhs.second);
+  }
+};
+
+using bpe_probe_scheme = cuco::linear_probing<1, bpe_hasher>;
+
+using merge_pairs_map_type = cuco::static_map<cudf::size_type,
+                                              cudf::size_type,
+                                              cuco::extent<std::size_t>,
+                                              cuda::thread_scope_device,
+                                              bpe_equal,
+                                              bpe_probe_scheme,
+                                              cudf::detail::cuco_allocator<char>,
+                                              cuco_storage>;
+
+/**
+ * @brief Hasher function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (merge_pair_type).
+ *
+ * Each component of the merge-pairs (left and right) are stored individually in the map.
+ */
+struct mp_hasher {
+  cudf::column_device_view const d_strings;
+  string_hasher_type hasher{};
+  // used by insert
+  __device__ hash_value_type operator()(cudf::size_type index) const
+  {
+    auto const d_str = d_strings.element<cudf::string_view>(index);
+    return hasher(d_str);
+  }
+  // used by find
+  __device__ hash_value_type operator()(cudf::string_view const& d_str) const
+  {
+    return hasher(d_str);
+  }
+};
+
+/**
+ * @brief Equal function used for building and using the cuco static-map
+ *
+ * This takes advantage of heterogeneous lookup feature in cuco static-map which
+ * allows inserting with one type (index) and looking up with a different type (string).
+ */
+struct mp_equal {
+  cudf::column_device_view const d_strings;
+  // used by insert
+  __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
+  {
+    auto const left  = d_strings.element<cudf::string_view>(lhs);
+    auto const right = d_strings.element<cudf::string_view>(rhs);
+    return left == right;
+  }
+  // used by find
+  __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
+  {
+    auto const right = d_strings.element<cudf::string_view>(rhs);
+    return lhs == right;
+  }
+};
+
+using mp_probe_scheme = cuco::linear_probing<1, mp_hasher>;
+
+using mp_table_map_type = cuco::static_map<cudf::size_type,
+                                           cudf::size_type,
+                                           cuco::extent<std::size_t>,
+                                           cuda::thread_scope_device,
+                                           mp_equal,
+                                           mp_probe_scheme,
+                                           cudf::detail::cuco_allocator<char>,
+                                           cuco_storage>;
+
+std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
+  cudf::column_device_view const& input, rmm::cuda_stream_view stream)
+{
+  auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
+    static_cast<size_t>(input.size()),
+    cuco::empty_key{-1},
+    cuco::empty_value{-1},
+    bpe_equal{input},
+    bpe_probe_scheme{bpe_hasher{input}},
+    cuco::thread_scope_device,
+    cuco_storage{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value());
+
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<cuco::pair<cudf::size_type, cudf::size_type>>(
+      [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
+
+  merge_pairs_map->insert_async(iter, iter + (input.size() / 2), stream.value());
+  std::cout << "initialize_merge_pairs_map=" << (int)cudaStreamSynchronize(stream.value())
+            << std::endl;
+
+  return merge_pairs_map;
+}
+
+std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
+  cudf::column_device_view const& input, rmm::cuda_stream_view stream)
+{
+  auto mp_table_map = std::make_unique<mp_table_map_type>(
+    static_cast<size_t>(input.size() * 2),
+    cuco::empty_key{-1},
+    cuco::empty_value{-1},
+    mp_equal{input},
+    mp_probe_scheme{mp_hasher{input}},
+    cuco::thread_scope_device,
+    cuco_storage{},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream.value());
+
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<cuco::pair<cudf::size_type, cudf::size_type>>(
+      [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
+
+  mp_table_map->insert_async(iter, iter + input.size(), stream.value());
+  std::cout << "initialize_mp_table_map=" << (int)cudaStreamSynchronize(stream.value())
+            << std::endl;
+
+  return mp_table_map;
+}
+
+std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
+  std::unique_ptr<cudf::column>&& input, rmm::cuda_stream_view stream)
+{
+  auto d_input      = cudf::column_device_view::create(input->view(), stream);
+  auto merge_pairs  = initialize_merge_pairs_map(*d_input, stream);
+  auto mp_table_map = initialize_mp_table_map(*d_input, stream);
+  return std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(
+    std::move(input), std::move(d_input), std::move(merge_pairs), std::move(mp_table_map));
+}
+
+std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
+  cudf::strings_column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto pairs =
+    cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
+  auto content = pairs->release();
+  return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
+}
+
+}  // namespace
+
+std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(!merge_pairs.is_empty(), "Merge pairs must not be empty");
+  CUDF_EXPECTS(!merge_pairs.has_nulls(), "Merge pairs may not contain nulls");
+  return std::make_unique<bpe_merge_pairs>(merge_pairs, stream, mr);
+}
+
+}  // namespace detail
+
+// since column_device_view::create() returns is a little more than
+// std::unique_ptr<column_device_view> this helper simplifies the return type for us
+using col_device_view = std::invoke_result_t<decltype(&cudf::column_device_view::create),
+                                             cudf::column_view,
+                                             rmm::cuda_stream_view>;
+
+struct bpe_merge_pairs::bpe_merge_pairs_impl {
+  std::unique_ptr<cudf::column> const merge_pairs;
+  col_device_view const d_merge_pairs;
+  std::unique_ptr<detail::merge_pairs_map_type> merge_pairs_map;  // for BPE
+  std::unique_ptr<detail::mp_table_map_type> mp_table_map;        // for locating unpairables
+
+  bpe_merge_pairs_impl(std::unique_ptr<cudf::column>&& merge_pairs,
+                       col_device_view&& d_merge_pairs,
+                       std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
+                       std::unique_ptr<detail::mp_table_map_type>&& mp_table_map);
+
+  auto const get_merge_pairs() const { return *d_merge_pairs; }
+  auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::op::find); }
+  auto get_mp_table_ref() const { return mp_table_map->ref(cuco::op::find); }
+};
+
+std::unique_ptr<bpe_merge_pairs> load_merge_pairs(cudf::strings_column_view const& merge_pairs,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::load_merge_pairs(merge_pairs, stream, mr);
+}
+
+bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
+  std::unique_ptr<cudf::column>&& merge_pairs,
+  std::unique_ptr<cudf::column_device_view, std::function<void(cudf::column_device_view*)>>&&
+    d_merge_pairs,
+  std::unique_ptr<detail::merge_pairs_map_type>&& merge_pairs_map,
+  std::unique_ptr<detail::mp_table_map_type>&& mp_table_map)
+  : merge_pairs(std::move(merge_pairs)),
+    d_merge_pairs(std::move(d_merge_pairs)),
+    merge_pairs_map(std::move(merge_pairs_map)),
+    mp_table_map(std::move(mp_table_map))
+{
+}
+
+bpe_merge_pairs::bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref)
+  : impl(detail::create_bpe_merge_pairs_impl(std::move(input), stream).release())
+{
+}
+
+bpe_merge_pairs::bpe_merge_pairs(cudf::strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+  : impl(detail::create_bpe_merge_pairs_impl(input, stream, mr).release())
+{
+}
+
+bpe_merge_pairs::bpe_merge_pairs() = default;
+bpe_merge_pairs::~bpe_merge_pairs() { delete impl; }
+
+namespace detail {
+
 namespace {
 
 constexpr int block_size = 512;
