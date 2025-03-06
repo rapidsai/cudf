@@ -7,9 +7,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 import cudf
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils.dtypes import find_common_type, is_mixed_with_object_dtype
+from cudf.utils.dtypes import (
+    find_common_type,
+    is_dtype_obj_numeric,
+    is_mixed_with_object_dtype,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import DtypeObj, ScalarLike
@@ -18,7 +22,7 @@ if TYPE_CHECKING:
 
 def _normalize_categorical(input_col, other):
     if isinstance(input_col, cudf.core.column.CategoricalColumn):
-        if cudf.api.types.is_scalar(other):
+        if is_scalar(other):
             try:
                 other = input_col._encode(other)
             except ValueError:
@@ -81,7 +85,7 @@ def _check_and_cast_columns_with_other(
             )
         return _normalize_categorical(source_col, other.astype(source_dtype))
 
-    if _is_non_decimal_numeric_dtype(source_dtype) and as_column(
+    if is_dtype_obj_numeric(source_dtype, include_decimal=False) and as_column(
         other
     ).can_cast_safely(source_dtype):
         common_dtype = source_dtype
