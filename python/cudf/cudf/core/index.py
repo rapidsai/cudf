@@ -1643,14 +1643,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @_performance_tracking
-    def where(self, cond, other=None, inplace=False) -> Index:
-        result_col = super().where(cond, other, inplace)
-        return self._mimic_inplace(
-            _index_from_data({self.name: result_col}),
-            inplace=inplace,
-        )
-
     @property
     def values(self) -> cupy.ndarray:
         return self._column.values

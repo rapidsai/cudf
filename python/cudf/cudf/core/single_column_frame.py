@@ -359,30 +359,24 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
-        from cudf.core._internals.where import (
-            _check_and_cast_columns_with_other,
-        )
-
-        if isinstance(other, cudf.DataFrame):
+    def where(self, cond, other=None, inplace: bool = False) -> Self:
+        if getattr(other, "ndim", 1) > 1:
             raise NotImplementedError(
-                "cannot align with a higher dimensional Frame"
+                "Only 1 dimensional other is currently supported"
             )
         cond = as_column(cond)
         if len(cond) != len(self):
             raise ValueError(
-                """Array conditional must be same shape as self"""
+                f"cond must be the same length as self ({len(self)})"
             )
 
         if not is_scalar(other):
-            other = cudf.core.column.as_column(other)
+            other = as_column(other)
 
-        input_col, other = _check_and_cast_columns_with_other(
-            source_col=self._column, other=other, inplace=inplace
+        return self._mimic_inplace(
+            self._from_column(self._column.where(cond, other, inplace)),
+            inplace=inplace,
         )
-
-        result = input_col.copy_if_else(other, cond)
-        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):

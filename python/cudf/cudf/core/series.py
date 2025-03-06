@@ -3796,18 +3796,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+    def where(
+        self, cond, other=None, inplace=False, axis=None, level=None
+    ) -> Self:
         if axis is not None:
             raise NotImplementedError("axis is not supported.")
         elif level is not None:
             raise NotImplementedError("level is not supported.")
-        result_col = super().where(cond, other, inplace)
-        return self._mimic_inplace(
-            self._from_data_like_self(
-                self._data._from_columns_like_self([result_col])
-            ),
-            inplace=inplace,
-        )
+        return super().where(cond, other, inplace)
 
     @_performance_tracking
     def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
