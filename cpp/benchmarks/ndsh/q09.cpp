@@ -115,6 +115,8 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  CUDF_FUNC_RANGE();
+
   auto const one = cudf::numeric_scalar<double>(1);
   auto const one_minus_discount =
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
@@ -145,6 +147,8 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  CUDF_FUNC_RANGE();
+
   std::string udf =
     R"***(
   void calculate_price(double * amount, double discount, double extended_price, double supply_cost, double quantity){
@@ -168,6 +172,8 @@ struct q9_data {
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  CUDF_FUNC_RANGE();
+
   cudf::ast::tree tree;
   cudf::table_view table{std::vector{discount, extendedprice, supplycost, quantity}};
 
@@ -237,6 +243,8 @@ q9_data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& source
 
 std::unique_ptr<table_with_names> join_data(q9_data const& data)
 {
+  CUDF_FUNC_RANGE();
+
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
   auto const p_name = data.part->table().column(1);
