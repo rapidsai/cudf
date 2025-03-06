@@ -98,6 +98,7 @@ struct bpe_unpairable_offsets_fn {
       if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
         output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
       }
+      printf("%ld: [%c,%c]\n", idx, *itr, *next);
     }
     return output;
   }
@@ -217,7 +218,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
   if (lane_idx == 0) {
     block_min_rank = reduce_rank;
-    printf("%d: min_rank=%d\n", str_idx, block_min_rank);
+    // printf("%d: min_rank=%d\n", str_idx, block_min_rank);
   }
   __syncthreads();
 
