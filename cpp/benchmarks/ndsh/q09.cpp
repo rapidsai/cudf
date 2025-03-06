@@ -16,15 +16,32 @@
 
 #include "utilities.hpp"
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
+
+enum class execution_engine : int32_t { binaryops = 0, ast = 1, transforms = 2 };
+
+execution_engine engine_from_string(std::string const& str)
+{
+  if (str == "binaryops") {
+    return execution_engine::binaryops;
+  } else if (str == "ast") {
+    return execution_engine::ast;
+  } else if (str == "transforms") {
+    return execution_engine::transforms;
+  } else {
+    CUDF_EXPECTS(false, +std::string{"unrecognized execution engine enum: "} + str);
+  }
+}
 
 /**
  * @file q09.cpp
@@ -81,7 +98,7 @@
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount(
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_binaryops(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -111,8 +128,83 @@
   return amount;
 }
 
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_transforms(
+  cudf::column_view const& discount,
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& supplycost,
+  cudf::column_view const& quantity,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+{
+  std::string udf =
+    R"***(
+  void calculate_price(double * amount, double discount, double extended_price, double supply_cost, double quantity){
+    *amount = extended_price * (1 - discount) - supply_cost * quantity; 
+  }
+  )***";
+
+  return cudf::transform({discount, extendedprice, supplycost, quantity},
+                         udf,
+                         cudf::data_type{cudf::type_id::FLOAT64},
+                         false,
+                         stream,
+                         mr);
+}
+
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_ast(
+  cudf::column_view const& discount,
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& supplycost,
+  cudf::column_view const& quantity,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+{
+  cudf::ast::tree tree;
+  cudf::table_view table{std::vector{discount, extendedprice, supplycost, quantity}};
+
+  auto& discount_ref       = tree.push(cudf::ast::column_reference{0});
+  auto& extended_price_ref = tree.push(cudf::ast::column_reference{1});
+  auto& supplycost_ref     = tree.push(cudf::ast::column_reference{2});
+  auto& quantity_ref       = tree.push(cudf::ast::column_reference{3});
+
+  auto one      = cudf::numeric_scalar<double>{1.0};
+  auto& one_ref = tree.push(cudf::ast::literal{one});
+
+  auto& one_minus_discount =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::SUB, one_ref, discount_ref});
+  auto& supply_cost_mul_quantity =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::MUL, supplycost_ref, quantity_ref});
+  auto& intermediate = tree.push(
+    cudf::ast::operation{cudf::ast::ast_operator::MUL, extended_price_ref, one_minus_discount});
+  auto& result = tree.push(
+    cudf::ast::operation{cudf::ast::ast_operator::MUL, intermediate, supply_cost_mul_quantity});
+
+  return cudf::compute_column(table, result, stream, mr);
+}
+
+[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount(
+  cudf::column_view const& discount,
+  cudf::column_view const& extendedprice,
+  cudf::column_view const& supplycost,
+  cudf::column_view const& quantity,
+  execution_engine engine,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+{
+  switch (engine) {
+    case execution_engine::binaryops:
+      return calculate_amount_binaryops(discount, extendedprice, supplycost, quantity, stream, mr);
+    case execution_engine::ast:
+      return calculate_amount_ast(discount, extendedprice, supplycost, quantity, stream, mr);
+    case execution_engine::transforms:
+      return calculate_amount_transforms(discount, extendedprice, supplycost, quantity, stream, mr);
+    default: CUDF_UNREACHABLE("invalid execution_engine enum");
+  }
+}
+
 void run_ndsh_q9(nvbench::state& state,
-                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources,
+                 execution_engine engine)
 {
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
@@ -150,7 +242,8 @@ void run_ndsh_q9(nvbench::state& state,
   auto amount = calculate_amount(joined_table->column("l_discount"),
                                  joined_table->column("l_extendedprice"),
                                  joined_table->column("ps_supplycost"),
-                                 joined_table->column("l_quantity"));
+                                 joined_table->column("l_quantity"),
+                                 engine);
 
   // Put together the `profit` table
   std::vector<std::unique_ptr<cudf::column>> profit_columns;
@@ -180,6 +273,7 @@ void ndsh_q9(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
+  auto const engine         = engine_from_string(state.get_string("engine"));
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
@@ -187,7 +281,7 @@ void ndsh_q9(nvbench::state& state)
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { run_ndsh_q9(state, sources); });
+             [&](nvbench::launch& launch) { run_ndsh_q9(state, sources, engine); });
 }
 
 NVBENCH_BENCH(ndsh_q9).set_name("ndsh_q9").add_float64_axis("scale_factor", {0.01, 0.1, 1});
