@@ -269,10 +269,11 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   nanoarrow::UniqueArray tmp;
 
   cudf::dictionary_column_view const dview{column.view()};
+  auto const is_empty = dview.is_empty();
 
   NANOARROW_RETURN_NOT_OK(initialize_array(
     tmp.get(),
-    dview.is_empty() ? NANOARROW_TYPE_INT32 : id_to_arrow_type(dview.indices().type().id()),
+    is_empty ? NANOARROW_TYPE_INT32 : id_to_arrow_type(dview.indices().type().id()),
     column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
 
@@ -280,13 +281,12 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, tmp.get()));
 
   auto indices_contents =
-    dview.is_empty()
-      ? cudf::make_empty_column(cudf::type_id::INT32)->release()
-      : contents.children[cudf::dictionary_column_view::indices_column_index]->release();
+    is_empty ? cudf::make_empty_column(cudf::type_id::INT32)->release()
+             : contents.children[cudf::dictionary_column_view::indices_column_index]->release();
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(indices_contents.data), fixed_width_data_buffer_idx, tmp.get()));
 
-  auto keys = dview.is_empty()
+  auto keys = is_empty
                 ? cudf::make_empty_column(cudf::type_id::INT64)
                 : std::move(contents.children[cudf::dictionary_column_view::keys_column_index]);
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
