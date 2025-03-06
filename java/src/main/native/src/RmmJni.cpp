@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -657,7 +657,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocCudaInternal(JNIEnv* env,
   try {
     cudf::jni::auto_set_device(env);
     void* ptr{nullptr};
-    RMM_CUDA_TRY_ALLOC(cudaMalloc(&ptr, size));
+    RMM_CUDA_TRY_ALLOC(cudaMalloc(&ptr, size), size);
     return reinterpret_cast<jlong>(ptr);
   }
   CATCH_STD(env, 0)
