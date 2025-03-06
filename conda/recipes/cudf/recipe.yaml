@@ -64,7 +64,7 @@ requirements:
       else:
         - cuda-cudart-dev
         - cuda-nvrtc
-        - if: linux64
+        - if: linux and x86_64
           then:
             - libcufile-dev
     - cuda-version =${{ cuda_version }}
@@ -96,7 +96,7 @@ requirements:
         - cuda-nvrtc
         - cuda-python >=12.6.2,<13.0a0
         - pynvjitlink
-        - if: linux64
+        - if: linux and x86_64
           then:
             - libcufile
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
@@ -109,7 +109,7 @@ requirements:
       - if: cuda_major != "11"
         then:
           - cuda-cudart-dev
-          - if: linux64
+          - if: linux and x86_64
             then: libcufile-dev
     by_name:
       - cuda-version
