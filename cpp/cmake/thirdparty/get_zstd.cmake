@@ -27,6 +27,10 @@ function(find_and_configure_zstd)
             "ZSTD_BUILD_PROGRAMS OFF"
   )
 
+  if(zstd_ADDED)
+    target_compile_definitions(libzstd_static PRIVATE ZSTD_HAVE_WEAK_SYMBOLS=0)
+  endif()
+
   if(DEFINED zstd_SOURCE_DIR)
     set(ZSTD_INCLUDE_DIR
         "${zstd_SOURCE_DIR}/lib"
