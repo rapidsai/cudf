@@ -33,7 +33,7 @@ using one of
 - Dask's data reading facilities, followed by
   :meth:`dask.dataframe.DataFrame.to_backend` with ``"cudf"`` to obtain a
   Dask-cuDF object
-- :meth:`dask.dataframe.from_map`
-- :meth:`dask.dataframe.from_delayd`
+- :func:`dask.dataframe.from_map`
+- :func:`dask.dataframe.from_delayed`
 
 .. _Dask DataFrame: https://docs.dask.org/en/stable/dataframe.html
