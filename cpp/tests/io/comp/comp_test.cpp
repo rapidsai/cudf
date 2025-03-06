@@ -248,7 +248,7 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {false, false}));
 }
 
-void roundtip_test(cudf::io::compression_type compression)
+void roundtrip_test(cudf::io::compression_type compression)
 {
   auto const stream = cudf::get_default_stream();
   auto const mr     = rmm::mr::get_current_device_resource();
