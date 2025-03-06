@@ -27,8 +27,8 @@ documented there, Dask-cuDF provides some cuDF-specific methods:
       from_cudf,
       read_text
 
-For on-disk data that are not supported directly in Dask or Dask-cuDF, we
-recommend using one of
+For on-disk data that are not supported directly in Dask-cuDF, we recommend
+using one of
 
 - Dask's data reading facilities, followed by
   :meth:`dask.dataframe.DataFrame.to_backend` with ``"cudf"`` to obtain a
