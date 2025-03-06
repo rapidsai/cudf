@@ -315,14 +315,14 @@ void roundtrip_test(cudf::io::compression_type compression)
   }
 }
 
-TEST_P(HostCompressTest, HostCompression) { roundtip_test(GetParam()); }
+TEST_P(HostCompressTest, HostCompression) { roundtrip_test(GetParam()); }
 
 INSTANTIATE_TEST_CASE_P(HostCompression,
                         HostCompressTest,
                         ::testing::Values(cudf::io::compression_type::GZIP,
                                           cudf::io::compression_type::SNAPPY));
 
-TEST_P(HostDecompressTest, HostDecompression) { roundtip_test(GetParam()); }
+TEST_P(HostDecompressTest, HostDecompression) { roundtrip_test(GetParam()); }
 
 INSTANTIATE_TEST_CASE_P(HostDecompression,
                         HostDecompressTest,

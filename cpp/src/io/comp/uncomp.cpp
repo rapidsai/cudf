@@ -634,10 +634,11 @@ void device_decompress(compression_type compression,
 {
   if (compression == compression_type::NONE) { return; }
 
-  auto const nvcomp_type = to_nvcomp_compression(compression);
-  auto nvcomp_disabled_reason   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
-                                                   : "invalid compression type";
-  if (not nvcomp_disabled) {
+  auto const nvcomp_type      = to_nvcomp_compression(compression);
+  auto nvcomp_disabled_reason = nvcomp_type.has_value()
+                                  ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                  : "invalid compression type";
+  if (not nvcomp_disabled_reason) {
     return nvcomp::batched_decompress(
       *nvcomp_type, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
   }
@@ -649,7 +650,7 @@ void device_decompress(compression_type compression,
     case compression_type::SNAPPY: return gpu_unsnap(inputs, outputs, results, stream);
     case compression_type::ZLIB:
       return gpuinflate(inputs, outputs, results, gzip_header_included::NO, stream);
-    default: CUDF_FAIL("Compression error: " + nvcomp_disabled.value());
+    default: CUDF_FAIL("Compression error: " + nvcomp_disabled_reason.value());
   }
 }
 
