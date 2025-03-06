@@ -42,7 +42,7 @@ namespace cudf::io::detail {
     case compression_type::SNAPPY: return "Snappy";
     case compression_type::GZIP: return "GZIP";
     case compression_type::BZIP2: return "BZIP2";
-    case compression_type::BROTLI: return "Brotlu";
+    case compression_type::BROTLI: return "Brotli";
     case compression_type::ZIP: return "ZIP";
     case compression_type::XZ: return "XZ";
     case compression_type::ZLIB: return "ZLIB";

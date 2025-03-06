@@ -635,7 +635,7 @@ void device_decompress(compression_type compression,
   if (compression == compression_type::NONE) { return; }
 
   auto const nvcomp_type = to_nvcomp_compression(compression);
-  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+  auto nvcomp_disabled_reason   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
   if (not nvcomp_disabled) {
     return nvcomp::batched_decompress(
