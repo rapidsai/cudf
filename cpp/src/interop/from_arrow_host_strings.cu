@@ -56,8 +56,6 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  if (input->length == 0) { return make_empty_column(type_id::STRING); }
-
   // offsets column should contain no nulls so we can put nullptr for the bitmask
   // nulls are tracked in the parent string column itself, not in the offsets
   void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
@@ -104,11 +102,9 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
   auto offsets_column = [&]() {
     if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
-      return get_column_from_host_copy(
-        &view, &offsets_array, data_type(type_id::INT64), true, stream, mr);
+      return get_column_copy(&view, &offsets_array, data_type(type_id::INT64), true, stream, mr);
     } else if (schema->type == NANOARROW_TYPE_STRING) {
-      return get_column_from_host_copy(
-        &view, &offsets_array, data_type(type_id::INT32), true, stream, mr);
+      return get_column_copy(&view, &offsets_array, data_type(type_id::INT32), true, stream, mr);
     } else {
       CUDF_FAIL("Unsupported string type", cudf::data_type_error);
     }
@@ -145,8 +141,6 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  if (input->length == 0) { return make_empty_column(type_id::STRING); }
-
   ArrowArrayView view;
   NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));
   NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
