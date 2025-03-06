@@ -215,7 +215,10 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
   // compute the min rank across the block
   auto const reduce_rank =
     block_reduce(temp_storage).Reduce(min_rank, cudf::detail::minimum{}, num_valid);
-  if (lane_idx == 0) { block_min_rank = reduce_rank; }
+  if (lane_idx == 0) {
+    block_min_rank = reduce_rank;
+    printf("%d: min_rank=%d\n", str_idx, block_min_rank);
+  }
   __syncthreads();
 
   // loop through the ranks processing the current minimum until there are no more
