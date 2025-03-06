@@ -382,11 +382,17 @@ struct bpe_unpairable_offsets_fn {
     if (next < end) {
       auto const rhs = cudf::string_view(next, cudf::strings::detail::bytes_in_utf8_byte(*next));
       // see if both halves exist anywhere in the table, if not these are unpairable
+      printf("%ld: [%c/%d]=%d,[%c/%d]=%d\n",
+             idx,
+             *itr,
+             lhs.size_bytes(),
+             d_map.find(lhs)->second,
+             *next,
+             rhs.size_bytes(),
+             d_map.find(rhs)->second);
       if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
         output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
       }
-      printf(
-        "%ld: [%c/%d,%c/%d]=%ld\n", idx, *itr, lhs.size_bytes(), *next, rhs.size_bytes(), output);
     }
     return output;
   }
