@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/orc_types.hpp>
@@ -366,8 +367,9 @@ static __device__ uint32_t IntegerRLE(
   orcenc_state_s* s, T const* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
-  uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
-  uint32_t out_cnt   = 0;
+
+  uint8_t* dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
+  uint32_t out_cnt = 0;
   __shared__ uint64_t block_vmin;
 
   while (numvals > 0) {
@@ -413,9 +415,9 @@ static __device__ uint32_t IntegerRLE(
       T vmin = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::max();
       T vmax = (t < literal_run) ? v0 : cuda::std::numeric_limits<T>::min();
       uint32_t literal_mode, literal_w;
-      vmin = block_reduce(temp_storage).Reduce(vmin, cub::Min());
+      vmin = block_reduce(temp_storage).Reduce(vmin, cudf::detail::minimum{});
       __syncthreads();
-      vmax = block_reduce(temp_storage).Reduce(vmax, cub::Max());
+      vmax = block_reduce(temp_storage).Reduce(vmax, cudf::detail::maximum{});
       if (t == 0) {
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;

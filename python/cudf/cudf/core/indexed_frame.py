@@ -26,11 +26,10 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core
 import cudf.core.algorithms
+import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     is_dict_like,
     is_list_like,
     is_scalar,
@@ -60,7 +59,11 @@ from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    is_column_like,
+    is_dtype_obj_numeric,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -71,6 +74,7 @@ if TYPE_CHECKING:
         ColumnLike,
         DataFrameOrSeries,
         Dtype,
+        DtypeObj,
         NotImplementedType,
     )
 
@@ -3908,7 +3912,7 @@ class IndexedFrame(Frame):
         }
 
         result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=ColumnAccessor(
                 cols,
                 multiindex=multiindex,
                 level_names=level_names,
@@ -4888,20 +4892,16 @@ class IndexedFrame(Frame):
         (
             operands,
             out_index,
-            can_use_self_column_name,
+            ca_attributes,
         ) = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
-
-        level_names = (
-            self._data._level_names if can_use_self_column_name else None
-        )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
-                level_names=level_names,
+                **ca_attributes,
             ),
             index=out_index,
         )
@@ -4917,7 +4917,7 @@ class IndexedFrame(Frame):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         cudf.BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         raise NotImplementedError(
             f"Binary operations are not supported for {self.__class__}"
@@ -6406,9 +6406,9 @@ class IndexedFrame(Frame):
         dropped_cols = False
         source = self
         if numeric_only:
-            if isinstance(
-                source, cudf.Series
-            ) and not _is_non_decimal_numeric_dtype(self.dtype):  # type: ignore[attr-defined]
+            if isinstance(source, cudf.Series) and not is_dtype_obj_numeric(
+                source.dtype, include_decimal=False
+            ):  # type: ignore[attr-defined]
                 raise TypeError(
                     "Series.rank does not allow numeric_only=True with "
                     "non-numeric dtype."
@@ -6416,7 +6416,7 @@ class IndexedFrame(Frame):
             numeric_cols = (
                 name
                 for name, dtype in self._dtypes
-                if _is_non_decimal_numeric_dtype(dtype)
+                if is_dtype_obj_numeric(dtype, include_decimal=False)
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
@@ -6558,7 +6558,7 @@ def _check_duplicate_level_names(specified, level_names):
 
 @_performance_tracking
 def _get_replacement_values_for_columns(
-    to_replace: Any, value: Any, columns_dtype_map: dict[Any, Any]
+    to_replace: Any, value: Any, columns_dtype_map: dict[Any, DtypeObj]
 ) -> tuple[dict[Any, bool], dict[Any, Any], dict[Any, Any]]:
     """
     Returns a per column mapping for the values to be replaced, new
@@ -6591,24 +6591,22 @@ def _get_replacement_values_for_columns(
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
-    elif cudf.api.types.is_list_like(to_replace) or isinstance(
+    elif is_list_like(to_replace) or isinstance(
         to_replace, (ColumnBase, BaseIndex)
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
             values_columns = {
                 col: [value]
-                if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
+                if is_dtype_obj_numeric(dtype, include_decimal=False)
                 else as_column(
                     value,
                     length=len(to_replace),
                     dtype=cudf.dtype(type(value)),
                 )
-                for col in columns_dtype_map
+                for col, dtype in columns_dtype_map.items()
             }
-        elif cudf.api.types.is_list_like(
-            value
-        ) or cudf.utils.dtypes.is_column_like(value):
+        elif is_list_like(value) or is_column_like(value):
             if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "
