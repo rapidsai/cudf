@@ -23,7 +23,7 @@ import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
-from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
+from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
 try:
     import fsspec.parquet as fsspec_parquet
@@ -1546,25 +1546,14 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
         else:
             col_names.append(name)
 
-        if isinstance(col.dtype, cudf.CategoricalDtype):
-            raise ValueError(
-                "'category' column dtypes are currently not "
-                + "supported by the gpu accelerated parquet writer"
-            )
-        elif isinstance(
-            col.dtype,
-            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
-        ):
-            types.append(col.dtype.to_arrow())
-        else:
+        if col.dtype.kind == "b":
             # A boolean element takes 8 bits in cudf and 1 bit in
             # pyarrow. To make sure the cudf format is interoperable
             # with arrow, we use `int8` type when converting from a
             # cudf boolean array.
-            if col.dtype.type == np.bool_:
-                types.append(pa.int8())
-            else:
-                types.append(np_to_pa_dtype(col.dtype))
+            types.append(pa.int8())
+        else:
+            types.append(cudf_dtype_to_pa_type(col.dtype))
 
     # Indexes
     materialize_index = False
@@ -1596,29 +1585,21 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                     index_levels.append(materialized_idx)
                     columns_to_convert.append(materialized_idx._values)
                     col_names.append(descr)
-                    types.append(np_to_pa_dtype(materialized_idx.dtype))
+                    types.append(pa.from_numpy_dtype(materialized_idx.dtype))
             else:
                 descr = _index_level_name(
                     index_name=idx.name, level=level, column_names=col_names
                 )
                 columns_to_convert.append(idx._values)
                 col_names.append(descr)
-                if isinstance(idx.dtype, cudf.CategoricalDtype):
-                    raise ValueError(
-                        "'category' column dtypes are currently not "
-                        + "supported by the gpu accelerated parquet writer"
-                    )
-                elif isinstance(idx.dtype, cudf.ListDtype):
-                    types.append(col.dtype.to_arrow())
-                else:
+                if idx.dtype.kind == "b":
                     # A boolean element takes 8 bits in cudf and 1 bit in
                     # pyarrow. To make sure the cudf format is interperable
                     # in arrow, we use `int8` type when converting from a
                     # cudf boolean array.
-                    if idx.dtype.type == np.bool_:
-                        types.append(pa.int8())
-                    else:
-                        types.append(np_to_pa_dtype(idx.dtype))
+                    types.append(pa.int8())
+                else:
+                    types.append(cudf_dtype_to_pa_type(idx.dtype))
 
                 index_levels.append(idx)
             index_descriptors.append(descr)
