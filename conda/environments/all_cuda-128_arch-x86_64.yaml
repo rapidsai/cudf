@@ -99,5 +99,4 @@ dependencies:
 - transformers==4.39.3
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
-- zstandard>=0.23.0
 name: all_cuda-128_arch-x86_64
