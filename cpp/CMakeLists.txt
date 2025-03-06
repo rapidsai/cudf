@@ -312,7 +312,7 @@ include(cmake/thirdparty/get_zstd.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow libzstd_shared)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow libzstd_static)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -820,6 +820,7 @@ set_target_properties(
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -936,7 +937,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow libzstd_shared
+          kvikio::kvikio nanoarrow libzstd_static
 )
 
 # Add Conda library, and include paths if specified

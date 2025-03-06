@@ -18,12 +18,12 @@ function(find_and_configure_zstd)
   set(CPM_DOWNLOAD_zstd ON)
   rapids_cpm_find(
     zstd 1.5.7
-    GLOBAL_TARGETS libzstd_shared
+    GLOBAL_TARGETS zstd
     CPM_ARGS
     GIT_REPOSITORY https://github.com/facebook/zstd.git
     GIT_TAG v1.5.7
     GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
-    OPTIONS "ZSTD_BUILD_STATIC OFF" "ZSTD_BUILD_SHARED ON" "ZSTD_BUILD_TESTS OFF"
+    OPTIONS "ZSTD_BUILD_STATIC ON" "ZSTD_BUILD_SHARED OFF" "ZSTD_BUILD_TESTS OFF"
             "ZSTD_BUILD_PROGRAMS OFF"
   )
 
