@@ -297,35 +297,42 @@ std::unique_ptr<table_with_names> compute_profit(
 
 void ndsh_q9(nvbench::state& state)
 {
-  double const scale_factor = state.get_float64("scale_factor");
-  auto const engine         = engine_from_string(state.get_string("engine"));
+  auto const scale_factor = state.get_float64("scale_factor");
+  auto const engine       = engine_from_string(state.get_string("engine"));
 
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    q9_data data = load_data(sources);
-    auto result  = compute_profit(state,
-                                 engine,
-                                 data,
-                                 launch.get_stream().get_stream(),
-                                 cudf::get_current_device_resource_ref());
+    q9_data const data = load_data(sources);
+    auto const result  = compute_profit(state,
+                                       engine,
+                                       data,
+                                       launch.get_stream().get_stream(),
+                                       cudf::get_current_device_resource_ref());
     result->to_parquet("q9.parquet");
   });
 }
 
+// unlike `ndsh_q9`, `ndsh_q9_amount` benchmarks only the amount calculation part of the benchmark
 void ndsh_q9_amount(nvbench::state& state)
 {
-  double const scale_factor = state.get_float64("scale_factor");
-  auto const engine         = engine_from_string(state.get_string("engine"));
+  auto const scale_factor = state.get_float64("scale_factor");
+  auto const engine       = engine_from_string(state.get_string("engine"));
 
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
-  q9_data data      = load_data(sources);
-  auto joined_table = join_data(data);
+  q9_data const data      = load_data(sources);
+  auto const joined_table = join_data(data);
+
+  auto const size = joined_table->column("l_extendedprice").size();
+
+  state.add_global_memory_reads<double>(size * 4);
+  state.add_global_memory_writes<double>(size);
+  state.add_element_count(size);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto amount = compute_amount(joined_table->column("l_discount"),
