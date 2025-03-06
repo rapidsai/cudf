@@ -69,7 +69,7 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
   auto mp_table_map = std::make_unique<mp_table_map_type>(
-    static_cast<size_t>(input.size()),
+    static_cast<size_t>(input.size() * 2),
     cuco::empty_key{-1},
     cuco::empty_value{-1},
     mp_equal{input},
