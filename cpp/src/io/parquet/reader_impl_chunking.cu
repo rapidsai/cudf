@@ -1154,7 +1154,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 page_keys + pages.size(),
                                 decomp_iter,
                                 decomp_info.begin(),
-                                thrust::equal_to<int32_t>{},
+                                cuda::std::equal_to<int32_t>{},
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
@@ -1393,7 +1393,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                   page_keys + pass.pages.size(),
                                   page_size,
                                   c_info.begin(),
-                                  thrust::equal_to{},
+                                  cuda::std::equal_to{},
                                   cumulative_page_sum{});
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
@@ -1641,9 +1641,6 @@ void reader::impl::compute_input_passes()
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
-  // To handle global_skip_rows when computing input passes
-  int skip_rows = _file_itm_data.global_skip_rows;
-
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
@@ -1652,14 +1649,7 @@ void reader::impl::compute_input_passes()
     auto const [compressed_rg_size, _ /*compressed + uncompressed*/] =
       get_row_group_size(row_group);
 
-    // We must use the effective size of the first row group we are reading to accurately calculate
-    // the first non-zero `input_pass_start_row_count` unless we are reading only one row group
-    auto const row_group_rows = (skip_rows and row_groups_info.size() > 1)
-                                  ? rgi.start_row + row_group.num_rows - skip_rows
-                                  : row_group.num_rows;
-
-    //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
-    skip_rows = 0;
+    auto const row_group_rows = row_group.num_rows;
 
     // can we add this row group
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
@@ -1713,7 +1703,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                                 page_keys + subpass.pages.size(),
                                 page_input,
                                 c_info.begin(),
-                                thrust::equal_to{},
+                                cuda::std::equal_to{},
                                 cumulative_page_sum{});
   auto iter = thrust::make_counting_iterator(0);
   // cap the max row in all pages by the max row we expect in the subpass. input chunking
