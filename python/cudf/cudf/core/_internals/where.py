@@ -93,7 +93,7 @@ def _check_and_cast_columns_with_other(
 
         if cudf.utils.utils.is_na_like(other):
             return source_col, pa_scalar_to_plc_scalar(
-                pa.scalar(other, type=cudf_dtype_to_pa_type(source_dtype))
+                pa.scalar(None, type=cudf_dtype_to_pa_type(source_dtype))
             )
 
     mixed_err = (
@@ -106,7 +106,7 @@ def _check_and_cast_columns_with_other(
         if is_mixed_with_object_dtype(other_col, source_col):
             raise TypeError(mixed_err)
 
-        if not _can_cast(other.dtype, source_dtype):
+        if not _can_cast(other_col.dtype, source_dtype):
             warnings.warn(
                 f"Type-casting from {other.dtype} "
                 f"to {source_dtype}, there could be potential data loss"
