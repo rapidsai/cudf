@@ -98,7 +98,8 @@ struct bpe_unpairable_offsets_fn {
       if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
         output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
       }
-      printf("%ld: [%c,%c]\n", idx, *itr, *next);
+      printf(
+        "%ld: [%c/%d,%c/%d]=%ld\n", idx, *itr, lhs.size_bytes(), *next, rhs.size_bytes(), output);
     }
     return output;
   }

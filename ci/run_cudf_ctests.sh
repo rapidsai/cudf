@@ -7,4 +7,4 @@ set -euo pipefail
 cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/gtests/libcudf/";
 
 #ctest --output-on-failure --no-tests=error "$@"
-compute-sanitizer ./TEST_TEXT --gtest_filter=TextBytePairEncoding.BytePairEncoding
+compute-sanitizer ./TEXT_TEST --gtest_filter=TextBytePairEncoding.BytePairEncoding
