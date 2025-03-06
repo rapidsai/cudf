@@ -19,33 +19,8 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    import pylibcudf as plc
-
     from cudf._typing import DtypeObj, ScalarLike
     from cudf.core.column import ColumnBase
-
-
-def _normalize_categorical(
-    input_col, other
-) -> tuple[ColumnBase, ColumnBase | plc.Scalar]:
-    if isinstance(input_col.dtype, cudf.CategoricalDtype):
-        if is_scalar(other):
-            try:
-                other = input_col._encode(other)
-            except ValueError:
-                # When other is not present in categories,
-                # fill with Null.
-                other = None
-            other = pa_scalar_to_plc_scalar(
-                pa.scalar(
-                    other, type=cudf_dtype_to_pa_type(input_col.codes.dtype)
-                )
-            )
-        elif isinstance(other, cudf.core.column.CategoricalColumn):
-            other = other.codes
-
-        input_col = input_col.codes
-    return input_col, other
 
 
 def _check_and_cast_columns_with_other(
