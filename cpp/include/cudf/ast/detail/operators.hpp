@@ -367,7 +367,7 @@ struct operator_functor<ast_operator::EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs == rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs == rhs;
   }
@@ -383,7 +383,7 @@ struct operator_functor<ast_operator::NOT_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs != rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs != rhs;
   }
@@ -394,7 +394,7 @@ struct operator_functor<ast_operator::LESS, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs < rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs < rhs;
   }
@@ -405,7 +405,7 @@ struct operator_functor<ast_operator::GREATER, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs > rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs > rhs;
   }
@@ -416,7 +416,7 @@ struct operator_functor<ast_operator::LESS_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs <= rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs <= rhs;
   }
@@ -427,7 +427,7 @@ struct operator_functor<ast_operator::GREATER_EQUAL, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs >= rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs >= rhs;
   }
@@ -471,7 +471,7 @@ struct operator_functor<ast_operator::LOGICAL_AND, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs && rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs && rhs;
   }
@@ -487,7 +487,7 @@ struct operator_functor<ast_operator::LOGICAL_OR, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(lhs || rhs)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> bool
   {
     return lhs || rhs;
   }
@@ -503,7 +503,7 @@ struct operator_functor<ast_operator::IDENTITY, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(input)
+  __device__ inline auto operator()(InputT input) -> InputT
   {
     return input;
   }
@@ -730,7 +730,7 @@ struct operator_functor<ast_operator::ABS, false> {
   }
 
   template <typename InputT, std::enable_if_t<std::is_unsigned_v<InputT>>* = nullptr>
-  __device__ inline auto operator()(InputT input) -> decltype(input)
+  __device__ inline auto operator()(InputT input) -> InputT
   {
     return input;
   }
@@ -763,7 +763,7 @@ struct operator_functor<ast_operator::NOT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(!input)
+  __device__ inline auto operator()(InputT input) -> bool
   {
     return !input;
   }
@@ -772,20 +772,14 @@ struct operator_functor<ast_operator::NOT, false> {
 template <typename To>
 struct cast {
   static constexpr auto arity{1};
-  template <typename From, typename std::enable_if_t<is_fixed_point<From>()>* = nullptr>
+  template <typename From>
   __device__ inline auto operator()(From f) -> To
   {
-    if constexpr (cuda::std::is_floating_point_v<To>) {
+    if constexpr (is_fixed_point<From> && cuda::std::is_floating_point_v<To>) {
       return convert_fixed_to_floating<To>(f);
     } else {
       return static_cast<To>(f);
     }
-  }
-
-  template <typename From, typename cuda::std::enable_if_t<!is_fixed_point<From>()>* = nullptr>
-  __device__ inline auto operator()(From f) -> decltype(static_cast<To>(f))
-  {
-    return static_cast<To>(f);
   }
 };
 
@@ -834,7 +828,7 @@ struct operator_functor<ast_operator::IS_NULL, true> {
   static constexpr auto arity = NonNullOperator::arity;
 
   template <typename LHS>
-  __device__ inline auto operator()(LHS const lhs) -> decltype(!lhs.has_value())
+  __device__ inline auto operator()(LHS const lhs) -> bool
   {
     return !lhs.has_value();
   }
