@@ -183,6 +183,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
