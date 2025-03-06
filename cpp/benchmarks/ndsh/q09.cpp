@@ -28,20 +28,29 @@
 
 #include <nvbench/nvbench.cuh>
 
-enum class execution_engine : int32_t { binaryops = 0, ast = 1, transforms = 2 };
+enum class engine_type : int32_t { binaryops = 0, ast = 1, transforms = 2 };
 
-execution_engine engine_from_string(std::string const& str)
+engine_type engine_from_string(std::string const& str)
 {
   if (str == "binaryops") {
-    return execution_engine::binaryops;
+    return engine_type::binaryops;
   } else if (str == "ast") {
-    return execution_engine::ast;
+    return engine_type::ast;
   } else if (str == "transforms") {
-    return execution_engine::transforms;
+    return engine_type::transforms;
   } else {
-    CUDF_EXPECTS(false, +std::string{"unrecognized execution engine enum: "} + str);
+    CUDF_EXPECTS(false, +std::string{"unrecognized engine enum: "} + str);
   }
 }
+
+struct q9_data {
+  std::unique_ptr<table_with_names> lineitem;
+  std::unique_ptr<table_with_names> nation;
+  std::unique_ptr<table_with_names> orders;
+  std::unique_ptr<table_with_names> part;
+  std::unique_ptr<table_with_names> partsupp;
+  std::unique_ptr<table_with_names> supplier;
+};
 
 /**
  * @file q09.cpp
@@ -98,7 +107,7 @@ execution_engine engine_from_string(std::string const& str)
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_binaryops(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_binaryops(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -128,7 +137,7 @@ execution_engine engine_from_string(std::string const& str)
   return amount;
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_transforms(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_transforms(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -151,7 +160,7 @@ execution_engine engine_from_string(std::string const& str)
                          mr);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount_ast(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_ast(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -185,36 +194,27 @@ execution_engine engine_from_string(std::string const& str)
   return cudf::compute_column(table, result, stream, mr);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> calculate_amount(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
   cudf::column_view const& quantity,
-  execution_engine engine,
+  engine_type engine,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   switch (engine) {
-    case execution_engine::binaryops:
-      return calculate_amount_binaryops(discount, extendedprice, supplycost, quantity, stream, mr);
-    case execution_engine::ast:
-      return calculate_amount_ast(discount, extendedprice, supplycost, quantity, stream, mr);
-    case execution_engine::transforms:
-      return calculate_amount_transforms(discount, extendedprice, supplycost, quantity, stream, mr);
-    default: CUDF_UNREACHABLE("invalid execution_engine enum");
+    case engine_type::binaryops:
+      return compute_amount_binaryops(discount, extendedprice, supplycost, quantity, stream, mr);
+    case engine_type::ast:
+      return compute_amount_ast(discount, extendedprice, supplycost, quantity, stream, mr);
+    case engine_type::transforms:
+      return compute_amount_transforms(discount, extendedprice, supplycost, quantity, stream, mr);
+    default: CUDF_UNREACHABLE("invalid engine_type enum");
   }
 }
 
-struct Data {
-  std::unique_ptr<table_with_names> lineitem;
-  std::unique_ptr<table_with_names> nation;
-  std::unique_ptr<table_with_names> orders;
-  std::unique_ptr<table_with_names> part;
-  std::unique_ptr<table_with_names> partsupp;
-  std::unique_ptr<table_with_names> supplier;
-};
-
-Data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& sources)
+q9_data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   auto lineitem = read_parquet(
     sources.at("lineitem").make_source_info(),
@@ -227,20 +227,15 @@ Data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& sources)
                                {"ps_suppkey", "ps_partkey", "ps_supplycost"});
   auto supplier =
     read_parquet(sources.at("supplier").make_source_info(), {"s_suppkey", "s_nationkey"});
-  return Data{std::move(lineitem),
-              std::move(nation),
-              std::move(orders),
-              std::move(part),
-              std::move(partsupp),
-              std::move(supplier)};
+  return q9_data{std::move(lineitem),
+                 std::move(nation),
+                 std::move(orders),
+                 std::move(part),
+                 std::move(partsupp),
+                 std::move(supplier)};
 }
 
-std::unique_ptr<table_with_names> run_ndsh_q9(
-  nvbench::state& state,
-  execution_engine engine,
-  Data const& data,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+std::unique_ptr<table_with_names> join_data(q9_data const& data)
 {
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
@@ -255,20 +250,29 @@ std::unique_ptr<table_with_names> run_ndsh_q9(
   auto const join_b = apply_inner_join(data.partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
   auto const join_c = apply_inner_join(data.lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
   auto const join_d = apply_inner_join(data.orders, join_c, {"o_orderkey"}, {"l_orderkey"});
-  auto const joined_table =
-    apply_inner_join(join_d, join_b, {"l_suppkey", "l_partkey"}, {"s_suppkey", "ps_partkey"});
+  return apply_inner_join(join_d, join_b, {"l_suppkey", "l_partkey"}, {"s_suppkey", "ps_partkey"});
+}
 
+std::unique_ptr<table_with_names> compute_profit(
+  nvbench::state& state,
+  engine_type engine,
+  q9_data const& data,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+{
+  auto joined_table = join_data(data);
   // Calculate the `nation`, `o_year`, and `amount` columns
   auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
   auto o_year = cudf::datetime::extract_datetime_component(
     joined_table->column("o_orderdate"), cudf::datetime::datetime_component::YEAR);
-  auto amount = calculate_amount(joined_table->column("l_discount"),
-                                 joined_table->column("l_extendedprice"),
-                                 joined_table->column("ps_supplycost"),
-                                 joined_table->column("l_quantity"),
-                                 engine,
-                                 stream,
-                                 mr);
+
+  auto amount = compute_amount(joined_table->column("l_discount"),
+                               joined_table->column("l_extendedprice"),
+                               joined_table->column("ps_supplycost"),
+                               joined_table->column("l_quantity"),
+                               engine,
+                               stream,
+                               mr);
 
   // Put together the `profit` table
   std::vector<std::unique_ptr<cudf::column>> profit_columns;
@@ -295,40 +299,51 @@ void ndsh_q9(nvbench::state& state)
 {
   double const scale_factor = state.get_float64("scale_factor");
   auto const engine         = engine_from_string(state.get_string("engine"));
-  bool const exclude_io     = state.get_string("exclude_io") == "true";
 
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
-  std::optional<Data> data;
-  std::unique_ptr<table_with_names> result;
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    q9_data data = load_data(sources);
+    auto result  = compute_profit(state,
+                                 engine,
+                                 data,
+                                 launch.get_stream().get_stream(),
+                                 cudf::get_current_device_resource_ref());
+    result->to_parquet("q9.parquet");
+  });
+}
 
-  if (exclude_io) { data = load_data(sources); }
+void ndsh_q9_amount(nvbench::state& state)
+{
+  double const scale_factor = state.get_float64("scale_factor");
+  auto const engine         = engine_from_string(state.get_string("engine"));
+
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
+  generate_parquet_data_sources(
+    scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
+
+  q9_data data      = load_data(sources);
+  auto joined_table = join_data(data);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if (exclude_io) {
-      result = run_ndsh_q9(state,
-                           engine,
-                           *data,
-                           launch.get_stream().get_stream(),
-                           cudf::get_current_device_resource_ref());
-    } else {
-      Data data = load_data(sources);
-      result    = run_ndsh_q9(state,
-                           engine,
-                           data,
-                           launch.get_stream().get_stream(),
-                           cudf::get_current_device_resource_ref());
-      result->to_parquet("q9.parquet");
-    }
+    auto amount = compute_amount(joined_table->column("l_discount"),
+                                 joined_table->column("l_extendedprice"),
+                                 joined_table->column("ps_supplycost"),
+                                 joined_table->column("l_quantity"),
+                                 engine,
+                                 launch.get_stream().get_stream(),
+                                 cudf::get_current_device_resource_ref());
   });
-
-  if (exclude_io && result) { result->to_parquet("q9.parquet"); }
 }
 
 NVBENCH_BENCH(ndsh_q9)
   .set_name("ndsh_q9")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("exclude_io", {"false", "true"})
+  .add_string_axis("engine", {"binaryops", "ast", "transforms"});
+
+NVBENCH_BENCH(ndsh_q9_amount)
+  .set_name("ndsh_q9_amount")
+  .add_float64_axis("scale_factor", {0.01, 0.1, 1})
   .add_string_axis("engine", {"binaryops", "ast", "transforms"});
