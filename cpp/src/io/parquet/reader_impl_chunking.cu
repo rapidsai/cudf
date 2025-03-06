@@ -540,22 +540,24 @@ struct get_page_span {
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
 
-    auto start_page =
-      thrust::distance(
-        column_page_start,
-        thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row)) +
-      first_page_index;
+    auto start_page = first_page_index;
 
-    // list rows can span page boundaries, so it is not always safe to assume that the row
-    // represented by end_row_index starts on the subsequent page. It is possible that
-    // the values for row end_row_index start within the page itself. so we must
-    // include the page in that case.
-    if (page_row_index[start_page] == start_row && !is_list) { start_page++; }
+    // For list columns, the row counts are estimates so we need all prefix start to correctly
+    // compute page bounds. Otherwise, we can get an exact span of pages.
+    if (not is_list) {
+      start_page += thrust::distance(
+        column_page_start,
+        thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row));
+
+      if (page_row_index[start_page] == start_row) { start_page++; }
+    }
 
     auto end_page = thrust::distance(column_page_start,
                                      thrust::lower_bound(
                                        thrust::seq, column_page_start, column_page_end, end_row)) +
                     first_page_index;
+    // TODO: For list columns, we can still end up with the `end_page` not containing the actual
+    // `end_row`. This should be handled properly.
     if (end_page < (first_page_index + num_pages)) { end_page++; }
 
     return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};

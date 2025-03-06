@@ -1523,7 +1523,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   auto const pass_end = pass.skip_rows + pass.num_rows;
   max_row             = std::min<size_t>(max_row, pass_end);
   // Make sure we don't skip past the max rows.
-  CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected subpass row count");
+  CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass");
   subpass.num_rows = max_row - subpass.skip_rows;
 
   // now split up the output into chunks as necessary
