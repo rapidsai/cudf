@@ -2259,7 +2259,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def where(
         self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
     ) -> ColumnBase:
-        # Align types between self and other
         casted_col, casted_other = self._cast_self_and_other_for_where(
             other, inplace
         )
