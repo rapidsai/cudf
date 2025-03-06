@@ -19,6 +19,8 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
+    import pylibcudf as plc
+
     from cudf._typing import DtypeObj, ScalarLike
     from cudf.core.column import ColumnBase
 
@@ -27,7 +29,7 @@ def _check_and_cast_columns_with_other(
     source_col: ColumnBase,
     other: ScalarLike | ColumnBase,
     inplace: bool,
-) -> tuple[ColumnBase, ScalarLike | ColumnBase]:
+) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
     # Returns type-casted `source_col` & `other` based on `inplace`.
     from cudf.core.column import as_column
 
