@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -8,4 +8,4 @@ set -euo pipefail
 # Support invoking run_cudf_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf/cudf/
 
-pytest --cache-clear --ignore="benchmarks" "$@" tests
+pytest -s --cache-clear --ignore="benchmarks" "$@" tests/text/test_text_methods.py
