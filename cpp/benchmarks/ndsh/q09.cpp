@@ -167,17 +167,20 @@ execution_engine engine_from_string(std::string const& str)
   auto& supplycost_ref     = tree.push(cudf::ast::column_reference{2});
   auto& quantity_ref       = tree.push(cudf::ast::column_reference{3});
 
-  auto one      = cudf::numeric_scalar<double>{1.0};
-  auto& one_ref = tree.push(cudf::ast::literal{one});
+  auto& extended_price_mul_discount =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::MUL, extended_price_ref, discount_ref});
 
-  auto& one_minus_discount =
-    tree.push(cudf::ast::operation{cudf::ast::ast_operator::SUB, one_ref, discount_ref});
+  // AST presently doesn't support literals on LHS, so we expand extended_price * (1 - discount)
+  auto& extended_price_discounted = tree.push(cudf::ast::operation{
+    cudf::ast::ast_operator::SUB, extended_price_ref, extended_price_mul_discount});
+
+  auto& quantity_float64 =
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::CAST_TO_FLOAT64, quantity_ref});
+
   auto& supply_cost_mul_quantity =
-    tree.push(cudf::ast::operation{cudf::ast::ast_operator::MUL, supplycost_ref, quantity_ref});
-  auto& intermediate = tree.push(
-    cudf::ast::operation{cudf::ast::ast_operator::MUL, extended_price_ref, one_minus_discount});
-  auto& result = tree.push(
-    cudf::ast::operation{cudf::ast::ast_operator::MUL, intermediate, supply_cost_mul_quantity});
+    tree.push(cudf::ast::operation{cudf::ast::ast_operator::MUL, supplycost_ref, quantity_float64});
+  auto& result = tree.push(cudf::ast::operation{
+    cudf::ast::ast_operator::SUB, extended_price_discounted, supply_cost_mul_quantity});
 
   return cudf::compute_column(table, result, stream, mr);
 }
@@ -202,36 +205,56 @@ execution_engine engine_from_string(std::string const& str)
   }
 }
 
-void run_ndsh_q9(nvbench::state& state,
-                 std::unordered_map<std::string, cuio_source_sink_pair>& sources,
-                 execution_engine engine)
+struct Data {
+  std::unique_ptr<table_with_names> lineitem;
+  std::unique_ptr<table_with_names> nation;
+  std::unique_ptr<table_with_names> orders;
+  std::unique_ptr<table_with_names> part;
+  std::unique_ptr<table_with_names> partsupp;
+  std::unique_ptr<table_with_names> supplier;
+};
+
+Data load_data(std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
-  // Read out the table from parquet files
-  auto const lineitem = read_parquet(
+  auto lineitem = read_parquet(
     sources.at("lineitem").make_source_info(),
     {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-  auto const nation =
-    read_parquet(sources.at("nation").make_source_info(), {"n_nationkey", "n_name"});
-  auto const orders =
+  auto nation = read_parquet(sources.at("nation").make_source_info(), {"n_nationkey", "n_name"});
+  auto orders =
     read_parquet(sources.at("orders").make_source_info(), {"o_orderkey", "o_orderdate"});
-  auto const part = read_parquet(sources.at("part").make_source_info(), {"p_partkey", "p_name"});
-  auto const partsupp = read_parquet(sources.at("partsupp").make_source_info(),
-                                     {"ps_suppkey", "ps_partkey", "ps_supplycost"});
-  auto const supplier =
+  auto part     = read_parquet(sources.at("part").make_source_info(), {"p_partkey", "p_name"});
+  auto partsupp = read_parquet(sources.at("partsupp").make_source_info(),
+                               {"ps_suppkey", "ps_partkey", "ps_supplycost"});
+  auto supplier =
     read_parquet(sources.at("supplier").make_source_info(), {"s_suppkey", "s_nationkey"});
+  return Data{std::move(lineitem),
+              std::move(nation),
+              std::move(orders),
+              std::move(part),
+              std::move(partsupp),
+              std::move(supplier)};
+}
 
+std::unique_ptr<table_with_names> run_ndsh_q9(
+  nvbench::state& state,
+  execution_engine engine,
+  Data const& data,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+{
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
-  auto const p_name = part->table().column(1);
+  auto const p_name = data.part->table().column(1);
   auto const mask =
     cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
-  auto const part_filtered = apply_mask(part, mask);
+  auto const part_filtered = apply_mask(data.part, mask);
 
   // Perform the joins
-  auto const join_a = apply_inner_join(supplier, nation, {"s_nationkey"}, {"n_nationkey"});
-  auto const join_b = apply_inner_join(partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
-  auto const join_c = apply_inner_join(lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
-  auto const join_d = apply_inner_join(orders, join_c, {"o_orderkey"}, {"l_orderkey"});
+  auto const join_a =
+    apply_inner_join(data.supplier, data.nation, {"s_nationkey"}, {"n_nationkey"});
+  auto const join_b = apply_inner_join(data.partsupp, join_a, {"ps_suppkey"}, {"s_suppkey"});
+  auto const join_c = apply_inner_join(data.lineitem, part_filtered, {"l_partkey"}, {"p_partkey"});
+  auto const join_d = apply_inner_join(data.orders, join_c, {"o_orderkey"}, {"l_orderkey"});
   auto const joined_table =
     apply_inner_join(join_d, join_b, {"l_suppkey", "l_partkey"}, {"s_suppkey", "ps_partkey"});
 
@@ -243,7 +266,9 @@ void run_ndsh_q9(nvbench::state& state,
                                  joined_table->column("l_extendedprice"),
                                  joined_table->column("ps_supplycost"),
                                  joined_table->column("l_quantity"),
-                                 engine);
+                                 engine,
+                                 stream,
+                                 mr);
 
   // Put together the `profit` table
   std::vector<std::unique_ptr<cudf::column>> profit_columns;
@@ -262,26 +287,48 @@ void run_ndsh_q9(nvbench::state& state,
                       {{"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}}});
 
   // Perform the orderby operation
-  auto const orderedby_table = apply_orderby(
+  return apply_orderby(
     groupedby_table, {"nation", "o_year"}, {cudf::order::ASCENDING, cudf::order::DESCENDING});
-
-  // Write query result to a parquet file
-  orderedby_table->to_parquet("q9.parquet");
 }
 
 void ndsh_q9(nvbench::state& state)
 {
-  // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
   auto const engine         = engine_from_string(state.get_string("engine"));
+  bool const exclude_io     = state.get_string("exclude_io") == "true";
+
   std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
-  auto stream = cudf::get_default_stream();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { run_ndsh_q9(state, sources, engine); });
+  std::optional<Data> data;
+  std::unique_ptr<table_with_names> result;
+
+  if (exclude_io) { data = load_data(sources); }
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    if (exclude_io) {
+      result = run_ndsh_q9(state,
+                           engine,
+                           *data,
+                           launch.get_stream().get_stream(),
+                           cudf::get_current_device_resource_ref());
+    } else {
+      Data data = load_data(sources);
+      result    = run_ndsh_q9(state,
+                           engine,
+                           data,
+                           launch.get_stream().get_stream(),
+                           cudf::get_current_device_resource_ref());
+      result->to_parquet("q9.parquet");
+    }
+  });
+
+  if (exclude_io && result) { result->to_parquet("q9.parquet"); }
 }
 
-NVBENCH_BENCH(ndsh_q9).set_name("ndsh_q9").add_float64_axis("scale_factor", {0.01, 0.1, 1});
+NVBENCH_BENCH(ndsh_q9)
+  .set_name("ndsh_q9")
+  .add_float64_axis("scale_factor", {0.01, 0.1, 1})
+  .add_string_axis("exclude_io", {"false", "true"})
+  .add_string_axis("engine", {"binaryops", "ast", "transforms"});
