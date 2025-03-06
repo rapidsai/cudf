@@ -27,6 +27,7 @@ function(find_and_configure_zstd)
             "ZSTD_BUILD_PROGRAMS OFF"
   )
 
+  # we need this to disable weak symbols support to hide tracing APIs as well
   if(zstd_ADDED)
     target_compile_definitions(libzstd_static PRIVATE ZSTD_HAVE_WEAK_SYMBOLS=0)
   endif()
