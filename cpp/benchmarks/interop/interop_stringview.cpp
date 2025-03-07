@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/interop/nanoarrow_utils.hpp>
+#include <cudf_test/nanoarrow_utils.hpp>
 
 #include <cudf/interop.hpp>
 
