@@ -331,6 +331,7 @@ add_library(
   src/aggregation/aggregation.cpp
   src/aggregation/aggregation.cu
   src/aggregation/result_cache.cpp
+  src/ast/expression_evaluator.cu
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/ast/operators.cpp
@@ -560,11 +561,9 @@ add_library(
   src/join/join_utils.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
-  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
-  src/join/mixed_join_size_kernel_nulls.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -1043,6 +1042,17 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudf_test_base OBJECT)
+  target_link_libraries(
+    cudf_test_base
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PRIVATE cudf::cudftestutil_impl
+  )
+  add_library(cudf::cudf_test_base ALIAS cudf_test_base)
 
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(

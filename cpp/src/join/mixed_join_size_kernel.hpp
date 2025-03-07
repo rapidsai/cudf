@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,8 @@ namespace detail {
  * probe table has already happened on the host.
  */
 
-template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
+  bool has_nulls,
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
   cudf::table_device_view probe,

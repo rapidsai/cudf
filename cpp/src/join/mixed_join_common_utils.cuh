@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,13 +45,11 @@ using row_equality = cudf::experimental::row::equality::strong_index_comparator_
  * attributes, specifically the equality operator for the non-conditional parts
  * of the operator and the evaluator used for the conditional.
  */
-template <bool has_nulls>
 struct expression_equality {
-  __device__ expression_equality(
-    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
-    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool const swap_tables,
-    row_equality const& equality_probe)
+  __device__ expression_equality(cudf::ast::detail::expression_evaluator const& evaluator,
+                                 char* thread_intermediate_storage,
+                                 bool const swap_tables,
+                                 row_equality const& equality_probe)
     : evaluator{evaluator},
       thread_intermediate_storage{thread_intermediate_storage},
       swap_tables{swap_tables},
@@ -59,8 +57,8 @@ struct expression_equality {
   {
   }
 
-  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
-  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
+  char* thread_intermediate_storage;
+  cudf::ast::detail::expression_evaluator const& evaluator;
   bool const swap_tables;
   row_equality const& equality_probe;
 };
@@ -73,9 +71,8 @@ struct expression_equality {
  * this comparator checks whether the keys themselves are equal (using the
  * provided equality_probe) and then evaluates the conditional expression
  */
-template <bool has_nulls>
-struct single_expression_equality : expression_equality<has_nulls> {
-  using expression_equality<has_nulls>::expression_equality;
+struct single_expression_equality : expression_equality {
+  using expression_equality::expression_equality;
 
   // The parameters are build/probe rather than left/right because the operator
   // is called by cuco's kernels with parameters in this order (note that this
@@ -92,7 +89,7 @@ struct single_expression_equality : expression_equality<has_nulls> {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
 
-    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+    auto output_dest = cudf::ast::detail::value_expression_result();
     // Two levels of checks:
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
@@ -100,12 +97,12 @@ struct single_expression_equality : expression_equality<has_nulls> {
     if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
       auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
       auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
-      this->evaluator.evaluate(output_dest,
+      this->evaluator.evaluate(&output_dest,
                                static_cast<size_type>(lrow_idx),
                                static_cast<size_type>(rrow_idx),
                                0,
                                this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
+      return (output_dest.is_valid() && output_dest.value<bool>());
     }
     return false;
   }
@@ -125,9 +122,8 @@ struct single_expression_equality : expression_equality<has_nulls> {
  * to compare the contents of the row indices that are stored as the payload in
  * the hash map.
  */
-template <bool has_nulls>
-struct pair_expression_equality : public expression_equality<has_nulls> {
-  using expression_equality<has_nulls>::expression_equality;
+struct pair_expression_equality : expression_equality {
+  using expression_equality::expression_equality;
 
   // The parameters are build/probe rather than left/right because the operator
   // is called by cuco's kernels with parameters in this order (note that this
@@ -143,7 +139,7 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
 
-    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+    auto output_dest = cudf::ast::detail::value_expression_result();
     // Three levels of checks:
     // 1. Row hashes of the columns involved in the equality condition are equal.
     // 2. The contents of the columns involved in the equality condition are equal.
@@ -154,8 +150,8 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
       auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
       auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
       this->evaluator.evaluate(
-        output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
+        &output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
+      return (output_dest.is_valid() && output_dest.value<bool>());
     }
     return false;
   }

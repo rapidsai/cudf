@@ -73,9 +73,12 @@ struct alignas(8) device_data_reference {
   }
 };
 
+using IntermediateType = std::int64_t;
+
+// TODO(lamarrr): rename and add RowIntermediate type that always has nulls
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+using IntermediateDataType = possibly_null_value_t<IntermediateType, has_nulls>;
 
 /**
  * @brief A container of all device data required to evaluate an expression on tables.
@@ -302,9 +305,8 @@ class expression_parser {
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
-    shmem_per_thread                         = static_cast<int>(
-      (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
-      device_expression_data.num_intermediates);
+    shmem_per_thread                         = static_cast<int>(sizeof(IntermediateDataType<true>) *
+                                        device_expression_data.num_intermediates);
   }
 
   /**
