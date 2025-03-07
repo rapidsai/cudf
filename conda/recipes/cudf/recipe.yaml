@@ -111,6 +111,8 @@ requirements:
           - cuda-cudart-dev
           - if: linux and x86_64
             then: libcufile-dev
+        else:
+          - cudatoolkit
     by_name:
       - cuda-version
 
