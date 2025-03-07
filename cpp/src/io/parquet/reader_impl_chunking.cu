@@ -542,7 +542,7 @@ struct get_page_span {
 
     auto start_page = first_page_index;
 
-    // For list columns, the row counts are estimates so we need all prefix start to correctly
+    // For list columns, the row counts are estimates so we need all prefix pages to correctly
     // compute page bounds. Otherwise, we can get an exact span of pages.
     if (not is_list) {
       start_page += thrust::distance(

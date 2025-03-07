@@ -3789,56 +3789,13 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-def test_parquet_chunked_reader_nested_lists():
-    data = [
-        {
-            "a": "g",
-            "b": {
-                "b_a": 10,
-                "b_b": {"b_b_b": None, "b_b_a": 2},
-            },
-            "c": None,
-        },
-        {"a": None, "b": {"b_a": None, "b_b": None}, "c": [15, 16]},
-        {"a": "j", "b": None, "c": [8, 10]},
-        {"a": None, "b": {"b_a": None, "b_b": None}, "c": None},
-        None,
-        {
-            "a": None,
-            "b": {"b_a": None, "b_b": {"b_b_b": 1}},
-            "c": [18, 19],
-        },
-        {"a": None, "b": None, "c": None},
-    ] * 1000
-    pa_struct = pa.Table.from_pydict({"struct": data})
-    df = cudf.DataFrame.from_arrow(pa_struct)
-
-    buffer = BytesIO()
-    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
-
-    # Only read the last row page
-    with cudf.option_context("io.parquet.low_memory", True):
-        read = cudf.read_parquet(
-            [buffer],
-            _chunk_read_limit=1024,
-            _pass_read_limit=1024,
-            nrows=999,
-            skip_rows=6001,
-        ).reset_index(drop=True)
-
-    expected = cudf.read_parquet(
-        [buffer], nrows=999, skip_rows=6001
-    ).reset_index(drop=True)
-
-    assert_eq(expected, read)
-
-
 @pytest.mark.parametrize("chunk_read_limit", [1024, 10240])
 @pytest.mark.parametrize("pass_read_limit", [1024, 10240])
-@pytest.mark.parametrize("num_rows", [999, 99])
-@pytest.mark.parametrize("skip_rows", [1, 4010, 13001])
+@pytest.mark.parametrize("num_rows", [99, 2900])
+@pytest.mark.parametrize("skip_rows", [4902, 6001])
+@pytest.mark.parametrize("data_size", [1000, 2000])
 def test_parquet_chunked_reader_structs(
-    chunk_read_limit, pass_read_limit, num_rows, skip_rows
+    chunk_read_limit, pass_read_limit, num_rows, skip_rows, data_size
 ):
     data = [
         {
@@ -3859,15 +3816,15 @@ def test_parquet_chunked_reader_structs(
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},
-    ] * 2000
+    ] * data_size
 
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer, row_group_size_rows=5000, max_page_size_rows=1000)
+    df.to_parquet(buffer, row_group_size_rows=5000, max_page_size_rows=100)
 
     # Number of rows to read
-    nrows = num_rows if num_rows is not None else len(df) - skip_rows
+    nrows = num_rows if skip_rows + num_rows < len(df) else len(df) - skip_rows
 
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
