@@ -162,12 +162,17 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
   auto indices = rmm::device_uvector<int64_t>(chars_size - min_width + 1, stream);
   auto sizes   = rmm::device_uvector<int16_t>(indices.size(), stream);
 
-  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
-  // note: thrust::sort may be limited to a 32-bit range
-  thrust::sort(rmm::exec_policy_nosync(stream),
-               indices.begin(),
-               indices.end(),
-               sort_comparator_fn{d_input_chars, chars_size});
+  {
+    auto const cmp_op = sort_comparator_fn{d_input_chars, chars_size};
+    auto const seq    = thrust::make_counting_iterator<int64_t>(0);
+    auto tmp_bytes    = std::size_t{0};
+    cub::DeviceMergeSort::SortKeysCopy(
+      nullptr, tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
+    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+    // std::cout << indices.size() * sizeof(int64_t) << "/" << tmp_bytes << std::endl;
+    cub::DeviceMergeSort::SortKeysCopy(
+      tmp_stg.data(), tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
+  }
 
   // locate candidate duplicates within the suffixes produced by sort
   thrust::transform(rmm::exec_policy_nosync(stream),
