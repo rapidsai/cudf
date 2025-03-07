@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import infer_dtype, is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
@@ -26,8 +26,8 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     find_common_type,
-    min_column_type,
     min_signed_type,
+    min_unsigned_type,
     np_dtypes_to_pandas_dtypes,
 )
 
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -182,7 +183,7 @@ class NumericalColumn(NumericalBaseColumn):
     @acquire_spill_lock()
     def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
         plc_column = plc.transform.transform(
-            self.to_pylibcudf(mode="read"),
+            [self.to_pylibcudf(mode="read")],
             compiled_op[0],
             plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
             True,
@@ -214,7 +215,7 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
-                return self.astype(truediv_type)._binaryop(other, op)
+                return self.astype(np.dtype(truediv_type))._binaryop(other, op)
         elif op in {
             "__lt__",
             "__gt__",
@@ -384,7 +385,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -395,7 +396,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -405,7 +406,7 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
@@ -439,7 +440,7 @@ class NumericalColumn(NumericalBaseColumn):
         except (MixedTypeError, TypeError) as e:
             # There is a corner where `values` can be of `object` dtype
             # but have values of homogeneous type.
-            inferred_dtype = cudf.api.types.infer_dtype(values)
+            inferred_dtype = infer_dtype(values)
             if (
                 self.dtype.kind in {"i", "u"} and inferred_dtype == "integer"
             ) or (
@@ -468,6 +469,34 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
+
+    def _min_column_type(self, expected_type: np.dtype) -> np.dtype:
+        """
+        Return the smallest dtype which can represent all elements of self.
+        """
+        if self.null_count == len(self):
+            return self.dtype
+
+        min_value, max_value = self.min(), self.max()
+        either_is_inf = np.isinf(min_value) or np.isinf(max_value)
+        if not either_is_inf and expected_type.kind == "i":
+            max_bound_dtype = min_signed_type(max_value)
+            min_bound_dtype = min_signed_type(min_value)
+            return np.promote_types(max_bound_dtype, min_bound_dtype)
+        elif not either_is_inf and expected_type.kind == "u":
+            max_bound_dtype = min_unsigned_type(max_value)
+            min_bound_dtype = min_unsigned_type(min_value)
+            return np.promote_types(max_bound_dtype, min_bound_dtype)
+        elif self.dtype.kind == "f" or expected_type.kind == "f":
+            return np.promote_types(
+                expected_type,
+                np.promote_types(
+                    np.min_scalar_type(float(max_value)),
+                    np.min_scalar_type(float(min_value)),
+                ),
+            )
+        else:
+            return self.dtype
 
     def find_and_replace(
         self,
@@ -559,15 +588,20 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            cudf_obj: cudf.Scalar | ColumnBase = cudf.Scalar(fill_value)
-            if not as_column(cudf_obj).can_cast_safely(self.dtype):
+            cudf_obj = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(
+                    pa_scalar_to_plc_scalar(pa.scalar(fill_value)), 1
+                )
+            )
+            if not cudf_obj.can_cast_safely(self.dtype):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
                     f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
+            return super()._validate_fillna_value(fill_value)
         else:
             cudf_obj = as_column(fill_value, nan_as_null=False)
             if not cudf_obj.can_cast_safely(self.dtype):  # type: ignore[attr-defined]
@@ -576,7 +610,7 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{cudf_obj.dtype.type.__name__} to "
                     f"{self.dtype.type.__name__}"
                 )
-        return cudf_obj.astype(self.dtype)
+            return cudf_obj.astype(self.dtype)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
@@ -762,8 +796,8 @@ def _normalize_find_and_replace_input(
             normalized_column = normalized_column.astype(input_column_dtype)
         if normalized_column.can_cast_safely(input_column_dtype):
             return normalized_column.astype(input_column_dtype)
-        col_to_normalize_dtype = min_column_type(
-            normalized_column, input_column_dtype
+        col_to_normalize_dtype = normalized_column._min_column_type(  # type: ignore[attr-defined]
+            input_column_dtype
         )
         # Scalar case
         if len(col_to_normalize) == 1:

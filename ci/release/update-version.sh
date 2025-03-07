@@ -43,6 +43,7 @@ sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
 DEPENDENCIES=(
   cudf
   cudf_kafka
+  cudf-polars
   cugraph
   cuml
   custreamz
@@ -50,6 +51,9 @@ DEPENDENCIES=(
   dask-cudf
   kvikio
   libcudf
+  libcudf-example
+  libcudf_kafka
+  libcudf-tests
   libkvikio
   librmm
   pylibcudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include "nested_json.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -208,7 +209,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                           thrust::make_constant_iterator(1),
                           non_leaf_nodes.begin(),
                           non_leaf_nodes_children.begin(),
-                          thrust::equal_to<TreeDepthT>());
+                          cuda::std::equal_to<TreeDepthT>());
 
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     non_leaf_nodes_children.begin(),

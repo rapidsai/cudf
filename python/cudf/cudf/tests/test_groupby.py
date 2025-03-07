@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -4103,4 +4103,32 @@ def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
+    assert_eq(result, expected)
+
+
+def test_agg_duplicate_aggs_pandas_compat_raises():
+    agg = {"b": ["mean", "mean"]}
+    dfgb = cudf.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6]}).groupby(["a"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            dfgb.agg(agg)
+
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
+    expected = cudf.DataFrame(
+        [4.5, 6.0],
+        index=cudf.Index([1, 2], name="a"),
+        columns=pd.MultiIndex.from_tuples([("b", "mean")]),
+    )
     assert_eq(result, expected)
