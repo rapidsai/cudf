@@ -49,4 +49,10 @@ def test_num_rows_per_resource(parquet_data):
     assert plc.io.parquet.read_parquet(options).num_rows_per_source == [3, 2]
 
 
+def test_num_input_row_groups(parquet_data):
+    source = plc.io.SourceInfo(parquet_data)
+    options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+    assert plc.io.parquet.read_parquet(options).num_input_row_groups == 2
+
+
 # TODO: Test more IO types
