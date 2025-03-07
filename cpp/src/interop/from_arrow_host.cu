@@ -120,22 +120,6 @@ struct dispatch_copy_from_arrow_host {
   }
 };
 
-// forward declaration is needed because `type_dispatch` instantiates the
-// dispatch_copy_from_arrow_host struct causing a recursive situation for struct,
-// dictionary and list_view types.
-//
-// This function is simply a convenience wrapper around the dispatch functor with
-// some extra handling to avoid having to reproduce it for all of the nested types.
-// It also allows us to centralize the location where the recursive calls happen
-// so that we only need to forward declare this one function, rather than multiple
-// functions which handle the overloads for nested types (list, struct, etc.)
-std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
-                                        ArrowArray const* input,
-                                        data_type type,
-                                        bool skip_mask,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr);
-
 template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSchemaView* schema,
                                                                         ArrowArray const* input,
@@ -302,6 +286,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
                mr);
 }
 
+}  // namespace
+
 std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         ArrowArray const* input,
                                         data_type type,
@@ -323,8 +309,6 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                       rmm::device_buffer{},
                                       input->length);
 }
-
-}  // namespace
 
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
