@@ -53,7 +53,7 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 #if defined(PREPROCESS_DEBUG)
-void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view _stream)
+void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream_view _stream)
 {
   pages.device_to_host_sync(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
