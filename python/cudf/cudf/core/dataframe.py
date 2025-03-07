@@ -83,8 +83,8 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
-    cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
     is_dtype_obj_numeric,
@@ -6669,12 +6669,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
@@ -6841,6 +6849,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
+
+        def cudf_dtype_from_pydata_dtype(dtype):
+            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+            Python dtype.
+            """
+            if cudf.api.types._is_categorical_dtype(dtype):
+                return cudf.core.dtypes.CategoricalDtype
+            elif cudf.api.types.is_decimal32_dtype(dtype):
+                return cudf.core.dtypes.Decimal32Dtype
+            elif cudf.api.types.is_decimal64_dtype(dtype):
+                return cudf.core.dtypes.Decimal64Dtype
+            elif cudf.api.types.is_decimal128_dtype(dtype):
+                return cudf.core.dtypes.Decimal128Dtype
+            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+                return dtype.type
+            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
