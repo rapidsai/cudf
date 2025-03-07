@@ -291,7 +291,6 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
-target_include_directories(INTEROP_NVBENCH PRIVATE ${CMAKE_SOURCE_DIR}/tests/interop)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
