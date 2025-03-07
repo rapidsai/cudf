@@ -288,6 +288,7 @@ def _(
         aggs,
         node.maintain_order,
         node.options,
+        translator.config.config.copy(),
         inp,
     )
 
