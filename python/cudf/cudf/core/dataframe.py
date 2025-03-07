@@ -1886,18 +1886,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
-            if len(set(dtype.keys()) - set(self._column_names)) > 0:
+            if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
+            dtype = {
+                col_name: cudf.dtype(dtype)
+                for col_name, dtype in dtype.items()  # type: ignore[union-attr]
+            }
         else:
-            dtype = {cc: dtype for cc in self._column_names}
+            dtype = {cc: cudf.dtype(dtype) for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
     def _clean_renderable_dataframe(self, output: Self) -> str:

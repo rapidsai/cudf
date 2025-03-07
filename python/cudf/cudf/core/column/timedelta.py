@@ -34,7 +34,6 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         DatetimeLikeScalar,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -328,7 +327,7 @@ class TimeDeltaColumn(ColumnBase):
         raise NotImplementedError("round is currently not implemented")
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -339,7 +338,7 @@ class TimeDeltaColumn(ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_datetime_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
@@ -361,7 +360,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]

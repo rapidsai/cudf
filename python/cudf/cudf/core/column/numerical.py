@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -384,7 +385,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -395,7 +396,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -405,7 +406,7 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:

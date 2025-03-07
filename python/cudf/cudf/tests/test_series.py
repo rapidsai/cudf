@@ -3020,7 +3020,7 @@ def test_roundtrip_series_plc_column(ps):
 
 def test_non_strings_dtype_object_pandas_compat_raises():
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             cudf.Series([1], dtype=object)
 
 
