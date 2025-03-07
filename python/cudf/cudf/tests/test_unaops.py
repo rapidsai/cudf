@@ -8,6 +8,7 @@ from decimal import Decimal
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse
 
 import cudf
 from cudf import Series
@@ -83,7 +84,15 @@ def generate_valid_scalar_unaop_combos():
 
 @pytest.mark.filterwarnings("ignore:overflow encountered in scalar negative")
 @pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
-def test_scalar_unary_operations(slr, dtype, op):
+def test_scalar_unary_operations(slr, dtype, op, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=op in {np.ceil, np.floor}
+            and not isinstance(slr, float)
+            and parse(np.__version__) >= parse("2.1"),
+            reason="https://github.com/cupy/cupy/issues/9018",
+        )
+    )
     slr_host = np.array([slr])[0].astype(cudf.dtype(dtype))
     # The scalar may be out of bounds, so go via array force-cast
     # NOTE: This is a change in behavior
