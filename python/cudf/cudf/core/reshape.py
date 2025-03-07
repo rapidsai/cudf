@@ -12,7 +12,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_scalar
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     ColumnBase,
@@ -21,7 +21,11 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    min_unsigned_type,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -820,7 +824,7 @@ def get_dummies(
     dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = ["object", "category"]
+        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
@@ -1362,7 +1366,7 @@ def _one_hot_encode_column(
 
 
 def _length_check_params(obj, columns, name):
-    if cudf.api.types.is_list_like(obj):
+    if is_list_like(obj):
         if len(obj) != len(columns):
             raise ValueError(
                 f"Length of '{name}' ({len(obj)}) did not match the "
