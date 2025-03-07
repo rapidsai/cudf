@@ -150,7 +150,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series._from_column(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -620,7 +620,7 @@ class CategoricalColumn(column.ColumnBase):
         return self._codes
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
@@ -1086,20 +1086,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
-    def as_categorical_column(self, dtype: Dtype) -> Self:
-        if isinstance(dtype, str) and dtype == "category":
-            return self
-        if isinstance(dtype, pd.CategoricalDtype):
-            dtype = cudf.CategoricalDtype.from_pandas(dtype)
-        if (
-            isinstance(dtype, cudf.CategoricalDtype)
-            and dtype.categories is None
-            and dtype.ordered is None
-        ):
-            return self
-        elif not isinstance(dtype, CategoricalDtype):
-            raise ValueError("dtype must be CategoricalDtype")
-
+    def as_categorical_column(self, dtype: cudf.CategoricalDtype) -> Self:
         if not isinstance(self.categories, type(dtype.categories._column)):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
@@ -1130,16 +1117,16 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self) -> StringColumn:
         return self._get_decategorized_column().as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(dtype)
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(dtype)
 
     def _get_decategorized_column(self) -> ColumnBase:
