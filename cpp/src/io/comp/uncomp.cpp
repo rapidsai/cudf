@@ -663,7 +663,6 @@ void host_decompress(compression_type compression,
   if (compression == compression_type::NONE) { return; }
 
   auto const num_chunks = inputs.size();
-  auto h_results        = cudf::detail::make_host_vector<compression_result>(num_chunks, stream);
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
@@ -688,20 +687,24 @@ void host_decompress(compression_type compression,
       [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
+
       auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
       auto const uncomp_size = decompress(compression, h_in, h_out, cur_stream);
-      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, uncomp_size),
-                                         host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
-                                         cur_stream);
+      h_in.clear();  // Free pinned memory as soon as possible
+
+      cudf::detail::cuda_memcpy_async<uint8_t>(d_out.subspan(0, uncomp_size),
+                                               host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
+                                               cur_stream);
       return uncomp_size;
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-
+  auto h_results = cudf::detail::make_pinned_vector_sync<compression_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
+  cudf::detail::join_streams(streams, stream);
 }
 
 [[nodiscard]] bool host_decompression_supported(compression_type compression)
