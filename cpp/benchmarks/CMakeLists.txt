@@ -360,6 +360,7 @@ ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
+  text/byte_pair_encoding.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp
   text/jaccard.cpp
