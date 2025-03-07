@@ -21,7 +21,11 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    min_unsigned_type,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -820,7 +824,7 @@ def get_dummies(
     dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = ["object", "category"]
+        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
