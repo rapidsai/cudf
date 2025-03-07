@@ -1545,12 +1545,10 @@ void reader::impl::create_global_chunk_info()
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
-    // Adjust row_group_rows for `skip_rows` for the first row_group but cap at row_group_start +
-    // row_group.num_rows
+    // Adjust row_group_rows for `skip_rows` for the first row_group but cap at row_group.num_rows
     auto const adjusted_row_group_rows = skip_rows ? skip_rows - row_groups_info[0].start_row : 0;
-    auto row_group_rows                = std::min<size_t>(
-      std::min<size_t>(remaining_rows, row_group.num_rows) + adjusted_row_group_rows,
-      row_group_start + row_group.num_rows);
+    auto row_group_rows =
+      std::min<size_t>(remaining_rows + adjusted_row_group_rows, row_group.num_rows);
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
