@@ -99,7 +99,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                cudf::cudf_test_base $<TARGET_NAME_IF_EXISTS:conda_env>
+                                cudf::cudftestutil_objects $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -129,7 +129,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   target_link_libraries(
     ${CMAKE_BENCH_NAME}
     PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
-            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudf_test_base
+            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_objects
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
