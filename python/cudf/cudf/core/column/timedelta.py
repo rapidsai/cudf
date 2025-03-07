@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -19,7 +18,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, np_to_pa_dtype
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -194,26 +193,6 @@ class TimeDeltaColumn(ColumnBase):
                 pa_array.to_numpy(zero_copy_only=False, writable=True)
             )
 
-    @acquire_spill_lock()
-    def to_arrow(self) -> pa.Array:
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(
-                self.mask_array_view(mode="read").copy_to_host()
-            )
-        data = pa.py_buffer(
-            self.astype(np.dtype(np.int64))
-            .data_array_view(mode="read")
-            .copy_to_host()
-        )
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
@@ -346,7 +325,7 @@ class TimeDeltaColumn(ColumnBase):
         raise NotImplementedError("round is currently not implemented")
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -357,7 +336,7 @@ class TimeDeltaColumn(ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_datetime_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
@@ -379,7 +358,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
