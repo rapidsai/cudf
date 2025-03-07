@@ -2046,13 +2046,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def copy_if_else(
-        self, other: Self | cudf.Scalar, boolean_mask: NumericalColumn
+        self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
     ) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.copying.copy_if_else(
                 self.to_pylibcudf(mode="read"),
-                other.device_value
-                if isinstance(other, cudf.Scalar)
+                other
+                if isinstance(other, plc.Scalar)
                 else other.to_pylibcudf(mode="read"),
                 boolean_mask.to_pylibcudf(mode="read"),
             )
@@ -2473,7 +2473,8 @@ def as_column(
             mask = None
 
         arbitrary = cupy.asarray(arbitrary, order="C")
-
+        if not arbitrary.dtype.isnative:
+            arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
         if nan_as_null or (mask is None and nan_as_null is None):
