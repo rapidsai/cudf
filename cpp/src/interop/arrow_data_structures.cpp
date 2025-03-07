@@ -301,7 +301,7 @@ void arrow_table::to_arrow_schema(ArrowSchema* output,
 void arrow_table::to_arrow(ArrowDeviceArray* output,
                            ArrowDeviceType device_type,
                            rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr)
+                           rmm::device_async_resource_ref mr) const
 {
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
@@ -309,7 +309,7 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
 arrow_table::arrow_table(ArrowSchema&& schema,
                          ArrowDeviceArray&& input,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr) const
+                         rmm::device_async_resource_ref mr)
 {
   switch (input.device_type) {
     case ARROW_DEVICE_CPU: {
