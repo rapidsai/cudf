@@ -2215,11 +2215,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if is_mixed_with_object_dtype(other_col, self):
                 raise TypeError(mixed_err)
 
-            if not _can_cast(other_col.dtype, self.dtype):
-                warnings.warn(
-                    f"Type-casting from {other.dtype} "
-                    f"to {self.dtype}, there could be potential data loss"
-                )
+            if other_col.dtype != self.dtype:
+                try:
+                    warn = (
+                        find_common_type((other_col.dtype, self.dtype))
+                        == CUDF_STRING_DTYPE
+                    )
+                except NotImplementedError:
+                    warn = True
+                if warn:
+                    warnings.warn(
+                        f"Type-casting from {other_col.dtype} "
+                        f"to {self.dtype}, there could be potential data loss"
+                    )
             if other_is_scalar:
                 other_out = pa_scalar_to_plc_scalar(
                     pa.scalar(other, type=cudf_dtype_to_pa_type(self.dtype))
@@ -2265,56 +2273,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return casted_col.copy_if_else(casted_other, cond)._with_type_metadata(  # type: ignore[arg-type]
             self.dtype
         )
-
-
-def _can_cast(from_dtype: DtypeObj, to_dtype: DtypeObj) -> bool:
-    """
-    Utility function to determine if we can cast
-    from `from_dtype` to `to_dtype`. This function primarily calls
-    `np.can_cast` but with some special handling around
-    cudf specific dtypes.
-    """
-    # TODO : Add precision & scale checking for
-    # decimal types in future
-
-    if isinstance(from_dtype, cudf.core.dtypes.DecimalDtype):
-        if isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
-            return True
-        elif isinstance(to_dtype, np.dtype):
-            if to_dtype.kind in {"i", "f", "u", "U", "O"}:
-                return True
-            else:
-                return False
-        else:
-            return False
-    elif isinstance(from_dtype, np.dtype):
-        if isinstance(to_dtype, np.dtype):
-            return np.can_cast(from_dtype, to_dtype)
-        elif isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
-            if from_dtype.kind in {"i", "f", "u", "U", "O"}:
-                return True
-            else:
-                return False
-        elif isinstance(to_dtype, cudf.CategoricalDtype):
-            return True
-        else:
-            return False
-    elif isinstance(from_dtype, cudf.ListDtype):
-        # TODO: Add level based checks too once casting of
-        # list columns is supported
-        if isinstance(to_dtype, cudf.ListDtype):
-            return np.can_cast(from_dtype.leaf_type, to_dtype.leaf_type)
-        else:
-            return False
-    elif isinstance(from_dtype, cudf.CategoricalDtype):
-        if isinstance(to_dtype, cudf.CategoricalDtype):
-            return True
-        elif isinstance(to_dtype, np.dtype):
-            return np.can_cast(from_dtype.categories.dtype, to_dtype)
-        else:
-            return False
-    else:
-        return np.can_cast(from_dtype, to_dtype)
 
 
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
