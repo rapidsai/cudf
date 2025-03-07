@@ -1677,11 +1677,36 @@ class Projection(IR):
 class MergeSorted(IR):
     """Merge sorted operation."""
 
-    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
-        # libcudf merge is not stable wrt order of inputs, since
-        # it uses a priority queue to manage the tables it produces.
-        # See: https://github.com/rapidsai/cudf/issues/16010
-        raise NotImplementedError("MergeSorted not yet implemented")
+    __slots__ = ("key",)
+    _non_child = ("schema", "key")
+    key: str
+    """Key that is sorted."""
+
+    def __init__(self, schema: Schema, key: str, left: IR, right: IR):
+        assert isinstance(left, Sort)
+        assert isinstance(right, Sort)
+        assert left.order == right.order
+        assert len(left.schema.keys()) <= len(right.schema.keys())
+        self.schema = schema
+        self.key = key
+        self.children = (left, right)
+        self._non_child_args = (key,)
+
+    @classmethod
+    def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
+        left, right = dfs
+        right = right.discard_columns(right.column_names_set - left.column_names_set)
+        on_col_left = left.select_columns({key})[0]
+        on_col_right = right.select_columns({key})[0]
+        return DataFrame.from_table(
+            plc.merge.merge(
+                [right.table, left.table],
+                [left.column_names.index(key), right.column_names.index(key)],
+                [on_col_left.order, on_col_right.order],
+                [on_col_left.null_order, on_col_right.null_order],
+            ),
+            left.column_names,
+        )
 
 
 class MapFunction(IR):

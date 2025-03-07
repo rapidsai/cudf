@@ -468,14 +468,14 @@ def _(
 def _(
     node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    key = node.key
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
-    key = node.key
     return ir.MergeSorted(
         schema,
+        key,
         inp_left,
         inp_right,
-        key,
     )
 
 

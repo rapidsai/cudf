@@ -61,6 +61,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     can_convert_to_column,
     find_common_type,
     is_dtype_obj_numeric,
@@ -75,8 +76,8 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from cudf._typing import (
-        ColumnLike,
         DataFrameOrSeries,
+        Dtype,
         NotImplementedType,
         ScalarLike,
     )
@@ -115,7 +116,7 @@ def _describe_timetype(obj, percentiles, typ):
             zip(
                 _format_percentile_names(percentiles),
                 obj.quantile(percentiles)
-                .astype("str")
+                .astype(CUDF_STRING_DTYPE)
                 .to_numpy(na_value=np.nan)
                 .tolist(),
             )
@@ -164,12 +165,13 @@ def _describe_categorical(obj, percentiles):
     return data
 
 
-def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    to_type = find_common_type([type(value), col.dtype])
-    val_col = as_column(value, dtype=to_type)
+    val_col = as_column(value)
+    to_type = find_common_type([val_col.dtype, col.dtype])
+    val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
 
     col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
@@ -631,6 +633,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
             if copy and not isinstance(data, (pd.Series, pd.Index)):
@@ -686,9 +690,6 @@ class Series(SingleColumnFrame, IndexedFrame):
                 column = column.copy(deep=True)
 
         assert isinstance(column, ColumnBase)
-
-        if dtype is not None:
-            column = column.astype(dtype)
 
         if name_from_data is not None and name is None:
             name = name_from_data
@@ -1462,12 +1463,12 @@ class Series(SingleColumnFrame, IndexedFrame):
             preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
-                    preprocess.astype("str")
+                    preprocess.astype(CUDF_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                "str"
+                                CUDF_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -2124,18 +2125,19 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
                     "Only the Series name can be used for the key in Series "
                     "dtype mappings."
                 )
+            dtype = {self.name: cudf.dtype(dtype[self.name])}
         else:
-            dtype = {self.name: dtype}
+            dtype = {self.name: cudf.dtype(dtype)}
         return super().astype(dtype, copy, errors)
 
     @_performance_tracking
