@@ -74,7 +74,10 @@ struct arrow_array_container {
 cudf::column_metadata get_column_metadata(cudf::column_view const& input)
 {
   cudf::column_metadata meta{};
-  std::transform( input.child_begin(), input.child_end(), std::back_inserter(meta.children_meta), [] (auto& cv) { return get_column_metadata(cv); } );
+  std::transform(
+    input.child_begin(), input.child_end(), std::back_inserter(meta.children_meta), [](auto& cv) {
+      return get_column_metadata(cv);
+    });
   return meta;
 }
 
@@ -84,7 +87,9 @@ std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& in
   for (auto i = 0; i < input.num_columns(); ++i) {
     meta.push_back(get_column_metadata(input.column(i)));
   }
-  std::transform( input.begin(), input.end(), std::back_inserter(meta), [] (auto& cv) { return get_column_metadata(cv); } );
+  std::transform(input.begin(), input.end(), std::back_inserter(meta), [](auto& cv) {
+    return get_column_metadata(cv);
+  });
   return meta;
 }
 
@@ -250,7 +255,7 @@ void arrow_column::to_arrow_schema(ArrowSchema* output,
 void arrow_column::to_arrow(ArrowDeviceArray* output,
                             ArrowDeviceType device_type,
                             rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+                            rmm::device_async_resource_ref mr) const
 {
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
@@ -263,7 +268,7 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
 // representation is not identical between arrow and cudf (like bools) and
 // avoiding constant back-and-forth conversion.
 unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr)
+                                        rmm::device_async_resource_ref mr) const
 {
   return from_arrow_device_column(&container->schema, &container->owner, stream, mr);
 }
@@ -281,7 +286,7 @@ arrow_table::arrow_table(cudf::table&& input,
 }
 
 unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      rmm::device_async_resource_ref mr) const
 {
   return from_arrow_device(&container->schema, &container->owner, stream, mr);
 }
@@ -304,7 +309,7 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
 arrow_table::arrow_table(ArrowSchema&& schema,
                          ArrowDeviceArray&& input,
                          rmm::cuda_stream_view stream,
-                         rmm::device_async_resource_ref mr)
+                         rmm::device_async_resource_ref mr) const
 {
   switch (input.device_type) {
     case ARROW_DEVICE_CPU: {
@@ -331,7 +336,7 @@ arrow_table::arrow_table(ArrowSchema&& schema,
 {
   ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
   ArrowArrayMove(&input, &arr.array);
-  container  = arrow_table(std::move(schema), std::move(arr), stream, mr).container;
+  container = arrow_table(std::move(schema), std::move(arr), stream, mr).container;
 }
 
 arrow_table::arrow_table(ArrowArrayStream&& input,

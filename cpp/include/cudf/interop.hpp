@@ -307,7 +307,7 @@ class arrow_column {
   void to_arrow(ArrowDeviceArray* output,
                 ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   // TODO: mutable_view
   /**
@@ -435,7 +435,7 @@ class arrow_table {
   void to_arrow(ArrowDeviceArray* output,
                 ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   std::shared_ptr<arrow_array_container>
