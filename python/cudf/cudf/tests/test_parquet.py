@@ -3791,8 +3791,8 @@ def test_parquet_chunked_reader(
 
 @pytest.mark.parametrize("chunk_read_limit", [1024, 10240])
 @pytest.mark.parametrize("pass_read_limit", [1024, 10240])
-@pytest.mark.parametrize("num_rows", [99, 2900])
-@pytest.mark.parametrize("skip_rows", [4902, 6001])
+@pytest.mark.parametrize("num_rows", [99, 2901])
+@pytest.mark.parametrize("skip_rows", [4912, 6001])
 @pytest.mark.parametrize("data_size", [1000, 2000])
 def test_parquet_chunked_reader_structs(
     chunk_read_limit, pass_read_limit, num_rows, skip_rows, data_size
@@ -3821,7 +3821,7 @@ def test_parquet_chunked_reader_structs(
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer, row_group_size_rows=5000, max_page_size_rows=100)
+    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
 
     # Number of rows to read
     nrows = num_rows if skip_rows + num_rows < len(df) else len(df) - skip_rows
