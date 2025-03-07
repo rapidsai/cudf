@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -11,15 +11,13 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 
 __all__ = ["Ternary"]
@@ -27,12 +25,18 @@ __all__ = ["Ternary"]
 
 class Ternary(Expr):
     __slots__ = ()
-    _non_child = ("dtype",)
+    _non_child = ("dtype", "context")
 
     def __init__(
-        self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
+        self,
+        dtype: plc.DataType,
+        context: ExecutionContext,
+        when: Expr,
+        then: Expr,
+        otherwise: Expr,
     ) -> None:
         self.dtype = dtype
+        self.context = context
         self.children = (when, then, otherwise)
         self.is_pointwise = True
 
@@ -40,13 +44,11 @@ class Ternary(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         when, then, otherwise = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
+            child.evaluate(df, mapping=mapping) for child in self.children
         )
         then_obj = then.obj_scalar if then.is_scalar else then.obj
         otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
