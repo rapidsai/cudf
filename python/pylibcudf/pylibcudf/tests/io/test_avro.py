@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import io
 import itertools
@@ -7,6 +7,8 @@ import fastavro
 import pyarrow as pa
 import pytest
 from utils import assert_table_and_meta_eq
+
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 
@@ -62,9 +64,12 @@ def row_opts(request):
     return request.param
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [["prop1"], [], ["prop1", "prop2"]])
 @pytest.mark.parametrize("nullable", [True, False])
-def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
+def test_read_avro(
+    avro_dtypes, avro_dtype_data, row_opts, columns, nullable, stream
+):
     (avro_type1, expected_type1), (avro_type2, expected_type2) = avro_dtypes
 
     avro_type1 = avro_type1 if not nullable else ["null", avro_type1]
@@ -106,7 +111,8 @@ def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
             .skip_rows(skip_rows)
             .num_rows(num_rows)
             .build()
-        )
+        ),
+        stream,
     )
 
     expected = pa.Table.from_arrays(

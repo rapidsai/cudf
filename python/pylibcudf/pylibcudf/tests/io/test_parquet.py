@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 
 import pyarrow as pa
@@ -6,6 +6,8 @@ import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
 from utils import assert_table_and_meta_eq, make_source
+
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.expressions import (
@@ -20,9 +22,10 @@ from pylibcudf.expressions import (
 _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
 def test_read_parquet_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns
+    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
@@ -41,7 +44,7 @@ def test_read_parquet_basic(
     if columns is not None:
         options.set_columns(columns)
 
-    res = plc.io.parquet.read_parquet(options)
+    res = plc.io.parquet.read_parquet(options, stream)
 
     if columns is not None:
         pa_table = pa_table.select(columns)
@@ -119,6 +122,7 @@ def test_read_parquet_filters(
 # bool use_pandas_metadata = True
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("write_v2_headers", [True, False])
 @pytest.mark.parametrize("utc_timestamps", [True, False])
 @pytest.mark.parametrize("write_arrow_schema", [True, False])
@@ -144,6 +148,7 @@ def test_write_parquet(
     max_page_size_bytes,
     max_page_size_rows,
     max_dictionary_size,
+    stream,
 ):
     _, pa_table = table_data
     if len(pa_table) == 0 and partitions is not None:
@@ -182,5 +187,5 @@ def test_write_parquet(
     if max_dictionary_size is not None:
         options.set_max_dictionary_size(max_dictionary_size)
 
-    result = plc.io.parquet.write_parquet(options)
+    result = plc.io.parquet.write_parquet(options, stream)
     assert isinstance(result, memoryview)

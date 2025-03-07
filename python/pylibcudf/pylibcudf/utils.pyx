@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator import dereference
 
@@ -9,6 +9,9 @@ from cuda.bindings import runtime
 
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport bitmask_type
+
+from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from .scalar cimport Scalar
 
@@ -55,3 +58,9 @@ def _is_concurrent_managed_access_supported():
             f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
         )
     return supports_managed_access != 0
+
+
+cdef Stream _get_stream(Stream stream = None):
+    if stream is None:
+        stream = DEFAULT_STREAM
+    return stream
