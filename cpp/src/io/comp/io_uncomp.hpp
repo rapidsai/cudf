@@ -52,6 +52,17 @@ size_t decompress(compression_type compression,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
+/**
+ * @brief Decompresses device memory buffers.
+ *
+ * @param compression Type of compression of the output data
+ * @param inputs      Device memory buffers to decompress
+ * @param outputs     Device memory buffers to store the decompressed output
+ * @param results     Compression results
+ * @param max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param max_total_uncomp_size Maximum size of the total uncompressed data
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ */
 void decompress(compression_type compression,
                 device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,

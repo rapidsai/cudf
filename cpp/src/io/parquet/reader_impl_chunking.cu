@@ -155,17 +155,30 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
 }
 #endif  // CHUNKING_DEBUG
 
-compression_type from_parquet_compression(Compression compression)
+/**
+ * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
+ */
+__host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_support(
+  Compression compression)
 {
   switch (compression) {
-    case Compression::BROTLI: return compression_type::BROTLI;
-    case Compression::GZIP: return compression_type::GZIP;
-    case Compression::LZ4_RAW: return compression_type::LZ4;
-    case Compression::SNAPPY: return compression_type::SNAPPY;
-    case Compression::ZSTD: return compression_type::ZSTD;
-    case Compression::UNCOMPRESSED: return compression_type::NONE;
-    default: CUDF_FAIL("Unsupported compression type");
+    case Compression::BROTLI: return {compression_type::BROTLI, true};
+    case Compression::GZIP: return {compression_type::GZIP, true};
+    case Compression::LZ4_RAW: return {compression_type::LZ4, true};
+    case Compression::LZO: return {compression_type::LZO, false};
+    case Compression::SNAPPY: return {compression_type::SNAPPY, true};
+    case Compression::ZSTD: return {compression_type::ZSTD, true};
+    case Compression::UNCOMPRESSED: return {compression_type::NONE, true};
+    default: break;
   }
+  return {compression_type::NONE, false};
+}
+
+compression_type from_parquet_compression(Compression compression)
+{
+  auto const [type, supported] = parquet_compression_support(compression);
+  CUDF_EXPECTS(supported, "Unsupported compression type");
+  return type;
 }
 
 /**
@@ -723,13 +736,13 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
   size_t cur_row_index       = skip_rows;
   size_t cur_cumulative_size = 0;
-  auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
+  auto const max_row = std::min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
   while (cur_row_index < max_row) {
     auto const split_pos = find_next_split(
       cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
 
     auto const start_row = cur_row_index;
-    cur_row_index        = min(max_row, h_aggregated_info[split_pos].end_row_index);
+    cur_row_index        = std::min(max_row, h_aggregated_info[split_pos].end_row_index);
     splits.push_back({start_row, cur_row_index - start_row});
     cur_pos             = split_pos;
     cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
@@ -1007,17 +1020,7 @@ struct get_decomp_info {
 
   __device__ decompression_info operator()(PageInfo const& p) const
   {
-    auto const comp_type = [codec = chunks[p.chunk_idx].codec]() {
-      switch (codec) {
-        case SNAPPY: return compression_type::SNAPPY;
-        case GZIP: return compression_type::GZIP;
-        case BROTLI: return compression_type::BROTLI;
-        case ZSTD: return compression_type::ZSTD;
-        case LZ4_RAW: return compression_type::LZ4;
-        default: return compression_type::NONE;
-      }
-    }();
-    return {comp_type,
+    return {parquet_compression_support(chunks[p.chunk_idx].codec).first,
             1,
             static_cast<size_t>(p.uncompressed_page_size),
             static_cast<size_t>(p.uncompressed_page_size)};
@@ -1068,11 +1071,10 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
   // retrieve to host so we can get compression scratch sizes
   auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
-  thrust::transform(thrust::host,
-                    h_decomp_info.begin(),
-                    h_decomp_info.end(),
-                    temp_cost.begin(),
-                    cudf::io::detail::get_decompression_scratch_size);
+  std::transform(h_decomp_info.begin(),
+                 h_decomp_info.end(),
+                 temp_cost.begin(),
+                 cudf::io::detail::get_decompression_scratch_size);
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
