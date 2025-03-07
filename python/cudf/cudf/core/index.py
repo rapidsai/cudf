@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
+    from cudf._typing import Dtype
     from cudf.core.frame import Frame
 
 
@@ -1325,8 +1326,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return type(self)._from_column(col, name=name)
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True) -> Index:
-        return super().astype({self.name: dtype}, copy)
+    def astype(self, dtype: Dtype, copy: bool = True) -> Index:
+        return super().astype({self.name: cudf.dtype(dtype)}, copy)
 
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -3782,6 +3783,8 @@ def as_index(
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
+    if dtype is not None:
+        dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, cudf.MultiIndex):
         if dtype is not None:
