@@ -3039,11 +3039,12 @@ def test_series_dataframe_count_float():
         )
 
 
-def test_construct_nonnative_np_array():
+@pytest.mark.parametrize("arr", [np.array, cp.array, pd.Series])
+def test_construct_nonnative_array(arr):
     data = [1, 2, 3.5, 4]
     dtype = np.dtype("f4")
-    np_array = np.array(data, dtype=dtype)
-    np_nonnative = np.array(data, dtype=dtype.newbyteorder())
-    result = cudf.Series(np_nonnative)
-    expected = cudf.Series(np_array)
+    native = arr(data, dtype=dtype)
+    nonnative = arr(data, dtype=dtype.newbyteorder())
+    result = cudf.Series(nonnative)
+    expected = cudf.Series(native)
     assert_eq(result, expected)

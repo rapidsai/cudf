@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -22,7 +21,6 @@ from cudf.core.column.column import ColumnBase
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     find_common_type,
-    np_to_pa_dtype,
 )
 from cudf.utils.utils import (
     _all_bools_with_nulls,
@@ -197,26 +195,6 @@ class TimeDeltaColumn(ColumnBase):
             return pd.Index(
                 pa_array.to_numpy(zero_copy_only=False, writable=True)
             )
-
-    @acquire_spill_lock()
-    def to_arrow(self) -> pa.Array:
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(
-                self.mask_array_view(mode="read").copy_to_host()
-            )
-        data = pa.py_buffer(
-            self.astype(np.dtype(np.int64))
-            .data_array_view(mode="read")
-            .copy_to_host()
-        )
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
