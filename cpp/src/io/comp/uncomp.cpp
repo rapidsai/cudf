@@ -713,7 +713,6 @@ void host_decompress(compression_type compression,
     case compression_type::GZIP:
     case compression_type::SNAPPY:
     case compression_type::ZLIB:
-    case compression_type::ZSTD:
     case compression_type::NONE: return true;
     default: return false;
   }
