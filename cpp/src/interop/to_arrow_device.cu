@@ -460,17 +460,19 @@ int dispatch_to_arrow_device_view::operator()<cudf::dictionary32>(ArrowArray* ou
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_RETURN_NOT_OK(initialize_array(
-    tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
-    column));
+  auto const dcv     = cudf::dictionary_column_view(column);
+  auto const indices = dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT32)->view()
+                                      : dcv.get_indices_annotated();
+  auto const keys =
+    dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT64)->view() : dcv.keys();
+
+  NANOARROW_RETURN_NOT_OK(
+    initialize_array(tmp.get(), id_to_arrow_type(indices.type().id()), column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
 
-  auto const dcv = cudf::dictionary_column_view(column);
-  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(dcv.indices(), tmp.get()));
+  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(indices, tmp.get()));
 
-  auto keys = dcv.keys();
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys.type(), dispatch_to_arrow_device_view{keys, stream, mr}, tmp->dictionary));
 
