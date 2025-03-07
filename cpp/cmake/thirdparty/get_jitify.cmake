@@ -18,8 +18,8 @@
 function(find_and_configure_jitify)
   rapids_cpm_find(
     jitify 2.0.0
-    GIT_REPOSITORY https://github.com/NVIDIA/jitify.git
-    GIT_TAG jitify2
+    GIT_REPOSITORY https://github.com/lamarrr/jitify.git
+    GIT_TAG f5114e15b5cd7b2380f50490e8ff79c7e5114e2f
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
   )
