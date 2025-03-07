@@ -3789,10 +3789,10 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [997, 99, None])
-@pytest.mark.parametrize("skip_rows", [1, 101, 6001])
+@pytest.mark.parametrize("chunk_read_limit", [0, 1024, 10240])
+@pytest.mark.parametrize("pass_read_limit", [0, 1024, 102400])
+@pytest.mark.parametrize("num_rows", [3000, 99, None])
+@pytest.mark.parametrize("skip_rows", [1, 4001, 9001])
 def test_parquet_chunked_reader_structs(
     chunk_read_limit, pass_read_limit, num_rows, skip_rows
 ):
@@ -3815,7 +3815,7 @@ def test_parquet_chunked_reader_structs(
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},
-    ] * 1000
+    ] * 2000
 
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
