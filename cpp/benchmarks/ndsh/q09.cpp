@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,7 +152,7 @@ struct q9_data {
   std::string udf =
     R"***(
   void calculate_price(double * amount, double discount, double extended_price, double supply_cost, double quantity){
-    *amount = extended_price * (1 - discount) - supply_cost * quantity; 
+    *amount = extended_price * (1 - discount) - supply_cost * quantity;
   }
   )***";
 
