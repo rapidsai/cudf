@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -133,5 +133,37 @@ def test_date_extract(field):
     )
 
     q = ldf.select(field(pl.col("dates").dt))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("format", ["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"])
+def test_strftime_timestamp(format):
+    ldf = pl.LazyFrame(
+        {
+            "dates": [
+                datetime.date(2024, 1, 1),
+                datetime.date(2024, 10, 11),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("dates").dt.strftime(format))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("format", ["iso", "polars"])
+def test_strftime_duration(format):
+    ldf = pl.LazyFrame(
+        {
+            "durations": [
+                datetime.timedelta(days=1, seconds=3600),
+                datetime.timedelta(days=2, seconds=7200),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("durations").dt.strftime(format))
 
     assert_gpu_result_equal(q)
