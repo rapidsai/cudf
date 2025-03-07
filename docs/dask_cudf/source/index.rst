@@ -56,12 +56,13 @@ Once this is done, the public Dask DataFrame API will leverage
 from an on-disk format using any of the following ``dask.dataframe``
 functions:
 
-* :func:`read_parquet`
-* :func:`read_json`
-* :func:`read_csv`
-* :func:`read_orc`
-* :func:`read_hdf`
-* :func:`from_dict`
+* :py:func:`dask.dataframe.read_parquet`
+* :py:func:`dask.dataframe.read_json`
+* :py:func:`dask.dataframe.read_csv`
+* :py:func:`dask.dataframe.read_orc`
+* :py:func:`dask.dataframe.read_hdf`
+* :py:meth:`dask.dataframe.DataFrame.from_dict`
+
 
 For example::
 
@@ -77,8 +78,8 @@ For example::
   df = dd.read_parquet("data.parquet", ...)
 
 When other functions are used to create a new collection
-(e.g. :func:`from_map`, :func:`from_pandas`, :func:`from_delayed`,
-and :func:`from_array`), the backend of the new collection will
+(e.g. :func:`dask.dataframe.from_map`, :func:`dask.dataframe.from_pandas`, :func:`dask.dataframe.from_delayed`,
+and :func:`dask.dataframe.from_array`), the backend of the new collection will
 depend on the inputs to those functions. For example::
 
   import pandas as pd
@@ -91,7 +92,7 @@ depend on the inputs to those functions. For example::
   dd.from_pandas(cudf.DataFrame({"a": range(10)}))
 
 An existing collection can always be moved to a specific backend
-using the :func:`dask.dataframe.DataFrame.to_backend` API::
+using the :meth:`dask.dataframe.DataFrame.to_backend` API::
 
   # This ensures that we have a cuDF-backed dataframe
   df = df.to_backend("cudf")
@@ -144,10 +145,9 @@ Simplified expression graph (``df.simplify().pprint()``)::
 
 .. note::
   Dask will automatically simplify the expression graph (within
-  :func:`optimize`) when the result is converted to a task graph
-  (via :func:`compute` or :func:`persist`). You do not need to call
-  :func:`simplify` yourself.
-
+  :func:`dask.optimize`) when the result is converted to a task graph
+  (via :func:`dask.compute` or :func:`dask.persist`). You do not need
+  to optimize or simplify the graph yourself.
 
 Using Multiple GPUs and Multiple Nodes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -184,8 +184,8 @@ to define a client object. For example::
     agg.compute()  # This will use the cluster defined above
 
 .. note::
-  This example uses :func:`compute` to materialize a concrete
-  ``cudf.DataFrame`` object in local memory. Never call :func:`compute`
+  This example uses :func:`dask.compute` to materialize a concrete
+  ``cudf.DataFrame`` object in local memory. Never call :func:`dask.compute`
   on a large collection that cannot fit comfortably in the memory of a
   single GPU! See Dask's `documentation on managing computation
   <https://distributed.dask.org/en/stable/manage-computation.html>`__
@@ -214,6 +214,7 @@ differences and all functionality that Dask cuDF supports.
 .. toctree::
    :maxdepth: 2
 
+   best_practices
    api
 
 
