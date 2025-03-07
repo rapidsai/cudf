@@ -59,7 +59,7 @@ struct arrow_array_container {
         ArrowDeviceArrayMove(&input_, &owner);
         break;
       }
-      default: throw std::runtime_error("Unsupported ArrowDeviceArray type");
+      default: CUDF_FAIL("Unsupported ArrowDeviceArray type", std::runtime_error);
     }
   }
   ~arrow_array_container()
@@ -74,9 +74,7 @@ struct arrow_array_container {
 cudf::column_metadata get_column_metadata(cudf::column_view const& input)
 {
   cudf::column_metadata meta{};
-  for (auto i = 0; i < input.num_children(); ++i) {
-    meta.children_meta.push_back(get_column_metadata(input.child(i)));
-  }
+  std::transform( input.child_begin(), input.child_end(), std::back_inserter(meta.children_meta), [] (auto& cv) { return get_column_metadata(cv); } );
   return meta;
 }
 
@@ -86,6 +84,7 @@ std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& in
   for (auto i = 0; i < input.num_columns(); ++i) {
     meta.push_back(get_column_metadata(input.column(i)));
   }
+  std::transform( input.begin(), input.end(), std::back_inserter(meta), [] (auto& cv) { return get_column_metadata(cv); } );
   return meta;
 }
 
@@ -199,7 +198,7 @@ arrow_column::arrow_column(cudf::column&& input,
                            column_metadata const& metadata,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
-  : container{[&]() {
+  : container{[&] {
       auto table_meta = std::vector{metadata};
       auto tv         = cudf::table_view{{input.view()}};
       auto schema     = cudf::to_arrow_schema(tv, table_meta);
@@ -332,8 +331,7 @@ arrow_table::arrow_table(ArrowSchema&& schema,
 {
   ArrowDeviceArray arr{.array = {}, .device_id = -1, .device_type = ARROW_DEVICE_CPU};
   ArrowArrayMove(&input, &arr.array);
-  auto tmp  = arrow_table(std::move(schema), std::move(arr), stream, mr);
-  container = tmp.container;
+  container  = arrow_table(std::move(schema), std::move(arr), stream, mr).container;
 }
 
 arrow_table::arrow_table(ArrowArrayStream&& input,

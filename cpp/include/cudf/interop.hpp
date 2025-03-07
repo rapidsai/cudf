@@ -319,7 +319,7 @@ class arrow_column {
    */
   unique_column_view_t view(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   std::shared_ptr<arrow_array_container>
@@ -408,7 +408,7 @@ class arrow_table {
    */
   unique_table_view_t view(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Convert the table to an ArrowSchema
