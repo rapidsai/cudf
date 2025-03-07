@@ -152,6 +152,14 @@ class StringLength(AbstractTemplate):
             # literal -> int32
             return nb_signature(size_type, string_view)
 
+def NRT_decref(st):
+    pass
+
+@cuda_decl_registry.register_global(NRT_decref)
+class NRT_decref_typing(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], ManagedUDFString):
+            return nb_signature(types.void, managed_udf_string)
 
 def register_stringview_binaryop(op, retty):
     """

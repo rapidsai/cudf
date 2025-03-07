@@ -25,6 +25,7 @@ from cudf.core.udf.strings_typing import (
     size_type,
     string_view,
     udf_string,
+    NRT_decref,
 )
 
 _STR_VIEW_PTR = types.CPointer(string_view)
@@ -286,6 +287,28 @@ def len_impl(context, builder, sig, args):
 
     return result
 
+
+_device_nrt_decref = cuda.declare_device(
+    "extern_NRT_Decref",
+    types.void(types.voidptr)
+)
+
+def call_device_nrt_decref(meminfo):
+    return _device_nrt_decref(meminfo)
+
+@cuda_lower(NRT_decref, managed_udf_string)
+def decref_managed_udf_string(context, builder, sig, args):
+    managed_ptr = args[0]
+    managed = cgutils.create_struct_proxy(managed_udf_string)(
+        context, builder, value=managed_ptr
+    )
+    _ = context.compile_internal(
+        builder,
+        call_device_nrt_decref,
+        nb_signature(types.void, types.voidptr),
+        (managed.meminfo,),
+    )
+    return
 
 def call_concat_string_view(result, lhs, rhs):
     return _concat_string_view(result, lhs, rhs)

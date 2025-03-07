@@ -28,6 +28,7 @@ from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
     managed_udf_string,
+    NRT_decref,
 )
 from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
@@ -345,18 +346,20 @@ def _finalize_string_column(col):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return ColumnBase.from_pylibcudf(
+        result = ColumnBase.from_pylibcudf(
             strings_udf.column_from_managed_udf_string_array(col)
         )
+        @cuda.jit(void(CPointer(managed_udf_string), int64), extensions=[str_view_arg_handler])
+        def free_managed_udf_string_array(ary, size):
+            gid = cuda.grid(1)
+            if gid < size:
+                NRT_decref(ary[gid])
+        free_managed_udf_string_array.forall(result.size)(col, result.size)
+        return result
+
     return as_column(col, retty)
 
-nrt_decref = cuda.declare_device(
-    "external_NRT_Decref",
-    void(voidptr)
-)
 
-#@cuda.jit
-#def free_udf_string_array
 
 # The only supported data layout in NVVM.
 # See: https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html?#data-layout
