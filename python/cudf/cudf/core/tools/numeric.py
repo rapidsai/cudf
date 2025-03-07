@@ -8,11 +8,14 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
-from cudf.utils.dtypes import can_convert_to_column
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    can_convert_to_column,
+    is_dtype_obj_numeric,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
@@ -142,7 +145,7 @@ def to_numeric(
                     return arg
                 else:
                     raise e
-    elif is_string_dtype(dtype):
+    elif dtype == CUDF_STRING_DTYPE:
         try:
             col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
         except ValueError as e:
@@ -152,7 +155,7 @@ def to_numeric(
                 raise e
     elif isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
         raise ValueError("Input does not support nested datatypes")
-    elif _is_non_decimal_numeric_dtype(dtype):
+    elif is_dtype_obj_numeric(dtype, include_decimal=False):
         pass
     else:
         raise ValueError("Unrecognized datatype")
@@ -218,7 +221,7 @@ def _convert_str_col(
     -------
     Converted numeric column
     """
-    if not is_string_dtype(col):
+    if col.dtype != CUDF_STRING_DTYPE:
         raise TypeError("col must be string dtype.")
 
     if col.is_integer().all():

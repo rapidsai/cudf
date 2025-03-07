@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import pylibcudf as plc
@@ -6,6 +6,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core.column import ColumnBase
 from cudf.utils import ioutils
+from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 
 def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
@@ -83,12 +84,12 @@ def to_dlpack(cudf_obj: cudf.Series | cudf.DataFrame | cudf.BaseIndex):
         )
 
     if any(
-        not cudf.api.types._is_non_decimal_numeric_dtype(dtype)
+        not is_dtype_obj_numeric(dtype, include_decimal=False)
         for _, dtype in gdf._dtypes  # type: ignore[union-attr]
     ):
         raise TypeError("non-numeric data not yet supported")
 
-    dtype = cudf.utils.dtypes.find_common_type(
+    dtype = find_common_type(
         [dtype for _, dtype in gdf._dtypes]  # type: ignore[union-attr]
     )
     gdf = gdf.astype(dtype)

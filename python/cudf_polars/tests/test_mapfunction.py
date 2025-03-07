@@ -12,16 +12,6 @@ from cudf_polars.testing.asserts import (
 )
 
 
-def test_merge_sorted_raises():
-    df1 = pl.LazyFrame({"a": [1, 6, 9], "b": [1, -10, 4]})
-    df2 = pl.LazyFrame({"a": [-1, 5, 11, 20], "b": [2, 7, -4, None]})
-    df3 = pl.LazyFrame({"a": [-10, 20, 21], "b": [1, 2, 3]})
-
-    q = df1.merge_sorted(df2, key="a").merge_sorted(df3, key="a")
-
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
 def test_explode_multiple_raises():
     df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
     q = df.explode("a", "b")

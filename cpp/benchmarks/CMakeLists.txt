@@ -291,7 +291,6 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
-target_include_directories(INTEROP_NVBENCH PRIVATE ${CMAKE_SOURCE_DIR}/tests/interop)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
@@ -344,11 +343,18 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(
+  BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+)
+
+# ##################################################################################################
+# * transform benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------

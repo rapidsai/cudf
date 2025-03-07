@@ -29,6 +29,7 @@
 namespace cudf {
 
 namespace {
+
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;

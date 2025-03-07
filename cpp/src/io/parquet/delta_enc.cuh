@@ -19,6 +19,7 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <cub/cub.cuh>
@@ -221,6 +222,7 @@ class delta_binary_packer {
   inline __device__ uint8_t* flush()
   {
     using cudf::detail::warp_size;
+
     __shared__ T block_min;
 
     int const t       = threadIdx.x;
@@ -240,7 +242,7 @@ class delta_binary_packer {
                                             : cuda::std::numeric_limits<T>::max();
 
     // Find min delta for the block.
-    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cub::Min());
+    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cudf::detail::minimum{});
 
     if (t == 0) { block_min = min_delta; }
     __syncthreads();
@@ -250,7 +252,7 @@ class delta_binary_packer {
 
     // Get max normalized delta for each warp, and use that to determine how many bits to use
     // for the bitpacking of this warp.
-    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
+    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cudf::detail::maximum{});
     __syncwarp();
 
     if (lane_id == 0) { _mb_bits[warp_id] = sizeof(long long) * 8 - __clzll(warp_max); }

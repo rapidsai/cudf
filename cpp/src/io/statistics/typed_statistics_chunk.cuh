@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "statistics_type_identification.cuh"
 #include "temp_storage_wrapper.cuh"
 
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -202,11 +203,12 @@ __inline__ __device__ typed_statistics_chunk<T, include_aggregate> block_reduce(
   using E              = typename detail::extrema_type<T>::type;
   using extrema_reduce = cub::BlockReduce<E, block_size>;
   using count_reduce   = cub::BlockReduce<uint32_t, block_size>;
-  output_chunk.minimum_value =
-    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.minimum_value, cub::Min());
+
+  output_chunk.minimum_value = extrema_reduce(storage.template get<E>())
+                                 .Reduce(output_chunk.minimum_value, cudf::detail::minimum{});
   __syncthreads();
-  output_chunk.maximum_value =
-    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.maximum_value, cub::Max());
+  output_chunk.maximum_value = extrema_reduce(storage.template get<E>())
+                                 .Reduce(output_chunk.maximum_value, cudf::detail::maximum{});
   __syncthreads();
   output_chunk.non_nulls =
     count_reduce(storage.template get<uint32_t>()).Sum(output_chunk.non_nulls);

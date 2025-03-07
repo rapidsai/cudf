@@ -333,8 +333,8 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                   validity_iterator,
                                   d_str_separator.begin(),
                                   false,
-                                  thrust::equal_to<size_type>{},
-                                  thrust::logical_or<bool>{});
+                                  cuda::std::equal_to<size_type>{},
+                                  cuda::std::logical_or<bool>{});
     thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(total_rows),

@@ -73,19 +73,6 @@ def is_numeric_dtype(obj):
     return pd_types.is_numeric_dtype(obj)
 
 
-# A version of numerical type check that does not include cudf decimals for
-# places where we need to distinguish fixed and floating point numbers.
-def _is_non_decimal_numeric_dtype(obj):
-    if isinstance(obj, _BaseDtype) or isinstance(
-        getattr(obj, "dtype", None), _BaseDtype
-    ):
-        return False
-    try:
-        return pd_types.is_numeric_dtype(obj)
-    except TypeError:
-        return False
-
-
 def is_integer(obj):
     """Return True if given object is integer.
 

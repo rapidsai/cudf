@@ -83,6 +83,8 @@ numpydoc_show_inherited_class_members = True
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
 
+nitpicky = True
+
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")

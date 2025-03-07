@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 
 import cupy as cp
@@ -8,7 +8,7 @@ from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 
-import cudf.core.udf.utils
+from cudf.core.column import column_empty
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -154,9 +154,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    output = cudf.core.column.column_empty(
-        ngroups, dtype=return_type, for_numba=True
-    )
+    output = column_empty(ngroups, dtype=return_type, for_numba=True)
     launch_args = [
         offsets,
         output,

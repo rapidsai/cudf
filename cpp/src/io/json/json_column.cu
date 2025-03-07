@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -130,8 +131,8 @@ reduce_to_column_tree(tree_meta_t const& tree,
                         ordered_row_offsets,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
-                        thrust::equal_to<size_type>(),
-                        thrust::maximum<size_type>());
+                        cuda::std::equal_to<size_type>(),
+                        cudf::detail::maximum<size_type>());
 
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
@@ -142,7 +143,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
     unique_col_ids.begin(),
     column_categories.begin(),
-    thrust::equal_to<size_type>(),
+    cuda::std::equal_to<size_type>(),
     [] __device__(NodeT type_a, NodeT type_b) -> NodeT {
       auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
       auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);

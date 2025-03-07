@@ -15,7 +15,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest narwhals"
-git clone https://github.com/narwhals-dev/narwhals --depth=1
+git clone https://github.com/narwhals-dev/narwhals --depth=1 -b stable
 pushd narwhals || exit 1
 rapids-pip-retry install -U -e ".[dev]"
 

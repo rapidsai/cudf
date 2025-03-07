@@ -16,10 +16,9 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
@@ -49,6 +48,7 @@ if TYPE_CHECKING:
     )
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -76,7 +76,7 @@ class StringMethods(ColumnMethods):
             if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
-        if not is_string_dtype(value_type):
+        if value_type != CUDF_STRING_DTYPE:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
@@ -6027,7 +6027,7 @@ class StringColumn(column.ColumnBase):
         return result_col  # type: ignore[return-value]
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         not_null = self.apply_boolean_mask(self.notnull())
         if len(not_null) == 0:
@@ -6040,13 +6040,13 @@ class StringColumn(column.ColumnBase):
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def as_decimal_column(
-        self, dtype: Dtype
+        self, dtype: DecimalDtype
     ) -> cudf.core.column.DecimalBaseColumn:
         plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
             self.to_pylibcudf(mode="read"),
@@ -6525,6 +6525,20 @@ class StringColumn(column.ColumnBase):
                 vocabulary,
                 pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
                 default_id,
+            )
+        )
+
+    @acquire_spill_lock()
+    def wordpiece_tokenize(
+        self,
+        vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
+        max_words_per_row: int,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
+                self.to_pylibcudf(mode="read"),
+                vocabulary,
+                max_words_per_row,
             )
         )
 

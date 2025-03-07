@@ -39,9 +39,12 @@ if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
 
 
-def dtype(arbitrary):
+def dtype(arbitrary: Any) -> DtypeObj:
     """
     Return the cuDF-supported dtype corresponding to `arbitrary`.
+
+    This function should only be used when converting a dtype
+    provided from a public API user (i.e. not internally).
 
     Parameters
     ----------
@@ -61,7 +64,13 @@ def dtype(arbitrary):
     except TypeError:
         pass
     else:
-        if np_dtype.kind in set("OU"):
+        if np_dtype.kind == "O":
+            if cudf.get_option("mode.pandas_compatible"):
+                raise ValueError(
+                    "cudf does not support object dtype. Use 'str' instead."
+                )
+            return CUDF_STRING_DTYPE
+        elif np_dtype.kind == "U":
             return CUDF_STRING_DTYPE
         elif (
             np_dtype
@@ -177,7 +186,7 @@ class CategoricalDtype(_BaseDtype):
     Categories (2, object): ['b' < 'a']
     """
 
-    def __init__(self, categories=None, ordered: bool = False) -> None:
+    def __init__(self, categories=None, ordered: bool | None = False) -> None:
         self._categories = self._init_categories(categories)
         self._ordered = ordered
 
@@ -212,7 +221,7 @@ class CategoricalDtype(_BaseDtype):
         return "|O08"
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -286,6 +295,9 @@ class CategoricalDtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
+        elif other.ordered is None and other._categories is None:
+            # other is equivalent to the string "category"
+            return True
         elif self.ordered != other.ordered:
             return False
         elif self._categories is None or other._categories is None:
@@ -1001,11 +1013,13 @@ class IntervalDtype(StructDtype):
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
-        return (
-            type(self) is type(other)
-            and self.subtype == other.subtype
-            and self.closed == other.closed
-        )
+        elif type(self) is not type(other):
+            # Avoid isinstance because this subclasses StructDtype
+            return False
+        elif other.subtype is None:
+            # Equivalent to the string "interval"
+            return True
+        return self.subtype == other.subtype and self.closed == other.closed
 
     def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
