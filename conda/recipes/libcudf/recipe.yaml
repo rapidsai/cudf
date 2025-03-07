@@ -139,6 +139,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -182,6 +183,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -261,6 +263,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -294,7 +297,6 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
-        - fmt >=11.0.2,<12
         - if: cuda_major == "11"
           then:
             - libcurand ${{ cuda11_libcurand_run_version }}
@@ -322,6 +324,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
