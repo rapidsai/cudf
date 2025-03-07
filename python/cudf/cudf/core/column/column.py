@@ -2501,7 +2501,8 @@ def as_column(
             mask = None
 
         arbitrary = cupy.asarray(arbitrary, order="C")
-
+        if not arbitrary.dtype.isnative:
+            arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
         if nan_as_null or (mask is None and nan_as_null is None):
