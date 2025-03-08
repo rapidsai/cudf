@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2045,7 +2045,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
  *
  * @return The size in bytes of required temporary memory
  */
-size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
+size_t get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
   uint32_t max_fb_size, min_fb_size, fb_size;
   auto const sm_count = cudf::detail::num_multiprocessors();
@@ -2062,9 +2062,14 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
   min_fb_size = 10 * 1024;  // TODO: Gather some statistics for typical meta-block size
   // Allocate at least two worst-case metablocks or 1 metablock plus typical size for every other
   // block
-  fb_size = max(max_fb_size * min(max_num_inputs, 2), max_fb_size + max_num_inputs * min_fb_size);
+  fb_size =
+    std::max(max_fb_size * std::min(max_num_inputs, 2), max_fb_size + max_num_inputs * min_fb_size);
   // Add some room for alignment
-  return fb_size + 16 + sizeof(brotli_dictionary_s);
+  auto const aligned_size = fb_size + 16 + sizeof(brotli_dictionary_s);
+  auto const clamped_size = std::min(aligned_size, static_cast<size_t>(0xffff'ffffu));
+  CUDF_EXPECTS(clamped_size >= sizeof(brotli_dictionary_s),
+               "Insufficient scratch space for debrotli");
+  return clamped_size;
 }
 
 #define DUMP_FB_HEAP 0
@@ -2075,38 +2080,35 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
                   device_span<compression_result> results,
-                  void* scratch,
-                  size_t scratch_size,
                   rmm::cuda_stream_view stream)
 {
+  // Scratch memory for decompressing
+  rmm::device_uvector<uint8_t> scratch(
+    cudf::io::detail::get_gpu_debrotli_scratch_size(inputs.size()), stream);
+
   auto const count = inputs.size();
-  uint32_t fb_heap_size;
-  auto* scratch_u8 = static_cast<uint8_t*>(scratch);
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(count, 1);  // TODO: Check max grid dimensions vs max expected count
 
-  CUDF_EXPECTS(scratch_size >= sizeof(brotli_dictionary_s),
-               "Insufficient scratch space for debrotli");
-  scratch_size = min(scratch_size, static_cast<size_t>(0xffff'ffffu));
-  fb_heap_size = (uint32_t)((scratch_size - sizeof(brotli_dictionary_s)) & ~0xf);
+  auto const fb_heap_size = (uint32_t)((scratch.size() - sizeof(brotli_dictionary_s)) & ~0xf);
 
-  CUDF_CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(scratch.data(), 0, 2 * sizeof(uint32_t), stream.value()));
   // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
   // page-locked
-  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
+  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch.data() + fb_heap_size,
                                 get_brotli_dictionary(),
                                 sizeof(brotli_dictionary_s),
                                 cudaMemcpyDefault,
                                 stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
-    inputs, outputs, results, scratch_u8, fb_heap_size);
+    inputs, outputs, results, scratch.data(), fb_heap_size);
 #if DUMP_FB_HEAP
   uint32_t dump[2];
   uint32_t cur = 0;
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDefault, stream.value()));
+      &dump[0], scratch.data() + cur, 2 * sizeof(uint32_t), cudaMemcpyDefault, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
     cur = (dump[0] > cur) ? dump[0] : 0xffff'ffffu;
