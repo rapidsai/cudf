@@ -12,7 +12,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_scalar,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -357,26 +356,6 @@ class SingleColumnFrame(Frame, NotIterable):
                     )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
-
-    @_performance_tracking
-    def where(self, cond, other=None, inplace: bool = False) -> Self:
-        if getattr(other, "ndim", 1) > 1:
-            raise NotImplementedError(
-                "Only 1 dimensional other is currently supported"
-            )
-        cond = as_column(cond)
-        if len(cond) != len(self):
-            raise ValueError(
-                f"cond must be the same length as self ({len(self)})"
-            )
-
-        if not is_scalar(other):
-            other = as_column(other)
-
-        return self._mimic_inplace(
-            self._from_column(self._column.where(cond, other, inplace)),
-            inplace=inplace,
-        )
 
     @_performance_tracking
     def transpose(self):

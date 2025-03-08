@@ -3116,7 +3116,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+    def where(
+        self, cond, other=None, inplace: bool = False, axis=None, level=None
+    ) -> Self | None:
         if axis is not None:
             raise NotImplementedError("axis is not supported.")
         elif level is not None:
