@@ -289,7 +289,7 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
 # * interop benchmark ------------------------------------------------------------------------------
-ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
+ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp interop/interop_stringview.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
 
 # ##################################################################################################
