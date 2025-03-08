@@ -27,11 +27,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cub/cub.cuh>
 #include <thrust/iterator/counting_iterator.h>
 
-namespace cudf {
-namespace detail {
+#include <memory>
+#include <utility>
+
+namespace cudf::detail {
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -78,7 +79,7 @@ class row_is_valid {
  public:
   row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(size_type const& i) const noexcept
+  __device__ bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -156,14 +157,13 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- *                           build
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * for build
  * @param hash_table Build hash table.
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 template <typename MultimapType>
 void build_join_hash_table(
@@ -262,7 +262,4 @@ struct valid_range {
     return ((index >= start) && (index < stop));
   }
 };
-
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail
