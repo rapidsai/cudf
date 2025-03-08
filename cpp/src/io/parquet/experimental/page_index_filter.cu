@@ -43,6 +43,7 @@
 
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
@@ -583,6 +584,21 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
 
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
 
+  // Return if all rows are required, or all rows are nulls.
+  if (input_rows.null_count() == input_rows.size() or
+      thrust::all_of(rmm::exec_policy(stream),
+                     input_rows.template begin<bool>(),
+                     input_rows.template end<bool>(),
+                     thrust::identity<bool>{})) {
+    return all_page_byte_ranges;
+  }
+
+  auto const total_input_pages =
+    std::accumulate(page_row_offsets.cbegin(),
+                    page_row_offsets.cend(),
+                    size_t{0},
+                    [](auto sum, auto const& offsets) { return sum + offsets.size() - 1; });
+
   // Get the validity column bitmask
   auto const host_bitmask = [&] {
     auto const num_bitmasks = num_bitmask_words(input_rows.size());
@@ -596,12 +612,6 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
     }
   }();
 
-  auto const total_input_pages =
-    std::accumulate(page_row_offsets.cbegin(),
-                    page_row_offsets.cend(),
-                    size_t{0},
-                    [](auto sum, auto const& offsets) { return sum + offsets.size() - 1; });
-
   // Create a validity iterator
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
@@ -609,12 +619,7 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   auto const is_row_required = cudf::detail::make_host_vector_sync(
     device_span<uint8_t const>(input_rows.data<uint8_t>(), input_rows.size()), stream);
 
-  // Return if all rows are required, or all rows are nulls.
-  if (input_rows.null_count() == input_rows.size() or
-      std::all_of(
-        is_row_required.cbegin(), is_row_required.cend(), [](auto i) { return bool(i); })) {
-    return all_page_byte_ranges;
-  }
+  // TODO: MH: Find a way to accelerate the following loop on device.
 
   // For all columns, look up which pages contain at least one valid row. i.e. !validity_it[row_idx]
   // or is_row_required[row_idx] satisfies, and add its byte range to the output list of byte ranges
@@ -641,7 +646,7 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                       auto const page_idx = std::distance(offsets.cbegin(), page_itr) - 1;
                       page_ranges.emplace_back(all_page_byte_ranges[col_idx][page_idx]);
                       // Move row_idx to the last row of the page, so that we don't need to check
-                      // the same page again.
+                      // the same page again. Adjusted by -1 to compensate for ++row_idx
                       row_idx = offsets[page_idx + 1] - 1;
                     }
                   }
