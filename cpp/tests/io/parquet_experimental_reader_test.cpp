@@ -85,7 +85,7 @@ auto create_parquet_with_stats(bool is_concatenated = false)
 {
   auto col0 = testdata::ascending<uint32_t>();
   auto col1 = testdata::descending<int64_t>();
-  auto col2 = testdata::unordered<double>();
+  auto col2 = testdata::ascending<cudf::string_view>();
 
   auto expected = table_view{{col0, col1, col2}};
   auto table    = std::unique_ptr<cudf::table>();
@@ -97,7 +97,7 @@ auto create_parquet_with_stats(bool is_concatenated = false)
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_uint32");
   expected_metadata.column_metadata[1].set_name("col_int64");
-  expected_metadata.column_metadata[2].set_name("col_double");
+  expected_metadata.column_metadata[2].set_name("col_str");
 
   std::vector<char> buffer;
   cudf::io::parquet_writer_options out_opts =
