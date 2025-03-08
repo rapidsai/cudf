@@ -228,11 +228,13 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           return row_indices;
         }();
 
-      if constexpr (not std::is_same_v<T, string_view>) {
-        // Lambda function to gather values based on computed indices
-        auto const gather_data_and_nullmask = [&](mutable_column_view column,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr) {
+      // For non-strings columns, directly gather the page-level column data and bitmask to the
+      // row-level.
+      if constexpr (not std::is_same_v<T, cudf::string_view>) {
+        // Lambda function to build a row-level device column from a page-level column
+        auto const build_data_and_nullmask = [&](mutable_column_view column,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr) {
           // Buffer for output data
           auto output_data = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
 
@@ -240,8 +242,8 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           auto output_bitmask =
             cudf::create_null_mask(total_rows, mask_state::ALL_VALID, stream, mr);
 
-          // For each row index, copy over the min/max page stat value and the bitmask bit from the
-          // corresponding page. index is invalid
+          // For each row index, copy over the min/max page stat value and the bitmask bit from
+          // the corresponding page. index is invalid
           thrust::for_each(rmm::exec_policy_nosync(stream),
                            thrust::counting_iterator(0),
                            thrust::counting_iterator(total_rows),
@@ -269,8 +271,8 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
 
         // Convert page-level min and max columns to row-level min and max columns by gathering
         // values based on page-level row offsets
-        auto [min_data, min_bitmask] = gather_data_and_nullmask(mincol->mutable_view(), stream, mr);
-        auto [max_data, max_bitmask] = gather_data_and_nullmask(maxcol->mutable_view(), stream, mr);
+        auto [min_data, min_bitmask] = build_data_and_nullmask(mincol->mutable_view(), stream, mr);
+        auto [max_data, max_bitmask] = build_data_and_nullmask(maxcol->mutable_view(), stream, mr);
 
         // Count nulls in min and max columns
         auto const min_nulls = cudf::detail::null_count(
@@ -283,12 +285,17 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
                   dtype, total_rows, std::move(min_data), std::move(min_bitmask), min_nulls),
                 std::make_unique<column>(
                   dtype, total_rows, std::move(max_data), std::move(max_bitmask), max_nulls)};
-      } else {
-        auto const gather_strings_children_and_nullmask = [&](host_column<T> const& host_col,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr) {
-          // Construct device vectors containing page-level string children and sizes.
-          [[maybe_unused]] auto [page_str_chars, page_str_sizes, page_str_offsets] = [&]() {
+      }
+      // For strings columns, gather the page-level string offsets and bitmask to row-level
+      // directly and gather string chars using a batched memcpy.
+      else {
+        // Lambda function to build a row-level device strings children and nullmask from the
+        // page-level string host column
+        auto const build_strings_children_and_nullmask = [&](host_column<T> const& host_col,
+                                                             rmm::cuda_stream_view stream,
+                                                             rmm::device_async_resource_ref mr) {
+          // Construct device vectors containing page-level (input) string children and sizes.
+          auto [page_str_chars, page_str_sizes, page_str_offsets] = [&]() {
             auto const& host_strings    = host_col.val;
             auto const total_char_count = std::accumulate(
               host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
@@ -354,7 +361,7 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           // Buffer for row-level string chars (output).
           auto row_str_chars = rmm::device_buffer(total_bytes, stream, mr);
 
-          // Iterator for input (page-level) strings
+          // Iterator for input (page-level) string chars
           auto src_iter = thrust::make_transform_iterator(
             thrust::make_counting_iterator<std::size_t>(0),
             cuda::proclaim_return_type<char*>(
@@ -365,7 +372,7 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
                 return chars + offsets[page_index];
               }));
 
-          // Iterator for output (row-level) strings
+          // Iterator for output (row-level) string chars
           auto dst_iter = thrust::make_transform_iterator(
             thrust::make_counting_iterator<std::size_t>(0),
             cuda::proclaim_return_type<char*>(
@@ -389,9 +396,9 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
         };
 
         auto [min_data, min_offsets, min_bitmask] =
-          gather_strings_children_and_nullmask(min, stream, mr);
+          build_strings_children_and_nullmask(min, stream, mr);
         auto [max_data, max_offsets, max_bitmask] =
-          gather_strings_children_and_nullmask(min, stream, mr);
+          build_strings_children_and_nullmask(min, stream, mr);
 
         // Count nulls in min and max columns
         auto const min_nulls = cudf::detail::null_count(
@@ -651,7 +658,7 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   CUDF_EXPECTS(filtered_num_pages < total_input_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
-  std::cout << "Num pages after filter: " << filtered_num_pages << " out of " << total_input_pages
+  std::cout << "Num pages after filter = " << filtered_num_pages << " out of " << total_input_pages
             << std::endl;
 
   // Return the final lists of data page byte ranges for all columns

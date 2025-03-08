@@ -127,123 +127,78 @@ auto create_parquet_with_stats(bool is_concatenated = false)
 
 }  // namespace
 
-TEST_F(ParquetExperimentalReaderTest, FilterRowGroupsWithStats)
+TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
 {
   srand(31337);
-  auto [table, buffer] = create_parquet_with_stats();
 
-  // Filtering AST - table[0] < 150
-  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto const hybrid_scan = [&](bool is_testing_pages) {
+    auto [table, buffer] = create_parquet_with_stats(is_testing_pages);
 
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
-      .filter(filter_expression);
+    // Filtering AST - table[0] < 150
+    auto literal_value = cudf::numeric_scalar<uint32_t>(100);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref_0     = cudf::ast::column_name_reference("col_uint32");
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-  auto const stream = cudf::get_default_stream();
+    cudf::io::parquet_reader_options options =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+        .filter(filter_expression);
 
-  auto const footer_bytes = get_footer_bytes(
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
-  auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
-    reinterpret_cast<uint8_t const*>(buffer.data()),
-    buffer.size());
-  auto const reader =
-    cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
+    auto const stream = cudf::get_default_stream();
 
-  auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
+    auto const footer_bytes     = get_footer_bytes(cudf::host_span<uint8_t const>(
+      reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+    auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
+      reinterpret_cast<uint8_t const*>(buffer.data()),
+      buffer.size());
+    auto const reader =
+      cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
 
-  std::cout << "Num input row groups = " << input_row_groups.size() << std::endl;
+    auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
 
-  auto stats_filtered_row_groups =
-    cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
+    auto stats_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_stats(
+      reader, input_row_groups, options, stream);
 
-  auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
+    auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
 
-  auto [bloom_filter_bytes, dict_page_bytes] =
-    cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
+    auto [bloom_filter_bytes, dict_page_bytes] =
+      cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
 
-  std::vector<cudf::size_type> bloom_filtered_row_groups;
-  bloom_filtered_row_groups.reserve(filtered_row_groups.size());
-  if (bloom_filter_bytes.size()) {
-    // TODO: Read bloom filter data
-    std::vector<rmm::device_buffer> bloom_filter_data;
-    bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
-      reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
-    filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
+    std::vector<cudf::size_type> bloom_filtered_row_groups;
+    bloom_filtered_row_groups.reserve(filtered_row_groups.size());
+    if (bloom_filter_bytes.size()) {
+      // TODO: Read bloom filter data
+      std::vector<rmm::device_buffer> bloom_filter_data;
+      bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
+        reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
+      filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
+    }
+
+    std::cout << "Num row groups after filter = " << filtered_row_groups.size() << " out of "
+              << input_row_groups.size() << std::endl;
+
+    auto mr = cudf::get_current_device_resource_ref();
+
+    auto row_map = cudf::experimental::io::filter_data_pages_with_stats(
+      reader, stats_filtered_row_groups, options, stream, mr);
+
+    auto data_pages_bytes = cudf::experimental::io::get_filter_columns_data_pages(
+      reader, row_map->view(), filtered_row_groups, options, stream);
+
+    EXPECT_EQ(data_pages_bytes.size(), table.num_columns());
+    if (is_testing_pages) { EXPECT_EQ(data_pages_bytes.front().size(), 10); }
+  };
+
+  // Only test filtering row groups
+  {
+    auto constexpr filter_pages = false;
+    hybrid_scan(filter_pages);
   }
 
-  std::cout << "Num filtered row groups = " << filtered_row_groups.size() << std::endl;
-
-  auto mr = cudf::get_current_device_resource_ref();
-
-  auto row_map = cudf::experimental::io::filter_data_pages_with_stats(
-    reader, stats_filtered_row_groups, options, stream, mr);
-
-  auto data_pages_bytes = cudf::experimental::io::get_filter_columns_data_pages(
-    reader, row_map->view(), filtered_row_groups, options, stream);
-
-  EXPECT_EQ(data_pages_bytes.size(), table.num_columns());
-}
-
-TEST_F(ParquetExperimentalReaderTest, FilterPagesWithStats)
-{
-  srand(31337);
-  auto [table, buffer] = create_parquet_with_stats(true);
-
-  // Filtering AST - table[0] < 150
-  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
-  auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
-  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
-      .filter(filter_expression);
-
-  auto const stream = cudf::get_default_stream();
-
-  auto const footer_bytes = get_footer_bytes(
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
-  auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
-    reinterpret_cast<uint8_t const*>(buffer.data()),
-    buffer.size());
-  auto const reader =
-    cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
-
-  auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
-
-  std::cout << "Num input row groups = " << input_row_groups.size() << std::endl;
-
-  auto stats_filtered_row_groups =
-    cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
-
-  auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
-
-  auto [bloom_filter_bytes, dict_page_bytes] =
-    cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
-
-  std::vector<cudf::size_type> bloom_filtered_row_groups;
-  bloom_filtered_row_groups.reserve(filtered_row_groups.size());
-  if (bloom_filter_bytes.size()) {
-    // TODO: Read bloom filter data
-    std::vector<rmm::device_buffer> bloom_filter_data;
-    bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
-      reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
-    filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
+  // Only test filtering data pages
+  {
+    auto constexpr filter_pages = true;
+    hybrid_scan(filter_pages);
   }
-
-  std::cout << "Num filtered row groups = " << filtered_row_groups.size() << std::endl;
-
-  auto mr = cudf::get_current_device_resource_ref();
-
-  auto row_map = cudf::experimental::io::filter_data_pages_with_stats(
-    reader, stats_filtered_row_groups, options, stream, mr);
-
-  auto data_pages_bytes = cudf::experimental::io::get_filter_columns_data_pages(
-    reader, row_map->view(), filtered_row_groups, options, stream);
-
-  EXPECT_EQ(data_pages_bytes.size(), table.num_columns());
-  EXPECT_EQ(data_pages_bytes.front().size(), 10);
 }
