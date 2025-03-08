@@ -765,6 +765,7 @@ add_library(
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
+  src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
@@ -1050,6 +1051,17 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudftestutil_objects OBJECT)
+  target_link_libraries(
+    cudftestutil_objects
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PRIVATE cudf::cudftestutil_impl
+  )
+  add_library(cudf::cudftestutil_objects ALIAS cudftestutil_objects)
 
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(
