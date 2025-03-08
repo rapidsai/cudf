@@ -323,7 +323,7 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return np.float64("nan")
 
 
-def find_common_type(dtypes):
+def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     """
     Wrapper over np.find_common_type to handle special cases
 
@@ -341,7 +341,7 @@ def find_common_type(dtypes):
 
     """
 
-    if len(dtypes) == 0:
+    if len(dtypes) == 0:  # type: ignore[arg-type]
         return None
 
     # Early exit for categoricals since they're not hashable and therefore
@@ -373,7 +373,7 @@ def find_common_type(dtypes):
             return CUDF_STRING_DTYPE
 
     # Aggregate same types
-    dtypes = {cudf.dtype(dtype) for dtype in dtypes}
+    dtypes = set(dtypes)
     if len(dtypes) == 1:
         return dtypes.pop()
 
@@ -419,7 +419,7 @@ def find_common_type(dtypes):
     common_dtype = np.result_type(*dtypes)
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
-    return cudf.dtype(common_dtype)
+    return common_dtype
 
 
 def _dtype_pandas_compatible(dtype):
