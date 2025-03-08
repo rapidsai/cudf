@@ -5,15 +5,15 @@ from __future__ import annotations
 import itertools
 import sys
 from collections import abc
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import cached_property, reduce
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool
 
 import cudf
+from cudf.api.types import is_scalar
 from cudf.core import column
 
 if TYPE_CHECKING:
@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype
     from cudf.core.column import ColumnBase
+
+
+def _is_bool(val: Any) -> bool:
+    return isinstance(val, (bool, np.bool_))
 
 
 class _NestedGetItemDict(dict):
@@ -404,7 +408,7 @@ class ColumnAccessor(abc.MutableMapping):
         """
         if isinstance(key, slice):
             return self._select_by_label_slice(key)
-        elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
+        elif not (isinstance(key, tuple) or is_scalar(key)):
             return self._select_by_label_list_like(tuple(key))
         else:
             if isinstance(key, tuple):
@@ -412,7 +416,9 @@ class ColumnAccessor(abc.MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
-    def get_labels_by_index(self, index: Any) -> tuple:
+    def get_labels_by_index(
+        self, index: slice | int | Iterable[int | bool]
+    ) -> tuple:
         """Get the labels corresponding to the provided column indices.
 
         Parameters
@@ -428,9 +434,9 @@ class ColumnAccessor(abc.MutableMapping):
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             return self.names[start:stop:step]
-        elif pd.api.types.is_integer(index):
+        elif isinstance(index, int):
             return (self.names[index],)
-        elif (bn := len(index)) > 0 and all(map(is_bool, index)):
+        elif (bn := len(index)) > 0 and all(map(_is_bool, index)):  # type: ignore[arg-type]
             if bn != (n := len(self.names)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"
@@ -443,7 +449,7 @@ class ColumnAccessor(abc.MutableMapping):
             # TODO: Doesn't handle on-device columns
             return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
-            if len(set(index)) != len(index):
+            if len(set(index)) != len(index):  # type: ignore[arg-type]
                 raise NotImplementedError(
                     "Selecting duplicate column labels is not supported."
                 )
@@ -545,7 +551,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_list_like(self, key: tuple) -> Self:
         # Special-casing for boolean mask
-        if (bn := len(key)) > 0 and all(map(is_bool, key)):
+        if (bn := len(key)) > 0 and all(map(_is_bool, key)):
             if bn != (n := len(self.names)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"

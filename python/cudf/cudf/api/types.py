@@ -14,7 +14,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api import types as pd_types
+from pandas.api import types as pd_types  # noqa: TID251
 
 import pylibcudf as plc
 
@@ -82,7 +82,7 @@ def is_integer(obj):
     """
     if isinstance(obj, cudf.Scalar):
         return obj.dtype.kind in "iu"
-    return pd.api.types.is_integer(obj)
+    return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
 def is_string_dtype(obj):
@@ -105,7 +105,7 @@ def is_string_dtype(obj):
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
-            pd.api.types.is_string_dtype(obj)
+            pd.api.types.is_string_dtype(obj)  # noqa: TID251
             # Reject all cudf extension types.
             and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
@@ -551,4 +551,4 @@ is_dtype_equal = pd_types.is_dtype_equal
 
 
 # Aliases of numpy dtype functionality.
-issubdtype = np.issubdtype
+issubdtype = np.issubdtype  # noqa: TID251

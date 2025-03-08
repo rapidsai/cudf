@@ -153,7 +153,7 @@ def make_all_numeric_extremes_dataframe():
 
     for gdf_dtype in gdf_dtypes:
         np_type = pdf_dtypes[gdf_dtype]
-        if np.issubdtype(np_type, np.integer):
+        if np.dtype(np_type).kind in "iu":
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
             df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]

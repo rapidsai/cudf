@@ -17,6 +17,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.utils.dtypes import find_common_type
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
 
@@ -981,7 +982,7 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -1011,7 +1012,7 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     if dtype_l != dtype_r:
         exp_join_data = [1, 2, 3, 4.5]
@@ -1052,7 +1053,7 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]

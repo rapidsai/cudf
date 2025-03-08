@@ -17,7 +17,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     Decimal128Dtype,
 )
-from cudf.utils.dtypes import is_dtype_obj_numeric
+from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -102,7 +102,7 @@ def _match_join_keys(
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
-            else np.result_type(ltype, rtype)
+            else find_common_type((ltype, rtype))
         )
     elif (ltype.kind == "M" and rtype.kind == "M") or (
         ltype.kind == "m" and rtype.kind == "m"

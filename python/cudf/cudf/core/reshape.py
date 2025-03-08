@@ -927,7 +927,7 @@ def _merge_sorted(
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-    if not pd.api.types.is_list_like(objs):
+    if is_scalar(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
@@ -1272,7 +1272,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         raise NotImplementedError("fill_value is not supported.")
     elif sort is False:
         raise NotImplementedError(f"{sort=} is not supported.")
-    if pd.api.types.is_list_like(level):
+    if not is_scalar(level):
         if not level:
             return df
     if not isinstance(df.index, cudf.MultiIndex):
@@ -1575,7 +1575,7 @@ def pivot_table(
 
     values_passed = values is not None
     if values_passed:
-        if pd.api.types.is_list_like(values):
+        if not is_scalar(values):
             values_multi = True
             values = list(values)
         else:

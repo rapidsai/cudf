@@ -251,7 +251,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
             # larger data type mimicking pandas
-            to_dtype = np.result_type(value.dtype, self._frame.dtype)
+            to_dtype = find_common_type((value.dtype, self._frame.dtype))
             value = value.astype(to_dtype)
             if to_dtype != self._frame.dtype:
                 # Do not remove until pandas-3.0 support is added.
