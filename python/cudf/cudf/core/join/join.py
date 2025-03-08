@@ -33,16 +33,16 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        if how == "cross":
-            return join_func(
-                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-                # plc.types.NullEquality.EQUAL,
-            )
+        # if how == "cross":
+        #     return join_func(
+        #         plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
+        #         plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+        #         # plc.types.NullEquality.EQUAL,
+        #     )
         left_rows, right_rows = join_func(
             plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
             plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-            # plc.types.NullEquality.EQUAL,
+            plc.types.NullEquality.EQUAL,
         )
         return (
             ColumnBase.from_pylibcudf(left_rows),
@@ -314,47 +314,71 @@ class Merge:
             right_key.set(self.rhs, rcol_casted)
 
         if self.how == "cross":
-            lib_table = self._joiner(
-                list(self.lhs._data.columns),
-                list(self.rhs._data.columns),
-                how=self.how,
+            lib_table = plc.join.cross_join(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.lhs._data.columns
+                    ]
+                ),
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.rhs._data.columns
+                    ]
+                ),
             )
-            all_columns = self.lhs._data.names + self.rhs._data.names
-            return cudf.DataFrame._from_data(
+            columns = lib_table.columns()
+            left_names, right_names = (
+                self.lhs._data.names,
+                self.rhs._data.names,
+            )
+            left_result = cudf.DataFrame._from_data(
                 {
-                    col: libcudf.column.Column.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(all_columns, lib_table.columns())
+                    col: ColumnBase.from_pylibcudf(lib_col)
+                    for col, lib_col in zip(
+                        left_names, columns[: len(left_names)]
+                    )
+                }
+            )
+            right_result = cudf.DataFrame._from_data(
+                {
+                    col: ColumnBase.from_pylibcudf(lib_col)
+                    for col, lib_col in zip(
+                        right_names, columns[len(left_names) :]
+                    )
                 }
             )
         else:
             left_rows, right_rows = self._gather_maps(
                 left_join_cols, right_join_cols
             )
-        gather_kwargs = {
-            "keep_index": self._using_left_index or self._using_right_index,
-        }
-        left_result = (
-            self.lhs._gather(
-                GatherMap.from_column_unchecked(
-                    left_rows, len(self.lhs), nullify=True
-                ),
-                **gather_kwargs,
+            gather_kwargs = {
+                "keep_index": self._using_left_index
+                or self._using_right_index,
+            }
+            left_result = (
+                self.lhs._gather(
+                    GatherMap.from_column_unchecked(
+                        left_rows, len(self.lhs), nullify=True
+                    ),
+                    **gather_kwargs,
+                )
+                if left_rows is not None
+                else cudf.DataFrame._from_data({})
             )
-            if left_rows is not None
-            else cudf.DataFrame._from_data({})
-        )
-        del left_rows
-        right_result = (
-            self.rhs._gather(
-                GatherMap.from_column_unchecked(
-                    right_rows, len(self.rhs), nullify=True
-                ),
-                **gather_kwargs,
+            del left_rows
+            right_result = (
+                self.rhs._gather(
+                    GatherMap.from_column_unchecked(
+                        right_rows, len(self.rhs), nullify=True
+                    ),
+                    **gather_kwargs,
+                )
+                if right_rows is not None
+                else cudf.DataFrame._from_data({})
             )
-            if right_rows is not None
-            else cudf.DataFrame._from_data({})
-        )
-        del right_rows
+            del right_rows
         result = cudf.DataFrame._from_data(
             *self._merge_results(left_result, right_result)
         )
@@ -630,7 +654,7 @@ class MergeSemi(Merge):
             join_func(
                 plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
                 plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-                # plc.types.NullEquality.EQUAL,
+                plc.types.NullEquality.EQUAL,
             )
         ), None
 
