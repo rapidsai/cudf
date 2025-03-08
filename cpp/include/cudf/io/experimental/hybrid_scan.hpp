@@ -100,6 +100,12 @@ class hybrid_scan_reader {
                                 cudf::io::parquet_reader_options const& options,
                                 rmm::cuda_stream_view stream) const;
 
+  [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+    cudf::mutable_column_view input_rows,
+    std::vector<rmm::device_buffer>& data_pages_bytes,
+    cudf::io::parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
+
  private:
   std::unique_ptr<detail::impl> _impl;
 };
@@ -165,6 +171,14 @@ get_filter_columns_data_pages(std::unique_ptr<parquet::hybrid_scan_reader> const
                               cudf::host_span<size_type const> row_group_indices,
                               cudf::io::parquet_reader_options const& options,
                               rmm::cuda_stream_view stream);
+
+// API # 9
+[[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+  cudf::mutable_column_view input_rows,
+  std::vector<rmm::device_buffer>& data_pages_bytes,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
 
 }  // namespace experimental::io
 }  // namespace CUDF_EXPORT cudf

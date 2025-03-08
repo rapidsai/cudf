@@ -118,4 +118,15 @@ std::vector<std::vector<cudf::io::text::byte_range_info>> get_filter_columns_dat
     input_rows, input_row_group_indices, options, stream);
 }
 
+// API # 9
+[[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+  cudf::mutable_column_view input_rows,
+  std::vector<rmm::device_buffer>& data_pages_bytes,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  return reader->materialize_filter_columns(input_rows, data_pages_bytes, options, stream);
+}
+
 }  // namespace cudf::experimental::io

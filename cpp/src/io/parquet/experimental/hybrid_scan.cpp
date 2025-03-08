@@ -109,4 +109,15 @@ hybrid_scan_reader::get_filter_columns_data_pages(
   return _impl->get_filter_columns_data_pages(input_rows, row_group_indices, options, stream);
 }
 
+std::unique_ptr<cudf::table> hybrid_scan_reader::materialize_filter_columns(
+  cudf::mutable_column_view input_rows,
+  std::vector<rmm::device_buffer>& data_pages_bytes,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(input_rows.type().id() == cudf::type_id::BOOL8, "");
+  // TODO: Implement this
+  return {};
+}
+
 }  // namespace cudf::experimental::io::parquet
