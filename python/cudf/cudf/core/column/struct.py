@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pyarrow as pa
@@ -12,9 +12,12 @@ from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+    import pylibcudf as plc
 
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
@@ -122,14 +125,20 @@ class StructColumn(ColumnBase):
         result = super().element_indexing(index)
         return self.dtype._recursively_replace_fields(result)
 
-    def __setitem__(self, key, value):
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
-            # filling in fields not in dict
-            for field in self.dtype.fields:
-                value[field] = value.get(field, NA)
-
-            value = cudf.Scalar(value, self.dtype)
-        super().__setitem__(key, value)
+            new_value = {
+                field: value.get(field, None) for field in self.dtype.fields
+            }
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(new_value, type=self.dtype.to_arrow())
+            )
+        elif value is NA or value is None:
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=self.dtype.to_arrow())
+            )
+        else:
+            raise ValueError("Can not set dict values into StructColumn")
 
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
