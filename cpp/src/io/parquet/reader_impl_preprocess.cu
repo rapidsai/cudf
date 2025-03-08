@@ -53,7 +53,7 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 #if defined(PREPROCESS_DEBUG)
-void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view _stream)
+void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream_view _stream)
 {
   pages.device_to_host_sync(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
@@ -1515,14 +1515,16 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
       max_col_row--;
     }
 
-    max_row = min(max_row, max_col_row);
+    max_row = std::min<size_t>(max_row, max_col_row);
 
     first_page_index += subpass.column_page_count[idx];
   }
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
   auto const pass_end = pass.skip_rows + pass.num_rows;
-  max_row             = min(max_row, pass_end);
-  subpass.num_rows    = max_row - subpass.skip_rows;
+  max_row             = std::min<size_t>(max_row, pass_end);
+  // Make sure we don't skip past the max rows.
+  CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass");
+  subpass.num_rows = max_row - subpass.skip_rows;
 
   // now split up the output into chunks as necessary
   compute_output_chunks_for_subpass();
