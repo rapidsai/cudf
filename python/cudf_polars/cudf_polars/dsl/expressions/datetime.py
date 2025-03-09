@@ -157,13 +157,10 @@ class TemporalFunction(Expr):
             )
 
             return Column(result)
-            # return Column(
-            #    plc.datetime.floor_datetimes(column.obj, plc.datetime.RoundingFrequency.MONTH)
-            # )
         elif self.name is TemporalFunction.Name.MonthEnd:
             return Column(
-                plc.datetime.ceil_datetimes(
-                    column.obj, plc.datetime.RoundingFrequency.MONTH
+                plc.unary.cast(
+                    plc.datetime.last_day_of_month(column.obj), column.obj.type()
                 )
             )
         if self.name is TemporalFunction.Name.Microsecond:
