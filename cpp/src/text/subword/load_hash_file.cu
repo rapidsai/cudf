@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,16 +189,21 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::ifstream hash_file(filename_hashed_vocabulary);
   CUDF_EXPECTS(hash_file.good(), "Could not open " + filename_hashed_vocabulary);
 
+  printf("hashed_file = [%s]\n", filename_hashed_vocabulary.c_str());
+
   uint64_t line_no = 1;
   std::string line;
   std::getline(hash_file, line);
   result.outer_hash_a = str_to_uint32(line, line_no++);
+  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.outer_hash_a);
 
   std::getline(hash_file, line);
   result.outer_hash_b = str_to_uint32(line, line_no++);
+  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.outer_hash_b);
 
   std::getline(hash_file, line);
   result.num_bins = str_to_uint32(line, line_no++);
+  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.num_bins);
 
   auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
   auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
@@ -206,6 +211,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
     size_t loc_of_space = line.find(" ");
+    printf("%ld: [%s]\n", line_no, line.c_str());
     CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);
