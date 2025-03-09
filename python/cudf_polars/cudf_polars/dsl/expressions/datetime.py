@@ -104,6 +104,12 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
+    _valid_ops: ClassVar[list[Name]] = [
+        *_COMPONENT_MAP.keys(),
+        Name.MonthStart,
+        Name.MonthEnd,
+    ]
+
     def __init__(
         self,
         dtype: plc.DataType,
@@ -116,10 +122,7 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if self.name not in self._COMPONENT_MAP and self.name not in {
-            self.name.MonthStart,
-            self.name.MonthEnd,
-        }:
+        if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
