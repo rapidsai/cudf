@@ -1085,3 +1085,20 @@ def test_byte_pair_encoding(separator, input, results):
     actual = encoder(strings, separator)
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
+
+
+def test_substring_deduplicate():
+    text = (
+        " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    "
+        "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   "
+        "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         "
+        "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur "
+        "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit "
+        "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  "
+    )
+    input = cudf.Series([text])
+    actual = input.str.substring_deduplicate(15)
+    expected = cudf.Series(
+        [" 01234567890123456789 ", ". 012345678901234", " reprehenderit "]
+    )
+    assert_eq(expected, actual)

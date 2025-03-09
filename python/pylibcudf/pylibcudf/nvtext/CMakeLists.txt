@@ -14,6 +14,7 @@
 
 set(cython_sources
     byte_pair_encode.pyx
+    dedup.pyx
     edit_distance.pyx
     generate_ngrams.pyx
     jaccard.pyx

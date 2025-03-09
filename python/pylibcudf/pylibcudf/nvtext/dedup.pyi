@@ -1,0 +1,5 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.
+
+from pylibcudf.column import Column
+
+def substring_deduplicate(input: Column, min_width: int) -> Column: ...
