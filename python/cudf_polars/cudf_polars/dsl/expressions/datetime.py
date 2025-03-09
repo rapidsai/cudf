@@ -116,7 +116,10 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if self.name not in self._COMPONENT_MAP:
+        if self.name not in self._COMPONENT_MAP and self.name not in {
+            self.name.MonthStart,
+            self.name.MonthEnd,
+        }:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -132,6 +135,37 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name is TemporalFunction.Name.MonthStart:
+            ends = plc.datetime.last_day_of_month(column.obj)
+            days_to_subtract = plc.datetime.days_in_month(column.obj)
+            # must subtract 1 to avoid rolling over to the previous month
+            days_to_subtract = plc.binaryop.binary_operation(
+                days_to_subtract,
+                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.binaryop.BinaryOperator.SUB,
+                plc.DataType(plc.TypeId.INT32),
+            )
+
+            days_to_subtract = plc.unary.cast(
+                days_to_subtract, plc.DataType(plc.TypeId.DURATION_DAYS)
+            )
+            result = plc.binaryop.binary_operation(
+                ends,
+                days_to_subtract,
+                plc.binaryop.BinaryOperator.SUB,
+                column.obj.type(),
+            )
+
+            return Column(result)
+            # return Column(
+            #    plc.datetime.floor_datetimes(column.obj, plc.datetime.RoundingFrequency.MONTH)
+            # )
+        elif self.name is TemporalFunction.Name.MonthEnd:
+            return Column(
+                plc.datetime.ceil_datetimes(
+                    column.obj, plc.datetime.RoundingFrequency.MONTH
+                )
+            )
         if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND

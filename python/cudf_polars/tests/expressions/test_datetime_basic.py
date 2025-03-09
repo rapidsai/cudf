@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -134,4 +134,25 @@ def test_date_extract(field):
 
     q = ldf.select(field(pl.col("dates").dt))
 
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_month_start(dtype):
+    data = pl.DataFrame(
+        {
+            "dates": pl.Series(
+                [
+                    datetime.date(2024, 1, 1),
+                    datetime.date(2024, 10, 11),
+                    datetime.date(2024, 10, 31),
+                ],
+                dtype=dtype,
+            )
+        }
+    ).lazy()
+
+    q = data.select(pl.col("dates").dt.month_start())
     assert_gpu_result_equal(q)
