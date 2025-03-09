@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -133,5 +133,24 @@ def test_date_extract(field):
     )
 
     q = ldf.select(field(pl.col("dates").dt))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_is_leap_year(dtype):
+    ldf = pl.LazyFrame(
+        {
+            "dates": [
+                datetime.date(2000, 1, 1),
+                datetime.date(2001, 1, 1),
+                datetime.date(2004, 1, 1),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("dates").dt.is_leap_year())
 
     assert_gpu_result_equal(q)
