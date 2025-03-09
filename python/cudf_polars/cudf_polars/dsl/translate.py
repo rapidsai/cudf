@@ -23,7 +23,7 @@ import pylibcudf as plc
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -41,13 +41,13 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
-    config
+    engine
         GPU engine configuration.
     """
 
-    def __init__(self, visitor: NodeTraverser, config: GPUEngine):
+    def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config = config
+        self.config_options = config.ConfigOptions(engine.config.copy())
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -233,7 +233,7 @@ def _(
         typ,
         reader_options,
         cloud_options,
-        translator.config.config.copy(),
+        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -260,7 +260,7 @@ def _(
         schema,
         node.df,
         node.projection,
-        translator.config.config.copy(),
+        translator.config_options,
     )
 
 
