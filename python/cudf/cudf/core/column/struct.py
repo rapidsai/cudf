@@ -11,8 +11,8 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.missing import NA
 from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -127,13 +127,21 @@ class StructColumn(ColumnBase):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
+
+            def _maybe_na_to_none(value: Any) -> Any:
+                if _is_null_host_scalar(value):
+                    return None
+                else:
+                    return value
+
             new_value = {
-                field: value.get(field, None) for field in self.dtype.fields
+                field: _maybe_na_to_none(value.get(field, None))
+                for field in self.dtype.fields
             }
             return pa_scalar_to_plc_scalar(
                 pa.scalar(new_value, type=self.dtype.to_arrow())
             )
-        elif value is NA or value is None:
+        elif _is_null_host_scalar(value):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(None, type=self.dtype.to_arrow())
             )

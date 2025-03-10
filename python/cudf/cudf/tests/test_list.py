@@ -836,7 +836,7 @@ def test_listcol_as_string(data):
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             [[1, 2, 3], [4, 5, 6]],
-            "list nesting level mismatch",
+            "Could not convert .* with type list: tried to convert to int64",
         ),
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],

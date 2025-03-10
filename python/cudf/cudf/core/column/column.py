@@ -1039,6 +1039,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
+            if _is_null_host_scalar(value):
+                value = None
             return pa_scalar_to_plc_scalar(
                 pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
             )
@@ -1059,6 +1061,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         else:
             key = as_column(key)
+            if len(key) == 0:
+                key = key.astype(SIZE_TYPE_DTYPE)
             if not is_dtype_obj_numeric(key.dtype):
                 raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, value_normalized)
