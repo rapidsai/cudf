@@ -39,6 +39,14 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --dist=worksteal \
     --constructors=polars[lazy]
 
+rapids-logger "Run narwhals tests for cuDF Pandas"
+NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m cudf.pandas \
+    --pytest \
+    --cache-clear \
+    --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
+    --numprocesses=8 \
+    --dist=worksteal
+
 popd || exit 1
 
 rapids-logger "Test script exiting with value: $EXITCODE"
