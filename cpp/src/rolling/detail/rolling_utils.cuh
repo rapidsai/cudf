@@ -30,7 +30,7 @@ namespace detail::rolling {
 /**
  * @brief Information about group bounds of the current row's group.
  */
-struct range_group_info {
+struct group_info {
   size_type const start;  ///< The start of the group
   size_type const end;    ///< The end of the group
   [[nodiscard]] __device__ constexpr inline bool is_null(size_type) const noexcept { return false; }
@@ -50,7 +50,7 @@ struct range_group_info {
  *
  * The groups can contain nulls.
  */
-struct range_group_info_with_nulls {
+struct group_info_with_nulls {
   size_type const group_start_;  ///< The start of the group
   size_type const group_end_;    ///< The end of the group
   size_type const null_count_;   ///< The null count of the group
@@ -102,7 +102,7 @@ struct ungrouped {
    * @param i The row
    * @returns `range_group_info` with the information about the row.
    */
-  [[nodiscard]] __device__ constexpr inline range_group_info row_info(size_type i) const noexcept
+  [[nodiscard]] __device__ constexpr inline group_info row_info(size_type i) const noexcept
   {
     return {0, num_rows};
   }
@@ -125,7 +125,7 @@ struct grouped {
   /**
    * @copydoc ungrouped::row_info
    */
-  [[nodiscard]] __device__ constexpr inline range_group_info row_info(size_type i) const noexcept
+  [[nodiscard]] __device__ constexpr inline group_info row_info(size_type i) const noexcept
   {
     auto const label       = labels[i];
     auto const group_start = offsets[label];
@@ -152,7 +152,7 @@ struct ungrouped_with_nulls {
   /**
    * @copydoc ungrouped::row_info
    */
-  [[nodiscard]] __device__ constexpr inline range_group_info_with_nulls row_info(
+  [[nodiscard]] __device__ constexpr inline group_info_with_nulls row_info(
     size_type i) const noexcept
   {
     return {0, num_rows, null_count, nulls_at_start};
@@ -182,7 +182,7 @@ struct grouped_with_nulls {
   /**
    * @copydoc ungrouped::row_info
    */
-  [[nodiscard]] __device__ constexpr inline range_group_info_with_nulls row_info(
+  [[nodiscard]] __device__ constexpr inline group_info_with_nulls row_info(
     size_type i) const noexcept
   {
     auto const label       = labels[i];
@@ -203,7 +203,7 @@ struct fixed_window_clamper {
 
   [[nodiscard]] __device__ constexpr cudf::size_type operator()(cudf::size_type i) const
   {
-    range_group_info const row_info = groups.row_info(i);
+    group_info const row_info = groups.row_info(i);
     if constexpr (Direction == direction::PRECEDING) {
       return cuda::std::min(i + 1 - row_info.group_start(),
                             cuda::std::max(delta, i + 1 - row_info.group_end()));
