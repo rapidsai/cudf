@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -375,16 +375,14 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
 template <typename T>
 struct create_chrono_scalar {
   template <typename ChronoT = T, typename... Args>
-  std::enable_if_t<std::is_same_v<typename cudf::is_timestamp_t<ChronoT>::type, std::true_type>,
-                   cudf::timestamp_scalar<ChronoT>>
+  std::enable_if_t<cudf::is_timestamp_t<ChronoT>::type::value, cudf::timestamp_scalar<ChronoT>>
   operator()(Args&&... args) const
   {
     return cudf::timestamp_scalar<T>(std::forward<Args>(args)...);
   }
 
   template <typename ChronoT = T, typename... Args>
-  std::enable_if_t<std::is_same_v<typename cudf::is_duration_t<ChronoT>::type, std::true_type>,
-                   cudf::duration_scalar<ChronoT>>
+  std::enable_if_t<cudf::is_duration_t<ChronoT>::type::value, cudf::duration_scalar<ChronoT>>
   operator()(Args&&... args) const
   {
     return cudf::duration_scalar<T>(std::forward<Args>(args)...);
