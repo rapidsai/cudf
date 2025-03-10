@@ -136,7 +136,11 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            scalar = pa.scalar(value)
+            scalar = pa.scalar(
+                value
+                if not cudf.utils.utils._is_null_host_scalar(value)
+                else None
+            )
             if pa.types.is_boolean(scalar.type) and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
