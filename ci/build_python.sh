@@ -15,7 +15,7 @@ rapids-generate-version > ./VERSION
 
 rapids-logger "Begin py build"
 
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
@@ -119,4 +119,4 @@ rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
 
-rapids-upload-conda-to-s3 python
+# rapids-upload-conda-to-s3 python

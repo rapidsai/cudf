@@ -4,6 +4,8 @@
 set -euo pipefail
 
 package_dir="python/cudf"
+wheel_dir=${RAPIDS_WHEEL_BLD_OUTPUT_DIR:-"${package_dir}/final_dist"}
+initial_wheel_dir=$(mktemp -d)
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
@@ -12,22 +14,22 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 #
 # Using env variable PIP_CONSTRAINT is necessary to ensure the constraints
 # are used when creating the isolated build environment.
-RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp /tmp/libcudf_dist
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python /tmp/pylibcudf_dist
-echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/libcudf_*.whl)" > /tmp/constraints.txt
-echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/pylibcudf_dist/pylibcudf_*.whl)" >> /tmp/constraints.txt
+CPP_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
+PYTHON_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${CPP_WHEELHOUSE}/libcudf_*.whl)" > /tmp/constraints.txt
+echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYTHON_WHEELHOUSE}/pylibcudf_*.whl)" >> /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
-./ci/build_wheel.sh cudf ${package_dir}
+./ci/build_wheel.sh cudf ${package_dir} ${initial_wheel_dir}
 
 python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
-    -w ${package_dir}/final_dist \
-    ${package_dir}/dist/*
+    -w ${wheel_dir} \
+    "${initial_wheel_dir}"/*
 
-./ci/validate_wheel.sh ${package_dir} final_dist
+./ci/validate_wheel.sh ${package_dir} ${wheel_dir}
 
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist
+# RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist
