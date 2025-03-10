@@ -51,6 +51,37 @@ namespace cudf::experimental::io::parquet::detail {
 
 namespace {
 
+rmm::device_uvector<size_type> make_page_indices(
+  cudf::host_span<cudf::size_type const> page_row_counts,
+  cudf::host_span<cudf::size_type const> page_row_offsets,
+  cudf::size_type total_rows,
+  rmm::cuda_stream_view stream)
+{
+  auto mr = cudf::get_current_device_resource_ref();
+
+  // Move page-level row counts and offsets to device
+  auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
+  auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
+
+  // Generate row index mapping
+  auto page_indices =
+    cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
+  thrust::scatter_if(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator<size_type>(0),
+                     thrust::counting_iterator<size_type>(row_counts.size()),
+                     row_offsets.begin(),
+                     row_counts.begin(),
+                     page_indices.begin());
+
+  // Fill gaps with previous values
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                         page_indices.begin(),
+                         page_indices.end(),
+                         page_indices.begin(),
+                         thrust::maximum<cudf::size_type>());
+  return page_indices;
+}
+
 using Type = cudf::io::parquet::detail::Type;
 
 /**
@@ -200,29 +231,7 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
 
       // Construct a row indices mapping based on page row counts and offsets
       auto const page_indices =
-        [&, page_row_counts = page_row_counts, page_row_offsets = page_row_offsets]() {
-          // Move page-level row counts and offsets to device
-          auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
-          auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
-
-          // Generate row index mapping
-          auto page_indices =
-            cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
-          thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                             thrust::counting_iterator<size_type>(0),
-                             thrust::counting_iterator<size_type>(row_counts.size()),
-                             row_offsets.begin(),
-                             row_counts.begin(),
-                             page_indices.begin());
-
-          // Fill gaps with previous values
-          thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                                 page_indices.begin(),
-                                 page_indices.end(),
-                                 page_indices.begin(),
-                                 thrust::maximum<cudf::size_type>());
-          return page_indices;
-        }();
+        make_page_indices(page_row_counts, page_row_offsets, total_rows, stream);
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
@@ -611,34 +620,11 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     // Construct a row indices mapping based on page row counts and offsets
     // TODO: MH: Would make sense to not recompute all this.
-    auto const page_indices = [&,
-                               page_row_counts  = page_row_counts[col_idx],
-                               page_row_offsets = page_row_offsets[col_idx]]() {
-      // Move page-level row counts and offsets to device
-      auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
-      auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
-
-      // Generate row index mapping
-      auto page_indices =
-        cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
-      thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
-                         thrust::counting_iterator<size_type>(row_counts.size()),
-                         row_offsets.begin(),
-                         row_counts.begin(),
-                         page_indices.begin());
-
-      // Fill gaps with previous values
-      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                             page_indices.begin(),
-                             page_indices.end(),
-                             page_indices.begin(),
-                             thrust::maximum<cudf::size_type>());
-      return page_indices;
-    }();
+    auto const page_indices =
+      make_page_indices(page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, stream);
 
     rmm::device_uvector<size_type> d_select_page_indices(total_rows, stream, mr);
-    auto selected_pages_end =
+    auto const selected_pages_end =
       thrust::copy_if(rmm::exec_policy_nosync(stream),
                       page_indices.begin(),
                       page_indices.end(),
@@ -652,14 +638,16 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                       });
 
     // Remove duplicate page indices across rows.
-    auto selected_unique_end = thrust::unique(
+    auto const selected_unique_end = thrust::unique(
       rmm::exec_policy_nosync(stream), d_select_page_indices.begin(), selected_pages_end);
-    auto num_selected_unique_pages =
-      static_cast<size_type>(selected_unique_end - d_select_page_indices.begin());
-    d_select_page_indices.resize(num_selected_unique_pages, stream);
+    size_t const num_selected_unique_pages =
+      thrust::distance(d_select_page_indices.begin(), selected_unique_end);
 
     // Copy the selected unique page indices back to host and
-    auto h_select_page_indices = cudf::detail::make_host_vector_sync(d_select_page_indices, stream);
+    auto h_select_page_indices = cudf::detail::make_host_vector_sync(
+      cudf::device_span<cudf::size_type const>{d_select_page_indices.data(),
+                                               num_selected_unique_pages},
+      stream);
 
     // page ranges for the current column
     auto page_ranges = std::vector<cudf::io::text::byte_range_info>(num_selected_unique_pages);
@@ -680,6 +668,7 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   CUDF_EXPECTS(num_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
+  // TODO: MH: Temp logging. Remove later.
   std::cout << "Num pages after filter = " << num_filtered_pages << " out of " << total_pages
             << std::endl;
 
