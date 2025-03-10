@@ -17,7 +17,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/distinct_hash_join.cuh>
+#include <cudf/detail/join/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
