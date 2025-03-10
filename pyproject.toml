@@ -99,6 +99,8 @@ select = [
     "RUF",
     # banned-api
     "TID251",
+    # flake8-debugger
+    "T10",
 ]
 ignore = [
     # whitespace before :

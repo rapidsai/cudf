@@ -519,7 +519,6 @@ def test_dask_struct_field_Key_Error(data):
     struct_accessor_data_params,
 )
 def test_dask_struct_field_Int_Error(data):
-    # breakpoint()
     got = dask_cudf.from_cudf(Series(data), 2)
 
     with pytest.raises(IndexError):
