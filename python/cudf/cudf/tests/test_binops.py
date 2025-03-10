@@ -3444,3 +3444,35 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
     result = slr2 < cudf.Series([slr1])
     expected = slr2 < pd.Series([slr1])
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("comp_op", _cmpops)
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize(
+    "data_left, data_right",
+    [
+        [[1, 2], [1, 2]],
+        [[1, 2], [1, 3]],
+    ],
+)
+def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
+    pd_non_cat = pd.Series(data_left)
+    pd_cat = pd.Series(
+        data_right,
+        dtype=pd.CategoricalDtype(categories=data_right, ordered=ordered),
+    )
+
+    cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
+    cudf_cat = cudf.Series.from_pandas(pd_cat)
+
+    if (
+        not ordered and comp_op not in {operator.eq, operator.ne}
+    ) or comp_op in {operator.gt, operator.lt, operator.le, operator.ge}:
+        with pytest.raises(TypeError):
+            comp_op(pd_non_cat, pd_cat)
+        with pytest.raises(TypeError):
+            comp_op(cudf_non_cat, cudf_cat)
+    else:
+        expected = comp_op(pd_non_cat, pd_cat)
+        result = comp_op(cudf_non_cat, cudf_cat)
+        assert_eq(result, expected)
