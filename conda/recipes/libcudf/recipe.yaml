@@ -95,7 +95,11 @@ outputs:
       version: ${{ version }}
     build:
       script:
-        - cmake --install cpp/build
+        content: |
+          cmake --install cpp/build
+          # Check that no undefined symbols are present in the shared library
+          test -f $PREFIX/lib/libcudf.so
+          ./ci/check_symbols.sh $PREFIX/lib/libcudf.so
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
