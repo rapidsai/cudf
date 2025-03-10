@@ -540,19 +540,24 @@ struct get_page_span {
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
 
-    auto start_page =
-      (thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row) -
-       column_page_start) +
-      first_page_index;
-    // list rows can span page boundaries, so it is not always safe to assume that the row
-    // represented by end_row_index starts on the subsequent page. It is possible that
-    // the values for row end_row_index start within the page itself. so we must
-    // include the page in that case.
-    if (page_row_index[start_page] == start_row && !is_list) { start_page++; }
+    auto start_page = first_page_index;
 
-    auto end_page = (thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row) -
-                     column_page_start) +
+    // For list columns, the row counts are estimates so we need all prefix pages to correctly
+    // compute page bounds. Otherwise, we can get an exact span of pages.
+    if (not is_list) {
+      start_page += thrust::distance(
+        column_page_start,
+        thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row));
+
+      if (page_row_index[start_page] == start_row) { start_page++; }
+    }
+
+    auto end_page = thrust::distance(column_page_start,
+                                     thrust::lower_bound(
+                                       thrust::seq, column_page_start, column_page_end, end_row)) +
                     first_page_index;
+    // TODO: For list columns, we can still end up with the `end_page` not containing the actual
+    // `end_row`. This should be handled properly.
     if (end_page < (first_page_index + num_pages)) { end_page++; }
 
     return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};
@@ -1540,7 +1545,10 @@ void reader::impl::create_global_chunk_info()
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
-    auto const row_group_rows  = std::min<int>(remaining_rows, row_group.num_rows);
+    // Adjust row_group_rows for `skip_rows` for the first row_group but cap at row_group.num_rows
+    auto const adjusted_row_group_rows = skip_rows ? skip_rows - row_groups_info[0].start_row : 0;
+    auto row_group_rows =
+      std::min<size_t>(remaining_rows + adjusted_row_group_rows, row_group.num_rows);
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -1644,9 +1652,10 @@ void reader::impl::compute_input_passes()
       get_row_group_size(row_group);
 
     // We must use the effective size of the first row group we are reading to accurately calculate
-    // the first non-zero input_pass_start_row_count.
-    auto const row_group_rows =
-      (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
+    // the first non-zero `input_pass_start_row_count` unless we are reading only one row group
+    auto const row_group_rows = (skip_rows and row_groups_info.size() > 1)
+                                  ? rgi.start_row + row_group.num_rows - skip_rows
+                                  : row_group.num_rows;
 
     //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
     skip_rows = 0;
@@ -1715,7 +1724,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                    iter,
                    iter + subpass.pages.size(),
                    set_row_index{pass.chunks, subpass.pages, c_info, subpass_max_row});
-  // print_cumulative_page_info(subpass.pages, c_info, _stream);
+  // print_cumulative_page_info(subpass.pages, pass.chunks, c_info, _stream);
 
   // compute the splits
   subpass.output_chunk_read_info = compute_page_splits_by_row(
