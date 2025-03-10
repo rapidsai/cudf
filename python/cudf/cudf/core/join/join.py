@@ -324,8 +324,8 @@ class Merge:
             )
             columns = lib_table.columns()
             left_names, right_names = (
-                self.lhs._data.names,
-                self.rhs._data.names,
+                self.lhs._column_names,
+                self.rhs._column_names,
             )
             left_result = cudf.DataFrame._from_data(
                 {
