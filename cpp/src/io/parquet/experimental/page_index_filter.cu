@@ -18,15 +18,11 @@
 #include "io/parquet/reader_impl_helpers.hpp"
 #include "io/parquet/stats_filter_helpers.hpp"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
-#include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
@@ -44,13 +40,12 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/tabulate.h>
+#include <thrust/unique.h>
 
 #include <algorithm>
 #include <limits>
 #include <numeric>
 #include <optional>
-#include <unordered_set>
 
 namespace cudf::experimental::io::parquet::detail {
 
@@ -204,29 +199,29 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
         });
 
       // Construct a row indices mapping based on page row counts and offsets
-      auto const row_indices =
+      auto const page_indices =
         [&, page_row_counts = page_row_counts, page_row_offsets = page_row_offsets]() {
           // Move page-level row counts and offsets to device
           auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
           auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
 
           // Generate row index mapping
-          auto row_indices =
+          auto page_indices =
             cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
           thrust::scatter_if(rmm::exec_policy_nosync(stream),
                              thrust::counting_iterator<size_type>(0),
                              thrust::counting_iterator<size_type>(row_counts.size()),
                              row_offsets.begin(),
                              row_counts.begin(),
-                             row_indices.begin());
+                             page_indices.begin());
 
           // Fill gaps with previous values
           thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                                 row_indices.begin(),
-                                 row_indices.end(),
-                                 row_indices.begin(),
+                                 page_indices.begin(),
+                                 page_indices.end(),
+                                 page_indices.begin(),
                                  thrust::maximum<cudf::size_type>());
-          return row_indices;
+          return page_indices;
         }();
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
@@ -248,13 +243,13 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           thrust::for_each(rmm::exec_policy_nosync(stream),
                            thrust::counting_iterator(0),
                            thrust::counting_iterator(total_rows),
-                           [row_indices    = row_indices.begin(),
+                           [page_indices   = page_indices.begin(),
                             input_data     = column.template begin<T>(),
                             output_data    = reinterpret_cast<T*>(output_data.data()),
                             input_bitmask  = column.null_mask(),
                             output_bitmask = reinterpret_cast<bitmask_type*>(
                               output_bitmask.data())] __device__(auto const row_index) {
-                             auto const page_index = row_indices[row_index];
+                             auto const page_index = page_indices[row_index];
                              // Write output data
                              output_data[row_index] = input_data[page_index];
                              // Write output bitmask
@@ -335,13 +330,13 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           thrust::for_each(rmm::exec_policy_nosync(stream),
                            thrust::counting_iterator(0),
                            thrust::counting_iterator(total_rows),
-                           [row_indices      = row_indices.begin(),
+                           [page_indices     = page_indices.begin(),
                             input_str_sizes  = page_str_sizes.begin(),
                             output_str_sizes = row_str_sizes.begin(),
                             input_bitmask  = reinterpret_cast<bitmask_type*>(input_bitmask.data()),
                             output_bitmask = reinterpret_cast<bitmask_type*>(
                               output_bitmask.data())] __device__(auto const row_index) {
-                             auto const page_index       = row_indices[row_index];
+                             auto const page_index       = page_indices[row_index];
                              output_str_sizes[row_index] = input_str_sizes[page_index];
                              if (not bit_is_set(input_bitmask, page_index)) {
                                clear_bit_unsafe(output_bitmask, row_index);
@@ -366,10 +361,10 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           auto src_iter = thrust::make_transform_iterator(
             thrust::make_counting_iterator<std::size_t>(0),
             cuda::proclaim_return_type<char*>(
-              [chars       = page_str_chars.begin(),
-               offsets     = page_str_offsets.begin(),
-               row_indices = row_indices.begin()] __device__(std::size_t index) {
-                auto const page_index = row_indices[index];
+              [chars        = page_str_chars.begin(),
+               offsets      = page_str_offsets.begin(),
+               page_indices = page_indices.begin()] __device__(std::size_t index) {
+                auto const page_index = page_indices[index];
                 return chars + offsets[page_index];
               }));
 
@@ -538,14 +533,16 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   auto const num_columns = output_dtypes.size();
 
   // Compute byte offsets and row offsets for all pages across all filter columns.
+  // TODO: MH: Would make sense to not recompute all this.
   std::vector<std::vector<cudf::io::text::byte_range_info>> all_page_byte_ranges(num_columns);
+  std::vector<std::vector<size_type>> page_row_counts(num_columns);
   std::vector<std::vector<size_type>> page_row_offsets(num_columns);
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
     [&](auto col_idx) {
       auto const schema_idx = output_column_schemas[col_idx];
-      size_type rows_so_far = 0;
+      page_row_offsets[col_idx].emplace_back(0);
       // For all source files
       std::for_each(
         thrust::counting_iterator<size_t>(0),
@@ -565,19 +562,23 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
             if (col != std::end(row_group.columns) and col->offset_index.has_value()) {
               auto const& offset_index = col->offset_index.value();
               for (size_t page_idx = 0; page_idx < offset_index.page_locations.size(); ++page_idx) {
-                page_row_offsets[col_idx].emplace_back(
-                  rows_so_far + offset_index.page_locations[page_idx].first_row_index);
+                int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
+                int64_t const last_row_idx =
+                  (page_idx < offset_index.page_locations.size() - 1)
+                    ? offset_index.page_locations[page_idx + 1].first_row_index
+                    : row_group.num_rows;
+
+                page_row_counts[col_idx].emplace_back(last_row_idx - first_row_idx);
+                page_row_offsets[col_idx].emplace_back(page_row_offsets[col_idx].back() +
+                                                       page_row_counts[col_idx].back());
+
                 all_page_byte_ranges[col_idx].emplace_back(
                   offset_index.page_locations[page_idx].offset,
                   offset_index.page_locations[page_idx].compressed_page_size);
               }
             }
-            rows_so_far += row_group.num_rows;
           });
         });
-
-      // Insert the last offset of the last page
-      page_row_offsets[col_idx].emplace_back(total_rows);
     });
 
   if (input_rows.is_empty()) { return all_page_byte_ranges; }
@@ -593,77 +594,93 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
     return all_page_byte_ranges;
   }
 
-  auto const total_input_pages =
+  auto const total_pages =
     std::accumulate(page_row_offsets.cbegin(),
                     page_row_offsets.cend(),
                     size_t{0},
                     [](auto sum, auto const& offsets) { return sum + offsets.size() - 1; });
 
-  // Get the validity column bitmask
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(input_rows.size());
-    if (input_rows.nullable()) {
-      return cudf::detail::make_host_vector_sync(
-        device_span<bitmask_type const>(input_rows.null_mask(), num_bitmasks), stream);
-    } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
-      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
-      return bitmask;
-    }
-  }();
-
-  // Create a validity iterator
-  auto validity_it = cudf::detail::make_counting_transform_iterator(
-    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
-  // Return only filtered row groups based on predicate
-  auto const is_row_required = cudf::detail::make_host_vector_sync(
-    device_span<uint8_t const>(input_rows.data<uint8_t>(), input_rows.size()), stream);
-
-  // TODO: MH: Find a way to accelerate the following loop on device.
+  // Vector to hold vectors of byte ranges of filtered pages for each column
+  auto data_page_bytes = std::vector<std::vector<cudf::io::text::byte_range_info>>();
+  data_page_bytes.reserve(num_columns);
+  auto mr = cudf::get_current_device_resource_ref();
 
   // For all columns, look up which pages contain at least one valid row. i.e. !validity_it[row_idx]
   // or is_row_required[row_idx] satisfies, and add its byte range to the output list of byte ranges
   // for the column.
-  auto data_page_bytes = std::vector<std::vector<cudf::io::text::byte_range_info>>();
-  data_page_bytes.reserve(num_columns);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    // Construct a row indices mapping based on page row counts and offsets
+    // TODO: MH: Would make sense to not recompute all this.
+    auto const page_indices = [&,
+                               page_row_counts  = page_row_counts[col_idx],
+                               page_row_offsets = page_row_offsets[col_idx]]() {
+      // Move page-level row counts and offsets to device
+      auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
+      auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_columns),
-                [&](auto col_idx) {
-                  // page ranges for the current column
-                  auto page_ranges = std::vector<cudf::io::text::byte_range_info>();
-                  page_ranges.reserve(page_row_offsets[col_idx].size());
-                  // For all rows
-                  for (size_type row_idx = 0; row_idx < total_rows; ++row_idx) {
-                    // If required row
-                    if (not validity_it[row_idx] or is_row_required[row_idx]) {
-                      // binary search to find the page index this row_idx belongs to and set the
-                      // page index to true page_indices
-                      auto const& offsets = page_row_offsets[col_idx];
-                      auto const page_itr =
-                        std::upper_bound(offsets.cbegin(), offsets.cend(), row_idx);
-                      CUDF_EXPECTS(page_itr != offsets.cbegin(), "Invalid page index");
-                      auto const page_idx = std::distance(offsets.cbegin(), page_itr) - 1;
-                      page_ranges.emplace_back(all_page_byte_ranges[col_idx][page_idx]);
-                      // Move row_idx to the last row of the page, so that we don't need to check
-                      // the same page again. Adjusted by -1 to compensate for ++row_idx
-                      row_idx = offsets[page_idx + 1] - 1;
-                    }
-                  }
-                  // Move the vector into the global list.
-                  data_page_bytes.emplace_back(std::move(page_ranges));
-                });
+      // Generate row index mapping
+      auto page_indices =
+        cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
+      thrust::scatter_if(rmm::exec_policy_nosync(stream),
+                         thrust::counting_iterator<size_type>(0),
+                         thrust::counting_iterator<size_type>(row_counts.size()),
+                         row_offsets.begin(),
+                         row_counts.begin(),
+                         page_indices.begin());
 
-  auto const filtered_num_pages = std::accumulate(
+      // Fill gaps with previous values
+      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+                             page_indices.begin(),
+                             page_indices.end(),
+                             page_indices.begin(),
+                             thrust::maximum<cudf::size_type>());
+      return page_indices;
+    }();
+
+    rmm::device_uvector<size_type> d_select_page_indices(total_rows, stream, mr);
+    auto selected_pages_end =
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      page_indices.begin(),
+                      page_indices.end(),
+                      thrust::counting_iterator<size_type>(0),
+                      d_select_page_indices.begin(),
+                      [is_nullable     = input_rows.nullable(),
+                       bitmask         = input_rows.null_mask(),
+                       is_row_required = input_rows.data<bool>()] __device__(size_type row_index) {
+                        auto const is_valid = is_nullable and not bit_is_set(bitmask, row_index);
+                        return is_valid or is_row_required[row_index];
+                      });
+
+    // Remove duplicate page indices across rows.
+    auto selected_unique_end = thrust::unique(
+      rmm::exec_policy_nosync(stream), d_select_page_indices.begin(), selected_pages_end);
+    auto num_selected_unique_pages =
+      static_cast<size_type>(selected_unique_end - d_select_page_indices.begin());
+    d_select_page_indices.resize(num_selected_unique_pages, stream);
+
+    // Copy the selected unique page indices back to host and
+    auto h_select_page_indices = cudf::detail::make_host_vector_sync(d_select_page_indices, stream);
+
+    // page ranges for the current column
+    auto page_ranges = std::vector<cudf::io::text::byte_range_info>(num_selected_unique_pages);
+    std::transform(h_select_page_indices.begin(),
+                   h_select_page_indices.end(),
+                   page_ranges.begin(),
+                   [&](auto const page_idx) { return all_page_byte_ranges[col_idx][page_idx]; });
+
+    data_page_bytes.emplace_back(std::move(page_ranges));
+  }
+
+  auto const num_filtered_pages = std::accumulate(
     data_page_bytes.cbegin(),
     data_page_bytes.cend(),
     size_t{0},
     [](auto sum, auto const& data_page_bytes) { return sum + data_page_bytes.size(); });
 
-  CUDF_EXPECTS(filtered_num_pages < total_input_pages,
+  CUDF_EXPECTS(num_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
-  std::cout << "Num pages after filter = " << filtered_num_pages << " out of " << total_input_pages
+  std::cout << "Num pages after filter = " << num_filtered_pages << " out of " << total_pages
             << std::endl;
 
   // Return the final lists of data page byte ranges for all columns
