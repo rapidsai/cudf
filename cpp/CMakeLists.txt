@@ -645,6 +645,7 @@ add_library(
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
+  src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/round/round.cu
