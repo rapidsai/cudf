@@ -208,7 +208,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
   auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
-  std::string delim = " ";
+  auto const delim = std::string{" "};
   printf("delim=%c 0x%02x\n", delim[0], (int)delim[0]);
 
   for (int i = 0; i < result.num_bins; ++i) {

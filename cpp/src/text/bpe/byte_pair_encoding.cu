@@ -288,8 +288,10 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto pairs =
-    cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
+  auto space   = std::string{" "};
+  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto pairs   = cudf::strings::split_record(
+    input, cudf::string_scalar(space, true, stream, temp_mr), 1, stream, mr);
   auto content = pairs->release();
   printf("pairs = %ld/%d\n", content.children.size(), input.size());  // offsets, strings
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);

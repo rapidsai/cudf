@@ -377,6 +377,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // Create a vector of every delimiter position in the chars column.
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
+  printf("delimiter count = %ld\n", d_count.value(stream));
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
   auto d_positions         = delimiter_positions.data();
   cudf::detail::copy_if_safe(
@@ -410,6 +411,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto const d_tokens_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+
+  printf("total_tokens = %d\n", total_tokens);
 
   // build a vector of all the token positions for all the strings
   auto tokens   = rmm::device_uvector<string_index_pair>(total_tokens, stream);
