@@ -107,6 +107,7 @@ class TemporalFunction(Expr):
     _valid_ops: ClassVar[list[Name]] = [
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
+        Name.OrdinalDay,
     ]
 
     def __init__(
@@ -141,6 +142,8 @@ class TemporalFunction(Expr):
             return Column(
                 plc.datetime.is_leap_year(column.obj),
             )
+        if self.name is TemporalFunction.Name.OrdinalDay:
+            return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND

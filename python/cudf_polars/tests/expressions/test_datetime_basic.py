@@ -152,5 +152,24 @@ def test_is_leap_year(dtype):
     )
 
     q = ldf.select(pl.col("dates").dt.is_leap_year())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "start_date, end_date",
+    [
+        (datetime.date(2001, 12, 22), datetime.date(2001, 12, 25)),
+        (datetime.date(2000, 2, 27), datetime.date(2000, 3, 1)),  # Leap year transition
+        (datetime.date(1999, 12, 31), datetime.date(2000, 1, 2)),
+        (datetime.date(2020, 2, 28), datetime.date(2020, 3, 1)),
+        (datetime.date(2021, 1, 1), datetime.date(2021, 1, 2)),
+    ],
+)
+def test_ordinal_day(start_date, end_date):
+    df = pl.DataFrame({"date": pl.date_range(start_date, end_date, eager=True)}).lazy()
+
+    q = df.with_columns(
+        pl.col("date").dt.ordinal_day().alias("day_of_year"),
+    )
 
     assert_gpu_result_equal(q)
