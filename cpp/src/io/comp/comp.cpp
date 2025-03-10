@@ -30,6 +30,7 @@
 
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
+#include <zstd.h>
 
 #include <numeric>
 
@@ -92,6 +93,24 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression failed at deallocation");
 
   return dst;
+}
+
+std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
+{
+  auto const compressed_size = ZSTD_compressBound(src.size());
+  CUDF_EXPECTS(ZSTD_isError(compressed_size) == 0, "Error in estimating ZSTD compressed size");
+  std::vector<std::uint8_t> compressed_buffer(compressed_size);
+
+  // This function compresses in a single frame
+  auto const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
+                                              compressed_size,
+                                              reinterpret_cast<const void*>(src.data()),
+                                              src.size(),
+                                              1);
+  CUDF_EXPECTS(ZSTD_isError(compressed_size_) == 0, "Error in ZSTD compression");
+  compressed_buffer.resize(compressed_size_);
+
+  return compressed_buffer;
 }
 
 namespace snappy {
@@ -432,6 +451,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return snappy::compress(src);
+    case compression_type::ZSTD: return compress_zstd(src);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
