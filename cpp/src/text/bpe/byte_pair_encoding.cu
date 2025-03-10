@@ -159,12 +159,16 @@ struct mp_hasher {
   __device__ hash_value_type operator()(cudf::size_type index) const
   {
     auto const d_str = d_strings.element<cudf::string_view>(index);
-    return hasher(d_str);
+    auto const hv    = hasher(d_str);
+    printf("mhi %d: %c,%d %u\n", index, d_str.data()[0], d_str.size_bytes(), hv);
+    return hv;
   }
   // used by find
   __device__ hash_value_type operator()(cudf::string_view const& d_str) const
   {
-    return hasher(d_str);
+    auto const hv = hasher(d_str);
+    printf("mhf %c,%d %u\n", d_str.data()[0], d_str.size_bytes(), hv);
+    return hv;
   }
 };
 
@@ -179,15 +183,29 @@ struct mp_equal {
   // used by insert
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const noexcept
   {
-    auto const left  = d_strings.element<cudf::string_view>(lhs);
-    auto const right = d_strings.element<cudf::string_view>(rhs);
-    return left == right;
+    auto const left   = d_strings.element<cudf::string_view>(lhs);
+    auto const right  = d_strings.element<cudf::string_view>(rhs);
+    auto const result = left == right;
+    printf("mei %c,%d/%c,%d=%d\n",
+           left.data()[0],
+           left.size_bytes(),
+           right.data()[0],
+           right.size_bytes(),
+           (int)result);
+    return result;  // left == right;
   }
   // used by find
   __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
-    auto const right = d_strings.element<cudf::string_view>(rhs);
-    return lhs == right;
+    auto const right  = d_strings.element<cudf::string_view>(rhs);
+    auto const result = lhs == right;
+    printf("mef %c,%d/%c,%d=%d\n",
+           lhs.data()[0],
+           lhs.size_bytes(),
+           right.data()[0],
+           right.size_bytes(),
+           (int)result);
+    return result;  // lhs == right;
   }
 };
 
@@ -248,8 +266,8 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
       [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
 
   mp_table_map->insert_async(iter, iter + input.size(), stream.value());
-  std::cout << "initialize_mp_table_map=" << (int)cudaStreamSynchronize(stream.value())
-            << std::endl;
+  // std::cout << "initialize_mp_table_map=" << (int)cudaStreamSynchronize(stream.value())
+  //           << std::endl;
 
   return mp_table_map;
 }
