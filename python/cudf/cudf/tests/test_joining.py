@@ -19,7 +19,15 @@ from cudf.testing._utils import (
 )
 from cudf.utils.dtypes import find_common_type
 
-_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
+_JOIN_TYPES = (
+    "left",
+    "inner",
+    "outer",
+    "right",
+    "leftanti",
+    "leftsemi",
+    "cross",
+)
 
 
 def make_params():
@@ -2323,4 +2331,32 @@ def test_merge_left_on_right_index_sort():
         right_index=True,
         sort=True,
     )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data",
+    [
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]},
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [5, 3, 2, 1]},
+    ],
+)
+@pytest.mark.parametrize(
+    "right_data",
+    [
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]},
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [8, 7, 6, 5]},
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_cross_join_overlapping(left_data, right_data, sort):
+    df1 = cudf.DataFrame(left_data)
+    df2 = cudf.DataFrame(right_data)
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+    expected = pdf1.join(
+        pdf2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort
+    )
+    result = df1.join(df2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort)
     assert_eq(result, expected)
