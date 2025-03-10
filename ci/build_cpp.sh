@@ -11,6 +11,10 @@ source rapids-date-string
 
 export CMAKE_GENERATOR=Ninja
 
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US:en
+export LC_ALL=en_US.UTF-8
+
 rapids-print-env
 
 rapids-logger "Begin cpp build"
