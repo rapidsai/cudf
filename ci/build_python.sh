@@ -31,7 +31,6 @@ sccache --zero-stats
 
 rapids-logger "Building pylibcudf"
 
-# TODO: Remove `--test skip` flag once importing on a CPU node works correctly
 # --no-build-id allows for caching with `sccache`
 # more info is available at
 # https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
@@ -41,7 +40,6 @@ rapids-telemetry-record build-pylibcudf.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
@@ -55,7 +53,6 @@ rapids-telemetry-record build-cudf.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
@@ -69,7 +66,6 @@ rapids-telemetry-record build-dask-cudf.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
@@ -83,7 +79,6 @@ rapids-telemetry-record build-cudf_kafka.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
@@ -97,7 +92,6 @@ rapids-telemetry-record build-custreamz.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
@@ -111,7 +105,6 @@ rapids-telemetry-record build-cudf-polars.log \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
