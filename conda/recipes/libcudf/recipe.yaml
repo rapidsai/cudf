@@ -78,6 +78,7 @@ cache:
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - libcurand-dev
+          - libnvjitlink-dev
           - if: linux and x86_64
             then:
               - libcufile-dev
@@ -142,6 +143,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - librmm
           - nvcomp
@@ -186,6 +188,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - librmm
           - nvcomp
@@ -266,6 +269,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - librmm
           - nvcomp
@@ -327,6 +331,7 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
+          - libnvjitlink
           - librdkafka
           - librmm
           - nvcomp
