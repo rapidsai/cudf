@@ -138,6 +138,24 @@ def test_date_extract(field):
 
 
 @pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_is_leap_year(dtype):
+    ldf = pl.LazyFrame(
+        {
+            "dates": [
+                datetime.date(2000, 1, 1),
+                datetime.date(2001, 1, 1),
+                datetime.date(2004, 1, 1),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("dates").dt.is_leap_year())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
     "start_date, end_date",
     [
         (datetime.date(2001, 12, 22), datetime.date(2001, 12, 25)),
