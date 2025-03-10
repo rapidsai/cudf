@@ -40,8 +40,8 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --constructors=polars[lazy]
 
 rapids-logger "Run narwhals tests for cuDF Pandas"
-NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m cudf.pandas \
-    --pytest \
+NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
+    -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
     --numprocesses=8 \
