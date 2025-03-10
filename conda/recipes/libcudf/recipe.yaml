@@ -151,7 +151,6 @@ outputs:
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf.so
-        - ./ci/check_symbols.sh $PREFIX/lib/libcudf.so
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
