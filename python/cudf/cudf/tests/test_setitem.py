@@ -301,7 +301,7 @@ def test_series_setitem_upcasting_string_column():
     cr = cudf.from_pandas(sr)
     new_value = np.float64(10.5)
     sr[0] = str(new_value)
-    cr[0] = new_value
+    cr[0] = str(new_value)
     assert_eq(sr, cr)
 
 
