@@ -841,6 +841,12 @@ target_compile_options(
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
+# ARM test
+target_compile_options(
+  cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-fsigned-char>"
+               "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fsigned-char>"
+)
+
 if(CUDF_BUILD_STACKTRACE_DEBUG)
   # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
   # 'optimize'".

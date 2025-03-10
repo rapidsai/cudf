@@ -213,14 +213,14 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
     size_t loc_of_space = line.find(' ');
     printf("%ld: [%s]\n", line_no, line.c_str());
     // [65559 0]
-    printf(" %02x %02x %02x %02x %02x %02x %02x\n",
-           (uint32_t)line[0],
-           (uint32_t)line[1],
-           (uint32_t)line[2],
-           (uint32_t)line[3],
-           (uint32_t)line[4],
-           (uint32_t)line[5],
-           (uint32_t)line[6]);
+    // printf(" %02x %02x %02x %02x %02x %02x %02x\n",
+    //       (uint32_t)line[0],
+    //       (uint32_t)line[1],
+    //       (uint32_t)line[2],
+    //       (uint32_t)line[3],
+    //       (uint32_t)line[4],
+    //       (uint32_t)line[5],
+    //       (uint32_t)line[6]);
     CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);
