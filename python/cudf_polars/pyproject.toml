@@ -16,7 +16,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
     { name = "NVIDIA Corporation" },
 ]
-license = { text = "Apache 2.0" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = [
     "polars>=1.20,<1.24",
@@ -35,7 +35,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "numpy>=1.23,<2.1",
+    "numpy>=1.23,<3.0a0",
     "pytest-cov",
     "pytest-xdist",
     "pytest<8",
