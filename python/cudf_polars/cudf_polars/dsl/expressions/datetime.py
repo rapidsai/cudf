@@ -108,6 +108,7 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.MonthStart,
         Name.MonthEnd,
+        Name.OrdinalDay,
     ]
 
     def __init__(
@@ -166,6 +167,8 @@ class TemporalFunction(Expr):
                     plc.datetime.last_day_of_month(column.obj), column.obj.type()
                 )
             )
+        if self.name is TemporalFunction.Name.OrdinalDay:
+            return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND

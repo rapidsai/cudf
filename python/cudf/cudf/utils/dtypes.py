@@ -9,36 +9,15 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.core.dtypes.common import infer_dtype_from_object
 
 import pylibcudf as plc
 
 import cudf
 
 if TYPE_CHECKING:
-    from cudf._typing import DtypeObj
+    from collections.abc import Iterable
 
-"""Map numpy dtype to pyarrow types.
-Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
-handling is required when converting a Boolean column into arrow.
-"""
-_np_pa_dtypes = {
-    np.float64: pa.float64(),
-    np.float32: pa.float32(),
-    np.int64: pa.int64(),
-    np.longlong: pa.int64(),
-    np.int32: pa.int32(),
-    np.int16: pa.int16(),
-    np.int8: pa.int8(),
-    np.bool_: pa.bool_(),
-    np.uint64: pa.uint64(),
-    np.uint32: pa.uint32(),
-    np.uint16: pa.uint16(),
-    np.uint8: pa.uint8(),
-    np.datetime64: pa.date64(),
-    np.object_: pa.string(),
-    np.str_: pa.string(),
-}
+    from cudf._typing import DtypeObj
 
 np_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
@@ -97,27 +76,11 @@ BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
-def np_to_pa_dtype(dtype: np.dtype) -> pa.DataType:
-    """Util to convert numpy dtype to PyArrow dtype."""
-    # special case when dtype is np.datetime64
-    if dtype.kind == "M":
-        time_unit, _ = np.datetime_data(dtype)
-        if time_unit in ("s", "ms", "us", "ns"):
-            # return a pa.Timestamp of the appropriate unit
-            return pa.timestamp(time_unit)
-        # default is int64_t UNIX ms
-        return pa.date64()
-    elif dtype.kind == "m":
-        time_unit, _ = np.datetime_data(dtype)
-        if time_unit in ("s", "ms", "us", "ns"):
-            # return a pa.Duration of the appropriate unit
-            return pa.duration(time_unit)
-        # default fallback unit is ns
-        return pa.duration("ns")
-    return _np_pa_dtypes[dtype.type]
-
-
-def _find_common_type_decimal(dtypes):
+def _find_common_type_decimal(
+    dtypes: Iterable[
+        cudf.Decimal128Dtype | cudf.Decimal64Dtype | cudf.Decimal32Dtype
+    ],
+) -> cudf.Decimal128Dtype | cudf.Decimal64Dtype | cudf.Decimal32Dtype:
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
     s = max(dtype.scale for dtype in dtypes)
@@ -140,25 +103,6 @@ def _find_common_type_decimal(dtypes):
         )
 
 
-def cudf_dtype_from_pydata_dtype(dtype):
-    """Given a numpy or pandas dtype, converts it into the equivalent cuDF
-    Python dtype.
-    """
-
-    if cudf.api.types._is_categorical_dtype(dtype):
-        return cudf.core.dtypes.CategoricalDtype
-    elif cudf.api.types.is_decimal32_dtype(dtype):
-        return cudf.core.dtypes.Decimal32Dtype
-    elif cudf.api.types.is_decimal64_dtype(dtype):
-        return cudf.core.dtypes.Decimal64Dtype
-    elif cudf.api.types.is_decimal128_dtype(dtype):
-        return cudf.core.dtypes.Decimal128Dtype
-    elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-        return dtype.type
-
-    return infer_dtype_from_object(dtype)
-
-
 def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
@@ -172,8 +116,12 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return dtype.to_arrow()
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        return pa.timestamp(dtype.unit, str(dtype.tz))
+    elif dtype == CUDF_STRING_DTYPE:
+        return pa.string()
     else:
-        return np_to_pa_dtype(dtype)
+        return pa.from_numpy_dtype(dtype)
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
@@ -186,7 +134,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
-    elif pa.types.is_large_string(typ):
+    elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
         return CUDF_STRING_DTYPE
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
@@ -375,7 +323,7 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return np.float64("nan")
 
 
-def find_common_type(dtypes):
+def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     """
     Wrapper over np.find_common_type to handle special cases
 
@@ -393,7 +341,7 @@ def find_common_type(dtypes):
 
     """
 
-    if len(dtypes) == 0:
+    if len(dtypes) == 0:  # type: ignore[arg-type]
         return None
 
     # Early exit for categoricals since they're not hashable and therefore
@@ -425,7 +373,7 @@ def find_common_type(dtypes):
             return CUDF_STRING_DTYPE
 
     # Aggregate same types
-    dtypes = {cudf.dtype(dtype) for dtype in dtypes}
+    dtypes = set(dtypes)
     if len(dtypes) == 1:
         return dtypes.pop()
 
@@ -471,7 +419,7 @@ def find_common_type(dtypes):
     common_dtype = np.result_type(*dtypes)
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
-    return cudf.dtype(common_dtype)
+    return common_dtype
 
 
 def _dtype_pandas_compatible(dtype):
