@@ -24,13 +24,13 @@ namespace jit {
 /// @brief This is a minified version of `cudf::column_device_view` for use in JIT kernels.
 struct column_device_view {
   /// @copydoc cudf::column_device_view::_data
-  void* __restrict__ const data = nullptr;
+  void* const data = nullptr;
 
   /// @copydoc cudf::column_device_view::d_children
-  void* __restrict__ const children = nullptr;
+  void* const children = nullptr;
 
   /// @copydoc cudf::column_device_view::_null_mask
-  cudf::bitmask_type const* const __restrict__ nullmask = nullptr;
+  cudf::bitmask_type const* const nullmask = nullptr;
 
   /// @copydoc cudf::column_device_view::_type
   cudf::data_type const type = {};
