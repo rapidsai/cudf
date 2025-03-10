@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -105,9 +105,7 @@ class IntervalColumn(StructColumn):
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=struct_copy.size,
-            dtype=IntervalDtype(
-                struct_copy.dtype.fields["left"], self.dtype.closed
-            ),
+            dtype=IntervalDtype(self.dtype.subtype, self.dtype.closed),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -163,7 +161,7 @@ class IntervalColumn(StructColumn):
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=self.size,
-            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            dtype=IntervalDtype(self.dtype.subtype, closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,

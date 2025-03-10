@@ -2302,3 +2302,24 @@ def test_merge_suffixes_duplicate_label_raises():
 
     with pytest.raises(NotImplementedError):
         result.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+
+
+def test_merge_left_on_right_index_sort():
+    ser = cudf.Series(range(10), name="left_ser")
+    ser2 = cudf.Series(
+        range(10), index=[4, 5, 6, 3, 2, 1, 8, 9, 0, 7], name="right_ser"
+    )
+    ser_pd = ser.to_pandas()
+    ser2_pd = ser2.to_pandas()
+    result = cudf.merge(
+        ser, ser2, how="left", left_on="left_ser", right_index=True, sort=True
+    )
+    expected = pd.merge(
+        ser_pd,
+        ser2_pd,
+        how="left",
+        left_on="left_ser",
+        right_index=True,
+        sort=True,
+    )
+    assert_eq(result, expected)
