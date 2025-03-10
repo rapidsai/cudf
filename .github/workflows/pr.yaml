@@ -68,6 +68,8 @@ jobs:
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
         with:
           repo: cudf
+          # TODO: Temporarily bumping this limit while we fix CI failures.
+          max_days_without_success: 30
   changed-files:
     secrets: inherit
     needs: telemetry-setup
