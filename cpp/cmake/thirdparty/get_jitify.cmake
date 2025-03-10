@@ -12,8 +12,6 @@
 # the License.
 # =============================================================================
 
-# Jitify doesn't have a version :/
-
 # This function finds Jitify and sets any additional necessary environment variables.
 function(find_and_configure_jitify)
   include(${rapids-cmake-dir}/cpm/package_override.cmake)
