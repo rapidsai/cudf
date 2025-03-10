@@ -195,23 +195,32 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string line;
   std::getline(hash_file, line);
   result.outer_hash_a = str_to_uint32(line, line_no++);
-  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.outer_hash_a);
+  printf("%ld: [%s] %u\n", line_no - 1, line.c_str(), result.outer_hash_a);
 
   std::getline(hash_file, line);
   result.outer_hash_b = str_to_uint32(line, line_no++);
-  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.outer_hash_b);
+  printf("%ld: [%s] %u\n", line_no - 1, line.c_str(), result.outer_hash_b);
 
   std::getline(hash_file, line);
   result.num_bins = str_to_uint32(line, line_no++);
-  printf("%ld: [%s] %u\n", line_no, line.c_str(), result.num_bins);
+  printf("%ld: [%s] %u\n", line_no - 1, line.c_str(), result.num_bins);
 
   auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
   auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
-    size_t loc_of_space = line.find(" ");
+    size_t loc_of_space = line.find(' ');
     printf("%ld: [%s]\n", line_no, line.c_str());
+    // [65559 0]
+    printf(" %02x %02x %02x %02x %02x %02x %02x\n",
+           (uint32_t)line[0],
+           (uint32_t)line[1],
+           (uint32_t)line[2],
+           (uint32_t)line[3],
+           (uint32_t)line[4],
+           (uint32_t)line[5],
+           (uint32_t)line[6]);
     CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);
