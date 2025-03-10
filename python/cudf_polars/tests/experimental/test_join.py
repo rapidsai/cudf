@@ -13,11 +13,15 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5, 10, 15])
-def test_join(how, reverse, max_rows_per_partition):
+@pytest.mark.parametrize("bcast_join_limit", [1, 16])
+def test_join(how, reverse, max_rows_per_partition, bcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
-        executor_options={"max_rows_per_partition": max_rows_per_partition},
+        executor_options={
+            "max_rows_per_partition": max_rows_per_partition,
+            "bcast_join_limit": bcast_join_limit,
+        },
     )
     left = pl.LazyFrame(
         {

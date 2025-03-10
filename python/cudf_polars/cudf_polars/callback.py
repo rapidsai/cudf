@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -233,6 +233,8 @@ def validate_config_options(config: dict) -> None:
         unsupported = config.get("executor_options", {}).keys() - {
             "max_rows_per_partition",
             "parquet_blocksize",
+            "shuffle_method",
+            "bcast_join_limit",
         }
     else:
         unsupported = config.get("executor_options", {}).keys()

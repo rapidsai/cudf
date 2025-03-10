@@ -57,8 +57,13 @@ def _make_hash_join(
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Extract shuffle_options
+    parallel_options = ir.config_options.get("executor_options", {})
+    shuffle_options: dict[str, Any] = {
+        "shuffle_method": parallel_options.get("shuffle_method", "tasks"),
+    }
+
     # Shuffle left and right dataframes (if necessary)
-    shuffle_options: dict[str, Any] = {}  # Unused for now
     new_left = _maybe_shuffle_frame(
         left,
         ir.left_on,
@@ -99,6 +104,11 @@ def _should_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
 ) -> bool:
+    # Check bcast_join_limit
+    # (Maximum number of partitions in "small" table)
+    parallel_options = ir.config_options.get("executor_options", {})
+    bcast_join_limit = parallel_options.get("bcast_join_limit", 16)
+
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
         small_count = partition_info[right].count
@@ -123,7 +133,7 @@ def _should_bcast_join(
     # 3. The "kind" of join is compatible with a broadcast join
     return (
         not large_shuffled
-        and small_count <= 8  # TODO: Make this configurable
+        and small_count <= bcast_join_limit
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)

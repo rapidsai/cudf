@@ -1126,8 +1126,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options")
+    __slots__ = ("config_options", "left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1149,6 +1149,8 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1156,6 +1158,7 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
+        config_options: dict[str, Any],
         left: IR,
         right: IR,
     ):
@@ -1163,11 +1166,24 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
+        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
         if options[5] != "none":
             raise NotImplementedError("maintain_order not implemented yet")
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.left_on,
+            self.right_on,
+            json.dumps(self.options),
+            json.dumps(self.config_options),
+            self.children,
+        )
 
     @staticmethod
     @cache
