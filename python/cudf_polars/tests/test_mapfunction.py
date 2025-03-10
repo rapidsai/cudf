@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -10,16 +10,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-
-
-def test_merge_sorted_raises():
-    df1 = pl.LazyFrame({"a": [1, 6, 9], "b": [1, -10, 4]})
-    df2 = pl.LazyFrame({"a": [-1, 5, 11, 20], "b": [2, 7, -4, None]})
-    df3 = pl.LazyFrame({"a": [-10, 20, 21], "b": [1, 2, 3]})
-
-    q = df1.merge_sorted(df2, key="a").merge_sorted(df3, key="a")
-
-    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_explode_multiple_raises():
@@ -92,4 +82,15 @@ def test_unpivot_defaults():
         }
     )
     q = df.unpivot(index="d")
+    assert_gpu_result_equal(q)
+
+
+def test_with_row_index_defaults():
+    lf = pl.LazyFrame(
+        {
+            "a": [1, 3, 5],
+            "b": [2, 4, 6],
+        }
+    )
+    q = lf.with_row_index()
     assert_gpu_result_equal(q)

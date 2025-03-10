@@ -251,8 +251,12 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
-    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
+    actual_column = cudf.core.column.as_column(
+        chunked_array, dtype=np.dtype(np.float64)
+    )
+    expected_column = cudf.core.column.as_column(
+        pyarrow_array, dtype=np.dtype(np.float64)
+    )
 
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -290,6 +294,8 @@ def test_column_chunked_array_creation():
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
+    from_dtype = np.dtype(from_dtype)
+    to_dtype = np.dtype(to_dtype)
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
@@ -314,6 +320,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
+    from_dtype = np.dtype(from_dtype)
+    to_dtype = np.dtype(to_dtype)
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
@@ -337,6 +345,7 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_valid_string_to_numeric(data, to_dtype):
+    to_dtype = np.dtype(to_dtype)
     expect = cudf.Series._from_column(cudf.Series(data)._column.view(to_dtype))
     got = cudf.Series(str_host_view(data, to_dtype))
 
@@ -352,7 +361,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="int32")
     expect = cudf.Series(expect_data, dtype="float32")
-    got = cudf.Series._from_column(sr._column.view("float32"))
+    got = cudf.Series._from_column(sr._column.view(np.dtype(np.float32)))
 
     assert_eq(expect, got)
 
@@ -364,7 +373,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="float64")
     expect = cudf.Series(expect_data, dtype="int64")
-    got = cudf.Series._from_column(sr._column.view("int64"))
+    got = cudf.Series._from_column(sr._column.view(np.dtype(np.int64)))
 
     assert_eq(expect, got)
 
@@ -376,7 +385,7 @@ def test_column_view_numeric_slice(slc):
 
     expect = cudf.Series(data[slc].view("int64"))
     got = cudf.Series._from_column(
-        sr._column.slice(slc.start, slc.stop).view("int64")
+        sr._column.slice(slc.start, slc.stop).view(np.dtype(np.int64))
     )
 
     assert_eq(expect, got)
@@ -389,7 +398,9 @@ def test_column_view_string_slice(slc):
     data = ["a", "bcde", "cd", "efg", "h"]
 
     expect = cudf.Series._from_column(
-        cudf.Series(data)._column.slice(slc.start, slc.stop).view("int8")
+        cudf.Series(data)
+        ._column.slice(slc.start, slc.stop)
+        .view(np.dtype(np.int8))
     )
     got = cudf.Series(str_host_view(data[slc], "int8"))
 

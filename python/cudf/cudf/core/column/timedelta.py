@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -19,7 +18,7 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, np_to_pa_dtype
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
@@ -28,7 +27,14 @@ from cudf.utils.utils import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -137,6 +143,19 @@ class TimeDeltaColumn(ColumnBase):
             "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
         )
 
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            isinstance(fill_value, np.timedelta64)
+            and self.time_unit != np.datetime_data(fill_value)[0]
+        ):
+            fill_value = fill_value.astype(self.dtype)
+        elif isinstance(fill_value, str) and fill_value.lower() == "nat":
+            fill_value = np.timedelta64(fill_value, self.time_unit)
+        return super()._validate_fillna_value(fill_value)
+
     @property
     def values(self):
         """
@@ -173,26 +192,6 @@ class TimeDeltaColumn(ColumnBase):
             return pd.Index(
                 pa_array.to_numpy(zero_copy_only=False, writable=True)
             )
-
-    @acquire_spill_lock()
-    def to_arrow(self) -> pa.Array:
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(
-                self.mask_array_view(mode="read").copy_to_host()
-            )
-        data = pa.py_buffer(
-            self.astype(np.dtype(np.int64))
-            .data_array_view(mode="read")
-            .copy_to_host()
-        )
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -281,7 +280,7 @@ class TimeDeltaColumn(ColumnBase):
             other = pd.Timedelta(other).to_timedelta64()
 
         if isinstance(other, np.timedelta64):
-            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
                 return cudf.Scalar(
                     None,
@@ -309,7 +308,9 @@ class TimeDeltaColumn(ColumnBase):
         # https://github.com/rapidsai/cudf/issues/17664
         return (
             (self.astype(np.dtype(np.int64)) * conversion)
-            .astype(cudf.Decimal128Dtype(38, 9))
+            .astype(
+                cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
+            )
             .round(decimals=abs(int(math.log10(conversion))))
             .astype(np.dtype(np.float64))
         )
@@ -324,7 +325,7 @@ class TimeDeltaColumn(ColumnBase):
         raise NotImplementedError("round is currently not implemented")
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -335,7 +336,7 @@ class TimeDeltaColumn(ColumnBase):
         )
         return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
-    def as_datetime_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_datetime_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
@@ -357,7 +358,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
@@ -378,10 +379,10 @@ class TimeDeltaColumn(ColumnBase):
             ),
         )
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        if to_dtype.kind == "m":  # type: ignore[union-attr]
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
+        if to_dtype.kind == "m":
             to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            self_res = self.time_unit
 
             max_int = np.iinfo(np.int64).max
 
@@ -452,14 +453,13 @@ class TimeDeltaColumn(ColumnBase):
         self,
         skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype | None = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
             self.astype(np.dtype(np.int64)).sum(  # type: ignore
-                skipna=skipna, min_count=min_count, dtype=dtype
+                skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
         ).as_unit(self.time_unit)
