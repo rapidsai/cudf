@@ -216,16 +216,71 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
   auto const test_str = std::string{"string with spaces in it"};
-  std::cout << "test_str.find(' ')=" << test_str.find(' ') << std::endl;
-  std::cout << "test_str.find(\" \")=" << test_str.find(" ") << std::endl;
-  auto const delim = std::string{" "};
-  std::cout << "test_str.find(delim)=" << test_str.find(delim) << std::endl;
-  auto const delim_view = std::string_view{" "};
-  std::cout << "test_str.find(dv)=" << test_str.find(delim_view) << std::endl;
-  auto const delim_char = " ";
-  std::cout << "test_str.find(dc)=" << test_str.find(delim_char) << std::endl;
 
-  printf("delim_char=[%c] 0x%02x\n", delim_char[0], (int)delim_char[0]);
+  std::cout << "find-space:\n";
+  std::cout << " .find(' ')=" << test_str.find(' ') << std::endl;
+  std::cout << " .find(\" \")=" << test_str.find(" ") << std::endl;
+  auto delim = std::string{" "};
+  std::cout << " .find(delim)=" << test_str.find(delim) << std::endl;
+  auto delim_view = std::string_view{" "};
+  std::cout << " .find(dv)=" << test_str.find(delim_view) << std::endl;
+  auto delim_char = " ";
+  std::cout << " .find(dc)=" << test_str.find(delim_char) << std::endl;
+  printf(" delim_char=[%c] 0x%02x\n", delim_char[0], (int)delim_char[0]);
+
+  std::cout << "find_first_of-space:\n";
+  std::cout << " .find_first_of(' ')=" << test_str.find_first_of(' ') << std::endl;
+  std::cout << " .find_first_of(\" \")=" << test_str.find_first_of(" ") << std::endl;
+  delim = std::string{" "};
+  std::cout << " .find_first_of(delim)=" << test_str.find_first_of(delim) << std::endl;
+
+  std::cout << "find_last_of-space:\n";
+  std::cout << " .find_last_of(' ')=" << test_str.find_last_of(' ') << std::endl;
+  std::cout << " .find_last_of(\" \")=" << test_str.find_last_of(" ") << std::endl;
+  delim = std::string{" "};
+  std::cout << " .find_last_of(delim)=" << test_str.find_last_of(delim) << std::endl;
+
+  std::cout << "find-w:\n";
+  std::cout << " .find('w')=" << test_str.find('w') << std::endl;
+  std::cout << " .find(\"w\")=" << test_str.find("w") << std::endl;
+  delim = std::string{"w"};
+  std::cout << " .find(delim)=" << test_str.find(delim) << std::endl;
+  delim_view = std::string_view{"w"};
+  std::cout << " .find(dv)=" << test_str.find(delim_view) << std::endl;
+  delim_char = "w";
+  std::cout << " .find(dc)=" << test_str.find(delim_char) << std::endl;
+  printf(" delim_char=[%c] 0x%02x\n", delim_char[0], (int)delim_char[0]);
+
+  std::cout << "find_first_of-w:\n";
+  std::cout << " .find_first_of('w')=" << test_str.find_first_of('w') << std::endl;
+  std::cout << " .find_first_of(\"w\")=" << test_str.find_first_of("w") << std::endl;
+  delim = std::string{"w"};
+  std::cout << " .find_first_of(delim)=" << test_str.find_first_of(delim) << std::endl;
+
+  std::cout << "find_last_of-w:\n";
+  std::cout << " .find_last_of('w')=" << test_str.find_last_of('w') << std::endl;
+  std::cout << " .find_last_of(\"w\")=" << test_str.find_last_of("w") << std::endl;
+  delim = std::string{"w"};
+  std::cout << " .find_last_of(delim)=" << test_str.find_last_of(delim) << std::endl;
+
+  std::cout << "find-wi:\n";
+  std::cout << " .find(\"wi\")=" << test_str.find("wi") << std::endl;
+  delim = std::string{"wi"};
+  std::cout << " .find(delim)=" << test_str.find(delim) << std::endl;
+  delim_view = std::string_view{"wi"};
+  std::cout << " .find(dv)=" << test_str.find(delim_view) << std::endl;
+  delim_char = "wi";
+  std::cout << " .find(dc)=" << test_str.find(delim_char) << std::endl;
+
+  std::cout << "find_first_of-wi:\n";
+  std::cout << " .find_first_of(\"wi\")=" << test_str.find_first_of("wi") << std::endl;
+  delim = std::string{"wi"};
+  std::cout << " .find_first_of(delim)=" << test_str.find_first_of(delim) << std::endl;
+
+  std::cout << "find_last_of-wi:\n";
+  std::cout << " .find_last_of(\"wi\")=" << test_str.find_last_of("wi") << std::endl;
+  delim = std::string{"wi"};
+  std::cout << " .find_last_of(delim)=" << test_str.find_last_of(delim) << std::endl;
 
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
