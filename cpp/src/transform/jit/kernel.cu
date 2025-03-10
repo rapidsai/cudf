@@ -17,6 +17,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/jit/types.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -37,6 +38,9 @@ namespace jit {
 
 template <typename T, int32_t index>
 struct accessor {
+  static_assert(cudf::is_rep_layout_compatible<T>(),
+                "Accessor requires type to be memory-compatible with its representation");
+
   using type                     = T;
   static constexpr int32_t INDEX = index;
 
