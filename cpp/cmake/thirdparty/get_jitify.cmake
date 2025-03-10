@@ -20,17 +20,11 @@ function(find_and_configure_jitify)
 
   rapids_cpm_find(
     jitify 2.0.0
-    GIT_REPOSITORY https://github.com/rapidsai/jitify.git
-    GIT_TAG jitify2
+    GIT_REPOSITORY https://github.com/davidwendt/jitify.git
+    GIT_TAG arm-space-double-quote
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
   )
-
-  set(current_json_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
-
-  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
-  rapids_cpm_package_override("${cudf_patch_dir}/jitify_override.json")
-
   set(JITIFY_INCLUDE_DIR
       "${jitify_SOURCE_DIR}"
       PARENT_SCOPE
