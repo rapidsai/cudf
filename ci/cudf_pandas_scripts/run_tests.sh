@@ -72,11 +72,14 @@ python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --numprocesses=8 \
     --dist=worksteal \
+    -k "not test_cudf_pandas_profiler" \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
+
+python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version_constraint")
 
@@ -90,9 +93,11 @@ for version in "${versions[@]}"; do
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --numprocesses=8 \
     --dist=worksteal \
+    -k "not test_cudf_pandas_profiler" \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
+    python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
 done
