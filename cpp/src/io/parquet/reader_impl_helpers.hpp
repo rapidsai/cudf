@@ -113,7 +113,7 @@ struct row_group_info {
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
-  explicit metadata(datasource* source);
+  explicit metadata(datasource* source, bool check_header);
   void sanitize_schema();
 };
 
@@ -145,7 +145,7 @@ class aggregate_reader_metadata {
    * @brief Create a metadata object from each element in the source vector
    */
   static std::vector<metadata> metadatas_from_sources(
-    host_span<std::unique_ptr<datasource> const> sources);
+    host_span<std::unique_ptr<datasource> const> sources, bool check_headers);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
@@ -289,7 +289,8 @@ class aggregate_reader_metadata {
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
-                            bool has_cols_from_mismatched_srcs);
+                            bool has_cols_from_mismatched_srcs,
+                            bool check_headers);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 

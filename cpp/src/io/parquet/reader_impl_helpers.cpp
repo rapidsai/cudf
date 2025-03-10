@@ -283,19 +283,22 @@ void metadata::sanitize_schema()
   process(0);
 }
 
-metadata::metadata(datasource* source)
+metadata::metadata(datasource* source, bool check_header)
 {
   constexpr auto header_len = sizeof(file_header_s);
-  constexpr auto ender_len  = sizeof(file_ender_s);
+  if (check_header) {
+    auto const header_buffer = source->host_read(0, header_len);
+    auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+    CUDF_EXPECTS(header->magic == parquet_magic, "Corrupted header");
+  }
 
   auto const len           = source->size();
-  auto const header_buffer = source->host_read(0, header_len);
-  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
-  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
-  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
+  constexpr auto ender_len = sizeof(file_ender_s);
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-               "Corrupted header or footer");
+
+  auto const ender_buffer = source->host_read(len - ender_len, ender_len);
+  auto const ender        = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
+  CUDF_EXPECTS(ender->magic == parquet_magic, "Corrupted footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
 
@@ -351,16 +354,18 @@ metadata::metadata(datasource* source)
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources)
+  host_span<std::unique_ptr<datasource> const> sources, bool check_headers)
 {
   // Avoid using the thread pool for a single source
-  if (sources.size() == 1) { return {metadata{sources[0].get()}}; }
+  if (sources.size() == 1) { return {metadata{sources[0].get(), check_headers}}; }
 
   std::vector<std::future<metadata>> metadata_ctor_tasks;
   metadata_ctor_tasks.reserve(sources.size());
   for (auto const& source : sources) {
-    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-      [source = source.get()] { return metadata{source}; }));
+    metadata_ctor_tasks.emplace_back(
+      cudf::detail::host_worker_pool().submit_task([source = source.get(), check_headers] {
+        return metadata{source, check_headers};
+      }));
   }
   std::vector<metadata> metadatas;
   metadatas.reserve(sources.size());
@@ -575,8 +580,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources,
   bool use_arrow_schema,
-  bool has_cols_from_mismatched_srcs)
-  : per_file_metadata(metadatas_from_sources(sources)),
+  bool has_cols_from_mismatched_srcs,
+  bool check_headers)
+  : per_file_metadata(metadatas_from_sources(sources, check_headers)),
     keyval_maps(collect_keyval_metadata()),
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),

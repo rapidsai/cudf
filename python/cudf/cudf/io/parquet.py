@@ -769,6 +769,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
+    check_header=True,
     *args,
     **kwargs,
 ):
@@ -918,6 +919,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        check_headers=check_header,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
@@ -1152,6 +1154,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    check_headers: bool = True,
     *args,
     **kwargs,
 ) -> cudf.DataFrame:
@@ -1186,6 +1189,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .check_header(check_headers)
                 .build()
             )
             if row_groups is not None:
@@ -1252,6 +1256,7 @@ def _read_parquet(
                 )
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .check_header(check_headers)
                 .build()
             )
             if row_groups is not None:

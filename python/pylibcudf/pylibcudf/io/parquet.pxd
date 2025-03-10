@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
@@ -37,6 +37,7 @@ cdef class ParquetReaderOptions:
     cpdef void set_skip_rows(self, int64_t skip_rows)
     cpdef void set_columns(self, list col_names)
     cpdef void set_filter(self, Expression filter)
+    cpdef void enable_check_header(self, bool val)
 
 cdef class ParquetReaderOptionsBuilder:
     cdef parquet_reader_options_builder c_obj
@@ -45,6 +46,7 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef ParquetReaderOptionsBuilder check_header(self, bool val)
     cpdef build(self)
 
 
