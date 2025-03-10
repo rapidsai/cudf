@@ -343,6 +343,7 @@ class Merge:
                     )
                 }
             )
+            del columns, lib_table
         else:
             left_rows, right_rows = self._gather_maps(
                 left_join_cols, right_join_cols
