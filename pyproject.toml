@@ -97,6 +97,8 @@ select = [
     "NPY002",
     # Ruff-specific rules
     "RUF",
+    # banned-api
+    "TID251",
 ]
 ignore = [
     # whitespace before :
@@ -118,6 +120,12 @@ fixable = ["ALL"]
 exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.result_type".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.issubdtype".msg = "Check the .kind attributes on dtype objects instead"
+"pandas.api.types".msg = "Use cudf.api.types instead"
 
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
