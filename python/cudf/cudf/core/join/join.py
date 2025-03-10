@@ -331,7 +331,7 @@ class Merge:
                 {
                     col: ColumnBase.from_pylibcudf(lib_col)
                     for col, lib_col in zip(
-                        left_names, columns[: len(left_names)]
+                        left_names, columns[: len(left_names)], strict=True
                     )
                 }
             )
@@ -339,7 +339,7 @@ class Merge:
                 {
                     col: ColumnBase.from_pylibcudf(lib_col)
                     for col, lib_col in zip(
-                        right_names, columns[len(left_names) :]
+                        right_names, columns[len(left_names) :], strict=True
                     )
                 }
             )
