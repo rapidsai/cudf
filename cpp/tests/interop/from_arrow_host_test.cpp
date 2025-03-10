@@ -750,6 +750,54 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
 }
 
+TEST_F(FromArrowHostDeviceTest, StringViewType)
+{
+  auto data = std::vector<std::string>({"hello",
+                                        "worldy",
+                                        "much longer string",
+                                        "",
+                                        "another even longer string",
+                                        "",
+                                        "other string"});
+
+  auto validity = std::vector<bool>{true, true, true, false, true, true, true};
+
+  ArrowArray input;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(&input, NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(&input));
+
+  // Set up validity bitmap
+  ArrowBitmap validity_bitmap;
+  ArrowBitmapInit(&validity_bitmap);
+  NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&validity_bitmap, validity.size()));
+
+  for (size_t i = 0; i < data.size(); ++i) {
+    if (validity[i]) {
+      auto item = ArrowStringView{data[i].c_str(), static_cast<int64_t>(data[i].size())};
+      NANOARROW_THROW_NOT_OK(ArrowArrayAppendString(&input, item));
+      NANOARROW_THROW_NOT_OK(ArrowBitmapAppend(&validity_bitmap, 1, 1));
+    } else {
+      NANOARROW_THROW_NOT_OK(ArrowArrayAppendNull(&input, 1));
+      NANOARROW_THROW_NOT_OK(ArrowBitmapAppend(&validity_bitmap, 0, 1));
+    }
+  }
+
+  // Set the validity bitmap on the array
+  ArrowArraySetValidityBitmap(&input, &validity_bitmap);
+  input.null_count = std::count(validity.begin(), validity.end(), false);
+
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(&input, NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
+
+  auto result = cudf::from_arrow_column(&schema, &input);
+
+  auto expected = cudf::test::strings_column_wrapper(data.begin(), data.end(), validity.begin());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+}
+
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
 {
   auto op = [&](ArrowArray* array) {
