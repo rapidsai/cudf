@@ -33,12 +33,6 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        # if how == "cross":
-        #     return join_func(
-        #         plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-        #         plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-        #         # plc.types.NullEquality.EQUAL,
-        #     )
         left_rows, right_rows = join_func(
             plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
             plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
