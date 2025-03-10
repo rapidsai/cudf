@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -90,7 +90,7 @@ def pytest_unconfigure(config):
         output_file = f"function_call_counts_worker_{worker_id}.json"
         with open(output_file, "w") as f:
             json.dump(function_call_counts, f, indent=4)
-        print(f"Function call counts have been written to {output_file}")
+        print(f"Function call counts have been written to {output_file}")  # noqa: T201
 
 
 sys.path.append(os.path.dirname(__file__))

@@ -45,8 +45,7 @@ def path_or_buf(datadir):
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".parquet file is not found")
-        else:
-            print(type(excpr).__name__)
+        raise excpr
 
     def _make_path_or_buf(src):
         if src == "filepath":

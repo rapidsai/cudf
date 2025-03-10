@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -109,7 +109,7 @@ def sort_results(results):
 
 
 def print_results_as_json(results):
-    print(json.dumps(results, indent=4))
+    print(json.dumps(results, indent=4))  # noqa: T201
 
 
 def print_results_as_table(results):

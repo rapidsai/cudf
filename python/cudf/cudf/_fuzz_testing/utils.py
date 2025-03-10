@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import random
 
@@ -124,7 +124,7 @@ def run_test(funcs, args):
     try:
         funcs[function_name_to_run]()
     except KeyError:
-        print(
+        print(  # noqa: T201
             f"Provided function name({function_name_to_run}) does not exist."
         )
 
