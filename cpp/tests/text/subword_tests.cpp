@@ -108,6 +108,9 @@ TEST(TextSubwordTest, Tokenize)
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected);
   }
+
+  vocab = nvtext::load_vocabulary_file2(hash_file);
+  std::cout << "num_bins=" << vocab->num_bins << std::endl;
 }
 
 TEST(TextSubwordTest, TokenizeMultiRow)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,26 @@ struct hashed_vocabulary {
  * @return vocabulary hash-table elements
  */
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Load the hashed vocabulary file into device memory.
+ *
+ * The object here can be used to call the subword_tokenize without
+ * incurring the cost of loading the same file each time.
+ *
+ * @throw cudf::logic_error if the `filename_hashed_vocabulary` could not be opened.
+ *
+ * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
+ *        Note that this is the file AFTER python/perfect_hash.py has been used
+ *        for preprocessing.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Memory resource to allocate any returned objects.
+ * @return vocabulary hash-table elements
+ */
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file2(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

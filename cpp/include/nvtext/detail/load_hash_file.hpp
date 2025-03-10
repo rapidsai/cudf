@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,11 @@ namespace detail {
  * @return vocabulary hash-table elements
  */
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file2(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

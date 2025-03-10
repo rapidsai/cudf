@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// #include "text/subword/detail/codepoint_metadata.ah"
-#include "text/subword/detail/tokenizer_utils.cuh"
+#include "text/subword/detail/codepoint_metadata.ah"
+// #include "text/subword/detail/tokenizer_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -30,9 +30,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
+// #include <rmm/exec_policy.hpp>
 
-#include <thrust/fill.h>
+// #include <thrust/fill.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -43,7 +43,6 @@
 namespace nvtext {
 namespace detail {
 
-#if 0
 /**
  * @brief Retrieve the code point metadata table.
  *
@@ -54,10 +53,14 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream),
-               table + cp_section1_end,
-               table + codepoint_metadata_size,
-               codepoint_metadata_default_value);
+  // thrust::fill(rmm::exec_policy(stream),
+  //              table + cp_section1_end,
+  //              table + codepoint_metadata_size,
+  //              codepoint_metadata_default_value);
+  cudaMemset(table + cp_section1_end,
+             0,
+             (codepoint_metadata_size - cp_section1_end) * sizeof(codepoint_metadata_type));
+
   CUDF_CUDA_TRY(cudaMemcpyAsync(table,
                                 codepoint_metadata,
                                 cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
@@ -82,10 +85,13 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy(stream),
-               table + aux_section1_end,
-               table + aux_codepoint_data_size,
-               aux_codepoint_default_value);
+  // thrust::fill(rmm::exec_policy(stream),
+  //              table + aux_section1_end,
+  //              table + aux_codepoint_data_size,
+  //              aux_codepoint_default_value);
+  cudaMemset(table + aux_section1_end,
+             0,
+             (aux_codepoint_data_size - aux_section1_end) * sizeof(aux_codepoint_data_type));
   CUDF_CUDA_TRY(cudaMemcpyAsync(table,
                                 aux_codepoint_data,
                                 aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
@@ -111,7 +117,6 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
     stream.value()));
   return table_vector;
 }
-#endif
 
 namespace {
 /**
@@ -182,7 +187,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
  * @param filename_hashed_vocabulary Path to text file containing hashed vocabulary
  * @return object containing hash table elements for the wordpiece tokenizer
  */
-std::unique_ptr<hashed_vocabulary> load_vocabulary_file2(
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -324,13 +329,13 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file2(
 
 }  // namespace detail
 
-std::unique_ptr<hashed_vocabulary> load_vocabulary_file2(
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_vocabulary_file2(filename_hashed_vocabulary, stream, mr);
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, stream, mr);
 }
 
 }  // namespace nvtext
