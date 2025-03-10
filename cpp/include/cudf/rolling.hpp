@@ -19,10 +19,15 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
+#include <optional>
+#include <variant>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -30,6 +35,106 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
+
+/**
+ * @brief Strongly typed wrapper for bounded closed rolling windows.
+ *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
+ * The endpoints of this window are included.
+ */
+struct bounded_closed {
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
+};
+
+/**
+ * @brief Strongly typed wrapper for bounded open rolling windows.
+ *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
+ * The endpoints of this window are excluded.
+ */
+struct bounded_open {
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+  ///< Similarly, if the delta is a floating point type the value must be neither inf nor nan
+  ///< otherwise behaviour is undefined.
+
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
+};
+
+/**
+ * @brief Strongly typed wrapper for unbounded rolling windows.
+ *
+ * This window runs to the begin/end of the current row's group.
+ */
+struct unbounded {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
+/**
+ * @brief Strongly typed wrapper for current_row rolling windows.
+ *
+ * This window contains all rows that are equal to the current row.
+ */
+struct current_row {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
+
+/**
+ * @brief The type of the range-based rolling window endpoint.
+ */
+using range_window_type = std::variant<unbounded, current_row, bounded_closed, bounded_open>;
+
+/**
+ * @brief Constructs preceding and following columns given window range specifications.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups.
+ * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
+ * be sorted groupwise.
+ * @param order Sort order of the `orderby` column.
+ * @param null_order Null sort order in the sorted `orderby` column. Apples groupwise if
+ * `group_keys` is non-empty.
+ * @param preceding Type of the preceding window.
+ * @param following Type of the following window.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return pair of preceding and following columns that define the window bounds for each row,
+ * suitable for passing to `rolling_window`.
+ */
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
+  table_view const& group_keys,
+  column_view const& orderby,
+  order order,
+  null_order null_order,
+  range_window_type preceding,
+  range_window_type following,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
@@ -443,6 +548,33 @@ std::unique_ptr<column> grouped_range_rolling_window(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Apply a grouping-aware range-based rolling window function to a sequence of columns.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups.
+ * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
+ * be sorted groupwise.
+ * @param order Sort order of the `orderby` column.
+ * @param null_order Null sort order in the sorted `orderby` column.
+ * @param preceding Type of the preceding window.
+ * @param following Type of the following window.
+ * @param min_periods Minimum number of observations in the window required to have a value.
+ * @param requests Vector of pairs of columns and aggregation requests.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A table of results, one column per input request.
+ */
+std::unique_ptr<table> grouped_range_rolling_window(
+  table_view const& group_keys,
+  column_view const& orderby,
+  order order,
+  null_order null_order,
+  range_window_type preceding,
+  range_window_type following,
+  size_type min_periods,
+  std::vector<std::pair<column_view const&, rolling_aggregation const&>> requests,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
  *
