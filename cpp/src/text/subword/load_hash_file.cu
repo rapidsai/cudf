@@ -208,10 +208,19 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
   auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
+  std::string delim = " ";
+  printf("delim=%c 0x%02x\n", delim[0], (int)delim[0]);
+
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
+    size_t test_space   = line.find(" ");
+    size_t test_space2  = line.find(delim);
     size_t loc_of_space = line.find(' ');
-    printf("%ld: [%s]\n", line_no, line.c_str());
+    printf("%ld: [%s] %d/%d\n",
+           line_no,
+           line.c_str(),
+           (int)(test_space != line.npos),
+           (int)(test_space2 != line.npos));
     // [65559 0]
     // printf(" %02x %02x %02x %02x %02x %02x %02x\n",
     //       (uint32_t)line[0],

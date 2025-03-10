@@ -275,7 +275,8 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(
   std::unique_ptr<cudf::column>&& input, rmm::cuda_stream_view stream)
 {
-  auto d_input      = cudf::column_device_view::create(input->view(), stream);
+  auto d_input = cudf::column_device_view::create(input->view(), stream);
+  printf("input.size()=%d\n", input->size());
   auto merge_pairs  = initialize_merge_pairs_map(*d_input, stream);
   auto mp_table_map = initialize_mp_table_map(*d_input, stream);
   return std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(
@@ -290,7 +291,7 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   auto pairs =
     cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
   auto content = pairs->release();
-  printf("pairs = %ld/%d\n", content.children.size(), input.size());
+  printf("pairs = %ld/%d\n", content.children.size(), input.size());  // offsets, strings
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
 
