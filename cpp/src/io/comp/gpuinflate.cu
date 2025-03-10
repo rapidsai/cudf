@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,9 @@ misrepresented as being the original software.
 Mark Adler    madler@alumni.caltech.edu
 */
 
+#include "common_internal.hpp"
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "io_uncomp.hpp"
 
 #include <rmm/cuda_stream_view.hpp>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,25 @@ size_t decompress(compression_type compression,
                   rmm::cuda_stream_view stream);
 
 /**
+ * @brief Decompresses device memory buffers.
+ *
+ * @param compression Type of compression of the output data
+ * @param inputs      Device memory buffers to decompress
+ * @param outputs     Device memory buffers to store the decompressed output
+ * @param results     Compression results
+ * @param max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param max_total_uncomp_size Maximum size of the total uncompressed data
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ */
+void decompress(compression_type compression,
+                device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<compression_result> results,
+                size_t max_uncomp_chunk_size,
+                size_t max_total_uncomp_size,
+                rmm::cuda_stream_view stream);
+
+/**
  * @brief Without actually decompressing the compressed input buffer passed, return the size of
  * decompressed output. If the decompressed size cannot be extracted apriori, return zero.
  *
@@ -64,16 +83,25 @@ size_t decompress(compression_type compression,
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
 
 /**
- * @brief GZIP header flags
- * See https://tools.ietf.org/html/rfc1952
+ * @brief Struct to hold information about decompression.
+ *
+ * This struct contains details about the decompression process, including
+ * the type of compression, the number of pages, the maximum size
+ * of a decompressed page, and the total decompressed size.
  */
-namespace GZIPHeaderFlag {
-constexpr uint8_t ftext    = 0x01;  // ASCII text hint
-constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
-constexpr uint8_t fextra   = 0x04;  // Extra fields present
-constexpr uint8_t fname    = 0x08;  // Original file name present
-constexpr uint8_t fcomment = 0x10;  // Comment present
-};                                  // namespace GZIPHeaderFlag
+struct decompression_info {
+  compression_type type;
+  size_t num_pages;
+  size_t max_page_decompressed_size;
+  size_t total_decompressed_size;
+};
+
+/**
+ * @brief Functor which returns total scratch space required based on computed decompression_info
+ * data.
+ *
+ */
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

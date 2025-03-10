@@ -337,6 +337,7 @@ size_t compress_max_output_chunk_size(compression_type compression,
         capped_uncomp_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
       break;
     case compression_type::DEFLATE:
+    case compression_type::GZIP:  // HACK!
       status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
         capped_uncomp_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
       break;
@@ -495,7 +496,8 @@ size_t required_alignment(compression_type compression)
 std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE: return nvcompDeflateCompressionMaxAllowedChunkSize;
+    case compression_type::DEFLATE:
+    case compression_type::GZIP: return nvcompDeflateCompressionMaxAllowedChunkSize;
     case compression_type::SNAPPY: return nvcompSnappyCompressionMaxAllowedChunkSize;
     case compression_type::ZSTD: return nvcompZstdCompressionMaxAllowedChunkSize;
     case compression_type::LZ4: return nvcompLZ4CompressionMaxAllowedChunkSize;

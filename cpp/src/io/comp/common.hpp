@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace cudf::io::detail {
 
@@ -33,5 +34,23 @@ namespace cudf::io::detail {
  * See https://github.com/rapidsai/cudf/issues/13605.
  */
 constexpr std::size_t BUFFER_PADDING_MULTIPLE{8};
+
+/**
+ * @brief Status of a compression/decompression operation.
+ */
+enum class compression_status : uint8_t {
+  SUCCESS,          ///< Successful, output is valid
+  FAILURE,          ///< Failed, output is invalid (e.g. input is unsupported in some way)
+  SKIPPED,          ///< Operation skipped (if conversion, uncompressed data can be used)
+  OUTPUT_OVERFLOW,  ///< Output buffer is too small; operation can succeed with larger output
+};
+
+/**
+ * @brief Descriptor of compression/decompression result.
+ */
+struct compression_result {
+  uint64_t bytes_written;
+  compression_status status;
+};
 
 }  // namespace cudf::io::detail
