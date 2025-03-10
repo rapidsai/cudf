@@ -1,134 +1,26 @@
 diff --git a/jitify.hpp b/jitify.hpp
-index b38b48d..4094374 100644
+index b38b48d..7914236 100644
 --- a/jitify.hpp
 +++ b/jitify.hpp
-@@ -450,20 +450,20 @@ inline bool extract_include_info_from_compile_error(std::string log,
-     size_t beg = log.find(p);
-     if (beg != std::string::npos) {
-       beg += p.size();
--      size_t end = log.find("\"", beg);
-+      size_t end = log.find('\"', beg);
-       name = log.substr(beg, end - beg);
- 
--      size_t line_beg = log.rfind("\n", beg);
-+      size_t line_beg = log.rfind('\n', beg);
-       if (line_beg == std::string::npos) {
-         line_beg = 0;
-       } else {
-         line_beg += 1;
-       }
- 
--      size_t split = log.find("(", line_beg);
-+      size_t split = log.find('(', line_beg);
-       parent = log.substr(line_beg, split - line_beg);
-       line_num =
--          atoi(log.substr(split + 1, log.find(")", split + 1) - (split + 1))
-+          atoi(log.substr(split + 1, log.find(')', split + 1) - (split + 1))
-                    .c_str());
- 
-       return true;
-@@ -478,7 +478,7 @@ inline bool is_include_directive_with_quotes(const std::string& source,
-   // TODO: Check each find() for failure.
-   size_t beg = 0;
-   for (int i = 1; i < line_num; ++i) {
--    beg = source.find("\n", beg) + 1;
-+    beg = source.find('\n', beg) + 1;
-   }
-   beg = source.find("include", beg) + 7;
-   beg = source.find_first_of("\"<", beg);
-@@ -488,7 +488,7 @@ inline bool is_include_directive_with_quotes(const std::string& source,
- inline std::string comment_out_code_line(int line_num, std::string source) {
-   size_t beg = 0;
-   for (int i = 1; i < line_num; ++i) {
--    beg = source.find("\n", beg) + 1;
-+    beg = source.find('\n', beg) + 1;
-   }
-   return (source.substr(0, beg) + "//" + source.substr(beg));
- }
-@@ -561,7 +561,7 @@ inline bool load_source(
-   std::stringstream string_stream;
-   std::ifstream file_stream;
-   // First detect direct source-code string ("my_program\nprogram_code...")
--  size_t newline_pos = filename.find("\n");
-+  size_t newline_pos = filename.find('\n');
-   if (newline_pos != std::string::npos) {
-     std::string source = filename.substr(newline_pos + 1);
-     filename = filename.substr(0, newline_pos);
-@@ -1220,8 +1220,8 @@ class CUDAKernel {
+@@ -1220,7 +1220,7 @@ class CUDAKernel {
        if (_ptx[end] == '=') --end;
        std::string line = _ptx.substr(pos, end - pos);
        pos = end;
 -      size_t symbol_start = line.find_last_of(" ") + 1;
--      size_t symbol_end = line.find_last_of("[");
 +      size_t symbol_start = line.find_last_of(' ') + 1;
-+      size_t symbol_end = line.find_last_of('[');
+       size_t symbol_end = line.find_last_of("[");
        std::string entry = line.substr(symbol_start, symbol_end - symbol_start);
        std::string key = detail::demangle_ptx_variable_name(entry.c_str());
-       // Skip unsupported mangled names. E.g., a static variable defined inside
-@@ -2685,7 +2685,7 @@ inline nvrtcResult compile_kernel(std::string program_name,
-     // Extract mangled kernel template instantiation from PTX
-     inst_dummy += " = ";  // Note: This must match how the PTX is generated
-     int mi_beg = ptx->find(inst_dummy) + inst_dummy.size();
--    int mi_end = ptx->find(";", mi_beg);
-+    int mi_end = ptx->find(';', mi_beg);
-     *mangled_instantiation = ptx->substr(mi_beg, mi_end - mi_beg);
- #endif
-   }
-@@ -3746,7 +3746,7 @@ CUresult parallel_for(ExecutionPolicy policy, IndexType begin, IndexType end,
-   std::stringstream source_ss;
-   source_ss << "parallel_for_program\n";
-   for (auto const& header : policy.headers) {
--    std::string header_name = header.substr(0, header.find("\n"));
-+    std::string header_name = header.substr(0, header.find('\n'));
-     source_ss << "#include <" << header_name << ">\n";
-   }
-   source_ss << "template<typename I>\n"
 diff --git a/jitify2.hpp b/jitify2.hpp
-index ede9fbf..e7055a5 100644
+index ede9fbf..905594d 100644
 --- a/jitify2.hpp
 +++ b/jitify2.hpp
-@@ -2802,8 +2802,8 @@ inline void find_lowered_global_variables(StringRef ptx,
+@@ -2802,7 +2802,7 @@ inline void find_lowered_global_variables(StringRef ptx,
      if (ptx[end] == '=') --end;
      StringRef line = ptx.substr(pos, end - pos);
      pos = end;
 -    size_t symbol_start = line.find_last_of(" ") + 1;
--    size_t symbol_end = line.find_last_of("[");
 +    size_t symbol_start = line.find_last_of(' ') + 1;
-+    size_t symbol_end = line.find_last_of('[');
+     size_t symbol_end = line.find_last_of("[");
      std::string entry(line.substr(symbol_start, symbol_end - symbol_start));
      std::string key = demangle_ptx_variable_name(entry.c_str());
-     // Skip unsupported mangled names. E.g., a static variable defined inside
-@@ -4635,20 +4635,20 @@ inline bool extract_include_info_from_compile_error(const std::string& log,
-     size_t beg = log.find(p);
-     if (beg != std::string::npos) {
-       beg += p.size();
--      size_t end = log.find("\"", beg);
-+      size_t end = log.find('\"', beg);
-       *name = log.substr(beg, end - beg);
- 
--      size_t line_beg = log.rfind("\n", beg);
-+      size_t line_beg = log.rfind('\n', beg);
-       if (line_beg == std::string::npos) {
-         line_beg = 0;
-       } else {
-         line_beg += 1;
-       }
- 
--      size_t split = log.find("(", line_beg);
-+      size_t split = log.find('(', line_beg);
-       *parent = log.substr(line_beg, split - line_beg);
-       *line_num = std::atoi(
--          log.substr(split + 1, log.find(")", split + 1) - (split + 1))
-+          log.substr(split + 1, log.find(')', split + 1) - (split + 1))
-               .c_str());
- 
-       return true;
-@@ -4686,7 +4686,7 @@ inline size_t find_source_line(StringRef source, int line_num) {
-       int num = std::atoi(
-           std::string(source.substr(num_beg, num_end - num_beg)).c_str());
-       i = num - 1;
--      beg = source.find_first_of("\n", beg);
-+      beg = source.find_first_of('\n', beg);
-       if (beg == std::string::npos) return beg;
-     } else if (source[beg] == '#') {
-       // This was just some other # token, don't count it as a new line.

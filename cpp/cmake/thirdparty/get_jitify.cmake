@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -16,6 +16,8 @@
 
 # This function finds Jitify and sets any additional necessary environment variables.
 function(find_and_configure_jitify)
+  include(${rapids-cmake-dir}/cpm/package_override.cmake)
+
   rapids_cpm_find(
     jitify 2.0.0
     GIT_REPOSITORY https://github.com/rapidsai/jitify.git
@@ -23,10 +25,17 @@ function(find_and_configure_jitify)
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
   )
+
+  set(current_json_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+
+  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+  rapids_cpm_package_override("${cudf_patch_dir}/jitify_override.json")
+
   set(JITIFY_INCLUDE_DIR
       "${jitify_SOURCE_DIR}"
       PARENT_SCOPE
   )
+
 endfunction()
 
 find_and_configure_jitify()

@@ -13,3 +13,4 @@ export LC_ALL=en_US.UTF-8
 #ctest --output-on-failure --no-tests=error "$@"
 compute-sanitizer ./TEXT_TEST --gtest_filter=TextSubwordTest.Tokenize --rmm_mode=cuda
 compute-sanitizer ./TEXT_TEST --gtest_filter=TextBytePairEncoding.BytePairEncoding --rmm_mode=cuda
+ctest --output-on-failure --no-tests=error -R TRANSFORM_TEST
