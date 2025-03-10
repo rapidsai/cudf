@@ -22,7 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/types.hpp>
+#include <cudf/jit/types.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -40,9 +40,10 @@ jitify2::StringVec build_jit_typenames(mutable_column_view output,
                                        std::vector<column_view> const& inputs)
 {
   jitify2::StringVec typenames;
-  int32_t index = 0;
+  int32_t outputs_index = 0;
+  int32_t inputs_index  = 0;
 
-  auto const add_column = [&](cudf::data_type data_type, bool is_scalar) {
+  auto const add_column = [&](cudf::data_type data_type, bool is_scalar, int32_t& index) {
     std::string accessor = jitify2::reflection::Template("cudf::transformation::jit::accessor")
                              .instantiate(cudf::type_to_name(data_type), index++);
 
@@ -52,10 +53,10 @@ jitify2::StringVec build_jit_typenames(mutable_column_view output,
         : accessor);
   };
 
-  add_column(output.type(), false);
+  add_column(output.type(), false, outputs_index);
   std::for_each(inputs.begin(), inputs.end(), [&](auto const& input) {
     bool const is_scalar = input.size() != output.size();
-    add_column(input.type(), is_scalar);
+    add_column(input.type(), is_scalar, inputs_index);
   });
 
   return typenames;
@@ -86,28 +87,33 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   return params;
 }
 
-cudf::jit::column_device_view to_jit_view(column_view const& view)
+cudf::jit::mutable_column_device_view to_jit_view(column_view const& view)
 {
-  return cudf::jit::column_device_view{
-    const_cast<void*>(view.head()), nullptr, view.null_mask(), view.type(), view.size()};
+  return cudf::jit::mutable_column_device_view{view.type(),
+                                               view.size(),
+                                               const_cast<void*>(view.head()),
+                                               view.null_mask(),
+                                               view.offset(),
+                                               nullptr,
+                                               0};
 }
 
-rmm::device_uvector<cudf::jit::column_device_view> build_views(
+rmm::device_uvector<cudf::jit::mutable_column_device_view> build_views(
   mutable_column_view output,
   std::vector<column_view> const& inputs,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  std::vector<cudf::jit::column_device_view> host;
+  std::vector<cudf::jit::mutable_column_device_view> host;
 
   host.emplace_back(to_jit_view(output));
 
   std::transform(inputs.begin(), inputs.end(), std::back_inserter(host), to_jit_view);
 
-  rmm::device_uvector<cudf::jit::column_device_view> views{host.size(), stream, mr};
+  rmm::device_uvector<cudf::jit::mutable_column_device_view> views{host.size(), stream, mr};
 
-  detail::cuda_memcpy_async(cudf::device_span<cudf::jit::column_device_view>{views},
-                            cudf::host_span<cudf::jit::column_device_view const>{host},
+  detail::cuda_memcpy_async(cudf::device_span<cudf::jit::mutable_column_device_view>{views},
+                            cudf::host_span<cudf::jit::mutable_column_device_view const>{host},
                             stream);
 
   return views;
@@ -115,13 +121,14 @@ rmm::device_uvector<cudf::jit::column_device_view> build_views(
 
 void launch(jitify2::ConfiguredKernel& kernel,
             cudf::size_type size,
-            rmm::device_uvector<cudf::jit::column_device_view>& views)
+            rmm::device_uvector<cudf::jit::mutable_column_device_view>& views)
 {
   // JITIFY and NVRTC need non-const pointers even if they aren't written to
 
-  cudf::jit::column_device_view* views_ptr = views.data();
+  cudf::jit::mutable_column_device_view* output_ptr = views.data();
+  cudf::jit::mutable_column_device_view* inputs_ptr = output_ptr + 1;
 
-  std::array<void*, 2> args{&size, &views_ptr};
+  std::array<void*, 3> args{&size, &output_ptr, &inputs_ptr};
 
   kernel->launch(args.data());
 }
