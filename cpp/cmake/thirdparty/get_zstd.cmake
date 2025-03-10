@@ -29,7 +29,8 @@ function(find_and_configure_zstd)
 
   # we need this to disable weak symbols support to hide tracing APIs as well
   if(zstd_ADDED)
-    target_compile_definitions(libzstd_static PRIVATE ZSTD_HAVE_WEAK_SYMBOLS=0)
+    add_library(zstd ALIAS libzstd_static)
+    target_compile_definitions(zstd PRIVATE ZSTD_HAVE_WEAK_SYMBOLS=0)
   endif()
 
   if(DEFINED zstd_SOURCE_DIR)
