@@ -312,7 +312,7 @@ class Merge:
                 plc.Table(
                     [
                         col.to_pylibcudf(mode="read")
-                        for col in self.lhs._data.columns
+                        for col in self.lhs._columns
                     ]
                 ),
                 plc.Table(
