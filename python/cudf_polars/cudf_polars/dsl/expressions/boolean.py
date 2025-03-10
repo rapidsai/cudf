@@ -15,10 +15,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,6 +26,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["BooleanFunction"]
 
@@ -68,17 +66,19 @@ class BooleanFunction(Expr):
             return getattr(cls, name)
 
     __slots__ = ("name", "options")
-    _non_child = ("dtype", "name", "options")
+    _non_child = ("dtype", "context", "name", "options")
 
     def __init__(
         self,
         dtype: plc.DataType,
+        context: ExecutionContext,
         name: BooleanFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
         self.dtype = dtype
         self.options = options
+        self.context = context
         self.name = name
         self.children = children
         self.is_pointwise = self.name not in (
@@ -148,7 +148,6 @@ class BooleanFunction(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
@@ -164,7 +163,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
                 )
                 return Column(plc.Column.from_scalar(value, df.num_rows))
-            needles = child.evaluate(df, context=context, mapping=mapping)
+            needles = child.evaluate(df, mapping=mapping)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
                 # NaN is neither finite not infinite
@@ -179,10 +178,7 @@ class BooleanFunction(Expr):
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
             return Column(result)
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, mapping=mapping) for child in self.children]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
         if self.name in (BooleanFunction.Name.Any, BooleanFunction.Name.All):

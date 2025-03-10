@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import AggInfo, Expr
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
@@ -19,17 +19,21 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expressions.base import ExecutionContext
 
 __all__ = ["Literal", "LiteralColumn"]
 
 
 class Literal(Expr):
     __slots__ = ("value",)
-    _non_child = ("dtype", "value")
+    _non_child = ("dtype", "context", "value")
     value: pa.Scalar[Any]
 
-    def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
+    def __init__(
+        self, dtype: plc.DataType, context: ExecutionContext, value: pa.Scalar[Any]
+    ) -> None:
         self.dtype = dtype
+        self.context = context
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
         self.children = ()
@@ -39,7 +43,6 @@ class Literal(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
@@ -53,11 +56,14 @@ class Literal(Expr):
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
-    _non_child = ("dtype", "value")
+    _non_child = ("dtype", "context", "value")
     value: pa.Array[Any]
 
-    def __init__(self, dtype: plc.DataType, value: pa.Array) -> None:
+    def __init__(
+        self, dtype: plc.DataType, context: ExecutionContext, value: pa.Array
+    ) -> None:
         self.dtype = dtype
+        self.context = context
         self.value = value
         self.children = ()
         self.is_pointwise = True
@@ -73,7 +79,6 @@ class LiteralColumn(Expr):
         self,
         df: DataFrame,
         *,
-        context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
