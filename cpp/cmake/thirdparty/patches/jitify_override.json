@@ -1,0 +1,13 @@
+{
+    "packages": {
+        "jitify": {
+            "patches": [
+                {
+                    "file": "${current_json_dir}/j.diff",
+                    "issue": "Patch single space strings [https://github.com/rapidsai/cudf/pull/8183]",
+                    "fixed_in": ""
+                }
+            ]
+        }
+    }
+}
