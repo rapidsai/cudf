@@ -272,6 +272,7 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   auto pairs =
     cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
   auto content = pairs->release();
+  printf("pairs = %ld/%d\n", content.children.size(), input.size());
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
 
