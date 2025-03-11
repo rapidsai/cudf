@@ -181,7 +181,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             std::size_t element_size,
                             std::size_t src_element_index,
                             uint32_t stride,
-                            int value_shift,
+                            cuda::std::int64_t value_shift,
                             int bit_shift,
                             std::size_t num_rows,
                             size_type* valid_count)
