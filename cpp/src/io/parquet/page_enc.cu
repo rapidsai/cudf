@@ -598,7 +598,7 @@ CUDF_KERNEL void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<EncPage> pages,
                device_span<size_type> page_sizes,
-               device_span<size_type> comp_page_sizes,
+               device_span<size_type const> comp_page_sizes,
                device_span<parquet_column_device_view const> col_desc,
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
@@ -3067,8 +3067,7 @@ CUDF_KERNEL void __launch_bounds__(128)
 }
 
 // blockDim(1024, 1, 1)
-CUDF_KERNEL void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<EncPage const> pages)
+CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChunk> chunks)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -3400,7 +3399,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
-                      device_span<size_type> comp_page_sizes,
+                      device_span<size_type const> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
@@ -3514,11 +3513,9 @@ void EncodePageHeaders(device_span<EncPage> pages,
     pages, comp_results, page_stats, chunk_stats);
 }
 
-void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<EncPage const> pages,
-                 rmm::cuda_stream_view stream)
+void GatherPages(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks);
 }
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
