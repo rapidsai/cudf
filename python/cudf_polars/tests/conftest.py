@@ -27,9 +27,18 @@ def pytest_addoption(parser):
         help="Executor to use for GPUEngine.",
     )
 
+    parser.addoption(
+        "--rapidsmp",
+        action="store_true",
+        help="Use LocalRMPCluster.",
+    )
+
 
 def pytest_configure(config):
     import cudf_polars.testing.asserts
+
+    if config.getoption("--rapidsmp") and not config.getoption("--dask-cluster"):
+        raise pytest.UsageError("--rapidsmp requires --dask-cluster'")
 
     if (
         config.getoption("--dask-cluster")
@@ -54,8 +63,19 @@ def pytest_sessionstart(session):
         # (We expect these for tests using literal/random arrays)
         config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
 
-        cluster = LocalCluster()
-        client = Client(cluster)
+        if session.config.getoption("--rapidsmp"):
+            from rapidsmp.integrations.dask import (
+                LocalRMPCluster,
+                bootstrap_dask_cluster,
+            )
+
+            cluster = LocalRMPCluster(n_workers=1)
+            client = Client(cluster)
+            client.wait_for_workers(1)
+            bootstrap_dask_cluster(client, enable_statistics=False)
+        else:
+            cluster = LocalCluster(n_workers=1)
+            client = Client(cluster)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
 
 

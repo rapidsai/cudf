@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 # Supported shuffle methods
-_SHUFFLE_METHODS = ("shuffle_method", "tasks")
+_SHUFFLE_METHODS = ("rapidsmp", "tasks")
 
 
 # Experimental rapidsmp shuffler integration
