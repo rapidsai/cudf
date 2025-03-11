@@ -206,9 +206,7 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> ColumnBase | type[NotImplemented]:
+    def _normalize_binop_operand(self, other: Any) -> ColumnBase:
         if isinstance(other, type(self)):
             return other
         return NotImplemented

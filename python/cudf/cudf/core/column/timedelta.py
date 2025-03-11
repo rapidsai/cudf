@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -277,9 +277,7 @@ class TimeDeltaColumn(ColumnBase):
             result = result.fillna(op == "__ne__")
         return result
 
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> pa.Scalar | ColumnBase | type[NotImplemented]:
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
         elif is_scalar(other):

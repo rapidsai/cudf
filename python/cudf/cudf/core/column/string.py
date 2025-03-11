@@ -6136,9 +6136,7 @@ class StringColumn(column.ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> pa.Scalar | ColumnBase | type[NotImplemented]:
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)

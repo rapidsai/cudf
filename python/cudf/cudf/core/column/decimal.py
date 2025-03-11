@@ -149,7 +149,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             lhs_dtype = self.dtype
             rhs_dtype = other_cudf_dtype
             lhs = self
-            rhs = other
+            rhs = other  # type: ignore[assignment]
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
@@ -168,7 +168,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             if isinstance(rhs, pa.Scalar):
                 rhs = new_rhs_dtype._as_plc_scalar(rhs)
             else:
-                rhs = rhs.astype(new_rhs_dtype)
+                rhs = rhs.astype(new_rhs_dtype)  # type: ignore[assignment]
             result = binaryop.binaryop(lhs, rhs, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
@@ -225,9 +225,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "integer values"
         )
 
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> pa.Scalar | ColumnBase | type[NotImplemented]:
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalBaseColumn):
                 return NotImplemented

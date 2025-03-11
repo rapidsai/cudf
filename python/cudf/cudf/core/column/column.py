@@ -1069,9 +1069,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def _normalize_binop_operand(
-        self, other: Any
-    ) -> pa.Scalar | ColumnBase | type[NotImplemented]:
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_na_like(other):
             return pa.scalar(None, dtype=cudf_dtype_to_pa_type(self.dtype))
         return NotImplemented
