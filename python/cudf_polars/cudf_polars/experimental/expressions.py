@@ -62,11 +62,11 @@ class FusedExpr(Expr):
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:
+    ) -> Column:  # pragma: no cover
         """Evaluate this expression given a dataframe for context."""
         return self.sub_expr.evaluate(df, context=context, mapping=mapping)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
+    def collect_agg(self, *, depth: int) -> AggInfo:  # pragma: no cover
         """Collect information about aggregations in groupbys."""
         return self.sub_expr.collect_agg(depth=depth)
 
@@ -127,7 +127,7 @@ def extract_partition_counts(
                 else:
                     # If no children, we are preserving the child-IR partition count
                     expr_partition_counts[node] = child_ir_count
-            else:
+            else:  # pragma: no cover
                 raise NotImplementedError(
                     f"{type(node)} not supported for multiple partitions."
                 )
@@ -137,9 +137,7 @@ def extract_partition_counts(
 
 def _replace(e: Expr, rec: ExprTransformer) -> Expr:
     mapping = rec.state["mapping"]
-    if e in mapping:
-        return mapping[e]
-    return reuse_if_unchanged(e, rec)
+    return mapping[e] if e in mapping else reuse_if_unchanged(e, rec)
 
 
 def replace(e: Expr, mapping: Mapping[Expr, Expr]) -> Expr:
