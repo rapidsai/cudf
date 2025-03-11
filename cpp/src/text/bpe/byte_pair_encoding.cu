@@ -160,14 +160,14 @@ struct mp_hasher {
   {
     auto const d_str = d_strings.element<cudf::string_view>(index);
     auto const hv    = hasher(d_str);
-    printf("mhi %d: %c,%d %u\n", index, d_str.data()[0], d_str.size_bytes(), hv);
+    // printf("mhi %d: %c,%d %u\n", index, d_str.data()[0], d_str.size_bytes(), hv);
     return hv;
   }
   // used by find
   __device__ hash_value_type operator()(cudf::string_view const& d_str) const
   {
     auto const hv = hasher(d_str);
-    printf("mhf %c,%d %u\n", d_str.data()[0], d_str.size_bytes(), hv);
+    // printf("mhf %c,%d %u\n", d_str.data()[0], d_str.size_bytes(), hv);
     return hv;
   }
 };
@@ -186,12 +186,12 @@ struct mp_equal {
     auto const left   = d_strings.element<cudf::string_view>(lhs);
     auto const right  = d_strings.element<cudf::string_view>(rhs);
     auto const result = left == right;
-    printf("mei %c,%d/%c,%d=%d\n",
-           left.data()[0],
-           left.size_bytes(),
-           right.data()[0],
-           right.size_bytes(),
-           (int)result);
+    // printf("mei %c,%d/%c,%d=%d\n",
+    //        left.data()[0],
+    //        left.size_bytes(),
+    //        right.data()[0],
+    //        right.size_bytes(),
+    //        (int)result);
     return result;  // left == right;
   }
   // used by find
@@ -199,12 +199,12 @@ struct mp_equal {
   {
     auto const right  = d_strings.element<cudf::string_view>(rhs);
     auto const result = lhs == right;
-    printf("mef %c,%d/%c,%d=%d\n",
-           lhs.data()[0],
-           lhs.size_bytes(),
-           right.data()[0],
-           right.size_bytes(),
-           (int)result);
+    // printf("mef %c,%d/%c,%d=%d\n",
+    //        lhs.data()[0],
+    //        lhs.size_bytes(),
+    //        right.data()[0],
+    //        right.size_bytes(),
+    //        (int)result);
     return result;  // lhs == right;
   }
 };
@@ -240,9 +240,6 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
       [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
 
   merge_pairs_map->insert_async(iter, iter + (input.size() / 2), stream.value());
-  std::cout << "initialize_merge_pairs_map=" << (int)cudaStreamSynchronize(stream.value())
-            << std::endl;
-
   return merge_pairs_map;
 }
 
@@ -266,9 +263,6 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
       [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
 
   mp_table_map->insert_async(iter, iter + input.size(), stream.value());
-  // std::cout << "initialize_mp_table_map=" << (int)cudaStreamSynchronize(stream.value())
-  //           << std::endl;
-
   return mp_table_map;
 }
 
@@ -288,9 +282,9 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto space   = std::string{" "};
-  auto temp_mr = cudf::get_current_device_resource_ref();
-  auto pairs   = cudf::strings::split_record(
+  auto const space = std::string{" "};
+  auto temp_mr     = cudf::get_current_device_resource_ref();
+  auto pairs       = cudf::strings::split_record(
     input, cudf::string_scalar(space, true, stream, temp_mr), 1, stream, mr);
   auto content = pairs->release();
   printf("pairs = %ld/%d\n", content.children.size(), input.size());  // offsets, strings
@@ -407,8 +401,9 @@ struct bpe_unpairable_offsets_fn {
       if (d_map.find(lhs) == d_map.end() && d_map.find(rhs) == d_map.end()) {
         output = idx + lhs.size_bytes() + offset;  // offset for artificial boundary
       }
-      printf(
-        "%ld: [%c/%d],[%c/%d]=%ld\n", idx, *itr, lhs.size_bytes(), *next, rhs.size_bytes(), output);
+      // printf(
+      //   "%ld: [%c/%d],[%c/%d]=%ld\n", idx, *itr, lhs.size_bytes(), *next, rhs.size_bytes(),
+      //   output);
     }
     return output;
   }
