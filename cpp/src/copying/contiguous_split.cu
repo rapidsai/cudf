@@ -29,11 +29,14 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/cstdint>
 #include <cuda/std/functional>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -49,9 +52,11 @@
 #include <thrust/tuple.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 
 namespace cudf {
 namespace {
@@ -75,8 +80,11 @@ static constexpr std::size_t desired_batch_size = 1 * 1024 * 1024;
  * block.
  */
 struct src_buf_info {
+  template <typename OffsetT,
+            CUDF_ENABLE_IF(std::is_same_v<OffsetT, cudf::id_to_type<cudf::type_id::INT32>> ||
+                           std::is_same_v<OffsetT, cudf::id_to_type<cudf::type_id::INT64>>)>
   src_buf_info(cudf::type_id _type,
-               int const* _offsets,
+               OffsetT const* _offsets,
                int _offset_stack_pos,
                int _parent_offsets_index,
                bool _is_validity,
@@ -91,7 +99,7 @@ struct src_buf_info {
   }
 
   cudf::type_id type;
-  int const* offsets;        // a pointer to device memory offsets if I am an offset buffer
+  void const* offsets;       // a pointer to device memory offsets if I am an offset buffer
   int offset_stack_pos;      // position in the offset stack buffer
   int parent_offsets_index;  // immediate parent that has offsets, or -1 if none
   bool is_validity;          // if I am a validity buffer
@@ -113,11 +121,11 @@ struct dst_buf_info {
   int num_rows;  // # of rows to be copied(which may be different from num_elements in the case of
                  // validity or offset buffers)
 
-  int src_element_index;   // element index to start reading from my associated source buffer
-  std::size_t dst_offset;  // my offset into the per-partition allocation
-  int value_shift;         // amount to shift values down by (for offset buffers)
-  int bit_shift;           // # of bits to shift right by (for validity buffers)
-  size_type valid_count;   // validity count for this block of work
+  int src_element_index;     // element index to start reading from my associated source buffer
+  std::size_t dst_offset;    // my offset into the per-partition allocation
+  std::int64_t value_shift;  // amount to shift values down by (for offset buffers)
+  int bit_shift;             // # of bits to shift right by (for validity buffers)
+  size_type valid_count;     // validity count for this block of work
 
   int src_buf_index;  // source buffer index
   int dst_buf_index;  // destination buffer index
@@ -470,8 +478,12 @@ struct buf_info_functor {
     }
 
     // info for the data buffer
-    *current = src_buf_info(
-      col.type().id(), nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+    *current = src_buf_info(col.type().id(),
+                            static_cast<int const*>(nullptr),
+                            offset_stack_pos,
+                            parent_offset_index,
+                            false,
+                            col.offset());
 
     return {current + 1, offset_stack_pos + offset_depth};
   }
@@ -491,8 +503,12 @@ struct buf_info_functor {
                                                       int offset_depth)
   {
     // info for the validity buffer
-    *current = src_buf_info(
-      type_id::INT32, nullptr, offset_stack_pos, parent_offset_index, true, col.offset());
+    *current = src_buf_info(type_id::INT32,
+                            static_cast<int const*>(nullptr),
+                            offset_stack_pos,
+                            parent_offset_index,
+                            true,
+                            col.offset());
 
     return {current + 1, offset_stack_pos + offset_depth};
   }
@@ -520,7 +536,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
 
   // string columns contain the underlying chars data.
   *current = src_buf_info(type_id::STRING,
-                          nullptr,
+                          static_cast<int const*>(nullptr),
                           offset_stack_pos,
                           // if I have an offsets child, it's index will be my parent_offset_index
                           has_offsets_child ? ((current + 1) - head) : parent_offset_index,
@@ -538,15 +554,21 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     // info for the offsets buffer
     auto offset_col = current;
     CUDF_EXPECTS(not scv.offsets().nullable(), "Encountered nullable string offsets column");
-    *current = src_buf_info(type_id::INT32,
-                            // note: offsets can be null in the case where the string column
-                            // has been created with empty_like().
-                            scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                            offset_stack_pos,
-                            parent_offset_index,
-                            false,
-                            col.offset());
-
+    auto create = [&](auto&& begin) {
+      return src_buf_info(scv.offsets().type().id(),
+                          begin,
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
+    };
+    if (scv.offsets().type().id() == type_id::INT64) {
+      *current = create(scv.offsets().begin<cudf::id_to_type<type_id::INT64>>());
+    } else if (scv.offsets().type().id() == type_id::INT32) {
+      *current = create(scv.offsets().begin<cudf::id_to_type<type_id::INT32>>());
+    } else {
+      CUDF_FAIL("Unhandled string offset column type", cudf::data_type_error);
+    }
     current++;
     offset_stack_pos += offset_depth;
 
@@ -576,8 +598,12 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
 
   // list columns hold no actual data, but we need to keep a record
   // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(
-    type_id::LIST, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  *current = src_buf_info(type_id::LIST,
+                          static_cast<int const*>(nullptr),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
   current++;
   offset_stack_pos += offset_depth;
 
@@ -626,8 +652,12 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
 
   // struct columns hold no actual data, but we need to keep a record
   // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(
-    type_id::STRUCT, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  *current = src_buf_info(type_id::STRUCT,
+                          static_cast<int const*>(nullptr),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
   current++;
   offset_stack_pos += offset_depth;
 
@@ -1253,16 +1283,25 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
         parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
       }
       // make sure to include the -column- offset on the root column in our calculation.
-      int row_start = d_indices[split_index] + root_column_offset;
-      int row_end   = d_indices[split_index + 1] + root_column_offset;
+      // For string_view types these might be int64
+      cuda::std::int64_t row_start = d_indices[split_index] + root_column_offset;
+      cuda::std::int64_t row_end   = d_indices[split_index + 1] + root_column_offset;
       while (stack_size > 0) {
         stack_size--;
+        auto info          = d_src_buf_info[offset_stack[stack_size]];
         auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
         // this case can happen when you have empty string or list columns constructed with
         // empty_like()
         if (offsets != nullptr) {
-          row_start = offsets[row_start];
-          row_end   = offsets[row_end];
+          if (info.type == cudf::type_id::INT32) {
+            auto offset_i32 = reinterpret_cast<int const*>(offsets);
+            row_start       = offset_i32[row_start];
+            row_end         = offset_i32[row_end];
+          } else {
+            auto offset_i32 = reinterpret_cast<cuda::std::int64_t const*>(offsets);
+            row_start       = offset_i32[row_start];
+            row_end         = offset_i32[row_end];
+          }
         }
       }
 
@@ -1270,7 +1309,11 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
       int const src_element_index = src_info.is_validity ? row_start / 32 : row_start;
       int const num_rows          = row_end - row_start;
       // if I am an offsets column, all my values need to be shifted
-      int const value_shift = src_info.offsets == nullptr ? 0 : src_info.offsets[row_start];
+      cuda::std::int64_t const value_shift =
+        src_info.offsets == nullptr ? 0
+        : src_info.type == cudf::type_id::INT32
+          ? reinterpret_cast<int const*>(src_info.offsets)[row_start]
+          : reinterpret_cast<cuda::std::int64_t const*>(src_info.offsets)[row_start];
       // if I am a validity column, we may need to shift bits
       int const bit_shift = src_info.is_validity ? row_start % 32 : 0;
       // # of rows isn't necessarily the same as # of elements to be copied.
