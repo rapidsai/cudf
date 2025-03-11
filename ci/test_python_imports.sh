@@ -7,8 +7,8 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1;
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_cudf
 
-rapids-logger "Check GPU usage"
-nvidia-smi
+# rapids-logger "Check GPU usage"
+# nvidia-smi
 rapids-print-env
 # shellcheck disable=SC2034
 EXITCODE=0
