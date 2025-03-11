@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -140,7 +140,7 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
@@ -206,10 +206,12 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def normalize_binop_value(self, other) -> Self:
-        if not isinstance(other, type(self)):
-            return NotImplemented
-        return other
+    def _normalize_binop_operand(
+        self, other: Any
+    ) -> ColumnBase | type[NotImplemented]:
+        if isinstance(other, type(self)):
+            return other
+        return NotImplemented
 
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype

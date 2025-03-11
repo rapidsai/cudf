@@ -70,7 +70,12 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
+from cudf.utils.utils import (
+    _array_ufunc,
+    _is_null_host_scalar,
+    is_na_like,
+    mask_dtype,
+)
 
 if TYPE_CHECKING:
     import builtins
@@ -888,7 +893,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        plc_fill_value = self._scalar_to_plc_scalar(fill_value)
+        plc_fill_value = self.dtype._as_plc_scalar(fill_value)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
@@ -1064,13 +1069,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def _wrap_binop_normalization(self, other):
-        if cudf.utils.utils.is_na_like(other):
-            return cudf.Scalar(other, dtype=self.dtype)
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            # Return numpy scalar
-            other = other[()]
-        return self.normalize_binop_value(other)
+    def _normalize_binop_operand(
+        self, other: Any
+    ) -> pa.Scalar | ColumnBase | type[NotImplemented]:
+        if is_na_like(other):
+            return pa.scalar(None, dtype=cudf_dtype_to_pa_type(self.dtype))
+        return NotImplemented
 
     def _scatter_by_slice(
         self,
@@ -1197,7 +1201,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            return self._scalar_to_plc_scalar(fill_value)
+            return self.dtype._as_plc_scalar(fill_value)
         return as_column(fill_value).astype(self.dtype)
 
     @acquire_spill_lock()
@@ -1894,11 +1898,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def nans_to_nulls(self: Self) -> Self:
         """Convert NaN to NA."""
         return self
-
-    def normalize_binop_value(
-        self, other: ScalarLike
-    ) -> ColumnBase | cudf.Scalar:
-        raise NotImplementedError
 
     def _reduce(
         self,

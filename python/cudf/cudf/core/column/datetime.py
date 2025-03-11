@@ -540,7 +540,7 @@ class DatetimeColumn(column.ColumnBase):
             )
         }
 
-    def normalize_binop_value(  # type: ignore[override]
+    def _normalize_binop_operand(  # type: ignore[override]
         self, other: DatetimeLikeScalar
     ) -> cudf.Scalar | cudf.DateOffset | ColumnBase:
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
@@ -777,7 +777,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):

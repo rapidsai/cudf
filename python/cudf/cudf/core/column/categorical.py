@@ -710,7 +710,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         # TODO: This is currently just here to make mypy happy, but eventually
         # we'll need to properly establish the APIs for these methods.
         if not isinstance(other, CategoricalColumn):
@@ -728,7 +728,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         return self.codes._binaryop(other.codes, op)
 
-    def normalize_binop_value(self, other: ScalarLike) -> Self:
+    def _normalize_binop_operand(self, other: ScalarLike) -> Self:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
                 return NotImplemented

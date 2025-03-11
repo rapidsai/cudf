@@ -249,7 +249,7 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        if (other := self._normalize_binop_operand(other)) is NotImplemented:
             return NotImplemented
 
         if out_dtype is not None:
@@ -306,7 +306,9 @@ class NumericalColumn(NumericalBaseColumn):
             )
             return self.set_mask(as_buffer(mask))
 
-    def normalize_binop_value(self, other: ScalarLike) -> Self | cudf.Scalar:
+    def _normalize_binop_operand(
+        self, other: ScalarLike
+    ) -> Self | cudf.Scalar:
         if isinstance(other, ColumnBase):
             if not isinstance(other, type(self)):
                 return NotImplemented
