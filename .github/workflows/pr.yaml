@@ -22,7 +22,7 @@ jobs:
       - conda-cpp-tests
       - conda-python-build
       - conda-python-cudf-tests
-      - conda-python-cudf-tests-cpu-only
+      - conda-python-cudf-imports-cpu-only
       - conda-python-other-tests
       - conda-java-tests
       - conda-notebook-tests
@@ -175,7 +175,7 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
-  conda-python-cudf-tests-cpu-only:
+  conda-python-cudf-imports-cpu-only:
     needs: [conda-python-build, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@disable-arm-pr-ci
