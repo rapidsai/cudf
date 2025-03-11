@@ -197,8 +197,11 @@ def _(
     )
 
     # Partition-wise groupby operation
+    pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
+        k.name: k.value.dtype for k in piecewise_exprs
+    }
     gb_pwise = GroupBy(
-        ir.schema,
+        pwise_schema,
         ir.keys,
         piecewise_exprs,
         ir.maintain_order,
@@ -212,9 +215,14 @@ def _(
     # Add Shuffle node if necessary
     gb_inter: GroupBy | Shuffle = gb_pwise
     if post_aggregation_count > 1:
+        if ir.maintain_order:  # pragma: no cover
+            raise NotImplementedError(
+                "maintain_order not supported for multiple output partitions."
+            )
+
         shuffle_options: dict[str, Any] = {}
         gb_inter = Shuffle(
-            ir.schema,
+            pwise_schema,
             ir.keys,
             shuffle_options,
             gb_pwise,
@@ -224,7 +232,8 @@ def _(
     # Tree reduction if post_aggregation_count==1
     # (Otherwise, this is another partition-wise op)
     gb_reduce = GroupBy(
-        ir.schema,
+        {k.name: k.value.dtype for k in ir.keys}
+        | {k.name: k.value.dtype for k in reduction_exprs},
         ir.keys,
         reduction_exprs,
         ir.maintain_order,
@@ -235,7 +244,6 @@ def _(
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
 
     # Final Select phase
-    should_broadcast: bool = False
     aggregated = {ne.name: ne for ne in selection_exprs}
     new_node = Select(
         ir.schema,
@@ -244,7 +252,7 @@ def _(
             aggregated.get(name, NamedExpr(name, Col(dtype, name)))
             for name, dtype in ir.schema.items()
         ],
-        should_broadcast,
+        False,  # noqa: FBT003
         gb_reduce,
     )
     partition_info[new_node] = PartitionInfo(count=post_aggregation_count)
