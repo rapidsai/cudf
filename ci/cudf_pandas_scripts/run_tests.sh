@@ -94,15 +94,15 @@ for version in "${versions[@]}"; do
     echo "Installing pandas version: ${version}"
     python -m pip install "numpy>=1.23,<2.0a0" "pandas==${version}.*"
     python -m pytest -p cudf.pandas \
-    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
-    --numprocesses=8 \
-    --dist=worksteal \
-    -k "not test_cudf_pandas_profiler" \
-    --cov-config=./python/cudf/.coveragerc \
-    --cov=cudf \
-    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
-    --cov-report=term \
-    ./python/cudf/cudf_pandas_tests/
+        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+        --numprocesses=8 \
+        --dist=worksteal \
+        -k "not test_cudf_pandas_profiler" \
+        --cov-config=./python/cudf/.coveragerc \
+        --cov=cudf \
+        --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+        --cov-report=term \
+        ./python/cudf/cudf_pandas_tests/
 
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
