@@ -97,6 +97,19 @@ struct src_buf_info {
       column_offset(_column_offset)
   {
   }
+  src_buf_info(cudf::type_id _type,
+               int _offset_stack_pos,
+               int _parent_offsets_index,
+               bool _is_validity,
+               size_type _column_offset)
+    : type(_type),
+      offsets(nullptr),
+      offset_stack_pos(_offset_stack_pos),
+      parent_offsets_index(_parent_offsets_index),
+      is_validity(_is_validity),
+      column_offset(_column_offset)
+  {
+  }
 
   cudf::type_id type;
   void const* offsets;       // a pointer to device memory offsets if I am an offset buffer
@@ -478,12 +491,8 @@ struct buf_info_functor {
     }
 
     // info for the data buffer
-    *current = src_buf_info(col.type().id(),
-                            static_cast<int const*>(nullptr),
-                            offset_stack_pos,
-                            parent_offset_index,
-                            false,
-                            col.offset());
+    *current =
+      src_buf_info(col.type().id(), offset_stack_pos, parent_offset_index, false, col.offset());
 
     return {current + 1, offset_stack_pos + offset_depth};
   }
@@ -503,12 +512,8 @@ struct buf_info_functor {
                                                       int offset_depth)
   {
     // info for the validity buffer
-    *current = src_buf_info(type_id::INT32,
-                            static_cast<int const*>(nullptr),
-                            offset_stack_pos,
-                            parent_offset_index,
-                            true,
-                            col.offset());
+    *current =
+      src_buf_info(type_id::INT32, offset_stack_pos, parent_offset_index, true, col.offset());
 
     return {current + 1, offset_stack_pos + offset_depth};
   }
@@ -536,7 +541,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
 
   // string columns contain the underlying chars data.
   *current = src_buf_info(type_id::STRING,
-                          static_cast<int const*>(nullptr),
                           offset_stack_pos,
                           // if I have an offsets child, it's index will be my parent_offset_index
                           has_offsets_child ? ((current + 1) - head) : parent_offset_index,
@@ -598,12 +602,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
 
   // list columns hold no actual data, but we need to keep a record
   // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(type_id::LIST,
-                          static_cast<int const*>(nullptr),
-                          offset_stack_pos,
-                          parent_offset_index,
-                          false,
-                          col.offset());
+  *current =
+    src_buf_info(type_id::LIST, offset_stack_pos, parent_offset_index, false, col.offset());
   current++;
   offset_stack_pos += offset_depth;
 
@@ -652,12 +652,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
 
   // struct columns hold no actual data, but we need to keep a record
   // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(type_id::STRUCT,
-                          static_cast<int const*>(nullptr),
-                          offset_stack_pos,
-                          parent_offset_index,
-                          false,
-                          col.offset());
+  *current =
+    src_buf_info(type_id::STRUCT, offset_stack_pos, parent_offset_index, false, col.offset());
   current++;
   offset_stack_pos += offset_depth;
 
@@ -1298,9 +1294,9 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
             row_start       = offset_i32[row_start];
             row_end         = offset_i32[row_end];
           } else {
-            auto offset_i32 = reinterpret_cast<cuda::std::int64_t const*>(offsets);
-            row_start       = offset_i32[row_start];
-            row_end         = offset_i32[row_end];
+            auto offset_i64 = reinterpret_cast<cuda::std::int64_t const*>(offsets);
+            row_start       = offset_i64[row_start];
+            row_end         = offset_i64[row_end];
           }
         }
       }
