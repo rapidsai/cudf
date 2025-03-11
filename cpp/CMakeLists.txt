@@ -645,6 +645,7 @@ add_library(
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
+  src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/round/round.cu
@@ -1047,6 +1048,17 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudftestutil_objects OBJECT)
+  target_link_libraries(
+    cudftestutil_objects
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PRIVATE cudf::cudftestutil_impl
+  )
+  add_library(cudf::cudftestutil_objects ALIAS cudftestutil_objects)
 
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(

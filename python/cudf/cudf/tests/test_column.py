@@ -251,8 +251,12 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
-    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
+    actual_column = cudf.core.column.as_column(
+        chunked_array, dtype=np.dtype(np.float64)
+    )
+    expected_column = cudf.core.column.as_column(
+        pyarrow_array, dtype=np.dtype(np.float64)
+    )
 
     assert_eq(
         cudf.Series._from_column(actual_column),

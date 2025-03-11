@@ -1090,10 +1090,7 @@ def test_series_update(data, other):
     ps = gs.to_pandas()
 
     ps.update(p_other)
-    with expect_warning_if(
-        isinstance(other, cudf.Series) and other.isna().any(), UserWarning
-    ):
-        gs.update(g_other)
+    gs.update(g_other)
     assert_eq(gs, ps)
 
 
@@ -3023,7 +3020,7 @@ def test_roundtrip_series_plc_column(ps):
 
 def test_non_strings_dtype_object_pandas_compat_raises():
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             cudf.Series([1], dtype=object)
 
 
@@ -3042,11 +3039,12 @@ def test_series_dataframe_count_float():
         )
 
 
-def test_construct_nonnative_np_array():
+@pytest.mark.parametrize("arr", [np.array, cp.array, pd.Series])
+def test_construct_nonnative_array(arr):
     data = [1, 2, 3.5, 4]
     dtype = np.dtype("f4")
-    np_array = np.array(data, dtype=dtype)
-    np_nonnative = np.array(data, dtype=dtype.newbyteorder())
-    result = cudf.Series(np_nonnative)
-    expected = cudf.Series(np_array)
+    native = arr(data, dtype=dtype)
+    nonnative = arr(data, dtype=dtype.newbyteorder())
+    result = cudf.Series(nonnative)
+    expected = cudf.Series(native)
     assert_eq(result, expected)

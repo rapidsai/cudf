@@ -18,8 +18,8 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <cuda/std/array>
-#include <cuda/std/functional>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -412,10 +412,9 @@ struct AgentDFA {
   static constexpr uint32_t SYMBOLS_PER_BLOCK  = BLOCK_THREADS * SYMBOLS_PER_THREAD;
 
   static constexpr uint32_t MIN_UINTS_PER_BLOCK =
-    CUB_QUOTIENT_CEILING(SYMBOLS_PER_BLOCK, sizeof(AliasedLoadT));
-  static constexpr uint32_t UINTS_PER_THREAD =
-    CUB_QUOTIENT_CEILING(MIN_UINTS_PER_BLOCK, BLOCK_THREADS);
-  static constexpr uint32_t UINTS_PER_BLOCK        = UINTS_PER_THREAD * BLOCK_THREADS;
+    cuda::ceil_div<uint32_t>(SYMBOLS_PER_BLOCK, sizeof(AliasedLoadT));
+  static constexpr uint32_t UINTS_PER_THREAD = cuda::ceil_div(MIN_UINTS_PER_BLOCK, BLOCK_THREADS);
+  static constexpr uint32_t UINTS_PER_BLOCK  = UINTS_PER_THREAD * BLOCK_THREADS;
   static constexpr uint32_t SYMBOLS_PER_UINT_BLOCK = UINTS_PER_BLOCK * sizeof(AliasedLoadT);
 
   //------------------------------------------------------------------------------
@@ -564,7 +563,7 @@ struct AgentDFA {
 
     // Last unit to be loaded is IDIV_CEIL(#SYM, SYMBOLS_PER_UNIT)
     OffsetT num_total_units =
-      CUB_QUOTIENT_CEILING(num_total_symbols - block_offset, sizeof(AliasedLoadT));
+      cuda::ceil_div(num_total_symbols - block_offset, sizeof(AliasedLoadT));
 
     AliasedLoadT const* d_block_symbols =
       reinterpret_cast<AliasedLoadT const*>(d_chars + block_offset);

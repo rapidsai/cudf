@@ -21,7 +21,11 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    min_unsigned_type,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -820,7 +824,7 @@ def get_dummies(
     dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = ["object", "category"]
+        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
@@ -923,7 +927,7 @@ def _merge_sorted(
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-    if not pd.api.types.is_list_like(objs):
+    if is_scalar(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
@@ -1268,7 +1272,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         raise NotImplementedError("fill_value is not supported.")
     elif sort is False:
         raise NotImplementedError(f"{sort=} is not supported.")
-    if pd.api.types.is_list_like(level):
+    if not is_scalar(level):
         if not level:
             return df
     if not isinstance(df.index, cudf.MultiIndex):
@@ -1571,7 +1575,7 @@ def pivot_table(
 
     values_passed = values is not None
     if values_passed:
-        if pd.api.types.is_list_like(values):
+        if not is_scalar(values):
             values_multi = True
             values = list(values)
         else:
