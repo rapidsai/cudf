@@ -181,7 +181,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@disable-arm-pr-ci
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
-      matrix_filter: map(select(.ARCH == "amd64")) | max_by([(.CUDA_VER|split(".")|map(tonumber)|.[0]), (.PY_VER|split(".")|map(tonumber)|.[0])]) | {include: [.]}
+      matrix_filter: map(select(.ARCH == "amd64")) | max_by([(.CUDA_VER|split(".")|map(tonumber)|.[0]), (.CUDA_VER|split(".")|map(tonumber)|.[1]), (.PY_VER|split(".")|map(tonumber)|.[0]), (.PY_VER|split(".")|map(tonumber)|.[1])])
       build_type: pull-request
       script: "ci/test_python_imports.sh"
   conda-python-other-tests:
