@@ -55,10 +55,14 @@ def install():
     ):
         return
 
-    # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
-    managed_memory_is_supported = (
-        pylibcudf.utils._is_concurrent_managed_access_supported()
-    )
+    try:
+        # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
+        managed_memory_is_supported = (
+            pylibcudf.utils._is_concurrent_managed_access_supported()
+        )
+    except RuntimeError as e:
+        warnings.warn(str(e))
+        return
     default_rmm_mode = (
         "managed_pool" if managed_memory_is_supported else "pool"
     )
