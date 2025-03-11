@@ -126,6 +126,8 @@ class ConfigOptions:
             unsupported = config.get("executor_options", {}).keys() - {
                 "max_rows_per_partition",
                 "parquet_blocksize",
+                "cardinality_factor",
+                "groupby_n_ary",
             }
         else:
             unsupported = config.get("executor_options", {}).keys()
