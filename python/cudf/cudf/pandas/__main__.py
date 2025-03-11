@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,8 +15,6 @@ import runpy
 import sys
 import tempfile
 from contextlib import contextmanager
-
-import pytest
 
 from . import install
 from .profiler import Profiler, lines_with_profiling
@@ -75,20 +73,12 @@ def main():
         help="Perform per-line profiling of this script.",
     )
     parser.add_argument(
-        "--pytest",
-        action="store_true",
-        help="Run pytest with the given arguments.",
-    )
-    parser.add_argument(
         "args",
         nargs=argparse.REMAINDER,
         help="Arguments to pass on to the script",
     )
 
     args = parser.parse_args()
-
-    if args.pytest:
-        sys.exit(pytest.main(args.args))
 
     if args.cmd:
         f = tempfile.NamedTemporaryFile(mode="w+b", suffix=".py")
