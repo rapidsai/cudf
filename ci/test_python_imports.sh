@@ -17,3 +17,5 @@ set +e
 
 rapids-logger "import cudf"
 python -c "import cudf"
+python -c -m cudf.pandas "import pandas as pd;print(pd)"
+python -c -m cudf.pandas "import pandas as pd;print(pd.Series([1, 2, 3]))"
