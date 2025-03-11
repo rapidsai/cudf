@@ -155,3 +155,16 @@ def test_ordinal_day(start_date, end_date):
     )
 
     assert_gpu_result_equal(q)
+
+
+def test_isoweek():
+    df = pl.DataFrame(
+        {
+            "date": pl.date_range(
+                datetime.date(2001, 12, 22), datetime.date(2001, 12, 25), eager=True
+            )
+        }
+    ).lazy()
+    q = df.with_columns(pl.col("date").dt.week().alias("isoweek"))
+
+    assert_gpu_result_equal(q)

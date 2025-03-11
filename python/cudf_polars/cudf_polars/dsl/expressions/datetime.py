@@ -104,6 +104,8 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
+    _valid_ops: ClassVar[set[Name]] = {*_COMPONENT_MAP.keys(), Name.Week}
+
     def __init__(
         self,
         dtype: plc.DataType,
@@ -116,10 +118,7 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if (
-            self.name not in self._COMPONENT_MAP
-            and self.name is not self.Name.OrdinalDay
-        ):
+        if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -135,6 +134,19 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name is TemporalFunction.Name.Week:
+            # breakpoint()
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%V",
+                    input_strings_names=plc.interop.from_arrow(
+                        pa.array([], type=pa.string())
+                    ),
+                ),
+                plc.types.DataType(plc.types.TypeId.INT8),
+            )
+            return Column(result)
         if self.name is TemporalFunction.Name.OrdinalDay:
             return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:
