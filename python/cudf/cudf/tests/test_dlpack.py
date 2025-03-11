@@ -44,7 +44,7 @@ def data_1d(request):
     nulls = request.param[2]
     rng = np.random.default_rng(seed=0)
     a = rng.integers(10, size=nelems).astype(dtype)
-    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.dtype(dtype).kind == "f":
         idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a[idx] = np.nan
     return a
@@ -58,7 +58,7 @@ def data_2d(request):
     nulls = request.param[3]
     rng = np.random.default_rng(seed=0)
     a = rng.integers(10, size=(nrows, ncols)).astype(dtype)
-    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.dtype(dtype).kind == "f":
         idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a.ravel()[idx] = np.nan
     return np.ascontiguousarray(a)

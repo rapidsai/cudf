@@ -229,6 +229,17 @@ TEST_F(ToArrowHostDeviceTest, EmptyTable)
   ArrowArrayViewReset(&actual);
 }
 
+TEST_F(ToArrowHostDeviceTest, EmptyDictionary)
+{
+  auto empty = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
+
+  auto got_arrow_host = cudf::to_arrow_host(cudf::table_view({empty->view()}));
+  ASSERT_EQ(got_arrow_host->array.n_children, 1);
+  auto dictionary = got_arrow_host->array.children[0]->dictionary;
+  ASSERT_NE(dictionary, nullptr);
+  EXPECT_EQ(dictionary->n_children, 0);
+}
+
 TEST_F(ToArrowHostDeviceTest, DateTimeTable)
 {
   auto data = std::initializer_list<int64_t>{1, 2, 3, 4, 5, 6};

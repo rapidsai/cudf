@@ -1060,7 +1060,7 @@ class ConditionalJoin(IR):
     """
     tuple of options:
     - predicates: tuple of ir join type (eg. ie_join) and (In)Equality conditions
-    - join_nulls: do nulls compare equal?
+    - nulls_equal: do nulls compare equal?
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
@@ -1075,9 +1075,9 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
-        _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
+        _, nulls_equal, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
-        assert not join_nulls
+        assert not nulls_equal
         assert not coalesce
         assert maintain_order == "none"
         if predicate_wrapper.ast is None:
@@ -1145,7 +1145,7 @@ class Join(IR):
     """
     tuple of options:
     - how: join type
-    - join_nulls: do nulls compare equal?
+    - nulls_equal: do nulls compare equal?
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
@@ -1280,7 +1280,7 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, join_nulls, zlice, suffix, coalesce, _ = options
+        how, nulls_equal, zlice, suffix, coalesce, _ = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
@@ -1308,7 +1308,7 @@ class Join(IR):
         right_on = DataFrame(broadcast(*(e.evaluate(right) for e in right_on_exprs)))
         null_equality = (
             plc.types.NullEquality.EQUAL
-            if join_nulls
+            if nulls_equal
             else plc.types.NullEquality.UNEQUAL
         )
         join_fn, left_policy, right_policy = cls._joiners(how)

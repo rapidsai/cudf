@@ -20,6 +20,10 @@ sccache --zero-stats
 RAPIDS_PACKAGE_VERSION=$(rapids-generate-version)
 export RAPIDS_PACKAGE_VERSION
 
+RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
+mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
+export RAPIDS_ARTIFACTS_DIR
+
 source rapids-rattler-channel-string
 
 # --no-build-id allows for caching with `sccache`

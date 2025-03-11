@@ -355,6 +355,24 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
 }
 
+TEST_F(ToArrowDeviceTest, EmptyDictionary)
+{
+  auto empty = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
+  auto meta  = std::vector<cudf::column_metadata>({cudf::column_metadata{"d"}});
+
+  auto got_arrow_schema = cudf::to_arrow_schema(cudf::table_view({empty->view()}), meta);
+  ASSERT_EQ(got_arrow_schema->n_children, 1);
+  auto dictionary_schema = got_arrow_schema->children[0]->dictionary;
+  ASSERT_NE(dictionary_schema, nullptr);
+  EXPECT_EQ(dictionary_schema->n_children, 0);
+
+  auto got_arrow_device = cudf::to_arrow_device(cudf::table_view({empty->view()}));
+  ASSERT_EQ(got_arrow_device->array.n_children, 1);
+  auto dictionary = got_arrow_device->array.children[0]->dictionary;
+  ASSERT_NE(dictionary, nullptr);
+  EXPECT_EQ(dictionary->n_children, 0);
+}
+
 TEST_F(ToArrowDeviceTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
