@@ -550,9 +550,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv
   try {
     cudf::jni::auto_set_device(env);
     auto const input_cv = reinterpret_cast<cudf::column_view const*>(column_view);
-    return release_as_jlong(cudf::lists::distinct(cudf::lists_column_view{*input_cv},
-      cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL, cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref(), static_cast<cudf::duplicate_keep_option>(keep_option)));
+    return release_as_jlong(
+      cudf::lists::distinct(cudf::lists_column_view{*input_cv},
+                            cudf::null_equality::EQUAL,
+                            cudf::nan_equality::ALL_EQUAL,
+                            cudf::get_default_stream(),
+                            cudf::get_current_device_resource_ref(),
+                            static_cast<cudf::duplicate_keep_option>(keep_option)));
   }
   CATCH_STD(env, 0);
 }

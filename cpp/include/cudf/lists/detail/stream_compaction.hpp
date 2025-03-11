@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/stream_compaction.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -37,12 +37,13 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 /**
  * @copydoc cudf::lists::distinct
  */
-std::unique_ptr<column> distinct(lists_column_view const& input,
-                                 null_equality nulls_equal,
-                                 nan_equality nans_equal,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr,
-                                 duplicate_keep_option keep_option=duplicate_keep_option::KEEP_ANY);
+std::unique_ptr<column> distinct(
+  lists_column_view const& input,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY);
 
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf
