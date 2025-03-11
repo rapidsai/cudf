@@ -80,7 +80,10 @@ python -m pytest -p cudf.pandas \
     ./python/cudf/cudf_pandas_tests/
 
 python -m pytest -p cudf.pandas \
-    ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
+    --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    --numprocesses=1 \
+    -k "test_cudf_pandas_profiler" \
+    ./python/cudf/cudf_pandas_tests/
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version_constraint")
 
@@ -102,5 +105,8 @@ for version in "${versions[@]}"; do
     ./python/cudf/cudf_pandas_tests/
 
     python -m pytest -p cudf.pandas \
-        ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
+        --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+        --numprocesses=1 \
+        -k "test_cudf_pandas_profiler" \
+        ./python/cudf/cudf_pandas_tests/
 done
