@@ -43,7 +43,7 @@ def combine(
     -------
     Unified groupby-aggregation decomposition.
     """
-    selections, aggregations, reductions = zip(*decompositions, strict=False)
+    selections, aggregations, reductions = zip(*decompositions, strict=True)
     assert all(isinstance(ne, NamedExpr) for ne in selections)
     return (
         list(selections),
@@ -93,6 +93,8 @@ def decompose(
         reduction = [
             NamedExpr(
                 name,
+                # Sum reduction may require casting.
+                # Do it for all cases to be safe (for now)
                 Cast(dtype, Agg(dtype, "sum", None, Col(dtype, name))),
             )
         ]
@@ -104,6 +106,8 @@ def decompose(
             reduction = [
                 NamedExpr(
                     name,
+                    # Sum reduction may require casting.
+                    # Do it for all cases to be safe (for now)
                     Cast(dtype, Agg(dtype, "sum", None, Col(dtype, name))),
                 )
             ]
@@ -111,6 +115,8 @@ def decompose(
         elif expr.name == "mean":
             (child,) = expr.children
             (sum, count), aggregations, reductions = combine(
+                # TODO: Avoid possibility of a name collision
+                # (even though the likelihood is small)
                 decompose(f"{name}__mean_sum", Agg(dtype, "sum", None, child)),
                 decompose(f"{name}__mean_count", Len(dtype)),
             )
