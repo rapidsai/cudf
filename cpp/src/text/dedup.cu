@@ -20,6 +20,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -62,6 +63,33 @@ struct sort_comparator_fn {
     return lh_str < rh_str;
   }
 };
+
+#if 0
+__global__ void bitonic_sort_step(
+  sort_comparator_fn scfn, int64_t* d_indices, int64_t size, int64_t j, int64_t k)
+{
+  auto const i   = cudf::detail::grid_1d::global_thread_id();
+  auto const ixj = i ^ j;
+
+  if (i >= size || ixj >= size) { return; }
+
+  if ((ixj) > i) {
+    if ((i & k) == 0) {
+      if (scfn(d_indices[ixj], d_indices[i])) {  //(dev_values[i] > dev_values[ixj])
+        auto const temp = d_indices[i];          // dev_values[i];
+        d_indices[i]    = d_indices[ixj];        // dev_values[i]   = dev_values[ixj];
+        d_indices[ixj]  = temp;                  // dev_values[ixj] = temp;
+      }
+    } else {
+      if (scfn(d_indices[i], d_indices[ixj])) {  //(dev_values[i] < dev_values[ixj])
+        auto const temp = d_indices[i];          // dev_values[i];
+        d_indices[i]    = d_indices[ixj];        // dev_values[i]   = dev_values[ixj];
+        d_indices[ixj]  = temp;                  // dev_values[ixj] = temp;
+      }
+    }
+  }
+}
+#endif
 
 __device__ cudf::size_type count_common_bytes(cudf::string_view lhs, cudf::string_view rhs)
 {
@@ -142,6 +170,39 @@ struct collapse_overlaps_fn {
   }
 };
 
+template <typename Iterator, typename Stencil, typename Predicate>
+Iterator remove_if_safe(
+  Iterator first, Iterator last, Stencil stencil, Predicate const& fn, rmm::cuda_stream_view stream)
+{
+  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                             static_cast<std::size_t>(std::numeric_limits<int>::max()));
+
+  auto result = first;
+  auto itr    = first;
+  while (itr != last) {
+    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
+    result   = thrust::remove_if(rmm::exec_policy(stream), itr, end, stencil, fn);
+    itr      = end;
+  }
+  return result;
+}
+
+// handles ranges above int32 max
+template <typename Iterator, typename T>
+Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
+{
+  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                             static_cast<std::size_t>(std::numeric_limits<int>::max()));
+
+  auto result = first;
+  auto itr    = first;
+  while (itr != last) {
+    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
+    result   = thrust::remove(rmm::exec_policy(stream), itr, end, value);
+    itr      = end;
+  }
+  return result;
+}
 }  // namespace
 
 std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view const& input,
@@ -173,6 +234,21 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
     cub::DeviceMergeSort::SortKeysCopy(
       tmp_stg.data(), tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
   }
+#if 0
+  {
+    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
+    auto const cmp_op = sort_comparator_fn{d_input_chars, chars_size};
+    auto size2        = 1 << static_cast<int>(std::log2(chars_size) + 1.0);
+    for (auto k = 2L; k <= size2; k <<= 1) {
+      for (auto j = k >> 1; j > 0; j = j >> 1) {
+        auto grid = cudf::detail::grid_1d(chars_size, 512);
+        bitonic_sort_step<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+          cmp_op, indices.data(), (int64_t)indices.size(), j, k);
+      }
+    }
+    std::cout << "bitonic-sort " << (int)cudaStreamSynchronize(stream.value()) << std::endl;
+  }
+#endif
 
   // locate candidate duplicates within the suffixes produced by sort
   thrust::transform(rmm::exec_policy_nosync(stream),
@@ -182,13 +258,13 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
                     find_duplicates_fn{d_input_chars, chars_size, min_width, indices.data()});
 
   // remove the non-candidate entries from indices and sizes
-  thrust::remove_if(
-    rmm::exec_policy_nosync(stream),
+  remove_if_safe(
     indices.begin(),
     indices.end(),
     thrust::counting_iterator<int64_t>(0),
-    [d_sizes = sizes.data()] __device__(int64_t idx) -> bool { return d_sizes[idx] == 0; });
-  auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
+    [d_sizes = sizes.data()] __device__(int64_t idx) -> bool { return d_sizes[idx] == 0; },
+    stream);
+  auto end = remove_safe(sizes.begin(), sizes.end(), 0, stream);
   sizes.resize(thrust::distance(sizes.begin(), end), stream);
   indices.resize(sizes.size(), stream);
 
