@@ -216,11 +216,10 @@ class _DataFrameIndexer(_FrameIndexer):
             return df[df._column_names[0]]
         else:
             if df._num_columns > 0:
-                dtypes = df.dtypes.values.tolist()
-                normalized_dtype = np.result_type(*dtypes)
-                for name, col in df._column_labels_and_values:
-                    df[name] = col.astype(normalized_dtype)
-
+                normalized_dtype = find_common_type(
+                    [dtype for _, dtype in df._dtypes]
+                )
+                df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -4248,7 +4247,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+        how : {'left', 'right', 'outer', 'inner', 'cross', 'leftsemi', 'leftanti'}, \
             default 'inner'
             Type of merge to be performed.
 
@@ -4259,6 +4258,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
               full outer join.
             - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
             - leftsemi : similar to ``inner`` join, but only returns columns
                from the left dataframe and ignores all columns from the
                right dataframe.
@@ -4379,8 +4380,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         other : DataFrame
-        how : str
-            Only accepts "left", "right", "inner", "outer"
+        how : {'left', 'right', 'outer', 'inner', 'cross'}, default 'left'
+            How to handle the operation of the two objects.
+
+            * left: use calling frame's index (or column if on is specified)
+            * right: use `other`'s index.
+            * outer: form union of calling frame's index (or column if on is
+              specified) with `other`'s index, and sort it lexicographically.
+            * inner: form intersection of calling frame's index (or column if
+              on is specified) with `other`'s index, preserving the order
+              of the calling's one.
+            * cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
         lsuffix, rsuffix : str
             The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
             column names when avoiding conflicts.
@@ -6144,7 +6155,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if isinstance(q, numbers.Number):
             q_is_number = True
             qs = [float(q)]
-        elif pd.api.types.is_list_like(q):
+        elif not is_scalar(q):
             q_is_number = False
             qs = q
         else:
@@ -6349,13 +6360,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
+        dtypes = [dtype for _, dtype in filtered._dtypes]
+        is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
             and common_dtype == CUDF_STRING_DTYPE
-            and any(dtype != CUDF_STRING_DTYPE for dtype in filtered._dtypes)
+            and any(dtype != CUDF_STRING_DTYPE for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -7359,8 +7371,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ]
 
             # Collect datatypes and cast columns as that type
-            common_type = np.result_type(
-                *(col.dtype for col in columns if col is not None)
+            common_type = find_common_type(
+                [col.dtype for col in columns if col is not None]
             )
 
             all_nulls = functools.cache(
