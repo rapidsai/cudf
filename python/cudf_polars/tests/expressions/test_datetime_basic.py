@@ -168,3 +168,16 @@ def test_isoweek():
     q = df.with_columns(pl.col("date").dt.week().alias("isoweek"))
 
     assert_gpu_result_equal(q)
+
+
+def test_isoyear():
+    df = pl.DataFrame(
+        {
+            "date": pl.date_range(
+                datetime.date(2001, 12, 22), datetime.date(2001, 12, 25), eager=True
+            )
+        }
+    ).lazy()
+    q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
+
+    assert_gpu_result_equal(q)
