@@ -91,7 +91,8 @@ def test_ufunc_index(request, ufunc):
     request.applymarker(
         pytest.mark.xfail(
             condition=fname in {"ceil", "floor", "trunc"}
-            and parse(np.__version__) >= parse("2.1"),
+            and parse(np.__version__) >= parse("2.1")
+            and parse(cp.__version__) < parse("14"),
             reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
@@ -401,7 +402,8 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         pytest.mark.xfail(
             condition=fname in {"ceil", "floor", "trunc"}
             and not has_nulls
-            and parse(np.__version__) >= parse("2.1"),
+            and parse(np.__version__) >= parse("2.1")
+            and parse(cp.__version__) < parse("14"),
             reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
