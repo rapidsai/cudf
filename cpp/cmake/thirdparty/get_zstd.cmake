@@ -39,6 +39,7 @@ function(find_and_configure_zstd)
         PARENT_SCOPE
     )
   endif()
+  rapids_export_find_package_root(BUILD zstd "${zstd_BINARY_DIR}" EXPORT_SET cudf-exports)
 
 endfunction()
 
