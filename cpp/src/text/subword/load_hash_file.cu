@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,7 +205,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
 
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
-    size_t loc_of_space = line.find(" ");
+    size_t loc_of_space = line.find(' ');
     CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);

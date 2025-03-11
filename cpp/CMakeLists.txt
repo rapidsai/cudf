@@ -305,12 +305,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
+# find zstd
+include(cmake/thirdparty/get_zstd.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -821,6 +823,7 @@ set_target_properties(
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -877,6 +880,7 @@ target_include_directories(
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
+          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -936,7 +940,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
