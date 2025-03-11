@@ -855,11 +855,19 @@ class GroupBy(IR):
     __slots__ = (
         "agg_infos",
         "agg_requests",
+        "config_options",
         "keys",
         "maintain_order",
         "options",
     )
-    _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
+    _non_child = (
+        "schema",
+        "keys",
+        "agg_requests",
+        "maintain_order",
+        "options",
+        "config_options",
+    )
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
     agg_requests: tuple[expr.NamedExpr, ...]
@@ -868,6 +876,8 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     options: GroupbyOptions
     """Arbitrary options."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -876,6 +886,7 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: Any,
+        config_options: dict[str, Any],
         df: IR,
     ):
         self.schema = schema
@@ -883,6 +894,7 @@ class GroupBy(IR):
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.options = self.GroupbyOptions(options)
+        self.config_options = config_options
         self.children = (df,)
         if self.options.rolling:
             raise NotImplementedError(
@@ -898,6 +910,18 @@ class GroupBy(IR):
             maintain_order,
             self.options,
             self.AggInfos(self.agg_requests),
+        )
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.keys,
+            self.maintain_order,
+            self.options,
+            json.dumps(self.config_options),
+            self.children,
         )
 
     @staticmethod

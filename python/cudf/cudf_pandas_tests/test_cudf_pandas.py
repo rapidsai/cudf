@@ -497,7 +497,7 @@ def test_options_mode():
 # Codecov and Profiler interfere with each-other,
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
-def test_profiler():
+def test_cudf_pandas_profiler():
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
