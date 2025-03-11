@@ -79,7 +79,8 @@ python -m pytest -p cudf.pandas \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
 
-python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
+python -m pytest -p cudf.pandas \
+    ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version_constraint")
 
@@ -99,5 +100,7 @@ for version in "${versions[@]}"; do
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
-    python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
+
+    python -m pytest -p cudf.pandas \
+        ./python/cudf/cudf_pandas_tests/test_cudf_pandas.py::test_cudf_pandas_profiler
 done
