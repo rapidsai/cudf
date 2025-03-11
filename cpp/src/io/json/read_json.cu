@@ -675,9 +675,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
 
   std::size_t const num_streams =
-    std::min<std::size_t>({sources.size() - start_source + 1,
-                           cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
-                           pools::tpool().get_thread_count()});
+    std::min<std::size_t>(sources.size() - start_source + 1, pools::tpool().get_thread_count());
   auto stream_pool = cudf::detail::fork_streams(stream, num_streams);
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;

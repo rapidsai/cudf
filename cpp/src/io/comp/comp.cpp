@@ -330,11 +330,8 @@ void host_compress(compression_type compression,
   });
 
   std::vector<std::future<size_t>> tasks;
-  auto const num_streams =
-    std::min<std::size_t>({num_chunks,
-                           cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
-                           h_comp_pool().get_thread_count()});
-  auto const streams = cudf::detail::fork_streams(stream, num_streams);
+  auto const num_streams = std::min<std::size_t>(num_chunks, h_comp_pool().get_thread_count());
+  auto const streams     = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
