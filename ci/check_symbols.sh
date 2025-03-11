@@ -16,8 +16,8 @@ readelf --dyn-syms --wide "${LIBRARY}" \
 
 lib=ZSTD
 echo "Checking for '${lib}' symbols..."
-if grep -E "${lib}\:\:" "${symbol_file}"; then
-    echo "ERROR: Found some exported symbols in ${LIBRARY} matching the pattern ${lib}::."
+if grep -E "${lib}" "${symbol_file}"; then
+    echo "ERROR: Found some exported symbols in ${LIBRARY} matching the pattern ${lib}."
     exit 1
 fi
 
