@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/error.hpp"
 #include "io/parquet/experimental/hybrid_scan_impl.hpp"
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf::experimental::io {
 

@@ -619,12 +619,15 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   // for the column.
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     // Construct a row indices mapping based on page row counts and offsets
-    // TODO: MH: Would make sense to not recompute all this.
+
+    // TODO: MH: Would make sense to not recompute `make_page_indices()`.
     auto const page_indices =
       make_page_indices(page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, stream);
 
+    // Device vector to hold page indices with at least one valid row
     rmm::device_uvector<size_type> d_select_page_indices(total_rows, stream, mr);
-    auto const selected_pages_end =
+    // Copy page indices with at least one valid row
+    auto const filtered_pages_end_iter =
       thrust::copy_if(rmm::exec_policy_nosync(stream),
                       page_indices.begin(),
                       page_indices.end(),
@@ -637,20 +640,21 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                         return is_valid or is_row_required[row_index];
                       });
 
-    // Remove duplicate page indices across rows.
-    auto const selected_unique_end = thrust::unique(
-      rmm::exec_policy_nosync(stream), d_select_page_indices.begin(), selected_pages_end);
-    size_t const num_selected_unique_pages =
-      thrust::distance(d_select_page_indices.begin(), selected_unique_end);
+    // Remove duplicate page indices across (presorted) rows
+    auto const filtered_uniq_page_end_iter = thrust::unique(
+      rmm::exec_policy_nosync(stream), d_select_page_indices.begin(), filtered_pages_end_iter);
 
-    // Copy the selected unique page indices back to host and
+    // Number of final filtered pages for this column
+    size_t const num_filtered_pages =
+      thrust::distance(d_select_page_indices.begin(), filtered_uniq_page_end_iter);
+
+    // Copy the filtered page indices for this column to host
     auto h_select_page_indices = cudf::detail::make_host_vector_sync(
-      cudf::device_span<cudf::size_type const>{d_select_page_indices.data(),
-                                               num_selected_unique_pages},
+      cudf::device_span<cudf::size_type const>{d_select_page_indices.data(), num_filtered_pages},
       stream);
 
-    // page ranges for the current column
-    auto page_ranges = std::vector<cudf::io::text::byte_range_info>(num_selected_unique_pages);
+    // Vector to hold byte ranges of filtered pages for the this column
+    auto page_ranges = std::vector<cudf::io::text::byte_range_info>(num_filtered_pages);
     std::transform(h_select_page_indices.begin(),
                    h_select_page_indices.end(),
                    page_ranges.begin(),
@@ -659,17 +663,17 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
     data_page_bytes.emplace_back(std::move(page_ranges));
   }
 
-  auto const num_filtered_pages = std::accumulate(
+  auto const total_filtered_pages = std::accumulate(
     data_page_bytes.cbegin(),
     data_page_bytes.cend(),
     size_t{0},
     [](auto sum, auto const& data_page_bytes) { return sum + data_page_bytes.size(); });
 
-  CUDF_EXPECTS(num_filtered_pages < total_pages,
+  CUDF_EXPECTS(total_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
   // TODO: MH: Temp logging. Remove later.
-  std::cout << "Num pages after filter = " << num_filtered_pages << " out of " << total_pages
+  std::cout << "Num pages after filter = " << total_filtered_pages << " out of " << total_pages
             << std::endl;
 
   // Return the final lists of data page byte ranges for all columns
