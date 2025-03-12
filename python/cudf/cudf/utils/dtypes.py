@@ -77,10 +77,8 @@ ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
 def _find_common_type_decimal(
-    dtypes: Iterable[
-        cudf.Decimal128Dtype | cudf.Decimal64Dtype | cudf.Decimal32Dtype
-    ],
-) -> cudf.Decimal128Dtype | cudf.Decimal64Dtype | cudf.Decimal32Dtype:
+    dtypes: Iterable[cudf.core.dtypes.DecimalDtype],
+) -> cudf.core.dtypes.DecimalDtype:
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
     s = max(dtype.scale for dtype in dtypes)
@@ -325,31 +323,28 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
 
 def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     """
-    Wrapper over np.find_common_type to handle special cases
-
-    Corner cases:
-    1. "M8", "M8" -> "M8" | "m8", "m8" -> "m8"
+    Wrapper over np.result_type to handle cudf specific types.
 
     Parameters
     ----------
-    dtypes : iterable, sequence of dtypes to find common types
+    dtypes : iterable
+        sequence of dtypes to find common types
 
     Returns
     -------
-    dtype : np.dtype optional, the result from np.find_common_type,
-    None if input is empty
-
+    dtype : np.dtype or None
+        None if input is empty
+        DtypeObj otherwise
     """
-
     if len(dtypes) == 0:  # type: ignore[arg-type]
         return None
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
-    if any(cudf.api.types._is_categorical_dtype(dtype) for dtype in dtypes):
+    if any(isinstance(dtype, cudf.CategoricalDtype) for dtype in dtypes):
         if all(
             (
-                cudf.api.types._is_categorical_dtype(dtype)
+                isinstance(dtype, cudf.CategoricalDtype)
                 and (not dtype.ordered if hasattr(dtype, "ordered") else True)
             )
             for dtype in dtypes
@@ -361,9 +356,9 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                     ).unique()
                 )
             else:
-                raise ValueError(
+                raise NotImplementedError(
                     "Only unordered categories of the same underlying type "
-                    "may be coerced to a common type."
+                    "may be currently coerced to a common type."
                 )
         else:
             # TODO: Should this be an error case (mixing categorical with other
@@ -380,12 +375,15 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
-        if all(cudf.api.types.is_numeric_dtype(dtype) for dtype in dtypes):
+        if all(
+            is_dtype_obj_numeric(dtype, include_decimal=True)
+            for dtype in dtypes
+        ):
             return _find_common_type_decimal(
                 [
                     dtype
                     for dtype in dtypes
-                    if cudf.api.types.is_decimal_dtype(dtype)
+                    if isinstance(dtype, cudf.core.dtypes.DecimalDtype)
                 ]
             )
         else:
@@ -404,19 +402,7 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "not supported"
         )
 
-    # Corner case 1:
-    # Resort to np.result_type to handle "M" and "m" types separately
-    dt_dtypes = set(filter(lambda t: t.kind == "M", dtypes))
-    if len(dt_dtypes) > 0:
-        dtypes = dtypes - dt_dtypes
-        dtypes.add(np.result_type(*dt_dtypes))
-
-    td_dtypes = set(filter(lambda t: t.kind == "m", dtypes))
-    if len(td_dtypes) > 0:
-        dtypes = dtypes - td_dtypes
-        dtypes.add(np.result_type(*td_dtypes))
-
-    common_dtype = np.result_type(*dtypes)
+    common_dtype = np.result_type(*dtypes)  # noqa: TID251
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
     return common_dtype

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api import types as pd_types
+from pandas.api import types as pd_types  # noqa: TID251
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
@@ -82,7 +82,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
-    pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
         if cudf.get_option("mode.pandas_compatible"):
             raise NotImplementedError(

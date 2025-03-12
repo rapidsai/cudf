@@ -440,26 +440,26 @@ def test_is_sparse():
     psa = pd.arrays.SparseArray([0, 0, 1, 0])
     xsa = xpd.arrays.SparseArray([0, 0, 1, 0])
 
-    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)
+    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)  # noqa: TID251
 
 
 def test_is_file_like():
-    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")
-    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(
+    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")  # noqa: TID251
+    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(  # noqa: TID251
         BytesIO()
     )
     assert pd.api.types.is_file_like(
         StringIO("abc")
-    ) == xpd.api.types.is_file_like(StringIO("abc"))
+    ) == xpd.api.types.is_file_like(StringIO("abc"))  # noqa: TID251
 
 
 def test_is_re_compilable():
     assert pd.api.types.is_re_compilable(
         ".^"
-    ) == xpd.api.types.is_re_compilable(".^")
+    ) == xpd.api.types.is_re_compilable(".^")  # noqa: TID251
     assert pd.api.types.is_re_compilable(
         ".*"
-    ) == xpd.api.types.is_re_compilable(".*")
+    ) == xpd.api.types.is_re_compilable(".*")  # noqa: TID251
 
 
 def test_module_attribute_types():
@@ -497,7 +497,7 @@ def test_options_mode():
 # Codecov and Profiler interfere with each-other,
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
-def test_profiler():
+def test_cudf_pandas_profiler():
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports

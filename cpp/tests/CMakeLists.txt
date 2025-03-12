@@ -493,6 +493,7 @@ ConfigureTest(
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
+  rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
   PERCENT 70
