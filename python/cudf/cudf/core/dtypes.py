@@ -920,11 +920,9 @@ class DecimalDtype(_BaseDtype):
 
         if not isinstance(scalar, pa.Scalar):
             # e.g casting int to decimal type isn't allow, but OK in the constructor?
-            pa_scalar = pa.scalar(
-                scalar, type=cudf_dtype_to_pa_type(self.dtype)
-            )
+            pa_scalar = pa.scalar(scalar, type=cudf_dtype_to_pa_type(self))
         else:
-            pa_scalar = scalar.cast(cudf_dtype_to_pa_type(self.dtype))
+            pa_scalar = scalar.cast(self.to_arrow())
         return pa_scalar_to_plc_scalar(pa_scalar)
 
 
@@ -946,7 +944,7 @@ class Decimal32Dtype(DecimalDtype):
         # from pyarrow would only return a pylibcudf.Scalar with Decimal128
         col = ColumnBase.from_pylibcudf(
             plc.Column.from_scalar(plc_scalar, 1)
-        ).astype(self.dtype)
+        ).astype(self)
         return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
 
 
@@ -968,7 +966,7 @@ class Decimal64Dtype(DecimalDtype):
         # from pyarrow would only return a pylibcudf.Scalar with Decimal128
         col = ColumnBase.from_pylibcudf(
             plc.Column.from_scalar(plc_scalar, 1)
-        ).astype(self.dtype)
+        ).astype(self)
         return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
 
 
