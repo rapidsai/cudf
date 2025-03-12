@@ -1071,7 +1071,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_na_like(other):
-            return pa.scalar(None, dtype=cudf_dtype_to_pa_type(self.dtype))
+            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
         return NotImplemented
 
     def _scatter_by_slice(
@@ -1199,7 +1199,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if is_scalar(fill_value):
-            return self.dtype._as_plc_scalar(fill_value)
+            return self._scalar_to_plc_scalar(fill_value)
         return as_column(fill_value).astype(self.dtype)
 
     @acquire_spill_lock()

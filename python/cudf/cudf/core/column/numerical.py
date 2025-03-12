@@ -341,7 +341,7 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
             if common_dtype.kind in {"b", "i", "u", "f"}:
-                if self.dtype.kind == "b":
+                if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
                 return pa.scalar(
                     other, type=cudf_dtype_to_pa_type(common_dtype)

@@ -246,7 +246,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other
         elif isinstance(other, (int, Decimal)):
             dtype = self.dtype._from_decimal(Decimal(other))
-            return pa.scalar(other, dtype=cudf_dtype_to_pa_type(dtype))
+            return pa.scalar(other, type=cudf_dtype_to_pa_type(dtype))
         return super()._normalize_binop_operand(other)
 
     def as_numerical_column(
