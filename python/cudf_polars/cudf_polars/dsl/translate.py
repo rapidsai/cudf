@@ -288,6 +288,7 @@ def _(
         aggs,
         node.maintain_order,
         node.options,
+        translator.config.config.copy(),
         inp,
     )
 
@@ -467,14 +468,14 @@ def _(
 def _(
     node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    key = node.key
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
-    key = node.key
     return ir.MergeSorted(
         schema,
+        key,
         inp_left,
         inp_right,
-        key,
     )
 
 
@@ -637,6 +638,18 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif name in "top_k":
+            (col, k) = children
+            assert isinstance(col, expr.Col)
+            assert isinstance(k, expr.Literal)
+            (descending,) = options
+            return expr.Slice(
+                dtype,
+                0,
+                k.value.as_py(),
+                expr.Sort(dtype, (True, True, not descending), col),
+            )
+
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -687,6 +700,20 @@ def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr
         (options[0], tuple(options[1]), tuple(options[2])),
         translator.translate_expr(n=node.expr),
         *(translator.translate_expr(n=n) for n in node.by),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Slice, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    offset = translator.translate_expr(n=node.offset)
+    length = translator.translate_expr(n=node.length)
+    assert isinstance(offset, expr.Literal)
+    assert isinstance(length, expr.Literal)
+    return expr.Slice(
+        dtype,
+        offset.value.as_py(),
+        length.value.as_py(),
+        translator.translate_expr(n=node.input),
     )
 
 

@@ -45,8 +45,10 @@ if TYPE_CHECKING:
 
     from cudf._typing import (
         ColumnBinaryOperand,
+        ColumnLike,
         DatetimeLikeScalar,
         Dtype,
+        DtypeObj,
         ScalarLike,
     )
     from cudf.core.column.numerical import NumericalColumn
@@ -177,13 +179,27 @@ def infer_format(element: str, **kwargs) -> str:
     return fmt
 
 
+def _get_time_unit(obj: ColumnBinaryOperand) -> str:
+    if isinstance(
+        obj,
+        (
+            cudf.core.column.datetime.DatetimeColumn,
+            cudf.core.column.timedelta.TimeDeltaColumn,
+        ),
+    ):
+        return obj.time_unit
+
+    time_unit, _ = np.datetime_data(obj.dtype)
+    return time_unit
+
+
 def _resolve_mixed_dtypes(
     lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
 ) -> Dtype:
     units = ["s", "ms", "us", "ns"]
-    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+    lhs_time_unit = _get_time_unit(lhs)
     lhs_unit = units.index(lhs_time_unit)
-    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+    rhs_time_unit = _get_time_unit(rhs)
     rhs_unit = units.index(rhs_time_unit)
     return np.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
 
@@ -267,6 +283,19 @@ class DatetimeColumn(column.ColumnBase):
         return ts.to_numpy().astype(np.dtype(np.int64)) in cast(
             "cudf.core.column.NumericalColumn", self.astype(np.dtype(np.int64))
         )
+
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> plc.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if (
+            isinstance(fill_value, np.datetime64)
+            and self.time_unit != np.datetime_data(fill_value)[0]
+        ):
+            fill_value = fill_value.astype(self.dtype)
+        elif isinstance(fill_value, str) and fill_value.lower() == "nat":
+            fill_value = np.datetime64(fill_value, self.time_unit)
+        return super()._validate_fillna_value(fill_value)
 
     @functools.cached_property
     def time_unit(self) -> str:
@@ -535,20 +564,20 @@ class DatetimeColumn(column.ColumnBase):
             other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
-                other_time_unit = cudf.utils.dtypes.get_time_unit(other)
                 if other_time_unit not in {"s", "ms", "ns", "us"}:
                     other_time_unit = "ns"
 
                 return cudf.Scalar(
                     None, dtype=f"datetime64[{other_time_unit}]"
                 )
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
+                other = other.astype(self.dtype)
 
-            other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
-            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
-
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
                 return cudf.Scalar(
                     None,
@@ -558,7 +587,9 @@ class DatetimeColumn(column.ColumnBase):
                 )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype(np.dtype("timedelta64[s]"))
+                other = other.astype(
+                    np.dtype(f"timedelta64[{self.time_unit}]")
+                )
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -569,7 +600,7 @@ class DatetimeColumn(column.ColumnBase):
 
         return NotImplemented
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
         elif isinstance(dtype, pd.DatetimeTZDtype):
@@ -579,13 +610,13 @@ class DatetimeColumn(column.ColumnBase):
             )
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_timedelta_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -837,7 +868,7 @@ class DatetimeColumn(column.ColumnBase):
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == "M":  # type: ignore[union-attr]
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
@@ -1104,7 +1135,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self._local_time.as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype: np.dtype | pd.DatetimeTZDtype
+    ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.

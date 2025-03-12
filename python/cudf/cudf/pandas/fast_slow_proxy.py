@@ -151,7 +151,7 @@ def make_final_proxy_type(
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
-       ``__init__`). If you want to remove a defaulted attribute
+       ``__init__``). If you want to remove a defaulted attribute
        completely, pass the special sentinel ``_DELETE`` as a value.
     postprocess
         Optional function called to allow the proxy to postprocess
@@ -1333,6 +1333,31 @@ def _get_proxy_base_class(cls):
         if proxy_class in cls.__mro__:
             return proxy_class
     return object
+
+
+def as_proxy_object(obj: Any) -> Any:
+    """
+    Wraps a cudf or pandas object in a proxy object if applicable.
+
+    There will be no memory transfer, i.e., GPU objects stay on GPU and
+    CPU objects stay on CPU. The object will be wrapped in a
+    proxy object. This is useful for ensuring that the object is
+    compatible with the fast-slow proxy system.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to wrap.
+
+    Returns
+    -------
+    Any
+        The wrapped proxy object if applicable, otherwise the original object.
+    """
+    if _is_final_type(obj):
+        typ = get_final_type_map()[type(obj)]
+        return typ._fsproxy_wrap(obj, None)
+    return obj
 
 
 def is_proxy_instance(obj, type):

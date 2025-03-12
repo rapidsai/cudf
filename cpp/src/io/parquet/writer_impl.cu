@@ -53,6 +53,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <numeric>
 #include <utility>

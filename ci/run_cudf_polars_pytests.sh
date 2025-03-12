@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -13,3 +13,9 @@ python -m pytest --cache-clear "$@" tests
 
 # Test the "dask-experimental" executor
 python -m pytest --cache-clear "$@" tests --executor dask-experimental
+
+# Run experimental tests with Distributed cluster
+python -m pytest --cache-clear "$@" "tests/experimental" \
+    --executor dask-experimental \
+    --dask-cluster \
+    --cov-fail-under=0  # No code-coverage requirement for these tests.

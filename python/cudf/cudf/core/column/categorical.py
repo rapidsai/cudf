@@ -14,12 +14,14 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+from cudf.api.types import is_scalar
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
         SeriesOrIndex,
         SeriesOrSingleColumnIndex,
@@ -147,7 +150,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series._from_column(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -617,16 +620,14 @@ class CategoricalColumn(column.ColumnBase):
         return self._codes
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
-        if cudf.api.types.is_scalar(
-            value
-        ) and cudf.utils.utils._is_null_host_scalar(value):
+        if is_scalar(value) and cudf.utils.utils._is_null_host_scalar(value):
             to_add_categories = 0
         else:
-            if cudf.api.types.is_scalar(value):
+            if is_scalar(value):
                 arr = column.as_column(value, length=1, nan_as_null=False)
             else:
                 arr = column.as_column(value, nan_as_null=False)
@@ -642,7 +643,7 @@ class CategoricalColumn(column.ColumnBase):
                 "category, set the categories first"
             )
 
-        if cudf.api.types.is_scalar(value):
+        if is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
             value = cudf.core.column.as_column(value).astype(self.dtype)
@@ -1041,9 +1042,9 @@ class CategoricalColumn(column.ColumnBase):
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
-        if cudf.api.types.is_scalar(fill_value):
+        if is_scalar(fill_value):
             if fill_value != _DEFAULT_CATEGORICAL_VALUE:
                 try:
                     fill_value = self._encode(fill_value)
@@ -1051,7 +1052,11 @@ class CategoricalColumn(column.ColumnBase):
                     raise ValueError(
                         f"{fill_value=} must be in categories"
                     ) from err
-            return cudf.Scalar(fill_value, dtype=self.codes.dtype)
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(
+                    fill_value, type=cudf_dtype_to_pa_type(self.codes.dtype)
+                )
+            )
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             if isinstance(fill_value.dtype, CategoricalDtype):
@@ -1081,20 +1086,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
-    def as_categorical_column(self, dtype: Dtype) -> Self:
-        if isinstance(dtype, str) and dtype == "category":
-            return self
-        if isinstance(dtype, pd.CategoricalDtype):
-            dtype = cudf.CategoricalDtype.from_pandas(dtype)
-        if (
-            isinstance(dtype, cudf.CategoricalDtype)
-            and dtype.categories is None
-            and dtype.ordered is None
-        ):
-            return self
-        elif not isinstance(dtype, CategoricalDtype):
-            raise ValueError("dtype must be CategoricalDtype")
-
+    def as_categorical_column(self, dtype: cudf.CategoricalDtype) -> Self:
         if not isinstance(self.categories, type(dtype.categories._column)):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
@@ -1125,16 +1117,16 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self) -> StringColumn:
         return self._get_decategorized_column().as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(dtype)
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(dtype)
 
     def _get_decategorized_column(self) -> ColumnBase:
@@ -1168,7 +1160,7 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col.codes
         return out
 
-    def view(self, dtype: Dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         raise NotImplementedError(
             "Categorical column views are not currently supported"
         )

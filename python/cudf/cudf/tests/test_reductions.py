@@ -176,8 +176,6 @@ def test_sum_of_squares(dtype, nelem):
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
             np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
-        else:
-            print("overflow, passing")
     else:
         np.testing.assert_approx_equal(
             expect, got, significant=accuracy_for_dtype[dtype]
@@ -510,14 +508,6 @@ def test_reduction_column_multiindex():
     result = df.mean()
     expected = df.to_pandas().mean()
     assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("op", ["sum", "product"])
-def test_dtype_deprecated(op):
-    ser = cudf.Series(range(5))
-    with pytest.warns(FutureWarning):
-        result = getattr(ser, op)(dtype=np.dtype(np.int8))
-    assert isinstance(result, np.int8)
 
 
 @pytest.mark.parametrize(

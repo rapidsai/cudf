@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,12 @@ struct type_tester {
 TYPED_TEST(TypedDispatcherTest, TypeToId)
 {
   EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam volatile>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const volatile>()},
                                     type_tester<TypeParam>{}));
 }
 

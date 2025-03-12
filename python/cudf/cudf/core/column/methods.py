@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Literal, Union, overload
 
 import cudf
-import cudf.core.column
-import cudf.core.column_accessor
 from cudf.utils.utils import NotIterable
 
 ParentType = Union["cudf.Series", "cudf.core.index.Index"]

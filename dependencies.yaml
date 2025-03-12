@@ -400,7 +400,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - &cmake_ver cmake>=3.26.4,!=3.30.0
+          - &cmake_ver cmake>=3.30.4
           - &ninja ninja
   build_all:
     common:
@@ -464,7 +464,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.1.0.6
+          - nvcomp==4.2.0.11
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -472,12 +472,12 @@ dependencies:
               cuda: "12.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-nvcomp-cu12==4.1.0.6
+              - nvidia-nvcomp-cu12==4.2.0.11
           - matrix:
               cuda: "11.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-nvcomp-cu11==4.1.0.6
+              - nvidia-nvcomp-cu11==4.2.0.11
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
           # (e.g. for DLFW and pip devcontainers)
           - matrix:
@@ -487,7 +487,7 @@ dependencies:
           # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
-              - nvidia-nvcomp==4.1.0.6
+              - nvidia-nvcomp==4.2.0.11
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -753,8 +753,8 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0a0
-          - &numba-dep numba>=0.59.1,<0.61.0a0
+          - &numba-cuda-dep numba-cuda>=0.4.0,<0.5.0a0
+          - &numba-dep numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -813,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.20,<1.23
+          - polars>=1.20,<1.25
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -885,7 +885,8 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba-cuda==0.2.0
+              - numba-cuda==0.4.0
+              - numba==0.59.1
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:

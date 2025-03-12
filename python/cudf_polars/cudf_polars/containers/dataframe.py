@@ -295,7 +295,7 @@ class DataFrame:
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
         return type(self).from_table(table, self.column_names).sorted_like(self)
 
-    def slice(self, zlice: tuple[int, int] | None) -> Self:
+    def slice(self, zlice: tuple[int, int | None] | None) -> Self:
         """
         Slice a dataframe.
 
@@ -312,6 +312,8 @@ class DataFrame:
         if zlice is None:
             return self
         start, length = zlice
+        if length is None:
+            length = self.num_rows
         if start < 0:
             start += self.num_rows
         # Polars implementation wraps negative start by num_rows, then
