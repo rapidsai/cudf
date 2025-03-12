@@ -3048,3 +3048,9 @@ def test_construct_nonnative_array(arr):
     result = cudf.Series(nonnative)
     expected = cudf.Series(native)
     assert_eq(result, expected)
+
+
+def test_construct_all_pd_NA_with_dtype():
+    result = cudf.Series([pd.NA, pd.NA], dtype=np.dtype(np.float64))
+    expected = cudf.Series(pa.array([None, None], type=pa.float64()))
+    assert_eq(result, expected)

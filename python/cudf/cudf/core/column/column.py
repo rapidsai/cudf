@@ -70,7 +70,12 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
+from cudf.utils.utils import (
+    _array_ufunc,
+    _is_null_host_scalar,
+    is_na_like,
+    mask_dtype,
+)
 
 if TYPE_CHECKING:
     import builtins
@@ -2825,8 +2830,12 @@ def as_column(
     if dtype is not None:
         dtype = cudf.dtype(dtype)
         try:
+            # pyarrow cannot infer pd.NA values
+            sanitized_nas = [
+                val if not is_na_like(val) else None for val in arbitrary
+            ]
             arbitrary = pa.array(
-                arbitrary,
+                sanitized_nas,
                 type=cudf_dtype_to_pa_type(dtype),
                 from_pandas=from_pandas,
             )

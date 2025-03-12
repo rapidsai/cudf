@@ -54,7 +54,6 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
         test_maybe_convert_dtypes_pandas or \
         test_to_arrow or \
         test_to_arrow_with_nulls or \
-        test_sumh_transformations or \
         test_dask_order_dependent_ops or \
         test_q1 or \
         test_cross_join_suffix or \
