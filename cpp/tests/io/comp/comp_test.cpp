@@ -57,13 +57,13 @@ struct DecompressTest : public cudf::test::BaseFixture, public testing::WithPara
                                   cudf::host_span<uint8_t const> compressed,
                                   size_t uncompressed_size)
   {
-    if (type == hw::gpu) {
+    if (type == hw::GPU) {
       if constexpr (has_gpu_impl<Decompressor>::value) {
         return DeviceDecompress(compressed, uncompressed_size);
       } else {
         CUDF_FAIL("Device decompression has not been implemented");
       }
-    } else if (type == hw::cpu) {
+    } else if (type == hw::CPU) {
       if constexpr (has_cpu_impl<Decompressor>::value) {
         return HostDecompress(compressed, uncompressed_size);
       } else {
@@ -209,7 +209,7 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
 
 INSTANTIATE_TEST_CASE_P(GzipDecompressTest,
                         GzipDecompressTest,
-                        ::testing::Values(hw::cpu, hw::gpu));
+                        ::testing::Values(hw::CPU, hw::GPU));
 
 TEST_P(GzipDecompressTest, HelloWorld)
 {
@@ -228,7 +228,7 @@ TEST_P(GzipDecompressTest, HelloWorld)
 
 INSTANTIATE_TEST_CASE_P(SnappyDecompressTest,
                         SnappyDecompressTest,
-                        ::testing::Values(hw::cpu, hw::gpu));
+                        ::testing::Values(hw::CPU, hw::GPU));
 
 TEST_P(SnappyDecompressTest, HelloWorld)
 {
@@ -258,7 +258,7 @@ TEST_P(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup)
   EXPECT_EQ(output, input);
 }
 
-INSTANTIATE_TEST_CASE_P(BrotliDecompressTest, BrotliDecompressTest, ::testing::Values(hw::gpu));
+INSTANTIATE_TEST_CASE_P(BrotliDecompressTest, BrotliDecompressTest, ::testing::Values(hw::GPU));
 
 TEST_P(BrotliDecompressTest, HelloWorld)
 {
@@ -274,7 +274,7 @@ TEST_P(BrotliDecompressTest, HelloWorld)
   EXPECT_EQ(output, input);
 }
 
-INSTANTIATE_TEST_CASE_P(ZstdDecompressTest, ZstdDecompressTest, ::testing::Values(hw::cpu));
+INSTANTIATE_TEST_CASE_P(ZstdDecompressTest, ZstdDecompressTest, ::testing::Values(hw::CPU));
 
 TEST_P(ZstdDecompressTest, HelloWorld)
 {
