@@ -242,7 +242,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             columns_df = self._frame._get_columns_by_label(arg[1])
             columns_df.index = self._frame.index
         else:
-            columns_df = self._frame.copy(deep=False)
+            columns_df = self._frame
 
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
@@ -338,6 +338,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         },
                         index=cudf.Index._from_column(tmp_arg[0]),
                     )
+                    columns_df = columns_df.copy(deep=False)
                     columns_df[cantor_name] = column.as_column(
                         range(len(columns_df))
                     )
