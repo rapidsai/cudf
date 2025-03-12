@@ -104,11 +104,11 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
-    _valid_ops: ClassVar[list[Name]] = [
+    _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
-    ]
+    }
 
     def __init__(
         self,
