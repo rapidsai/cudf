@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -257,7 +258,7 @@ class NumericalColumn(NumericalBaseColumn):
             # not a binary operator, so no need to promote
             out_dtype = self.dtype
         elif out_dtype is None:
-            out_dtype = np.result_type(self.dtype, other.dtype)
+            out_dtype = find_common_type((self.dtype, other.dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
@@ -342,7 +343,7 @@ class NumericalColumn(NumericalBaseColumn):
         #   => np.int64
         # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
         #   => np.int64
-        common_dtype = np.result_type(self.dtype, other)
+        common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
         if common_dtype.kind in {"b", "i", "u", "f"}:
             if self.dtype.kind == "b":
                 common_dtype = min_signed_type(other)
@@ -384,7 +385,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -395,7 +396,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -405,7 +406,7 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
@@ -741,7 +742,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.dtype
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            return np.result_dtype(self.dtype, np.dtype("uint64"))
+            return find_common_type((self.dtype, np.dtype(np.uint64)))
         elif reduction_op in {"var", "std", "mean"}:
             return np.dtype("float64")
 

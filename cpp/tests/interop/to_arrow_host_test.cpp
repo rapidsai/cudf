@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "nanoarrow_utils.hpp"
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -228,6 +227,17 @@ TEST_F(ToArrowHostDeviceTest, EmptyTable)
 
   ArrowArrayViewReset(&expected);
   ArrowArrayViewReset(&actual);
+}
+
+TEST_F(ToArrowHostDeviceTest, EmptyDictionary)
+{
+  auto empty = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
+
+  auto got_arrow_host = cudf::to_arrow_host(cudf::table_view({empty->view()}));
+  ASSERT_EQ(got_arrow_host->array.n_children, 1);
+  auto dictionary = got_arrow_host->array.children[0]->dictionary;
+  ASSERT_NE(dictionary, nullptr);
+  EXPECT_EQ(dictionary->n_children, 0);
 }
 
 TEST_F(ToArrowHostDeviceTest, DateTimeTable)

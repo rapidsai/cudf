@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -428,8 +428,7 @@ def test_multiindex_loc_rows_1_2_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    print(pdf.loc[("c", "forest"), :])
-    print(gdf.loc[("c", "forest"), :].to_pandas())
+
     assert_eq(pdf.loc[("c", "forest"), :], gdf.loc[("c", "forest"), :])
 
 
@@ -437,8 +436,7 @@ def test_multiindex_loc_rows_1_1_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    print(pdf.loc[("c",), :])
-    print(gdf.loc[("c",), :].to_pandas())
+
     assert_eq(pdf.loc[("c",), :], gdf.loc[("c",), :])
 
 
