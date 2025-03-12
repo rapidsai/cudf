@@ -640,14 +640,13 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         elif name in "top_k":
             (col, k) = children
-            assert isinstance(col, expr.Col)
             assert isinstance(k, expr.Literal)
             (descending,) = options
             return expr.Slice(
                 dtype,
                 0,
                 k.value.as_py(),
-                expr.Sort(dtype, (True, True, not descending), col),
+                expr.Sort(dtype, (False, True, not descending), col),
             )
 
         return expr.UnaryFunction(dtype, name, options, *children)
