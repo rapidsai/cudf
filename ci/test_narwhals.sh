@@ -55,6 +55,8 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
         test_sumh_transformations or \
         test_dask_order_dependent_ops or \
         test_q1 \
+        test_cross_join_suffix \
+        test_cross_join \
     )" \
     --numprocesses=8 \
     --dist=worksteal
