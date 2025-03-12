@@ -288,6 +288,7 @@ def _(
         aggs,
         node.maintain_order,
         node.options,
+        translator.config.config.copy(),
         inp,
     )
 
@@ -467,14 +468,14 @@ def _(
 def _(
     node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    key = node.key
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
-    key = node.key
     return ir.MergeSorted(
         schema,
+        key,
         inp_left,
         inp_right,
-        key,
     )
 
 
@@ -637,6 +638,17 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif name in "top_k":
+            (col, k) = children
+            assert isinstance(k, expr.Literal)
+            (descending,) = options
+            return expr.Slice(
+                dtype,
+                0,
+                k.value.as_py(),
+                expr.Sort(dtype, (False, True, not descending), col),
+            )
+
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"

@@ -71,3 +71,12 @@ def test_mask_nans_float():
     got = pyarrow.array(plc.interop.to_arrow(masked.obj))
 
     assert expect == got
+
+
+def test_slice_none_returns_self():
+    column = Column(
+        plc.column_factories.make_numeric_column(
+            plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+        )
+    )
+    assert column.slice(None) is column

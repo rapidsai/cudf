@@ -875,7 +875,7 @@ class ListMethods(ColumnMethods):
             self._column.concatenate_list_elements(dropna)
         )
 
-    def astype(self, dtype):
+    def astype(self, dtype: Dtype):
         """
         Return a new list Series with the leaf values casted
         to the specified data type.
@@ -899,6 +899,6 @@ class ListMethods(ColumnMethods):
         """
         return self._return_or_inplace(
             self._column._transform_leaves(
-                lambda col, dtype: col.astype(dtype), dtype
+                lambda col, dtype: col.astype(cudf.dtype(dtype)), dtype
             )
         )

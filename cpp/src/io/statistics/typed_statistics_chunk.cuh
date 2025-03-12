@@ -31,9 +31,9 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <math_constants.h>
-#include <thrust/extrema.h>
 
 namespace cudf {
 namespace io {
@@ -131,8 +131,8 @@ struct typed_statistics_chunk<T, true> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
-    maximum_value = thrust::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
+    minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
+    maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     aggregate += detail::aggregation_type<T>::convert(elem);
     has_minmax = true;
   }
@@ -140,8 +140,8 @@ struct typed_statistics_chunk<T, true> {
   __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
-      minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
-      maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
+      minimum_value = cuda::std::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
+      maximum_value = cuda::std::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
     if (chunk.has_sum) { aggregate += union_member::get<A>(chunk.sum); }
     non_nulls += chunk.non_nulls;
@@ -170,16 +170,16 @@ struct typed_statistics_chunk<T, false> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
-    maximum_value = thrust::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
+    minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
+    maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     has_minmax    = true;
   }
 
   __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
-      minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
-      maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
+      minimum_value = cuda::std::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
+      maximum_value = cuda::std::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
