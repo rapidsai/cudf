@@ -227,10 +227,9 @@ def test_series_binop_concurrent(binop):
         list(e.map(func, indices))
 
 
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
-def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
+def test_series_binop_scalar(nelem, binop, obj_class):
     rng = np.random.default_rng(seed=0)
     arr = rng.random(nelem)
     rhs = rng.choice(arr).item()
@@ -239,10 +238,7 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     if obj_class == "Index":
         sr = Index(sr)
 
-    if use_cudf_scalar:
-        result = binop(sr, rhs)
-    else:
-        result = binop(sr, cudf.Scalar(rhs))
+    result = binop(sr, rhs)
 
     if obj_class == "Index":
         result = Series(result)
@@ -445,17 +441,11 @@ def test_str_series_compare_num_reflected(
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
-@pytest.mark.parametrize("use_cudf_scalar", [True, False])
-def test_series_compare_scalar(
-    nelem, cmpop, obj_class, dtype, use_cudf_scalar
-):
+def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
     arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     rhs = rng.choice(arr1).item()
-
-    if use_cudf_scalar:
-        rhs = cudf.Scalar(rhs)
 
     if obj_class == "Index":
         sr1 = Index(sr1)
@@ -826,10 +816,7 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
-def test_operator_func_series_and_scalar(
-    dtype, func, has_nulls, fill_value, use_cudf_scalar
-):
+def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     count = 1000
     scalar = 59
     gdf_series = utils.gen_rand_series(
@@ -838,11 +825,11 @@ def test_operator_func_series_and_scalar(
     pdf_series = gdf_series.to_pandas()
 
     gdf_series_result = getattr(gdf_series, func)(
-        cudf.Scalar(scalar) if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
-        np.array(scalar)[()] if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
 
@@ -895,9 +882,8 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, 1.0])
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
-    request, dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
+    request, dtype, func, has_nulls, scalar, fill_value
 ):
     request.applymarker(
         pytest.mark.xfail(
@@ -914,7 +900,7 @@ def test_operator_func_series_and_scalar_logical(
         gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
-        cudf.Scalar(scalar) if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
