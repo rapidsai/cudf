@@ -20,6 +20,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/utilities/default_stream.hpp>
@@ -96,7 +97,8 @@ struct DecompressTest : public cudf::test::BaseFixture, public testing::WithPara
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed.data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
     inf_stat.device_to_host_sync(stream);
-    // ASSERT_EQ(inf_stat[0].status, compression_status::SUCCESS);
+    CUDF_EXPECTS(inf_stat[0].status == compression_status::SUCCESS,
+                 "Failure in device decompression");
 
     return decompressed;
   }

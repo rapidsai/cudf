@@ -383,51 +383,6 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return uncompressed_size;
 }
 
-/**
- * @brief ZSTD decompressor that uses nvcomp
- */
-/*
-size_t device_decompress_zstd(host_span<uint8_t const> src,
-                       host_span<uint8_t> dst,
-                       rmm::cuda_stream_view stream)
-{
-  // Init device span of spans (source)
-  auto const d_src =
-    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
-  auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
-  hd_srcs[0]   = d_src;
-  hd_srcs.host_to_device_async(stream);
-
-  // Init device span of spans (temporary destination)
-  auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
-  auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
-  hd_dsts[0]   = d_dst;
-  hd_dsts.host_to_device_async(stream);
-
-  auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
-  hd_stats[0]   = compression_result{0, compression_status::FAILURE};
-  hd_stats.host_to_device_async(stream);
-  auto const max_uncomp_page_size = dst.size();
-  nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                             hd_srcs,
-                             hd_dsts,
-                             hd_stats,
-                             max_uncomp_page_size,
-                             max_uncomp_page_size,
-                             stream);
-
-  hd_stats.device_to_host_sync(stream);
-  CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
-
-  // Copy temporary output to `dst`
-  cudf::detail::cuda_memcpy(dst.subspan(0, hd_stats[0].bytes_written),
-                            device_span<uint8_t const>{d_dst.data(), hd_stats[0].bytes_written},
-                            stream);
-
-  return hd_stats[0].bytes_written;
-}
-*/
-
 size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   size_t const decompressed_bytes =
@@ -437,51 +392,6 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
                     src.size());
   CUDF_EXPECTS(ZSTD_isError(decompressed_bytes) == 0, "ZSTD decompression error");
   return decompressed_bytes;
-}
-
-/**
- * @brief Code ported from libzstd "experimental" API since this symbol is accessible
- * only if the library is statically linked
- */
-unsigned long long ZSTD_findDecompressedSize(host_span<uint8_t const> src)
-{
-  unsigned long long totalDstSize = 0;
-  auto ZSTD_startingInputLength   = []() { return 5; };
-  bool is_little_endian           = []() {
-    uint16_t n = 0x1;
-    auto byte  = reinterpret_cast<uint8_t*>(&n);
-    return (*byte == n);
-  }();
-  uint32_t magic_number = [is_little_endian, src]() {
-    uint32_t ret = 0;
-    std::memcpy(&ret, src.data(), sizeof(uint32_t));
-    if (is_little_endian) return ret;
-    return __builtin_bswap32(ret);
-  }();
-
-  auto src_size = src.size();
-  auto srcptr   = src.data();
-  while (src_size >= ZSTD_startingInputLength()) {
-    CUDF_EXPECTS((magic_number & ZSTD_MAGIC_SKIPPABLE_MASK) != ZSTD_MAGIC_SKIPPABLE_START,
-                 "No support for skippable frames yet!");
-
-    auto const fcs = ZSTD_getFrameContentSize(reinterpret_cast<const void*>(srcptr), src_size);
-    if (fcs >= ZSTD_CONTENTSIZE_ERROR) return fcs;
-    if (totalDstSize + fcs < totalDstSize) return ZSTD_CONTENTSIZE_ERROR; /* check for overflow */
-    totalDstSize += fcs;
-
-    /* skip to next frame */
-    auto const frameSrcSize =
-      ZSTD_findFrameCompressedSize(reinterpret_cast<const void*>(srcptr), src_size);
-    if (ZSTD_isError(frameSrcSize)) return ZSTD_CONTENTSIZE_ERROR;
-    CUDF_EXPECTS(frameSrcSize <= src_size, "Corrupted frame");
-    srcptr = reinterpret_cast<uint8_t const*>(srcptr) + frameSrcSize;
-    src_size -= frameSrcSize;
-  }
-
-  if (src_size) return ZSTD_CONTENTSIZE_ERROR;
-
-  return totalDstSize;
 }
 
 struct source_properties {
@@ -591,9 +501,10 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      comp_data      = raw;
-      comp_len       = src.size();
-      auto const ret = ZSTD_findDecompressedSize(src);
+      comp_data = raw;
+      comp_len  = src.size();
+      auto const ret =
+        ZSTD_findDecompressedSize(reinterpret_cast<const void*>(src.data()), src.size());
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN, "Decompressed ZSTD size cannot be determined");
       CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
       uncomp_len = static_cast<size_t>(ret);
@@ -651,6 +562,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   if (compression == compression_type::ZSTD) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     auto const decompressed_bytes = decompress_zstd(src, dst);
+    CUDF_EXPECTS(decompressed_bytes == srcprops.uncomp_len,
+                 "ZSTD: Error in computing uncompressed size prior to decompression");
     dst.resize(decompressed_bytes);
     return dst;
   }
