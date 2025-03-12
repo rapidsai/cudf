@@ -14,7 +14,15 @@ import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
-from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    Cache,
+    Filter,
+    HStack,
+    Projection,
+    Select,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -150,7 +158,7 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, list(partition_info[ir].keys(ir)))
+        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
         return graph, key_name
     else:
         return graph, (key_name, 0)
