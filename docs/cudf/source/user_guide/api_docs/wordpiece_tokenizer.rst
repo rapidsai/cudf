@@ -1,7 +1,7 @@
 ===================
 WordPieceTokenizer
 ===================
-.. currentmodule:: cudf.core.wordpiece_tokenizer
+.. currentmodule:: cudf.core.wordpiece_tokenize
 
 Constructor
 ~~~~~~~~~~~
