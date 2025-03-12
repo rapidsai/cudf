@@ -9,7 +9,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.nvtext.dedup cimport (
     substring_deduplicate as cpp_substring_deduplicate,
     build_suffix_array as cpp_build_suffix_array,
-    suffix_array_pair_type as cpp_suffix_array_pair_type,
+    suffix_array_type as cpp_suffix_array_type
 )
 from pylibcudf.libcudf.types cimport size_type
 
@@ -17,7 +17,7 @@ from rmm.librmm.device_buffer cimport device_buffer
 
 __all__ = ["substring_deduplicate", "build_suffix_array"]
 
-cdef Column _column_from_suffix_array(cpp_suffix_array_pair_type suffix_array):
+cdef Column _column_from_suffix_array(cpp_suffix_array_type suffix_array):
     # helper to convert a suffix array to a Column
     return Column.from_libcudf(
         move(
@@ -56,7 +56,7 @@ cpdef Column substring_deduplicate(Column input, size_type min_width):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef tuple build_suffix_array(Column input):
+cpdef Column build_suffix_array(Column input):
     """
     Builds a suffix array for the input strings column
 
@@ -72,12 +72,9 @@ cpdef tuple build_suffix_array(Column input):
     Column
         New column of suffix array
     """
-    cdef cpp_suffix_array_pair_type c_result
+    cdef cpp_suffix_array_type c_result
 
     with nogil:
         c_result = cpp_build_suffix_array(input.view())
 
-    return (
-        _column_from_suffix_array(move(c_result.first)),
-        _column_from_suffix_array(move(c_result.second)),
-    )
+    return _column_from_suffix_array(move(c_result))

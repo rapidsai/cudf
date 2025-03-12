@@ -330,13 +330,13 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
   return detail::substring_deduplicate(input, min_width, stream, mr);
 }
 
-std::pair<std::unique_ptr<rmm::device_uvector<int64_t>>,
-          std::unique_ptr<rmm::device_uvector<int16_t>>>
-build_suffix_array(cudf::strings_column_view const& input,
-                   rmm::cuda_stream_view stream,
-                   rmm::device_async_resource_ref mr)
+std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
+  cudf::strings_column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::build_suffix_array(input, 8, stream, mr);
+  auto result = detail::build_suffix_array(input, 8, stream, mr);
+  return std::move(result.first);
 }
 }  // namespace nvtext
