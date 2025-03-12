@@ -113,6 +113,8 @@ requirements:
             then: libcufile-dev
     by_name:
       - cuda-version
+      - if: cuda_major == "11"
+        then: cudatoolkit
 
 tests:
   - python:
