@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "cudf/stream_compaction.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -167,6 +169,7 @@ TEST_F(ListTest, Distinct)
   cudf::lists::distinct(list_col,
                         cudf::null_equality::EQUAL,
                         cudf::nan_equality::ALL_EQUAL,
+                        cudf::duplicate_keep_option::KEEP_FIRST,
                         cudf::test::get_default_stream());
 }
 

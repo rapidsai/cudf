@@ -23,6 +23,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -38,9 +39,9 @@ namespace detail {
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr,
-                                 duplicate_keep_option keep_option)
+                                 rmm::device_async_resource_ref mr)
 {
   // Algorithm:
   // - Generate labels for the child elements.
@@ -74,17 +75,37 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                            mr);
 }
 
+std::unique_ptr<column> distinct(lists_column_view const& input,
+                                 null_equality nulls_equal,
+                                 nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  return distinct(input, nulls_equal, nans_equal, duplicate_keep_option::KEEP_FIRST, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr,
-                                 duplicate_keep_option keep_option)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, stream, mr, keep_option);
+  return detail::distinct(input, nulls_equal, nans_equal, keep_option, stream, mr);
+}
+
+std::unique_ptr<column> distinct(lists_column_view const& input,
+                                 null_equality nulls_equal,
+                                 nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::distinct(
+    input, nulls_equal, nans_equal, duplicate_keep_option::KEEP_ANY, stream, mr);
 }
 
 }  // namespace cudf::lists

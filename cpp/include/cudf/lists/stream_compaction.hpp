@@ -83,18 +83,48 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param input The input lists column
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param keep_option Flag to specify which element to keep (first, last, any)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
- * @param keep_option Flag to specify which element to keep (first, last, any)
  * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
+  // TODO: add defaults for nulls_equal, nans_equal, keep_option after distinct() is deprecated
+  lists_column_view const& input,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Create a new list column without duplicate elements in each list.
+ *
+ * Given a lists column `input`, distinct elements of each list are copied to the corresponding
+ * output list. The order of lists is preserved while the order of elements within each list is not
+ * guaranteed.
+ *
+ * @deprecated Deprecated in 25.04, to be removed in 25.06
+ *
+ * Example:
+ * @code{.pseudo}
+ * input  = { {0, 1, 2, 3, 2}, {3, 1, 2}, null, {4, null, null, 5} }
+ * result = { {0, 1, 2, 3}, {3, 1, 2}, null, {4, null, 5} }
+ * @endcode
+ *
+ * @param input The input lists column
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
+ * @return The resulting lists column containing lists without duplicates
+ */
+[[deprecated]] std::unique_ptr<column> distinct(
   lists_column_view const& input,
   null_equality nulls_equal         = null_equality::EQUAL,
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
-  duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY);
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
