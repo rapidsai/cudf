@@ -411,9 +411,8 @@ struct source_properties {
 
 source_properties get_source_properties(compression_type compression, host_span<uint8_t const> src)
 {
-  auto raw                 = src.data();
-  uint8_t const* comp_data = nullptr;
-  size_t comp_len          = 0;
+  uint8_t const* comp_data = src.data();
+  size_t comp_len          = src.size();
   size_t uncomp_len        = 0;
 
   switch (compression) {
@@ -435,7 +434,7 @@ source_properties get_source_properties(compression_type compression, host_span<
     }
     case compression_type::ZIP: {
       zip_archive_s za{};
-      auto const open_succeeded = OpenZipArchive(&za, raw, src.size());
+      auto const open_succeeded = OpenZipArchive(&za, src.data(), src.size());
       if (compression != compression_type::AUTO)
         CUDF_EXPECTS(open_succeeded, "Failed to parse ZIP header while fetching source properties");
       if (open_succeeded) {
@@ -452,7 +451,7 @@ source_properties get_source_properties(compression_type compression, host_span<
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t const lfh_ofs = cdfh->hdr_ofs;
-            auto const* lfh      = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
+            auto const* lfh      = reinterpret_cast<zip_lfh_s const*>(src.data() + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -462,7 +461,7 @@ source_properties get_source_properties(compression_type compression, host_span<
                 if (file_end <= src.size()) {
                   // Pick the first valid file of non-zero size (only 1 file expected in archive)
                   compression = compression_type::ZIP;
-                  comp_data   = raw + file_start;
+                  comp_data   = src.data() + file_start;
                   comp_len    = lfh->comp_size;
                   uncomp_len  = lfh->uncomp_size;
                   break;
@@ -471,27 +470,6 @@ source_properties get_source_properties(compression_type compression, host_span<
             }
           }
           cdfh_ofs += cdfh_len;
-        }
-      }
-      if (compression != compression_type::AUTO) break;
-      [[fallthrough]];
-    }
-    case compression_type::BZIP2: {
-      if (compression != compression_type::AUTO)
-        CUDF_EXPECTS(src.size() > 4,
-                     "Failed to parse BZIP2 header while fetching source properties");
-      if (src.size() > 4) {
-        auto const* fhdr = reinterpret_cast<bz2_file_header_s const*>(raw);
-        // Check for BZIP2 file signature "BZh1" to "BZh9"
-        auto bzip2_sig = fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
-                         fhdr->blksz >= '1' && fhdr->blksz <= '9';
-        if (compression != compression_type::AUTO)
-          CUDF_EXPECTS(bzip2_sig, "Failed to parse BZIP2 header while fetching source properties");
-        if (bzip2_sig) {
-          compression = compression_type::BZIP2;
-          comp_data   = raw;
-          comp_len    = src.size();
-          uncomp_len  = 0;
         }
       }
       if (compression != compression_type::AUTO) break;
@@ -519,14 +497,10 @@ source_properties get_source_properties(compression_type compression, host_span<
                        "Error in retrieving SNAPPY source properties");
         if (uncomp_len != 0 && cur < end) compression = compression_type::SNAPPY;
       }
-      comp_data = raw;
-      comp_len  = src.size();
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
-      comp_data = raw;
-      comp_len  = src.size();
       auto const ret =
         ZSTD_findDecompressedSize(reinterpret_cast<const void*>(src.data()), src.size());
       uncomp_len = static_cast<size_t>(ret);
@@ -539,7 +513,9 @@ source_properties get_source_properties(compression_type compression, host_span<
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
-    default: CUDF_FAIL("Unsupported compressed stream type");
+    default: {
+      uncomp_len = 0;
+    }
   }
 
   return source_properties{compression, comp_data, comp_len, uncomp_len};
