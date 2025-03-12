@@ -39,7 +39,7 @@ engine_type engine_from_string(std::string const& str)
   } else if (str == "transforms") {
     return engine_type::transforms;
   } else {
-    CUDF_EXPECTS(false, +std::string{"unrecognized engine enum: "} + str);
+    CUDF_FAILS("unrecognized engine enum: " + str);
   }
 }
 
