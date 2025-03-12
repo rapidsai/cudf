@@ -488,7 +488,7 @@ struct ArrowDeviceArrayPrivateData {
 void ArrowDeviceArrayRelease(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
-  RMM_ASSERT_CUDA_SUCCESS(cudaEventDestroy(private_data->sync_event));
+  CUDF_CUDA_TRY(cudaEventDestroy(private_data->sync_event));
   ArrowArrayRelease(&private_data->parent);
   delete private_data;
   array->release = nullptr;

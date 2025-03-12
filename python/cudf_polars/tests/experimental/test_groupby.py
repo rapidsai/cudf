@@ -24,7 +24,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
-            "y": ["cat", "dog", "fish"] * 50,
+            "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )

@@ -104,6 +104,10 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
+      prefix_detection:
+        ignore:
+          # See https://github.com/rapidsai/build-planning/issues/160
+          - lib/libcudf.so
     requirements:
       build:
         - cmake ${{ cmake_version }}

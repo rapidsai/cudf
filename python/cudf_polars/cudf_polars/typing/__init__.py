@@ -68,6 +68,8 @@ PolarsExpr: TypeAlias = Union[
 
 Schema: TypeAlias = Mapping[str, plc.DataType]
 
+Slice: TypeAlias = tuple[int, int | None]
+
 
 class NodeTraverser(Protocol):
     """Abstract protocol for polars NodeTraverser."""

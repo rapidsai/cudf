@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
@@ -43,9 +43,6 @@ class Sort(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
-        name = None
-        if isinstance(child, Col):
-            name = child.name
         column = child.evaluate(df, context=context, mapping=mapping)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
@@ -58,7 +55,6 @@ class Sort(Expr):
             is_sorted=plc.types.Sorted.YES,
             order=order[0],
             null_order=null_order[0],
-            name=name,
         )
 
 
