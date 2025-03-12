@@ -564,16 +564,17 @@ class DatetimeColumn(column.ColumnBase):
             other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
-                other_time_unit = np.datetime_data(other.dtype)[0]
                 if other_time_unit not in {"s", "ms", "ns", "us"}:
                     other_time_unit = "ns"
 
                 return cudf.Scalar(
                     None, dtype=f"datetime64[{other_time_unit}]"
                 )
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
+                other = other.astype(self.dtype)
 
-            other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = np.datetime_data(other.dtype)[0]
@@ -586,7 +587,9 @@ class DatetimeColumn(column.ColumnBase):
                 )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype(np.dtype("timedelta64[s]"))
+                other = other.astype(
+                    np.dtype(f"timedelta64[{self.time_unit}]")
+                )
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
