@@ -5432,15 +5432,15 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
-        self, seed, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int, a: ColumnLike, b: ColumnLike, width: int
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column or a list strings column
         of terms.
 
         This uses the MurmurHash3_x86_32 algorithm for the hash function
-        if seed is of type np.uint32 or MurmurHash3_x86_128 if seed is
-        of type np.uint64.
+        if a or b are of type np.uint32 or MurmurHash3_x86_128 if a and b
+        are of type np.uint64.
 
         Calculation uses the formula (hv * a + b) % mersenne_prime
         where hv is the hash of a substring of width characters
@@ -5449,7 +5449,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        seed : uint32 or uint64
+        seed : int
             The seed used for the hash algorithm.
         a : ColumnLike
             Values for minhash calculation.
@@ -5480,20 +5480,12 @@ class StringMethods(ColumnMethods):
         """
         a_column = column.as_column(a)
         b_column = column.as_column(b)
-        if not hasattr(seed, "dtype"):
-            if a_column.dtype == np.uint32:
-                seed = np.uint32(seed)
-            else:
-                seed = np.uint64(seed)
-        if a_column.dtype != seed.dtype:
+        if a_column.dtype != b_column.dtype:
             raise ValueError(
-                f"Expecting a Series dtype to match seed type, got {type(a)}"
+                f"Expecting a and b Series dtype to match,  got {type(a)}"
             )
-        if b_column.dtype != seed.dtype:
-            raise ValueError(
-                f"Expecting b Series dtype to match seed type, got {type(b)}"
-            )
-        if seed.dtype == np.uint32:
+        seed = a.dtype(seed)
+        if a.dtype == np.uint32:
             if isinstance(self._parent.dtype, cudf.ListDtype):
                 plc_column = plc.nvtext.minhash.minhash_ngrams(
                     self._column.to_pylibcudf(mode="read"),
