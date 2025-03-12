@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(30_000),
-            "y": ["cat", "dog", "fish"] * 10_000,
+            "y": [1, 2, 3] * 10_000,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 6_000,
         }
     )
