@@ -120,6 +120,12 @@ tests:
   - python:
       imports:
         - cudf
+      commands:
+        - python -c "import cudf; print(cudf.__version__)"
+        - python -m cudf.pandas -c "import pandas as pd;print(pd)"
+        - python -m cudf.pandas -c "import pandas as pd;print(pd.Series([1, 2, 3]))"
+        - RAPIDS_NO_INITIALIZE=1 python -m cudf.pandas -c "import pandas as pd;print(pd.Series([1, 2, 3]))"
+        - CUDF_NO_INITIALIZE=1 python -m cudf.pandas -c "import pandas as pd;print(pd.Series([1, 2, 3]))"
       pip_check: false
 
 about:
