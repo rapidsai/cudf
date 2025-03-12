@@ -106,14 +106,7 @@ outputs:
         overlinking_behavior: "error"
       prefix_detection:
         ignore:
-          # Due to the present of __FILE__ in cudf and rmm's error macros,
-          # rattler's prefix replacement will modify the binary directly to use
-          # paths that point into the install prefix. This causes problems for
-          # C++ strings where a null terminator is not required and conda's
-          # replacement logic is therefore incorrect, breaking rodata constants
-          # that other parts of the code rely on. Since the paths only exist in
-          # error messages, removing the prefix replacement is an acceptable
-          # alternative for now.
+          # See https://github.com/rapidsai/build-planning/issues/160
           - lib/libcudf.so
     requirements:
       build:
