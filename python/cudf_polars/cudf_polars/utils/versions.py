@@ -13,6 +13,7 @@ from polars import __version__
 POLARS_VERSION = parse(__version__)
 
 POLARS_VERSION_LT_120 = POLARS_VERSION < parse("1.20")
+POLARS_VERSION_LT_124 = POLARS_VERSION < parse("1.24")
 
 
 def _ensure_polars_version():
