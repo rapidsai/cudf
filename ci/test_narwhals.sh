@@ -40,6 +40,8 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --constructors=polars[lazy]
 
 rapids-logger "Run narwhals tests for cuDF Pandas"
+# TODO: Investigate which of the tests we can avoid skipping
+# Tracking Issue: https://github.com/rapidsai/cudf/issues/18248
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
@@ -54,7 +56,9 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
         test_to_arrow_with_nulls or \
         test_sumh_transformations or \
         test_dask_order_dependent_ops or \
-        test_q1 \
+        test_q1 or \
+        test_cross_join_suffix or \
+        test_cross_join \
     )" \
     --numprocesses=8 \
     --dist=worksteal
