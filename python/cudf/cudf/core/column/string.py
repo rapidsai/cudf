@@ -5364,6 +5364,15 @@ class StringMethods(ColumnMethods):
             retain_index=False,
         )
 
+    def build_suffix_array(self) -> SeriesOrIndex:
+        """ """
+        return self._return_or_inplace(
+            self._column.build_suffix_array(),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
     def edit_distance(self, targets) -> SeriesOrIndex:
         """
         The ``targets`` strings are measured against the strings in this
@@ -6348,6 +6357,13 @@ class StringColumn(column.ColumnBase):
     def substring_deduplicate(self, min_width: int) -> Self:
         result = plc.nvtext.dedup.substring_deduplicate(
             self.to_pylibcudf(mode="read"), min_width
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def build_suffix_array(self) -> Self:
+        result = plc.nvtext.dedup.build_suffix_array(
+            self.to_pylibcudf(mode="read")
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 

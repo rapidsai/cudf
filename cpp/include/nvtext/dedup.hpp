@@ -20,6 +20,9 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
 //! NVText APIs
 namespace CUDF_EXPORT nvtext {
 /**
@@ -48,6 +51,20 @@ std::unique_ptr<cudf::column> substring_deduplicate(
   cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Builds a suffix array for the input strings column
+ *
+ * @param input Strings column to build suffix array for
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Sorted suffix array and corresponding sizes
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<int64_t>>,
+          std::unique_ptr<rmm::device_uvector<int16_t>>>
+build_suffix_array(cudf::strings_column_view const& input,
+                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT nvtext
