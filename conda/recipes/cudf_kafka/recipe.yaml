@@ -72,6 +72,7 @@ requirements:
         then: cuda-cudart-dev
     by_name:
       - cuda-version
+      - cudatoolkit
 
 tests:
   - python:
