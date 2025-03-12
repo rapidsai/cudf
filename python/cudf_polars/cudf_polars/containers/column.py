@@ -375,8 +375,9 @@ class Column:
         """
         if zlice is None:
             return self
-        (column,) = plc.copying.slice(
+        (table,) = plc.copying.slice(
             plc.Table([self.obj]),
             conversion.from_polars_slice(zlice, num_rows=self.size),
-        ).columns()
+        )
+        (column,) = table.columns()
         return type(self)(column, name=self.name).sorted_like(self)
