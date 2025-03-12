@@ -79,7 +79,6 @@ def test_query_ref_env(data, fn):
     d = 1.2
     # udt
     expect_mask = expect_fn(aa, bb, c, d)
-
     df2 = df.query(query_expr)
     # check
     assert len(df2) == np.count_nonzero(expect_mask)
