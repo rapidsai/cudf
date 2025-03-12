@@ -175,7 +175,7 @@ struct group_reduction_functor<
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to{},
+                            cuda::std::equal_to{},
                             binop);
     };
 
@@ -201,7 +201,7 @@ struct group_reduction_functor<
       rmm::device_uvector<bool> validity(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or{});
+                   cuda::std::logical_or{});
 
       auto [null_mask, null_count] =
         cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
@@ -238,7 +238,7 @@ struct group_reduction_functor<
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to{},
+                            cuda::std::equal_to{},
                             binop);
     };
 
@@ -254,7 +254,7 @@ struct group_reduction_functor<
       auto validity           = rmm::device_uvector<bool>(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or{});
+                   cuda::std::logical_or{});
 
       auto [null_mask, null_count] =
         cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
