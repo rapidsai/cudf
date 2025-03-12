@@ -4,7 +4,7 @@ from typing import TypeAlias
 
 from typing_extensions import Self
 
-from rmm._cuda.stream import Stream
+from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.io.types import (
@@ -68,7 +68,9 @@ class JsonReaderOptionsBuilder:
     def unquoted_control_chars(self, val: bool) -> Self: ...
     def build(self) -> JsonReaderOptions: ...
 
-def read_json(options: JsonReaderOptions) -> TableWithMetadata: ...
+def read_json(
+    options: JsonReaderOptions, stream: Stream = None
+) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
     @staticmethod

@@ -1,11 +1,16 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cython.operator cimport dereference
+
 from libc.stdint cimport int64_t, uint8_t
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
 from pylibcudf.io.types cimport (
@@ -13,7 +18,7 @@ from pylibcudf.io.types cimport (
     SourceInfo,
     PartitionInfo,
     TableInputMetadata,
-    TableWithMetadata
+    TableWithMetadata,
 )
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.io.parquet cimport (
@@ -35,7 +40,6 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
-from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.utils cimport _get_stream
 
 __all__ = [
@@ -268,24 +272,16 @@ cdef class ChunkedParquetReader:
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
+        cdef Stream s = _get_stream(stream)
         with nogil:
-            if stream is not None:
-                self.reader.reset(
-                    new cpp_chunked_parquet_reader(
-                        chunk_read_limit,
-                        pass_read_limit,
-                        options.c_obj,
-                        stream.view(),
-                    )
+            self.reader.reset(
+                new cpp_chunked_parquet_reader(
+                    chunk_read_limit,
+                    pass_read_limit,
+                    options.c_obj,
+                    s.view(),
                 )
-            else:
-                self.reader.reset(
-                    new cpp_chunked_parquet_reader(
-                        chunk_read_limit,
-                        pass_read_limit,
-                        options.c_obj,
-                    )
-                )
+            )
 
     __hash__ = None
 

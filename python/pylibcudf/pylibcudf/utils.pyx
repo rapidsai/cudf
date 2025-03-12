@@ -3,15 +3,17 @@
 from cython.operator import dereference
 
 from libc.stdint cimport uintptr_t
+
 from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
-from cuda.bindings import runtime
 
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport bitmask_type
+from cuda.bindings import runtime
 
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.stream import DEFAULT_STREAM
+
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport bitmask_type
 
 from .scalar cimport Scalar
 
@@ -62,5 +64,5 @@ def _is_concurrent_managed_access_supported():
 
 cdef Stream _get_stream(Stream stream = None):
     if stream is None:
-        stream = DEFAULT_STREAM
+        return DEFAULT_STREAM
     return stream
