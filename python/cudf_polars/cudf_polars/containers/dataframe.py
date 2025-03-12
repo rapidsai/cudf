@@ -15,14 +15,14 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import conversion, dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
     from typing_extensions import Self
 
-    from cudf_polars.typing import ColumnOptions, DataFrameHeader
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
 
 __all__: list[str] = ["DataFrame"]
@@ -295,7 +295,7 @@ class DataFrame:
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
         return type(self).from_table(table, self.column_names).sorted_like(self)
 
-    def slice(self, zlice: tuple[int, int | None] | None) -> Self:
+    def slice(self, zlice: Slice | None) -> Self:
         """
         Slice a dataframe.
 
@@ -311,16 +311,7 @@ class DataFrame:
         """
         if zlice is None:
             return self
-        start, length = zlice
-        if length is None:
-            length = self.num_rows
-        if start < 0:
-            start += self.num_rows
-        # Polars implementation wraps negative start by num_rows, then
-        # adds length to start to get the end, then clamps both to
-        # [0, num_rows)
-        end = start + length
-        start = max(min(start, self.num_rows), 0)
-        end = max(min(end, self.num_rows), 0)
-        (table,) = plc.copying.slice(self.table, [start, end])
+        (table,) = plc.copying.slice(
+            self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
+        )
         return type(self).from_table(table, self.column_names).sorted_like(self)

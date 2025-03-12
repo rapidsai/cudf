@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import Schema
+    from cudf_polars.typing import Schema, Slice as Zlice
 
 
 __all__ = [
@@ -1074,7 +1074,7 @@ class ConditionalJoin(IR):
             pl_expr.Operator | Iterable[pl_expr.Operator],
         ],
         bool,
-        tuple[int, int] | None,
+        Zlice | None,
         str,
         bool,
         Literal["none", "left", "right", "left_right", "right_left"],
@@ -1112,7 +1112,7 @@ class ConditionalJoin(IR):
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         suffix: str,
         maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
         left: DataFrame,
@@ -1159,7 +1159,7 @@ class Join(IR):
     options: tuple[
         Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
         bool,
-        tuple[int, int] | None,
+        Zlice | None,
         str,
         bool,
         Literal["none", "left", "right", "left_right", "right_left"],
@@ -1293,7 +1293,7 @@ class Join(IR):
         options: tuple[
             Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
-            tuple[int, int] | None,
+            Zlice | None,
             str,
             bool,
             Literal["none", "left", "right", "left_right", "right_left"],
@@ -1451,7 +1451,7 @@ class Distinct(IR):
     subset: frozenset[str] | None
     """Which columns should be used to define distinctness. If None,
     then all columns are used."""
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
     stable: bool
     """Should the result maintain ordering."""
@@ -1461,7 +1461,7 @@ class Distinct(IR):
         schema: Schema,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: IR,
     ):
@@ -1485,7 +1485,7 @@ class Distinct(IR):
         cls,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: DataFrame,
     ):
@@ -1541,7 +1541,7 @@ class Sort(IR):
     """Null sorting location for each sort key."""
     stable: bool
     """Should the sort be stable?"""
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
 
     def __init__(
@@ -1551,7 +1551,7 @@ class Sort(IR):
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         df: IR,
     ):
         self.schema = schema
@@ -1576,7 +1576,7 @@ class Sort(IR):
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -1870,10 +1870,10 @@ class Union(IR):
 
     __slots__ = ("zlice",)
     _non_child = ("schema", "zlice")
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
 
-    def __init__(self, schema: Schema, zlice: tuple[int, int] | None, *children: IR):
+    def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
         self.schema = schema
         self.zlice = zlice
         self._non_child_args = (zlice,)
@@ -1881,7 +1881,7 @@ class Union(IR):
         schema = self.children[0].schema
 
     @classmethod
-    def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
