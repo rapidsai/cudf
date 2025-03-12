@@ -782,10 +782,6 @@ def test_boolean_scalar_binop(op):
     assert_eq(op(psr, True), op(gsr, True))
     assert_eq(op(psr, False), op(gsr, False))
 
-    # cuDF scalar
-    assert_eq(op(psr, True), op(gsr, cudf.Scalar(True)))
-    assert_eq(op(psr, False), op(gsr, cudf.Scalar(False)))
-
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
@@ -1037,7 +1033,7 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
 
     if scalar_divisor:
         pd_div = divisor_dtype(0)
-        cudf_div = cudf.Scalar(0, dtype=divisor_dtype)
+        cudf_div = pd_div
     else:
         pd_div = pd.Series([0], dtype=divisor_dtype)
         cudf_div = cudf.from_pandas(pd_div)
@@ -1052,16 +1048,14 @@ def test_floordiv_zero_bool(scalar_divisor):
 
     if scalar_divisor:
         pd_div = np.bool_(0)
-        cudf_div = cudf.Scalar(0, dtype=np.bool_)
+        cudf_div = pd_div
     else:
         pd_div = pd.Series([0], dtype=np.bool_)
         cudf_div = cudf.from_pandas(pd_div)
 
     with pytest.raises((NotImplementedError, ZeroDivisionError)):
-        # Pandas does raise
         sr // pd_div
     with pytest.raises((NotImplementedError, ZeroDivisionError)):
-        # Cudf does not
         cr // cudf_div
 
 
@@ -3038,14 +3032,6 @@ def test_binops_decimal_scalar(args):
             cudf.Series([True, True, False, None], dtype=bool),
             cudf.Series([True, False, True, None], dtype=bool),
         ),
-        (
-            operator.le,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
-        ),
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
@@ -3301,16 +3287,6 @@ def test_binop_integer_power_series_series():
     ps_exponent = gs_exponent.to_pandas()
     expected = ps_base**ps_exponent
     got = gs_base**gs_exponent
-    assert_eq(expected, got)
-
-
-def test_binop_integer_power_series_scalar():
-    # GH: #10178
-    gs_base = cudf.Series([3, -3, 8, -8])
-    exponent = cudf.Scalar(1)
-    ps_base = gs_base.to_pandas()
-    expected = ps_base**exponent.value
-    got = gs_base**exponent
     assert_eq(expected, got)
 
 
