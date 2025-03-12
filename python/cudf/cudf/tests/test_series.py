@@ -3050,7 +3050,10 @@ def test_construct_nonnative_array(arr):
     assert_eq(result, expected)
 
 
-def test_construct_all_pd_NA_with_dtype():
-    result = cudf.Series([pd.NA, pd.NA], dtype=np.dtype(np.float64))
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_construct_all_pd_NA_with_dtype(nan_as_null):
+    result = cudf.Series(
+        [pd.NA, pd.NA], dtype=np.dtype(np.float64), nan_as_null=nan_as_null
+    )
     expected = cudf.Series(pa.array([None, None], type=pa.float64()))
     assert_eq(result, expected)
