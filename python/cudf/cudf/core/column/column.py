@@ -893,7 +893,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def shift(self, offset: int, fill_value: ScalarLike) -> Self:
-        plc_fill_value = self.dtype._as_plc_scalar(fill_value)
+        plc_fill_value = self._scalar_to_plc_scalar(fill_value)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
