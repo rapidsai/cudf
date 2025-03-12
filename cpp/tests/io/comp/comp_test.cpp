@@ -37,7 +37,7 @@ using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
 
-enum class hw { cpu, gpu };
+enum class hw { CPU, GPU };
 
 /**
  * @brief Base test fixture for decompression
