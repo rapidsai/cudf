@@ -95,7 +95,12 @@ outputs:
       version: ${{ version }}
     build:
       script:
-        - cmake --install cpp/build
+        content: |
+          cmake --install cpp/build
+          # Check that no hidden symbols are present in the shared library
+          LIB="$PREFIX/lib/libcudf.so"
+          test -f "$LIB"
+          ./ci/check_symbols.sh "$LIB"
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
@@ -150,7 +155,6 @@ outputs:
               - cudatoolkit
     tests:
       - script:
-        - test -f $PREFIX/lib/libcudf.so
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}

@@ -17,8 +17,17 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.utils.dtypes import find_common_type
 
-_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
+_JOIN_TYPES = (
+    "left",
+    "inner",
+    "outer",
+    "right",
+    "leftanti",
+    "leftsemi",
+    "cross",
+)
 
 
 def make_params():
@@ -981,7 +990,7 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -1011,7 +1020,7 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     if dtype_l != dtype_r:
         exp_join_data = [1, 2, 3, 4.5]
@@ -1052,7 +1061,7 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
@@ -2322,4 +2331,32 @@ def test_merge_left_on_right_index_sort():
         right_index=True,
         sort=True,
     )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data",
+    [
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]},
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [5, 3, 2, 1]},
+    ],
+)
+@pytest.mark.parametrize(
+    "right_data",
+    [
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]},
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [8, 7, 6, 5]},
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_cross_join_overlapping(left_data, right_data, sort):
+    df1 = cudf.DataFrame(left_data)
+    df2 = cudf.DataFrame(right_data)
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+    expected = pdf1.join(
+        pdf2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort
+    )
+    result = df1.join(df2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort)
     assert_eq(result, expected)
