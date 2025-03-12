@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <cstring>  // memset
+#include <sstream>
 
 namespace cudf::io::detail {
 
@@ -385,12 +386,19 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 
 size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  size_t const decompressed_bytes =
-    ZSTD_decompress(reinterpret_cast<void*>(dst.data()),
-                    dst.size(),
-                    reinterpret_cast<const void*>(const_cast<uint8_t*>(src.data())),
-                    src.size());
-  CUDF_EXPECTS(ZSTD_isError(decompressed_bytes) == 0, "ZSTD decompression error");
+  auto check_error_code = [](size_t err_code, size_t line) {
+    if (err_code) {
+      std::stringstream ss;
+      ss << "CUDF failure at: " << __FILE__ << ":" << line << ": " << ZSTD_getErrorName(err_code)
+         << std::endl;
+      throw cudf::logic_error(ss.str());
+    }
+  };
+  size_t const decompressed_bytes = ZSTD_decompress(reinterpret_cast<void*>(dst.data()),
+                                                    dst.size(),
+                                                    reinterpret_cast<const void*>(src.data()),
+                                                    src.size());
+  check_error_code(ZSTD_isError(decompressed_bytes), __LINE__);
   return decompressed_bytes;
 }
 

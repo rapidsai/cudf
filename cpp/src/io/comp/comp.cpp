@@ -97,18 +97,27 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
 
 std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
 {
-  auto const compressed_size = ZSTD_compressBound(src.size());
-  CUDF_EXPECTS(ZSTD_isError(compressed_size) == 0, "Error in estimating ZSTD compressed size");
-  std::vector<std::uint8_t> compressed_buffer(compressed_size);
+  auto check_error_code = [](size_t err_code, size_t line) {
+    if (err_code) {
+      std::stringstream ss;
+      ss << "CUDF failure at: " << __FILE__ << ":" << line << ": " << ZSTD_getErrorName(err_code)
+         << std::endl;
+      throw cudf::logic_error(ss.str());
+    }
+  };
+  auto const compressed_size_estimate = ZSTD_compressBound(src.size());
+  check_error_code(ZSTD_isError(compressed_size_estimate), __LINE__);
+  std::vector<std::uint8_t> compressed_buffer(compressed_size_estimate);
 
   // This function compresses in a single frame
-  auto const compressed_size_ = ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
-                                              compressed_size,
-                                              reinterpret_cast<const void*>(src.data()),
-                                              src.size(),
-                                              1);
-  CUDF_EXPECTS(ZSTD_isError(compressed_size_) == 0, "Error in ZSTD compression");
-  compressed_buffer.resize(compressed_size_);
+  auto const compressed_size_actual =
+    ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
+                  compressed_size_estimate,
+                  reinterpret_cast<const void*>(src.data()),
+                  src.size(),
+                  1);
+  check_error_code(ZSTD_isError(compressed_size_actual), __LINE__);
+  compressed_buffer.resize(compressed_size_actual);
 
   return compressed_buffer;
 }
