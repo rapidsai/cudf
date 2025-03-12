@@ -2,12 +2,16 @@
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.io.types cimport (
     SinkInfo,
     SourceInfo,
     TableWithMetadata,
     compression_type,
 )
+
 from pylibcudf.libcudf.io.json cimport (
     json_recovery_mode_t,
     json_reader_options,
@@ -15,8 +19,9 @@ from pylibcudf.libcudf.io.json cimport (
     json_writer_options,
     json_writer_options_builder,
 )
+
 from pylibcudf.libcudf.types cimport size_type
-from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.table cimport Table
 
 
