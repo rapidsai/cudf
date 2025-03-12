@@ -98,7 +98,7 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
 std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
 {
   auto check_error_code = [](size_t err_code, size_t line) {
-    if (err_code) {
+    if (err_code != 0) {
       std::stringstream ss;
       ss << "CUDF failure at: " << __FILE__ << ":" << line << ": " << ZSTD_getErrorName(err_code)
          << std::endl;

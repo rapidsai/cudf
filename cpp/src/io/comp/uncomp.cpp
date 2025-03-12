@@ -387,7 +387,7 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   auto check_error_code = [](size_t err_code, size_t line) {
-    if (err_code) {
+    if (err_code != 0) {
       std::stringstream ss;
       ss << "CUDF failure at: " << __FILE__ << ":" << line << ": " << ZSTD_getErrorName(err_code)
          << std::endl;
@@ -420,23 +420,25 @@ source_properties get_source_properties(compression_type compression, host_span<
     case compression_type::GZIP: {
       gz_archive_s gz{};
       auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
-      if (compression != compression_type::AUTO)
+      if (compression != compression_type::AUTO) {
         CUDF_EXPECTS(parse_succeeded,
                      "Failed to parse GZIP header while fetching source properties");
+      }
       if (parse_succeeded) {
         compression = compression_type::GZIP;
         comp_data   = gz.comp_data;
         comp_len    = gz.comp_len;
         uncomp_len  = gz.isize;
       }
-      if (compression != compression_type::AUTO) break;
+      if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
     case compression_type::ZIP: {
       zip_archive_s za{};
       auto const open_succeeded = OpenZipArchive(&za, src.data(), src.size());
-      if (compression != compression_type::AUTO)
+      if (compression != compression_type::AUTO) {
         CUDF_EXPECTS(open_succeeded, "Failed to parse ZIP header while fetching source properties");
+      }
       if (open_succeeded) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
@@ -472,7 +474,7 @@ source_properties get_source_properties(compression_type compression, host_span<
           cdfh_ofs += cdfh_len;
         }
       }
-      if (compression != compression_type::AUTO) break;
+      if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
     case compression_type::SNAPPY: {
@@ -492,12 +494,13 @@ source_properties get_source_properties(compression_type compression, host_span<
           uncomp_len |= lo7 << l;
           l += 7;
         } while (c > 0x7f && cur < end);
-        if (compression != compression_type::AUTO)
+        if (compression != compression_type::AUTO) {
           CUDF_EXPECTS(uncomp_len != 0 && cur < end,
                        "Error in retrieving SNAPPY source properties");
-        if (uncomp_len != 0 && cur < end) compression = compression_type::SNAPPY;
+        }
+        if (uncomp_len != 0 && cur < end) { compression = compression_type::SNAPPY; }
       }
-      if (compression != compression_type::AUTO) break;
+      if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
     case compression_type::ZSTD: {
@@ -508,9 +511,10 @@ source_properties get_source_properties(compression_type compression, host_span<
         CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN,
                      "Decompressed ZSTD size cannot be determined");
         CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
-      } else if (ret != ZSTD_CONTENTSIZE_UNKNOWN && ret != ZSTD_CONTENTSIZE_ERROR)
+      } else if (ret != ZSTD_CONTENTSIZE_UNKNOWN && ret != ZSTD_CONTENTSIZE_ERROR) {
         compression = compression_type::ZSTD;
-      if (compression != compression_type::AUTO) break;
+      }
+      if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
     default: {
@@ -567,7 +571,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     auto const decompressed_bytes = decompress_zstd(src, dst);
     CUDF_EXPECTS(decompressed_bytes == srcprops.uncomp_len,
-                 "ZSTD: Error in computing uncompressed size prior to decompression");
+                 "Error in ZSTD decompression: Mismatch in actual size of decompressed buffer and "
+                 "estimated size ");
     dst.resize(decompressed_bytes);
     return dst;
   }
