@@ -379,4 +379,4 @@ class Column:
             plc.Table([self.obj]),
             conversion.from_polars_slice(zlice, num_rows=self.size),
         )
-        return type(self)(column).sorted_like(self)
+        return type(self)(column, name=self.name).sorted_like(self)
