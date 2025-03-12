@@ -24,6 +24,16 @@ if TYPE_CHECKING:
     from cudf.core.column.string import StringColumn
 
 
+def _maybe_na_to_none(value: Any) -> Any:
+    """
+    Convert NA-like values to None for pyarrow.
+    """
+    if _is_null_host_scalar(value):
+        return None
+    else:
+        return value
+
+
 class StructColumn(ColumnBase):
     """
     Column that stores fields of values.
@@ -127,13 +137,6 @@ class StructColumn(ColumnBase):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
-
-            def _maybe_na_to_none(value: Any) -> Any:
-                if _is_null_host_scalar(value):
-                    return None
-                else:
-                    return value
-
             new_value = {
                 field: _maybe_na_to_none(value.get(field, None))
                 for field in self.dtype.fields
