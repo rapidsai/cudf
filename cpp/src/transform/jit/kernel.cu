@@ -47,6 +47,12 @@ struct accessor {
     return views[INDEX].element<T>(row);
   }
 
+  static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
+                                           cudf::size_type row)
+  {
+    return views[INDEX].element<T>(row);
+  }
+
   static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
                                 cudf::size_type row,
                                 T value)
@@ -66,6 +72,12 @@ struct scalar {
     return accessor::element(views, 0);
   }
 
+  static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
+                                           cudf::size_type row)
+  {
+    return accessor::element(views, 0);
+  }
+
   static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
                                 cudf::size_type row,
                                 type value)
@@ -75,35 +87,35 @@ struct scalar {
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::size_type size,
-                        cudf::jit::mutable_column_device_view const* output,
-                        cudf::jit::mutable_column_device_view const* inputs)
+CUDF_KERNEL void kernel(cudf::jit::mutable_column_device_view const* output,
+                        cudf::jit::column_device_view const* inputs)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
+  thread_index_type const size   = output->size();
 
-  for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
+  for (auto i = start; i < size; i += stride) {
     GENERIC_TRANSFORM_OP(&Out::element(output, i), In::element(inputs, i)...);
   }
 }
 
 template <typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::size_type size,
-                                    cudf::jit::mutable_column_device_view const* output,
-                                    cudf::jit::mutable_column_device_view const* inputs)
+CUDF_KERNEL void fixed_point_kernel(cudf::jit::mutable_column_device_view const* output,
+                                    cudf::jit::column_device_view const* inputs)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
+  thread_index_type const size   = output->size();
 
   numeric::scale_type const output_scale = static_cast<numeric::scale_type>(output->type().scale());
 
-  for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
+  for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
     GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
     Out::assign(output, i, result);
