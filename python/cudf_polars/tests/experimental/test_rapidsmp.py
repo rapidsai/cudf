@@ -12,14 +12,21 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
 def test_join_rapidsmp(max_rows_per_partition: int) -> None:
-    pytest.importorskip("rapidsmp")
+    # Check that we have a distributed cluster running
     distributed = pytest.importorskip("distributed")
-
     try:
-        distributed.get_client()
+        client = distributed.get_client()
     except ValueError:
         pytest.skip(reason="Requires distributed execution.")
 
+    # check that we have a rapidsmp cluster running
+    rapidsmp = pytest.importorskip("rapidsmp")
+    try:
+        rapidsmp.integrations.dask.bootstrap_dask_cluster(client)
+    except ValueError:
+        pytest.skip(reason="Requires rapidsmp cluster.")
+
+    # Setup the GPUEngine config
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
@@ -29,6 +36,7 @@ def test_join_rapidsmp(max_rows_per_partition: int) -> None:
             "shuffle_method": "rapidsmp",
         },
     )
+
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -43,7 +51,6 @@ def test_join_rapidsmp(max_rows_per_partition: int) -> None:
             "zz": [1, 2] * 3,
         }
     )
-
     q = left.join(right, on="y", how="inner")
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
