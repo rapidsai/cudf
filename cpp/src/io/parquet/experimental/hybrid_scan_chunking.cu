@@ -758,13 +758,13 @@ void impl::compute_output_chunks_for_subpass()
   return;
 }
 
-void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_bytes,
+void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
                            cudf::io::parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(std::move(column_chunk_bytes), options);
+    setup_next_pass(std::move(column_chunk_buffers), options);
   }
 
   auto& pass = *_pass_itm_data;
@@ -792,7 +792,7 @@ void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_bytes,
       if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass(std::move(column_chunk_bytes), options);
+      setup_next_pass(std::move(column_chunk_buffers), options);
     }
   }
 
@@ -800,7 +800,7 @@ void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_bytes,
   setup_next_subpass(options);
 }
 
-void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_bytes,
+void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
                            cudf::io::parquet_reader_options const& options)
 {
   auto const num_passes = _file_itm_data.num_passes();
@@ -845,7 +845,7 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_bytes,
     // load page information for the chunk. this retrieves the compressed bytes for all the
     // pages, and their headers (which we can access without decompressing)
 
-    read_compressed_data(std::move(column_chunk_bytes));
+    read_compressed_data(std::move(column_chunk_buffers));
 
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N
@@ -956,8 +956,7 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
     // nesting information (sizes, etc) stored -per page-
     // note : even for flat schemas, we allocate 1 level of "nesting" info
 
-    // MH: Define this
-    // allocate_nesting_info();
+    allocate_nesting_info();
 
     // level decode space
     allocate_level_decode_space();
@@ -966,7 +965,7 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
 
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
-  // preprocess_subpass_pages(mode, 0);
+  preprocess_subpass_pages(0);
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

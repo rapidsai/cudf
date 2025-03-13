@@ -16,6 +16,7 @@
 
 #include "hybrid_scan_impl.hpp"
 
+#include "cudf/io/text/byte_range_info.hpp"
 #include "hybrid_scan_helpers.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
@@ -39,7 +40,7 @@ namespace {
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(
+[[maybe_unused]] inline bool is_treat_fixed_length_as_string(
   std::optional<cudf::io::parquet::detail::LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
@@ -651,9 +652,6 @@ std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
 
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Make sure we haven't gone past the input passes
-  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
-
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
@@ -679,10 +677,57 @@ std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
     predicate->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 }
 
+std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+impl::get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   cudf::io::parquet_reader_options const& options) const
+{
+  // Descriptors for all the chunks that make up the selected columns
+  auto const num_input_columns = _input_columns.size();
+  auto const num_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    size_t{0},
+                    [](size_t sum, auto const& row_groups) { return sum + row_groups.size(); });
+  auto const num_chunks = num_row_groups * num_input_columns;
+
+  // Association between each column chunk and its source
+  std::vector<size_type> chunk_source_map(num_chunks);
+
+  // Keep track of column chunk byte ranges
+  std::vector<cudf::io::text::byte_range_info> column_chunk_byte_ranges(num_chunks);
+
+  size_type chunk_count = 0;
+  for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+    auto const& row_groups = row_group_indices[src_idx];
+    for (auto const row_group_index : row_groups) {
+      // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
+      for (size_t i = 0; i < num_input_columns; ++i) {
+        auto const& col = _input_columns[i];
+        // look up metadata
+        auto& col_meta = _metadata->get_column_metadata(row_group_index, src_idx, col.schema_idx);
+        auto const chunk_offset =
+          (col_meta.dictionary_page_offset != 0)
+            ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
+            : col_meta.data_page_offset;
+        auto const chunk_size = col_meta.total_compressed_size;
+
+        column_chunk_byte_ranges[chunk_count] = {chunk_offset, chunk_size};
+
+        // Map each column chunk to its column index and its source index
+        chunk_source_map[chunk_count] = src_idx;
+
+        chunk_count++;
+      }
+    }
+  }
+
+  return {std::move(column_chunk_byte_ranges), std::move(chunk_source_map)};
+}
+
 cudf::io::table_with_metadata impl::materialize_filter_columns(
-  cudf::mutable_column_view input_rows,
+  cudf::host_span<std::vector<bool> const> filtered_data_pages,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_bytes,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -693,15 +738,19 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
-  _stream                 = stream;
+  // Strings may be returned as either string or categorical columns
+  _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
-  if (not _file_preprocessed) {
-    // setup file level information
-    // - read row group information
-    // - setup information on (parquet) chunks
-    // - compute schedule of input passes
-    prepare_row_groups(row_group_indices, options);
-  }
+  // Binary columns can be read as binary or strings
+  _reader_column_schema = options.get_column_schema();
+
+  _timestamp_type = options.get_timestamp_type();
+
+  _num_sources = row_group_indices.size();
+
+  _stream = stream;
+
+  prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
@@ -721,7 +770,8 @@ cudf::io::table_with_metadata impl::read_chunk_internal()
   // Copy number of total input row groups and number of surviving row groups from predicate
   // pushdown.
   out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
-  // Copy the number surviving row groups from each predicate pushdown only if the filter has value.
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has
+  // value.
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
       _file_itm_data.surviving_row_groups.after_stats_filter;
@@ -754,8 +804,8 @@ cudf::io::table_with_metadata impl::read_chunk_internal()
     auto const logical_type =
       schema.logical_type.value_or(cudf::io::parquet::detail::LogicalType{});
     // FIXED_LEN_BYTE_ARRAY never read as string.
-    // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as
-    // binary and not strings, this test needs to change.
+    // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY
+    // as binary and not strings, this test needs to change.
     if (schema.type == cudf::io::parquet::detail::FIXED_LEN_BYTE_ARRAY and
         logical_type.type != cudf::io::parquet::detail::LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
@@ -778,7 +828,8 @@ cudf::io::table_with_metadata impl::read_chunk_internal()
 cudf::io::table_with_metadata impl::finalize_output(
   table_metadata& out_metadata, std::vector<std::unique_ptr<column>>& out_columns)
 {
-  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
+  // Create empty columns as needed (this can happen if we've ended up with no actual data to
+  // read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
       cudf::io::column_name_info& col_name = out_metadata.schema_info[i];
@@ -844,7 +895,7 @@ void impl::populate_metadata(table_metadata& out_metadata) const
 }
 
 void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                        std::vector<rmm::device_buffer> column_chunk_bytes,
+                        std::vector<rmm::device_buffer> column_chunk_buffers,
                         cudf::io::parquet_reader_options const& options)
 {
   // if we have not preprocessed at the whole-file level, do that now
@@ -859,7 +910,7 @@ void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass) if in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
-    handle_chunking(std::move(column_chunk_bytes), options);
+    handle_chunking(std::move(column_chunk_buffers), options);
   }
 }
 

@@ -16,6 +16,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
+#include "io/parquet/parquet_gpu.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -53,10 +54,21 @@ namespace cudf::experimental::io::parquet::detail {
 
 namespace {
 
+using PageInfo        = cudf::io::parquet::detail::PageInfo;
+using ColumnChunkDesc = cudf::io::parquet::detail::ColumnChunkDesc;
+
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
   size_t size_bytes;  // cumulative size in bytes
   int key;            // schema index
+};
+
+struct get_page_chunk_idx {
+  __device__ size_type operator()(PageInfo const& page) { return page.chunk_idx; }
+};
+
+struct get_page_num_rows {
+  __device__ size_type operator()(PageInfo const& page) { return page.num_rows; }
 };
 
 struct input_col_info {
@@ -64,7 +76,7 @@ struct input_col_info {
   size_type nesting_depth;
 };
 
-__device__ constexpr bool is_string_chunk(cudf::io::parquet::detail::ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 {
   auto const is_decimal =
     chunk.logical_type.has_value() and
@@ -76,9 +88,9 @@ __device__ constexpr bool is_string_chunk(cudf::io::parquet::detail::ColumnChunk
 
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
-  device_span<cudf::io::parquet::detail::ColumnChunkDesc const> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
-  __device__ void operator()(cudf::io::parquet::detail::PageInfo const& page)
+  __device__ void operator()(PageInfo const& page)
   {
     auto const& chunk = chunks[page.chunk_idx];
     if ((page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) != 0 and
@@ -92,7 +104,7 @@ struct set_str_dict_index_count {
 struct set_str_dict_index_ptr {
   cudf::io::parquet::detail::string_index_pair* const base;
   device_span<size_t const> str_dict_index_offsets;
-  device_span<cudf::io::parquet::detail::ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc> chunks;
 
   __device__ void operator()(size_t i)
   {
@@ -127,6 +139,26 @@ struct get_reduction_key {
   __device__ size_t operator()(size_t index) const { return index / num_pages; }
 };
 
+struct chunk_row_output_iter {
+  PageInfo* p;
+  using value_type        = size_type;
+  using difference_type   = size_type;
+  using pointer           = size_type*;
+  using reference         = size_type&;
+  using iterator_category = thrust::output_device_iterator_tag;
+
+  __host__ __device__ chunk_row_output_iter operator+(int i) { return {p + i}; }
+
+  __host__ __device__ chunk_row_output_iter& operator++()
+  {
+    p++;
+    return *this;
+  }
+
+  __device__ reference operator[](int i) { return p[i].chunk_row; }
+  __device__ reference operator*() { return p->chunk_row; }
+};
+
 /**
  * @brief Returns the size field of a PageInfo struct for a given depth, keyed by schema.
  */
@@ -134,7 +166,7 @@ struct get_page_nesting_size {
   input_col_info const* const input_cols;
   size_type const max_depth;
   size_t const num_pages;
-  cudf::io::parquet::detail::PageInfo const* const pages;
+  PageInfo const* const pages;
 
   __device__ size_type operator()(size_t index) const
   {
@@ -152,6 +184,110 @@ struct get_page_nesting_size {
 };
 
 /**
+ * @brief Generate depth remappings for repetition and definition levels.
+ *
+ * When dealing with columns that contain lists, we must examine incoming
+ * repetition and definition level pairs to determine what range of output nesting
+ * is indicated when adding new values.  This function generates the mappings of
+ * the R/D levels to those start/end bounds
+ *
+ * @param remap Maps column schema index to the R/D remapping vectors for that column for a
+ *              particular input source file
+ * @param src_col_schema The source column schema to generate the new mapping for
+ * @param mapped_src_col_schema Mapped column schema for src_file_idx'th file
+ * @param src_file_idx The input source file index for the column schema
+ * @param md File metadata information
+ */
+void generate_depth_remappings(
+  std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>>& remap,
+  int const src_col_schema,
+  int const mapped_src_col_schema,
+  int const src_file_idx,
+  aggregate_reader_metadata const& md)
+{
+  // already generated for this level
+  if (remap.find({src_col_schema, src_file_idx}) != remap.end()) { return; }
+  auto const& schema   = md.get_schema(mapped_src_col_schema, src_file_idx);
+  auto const max_depth = md.get_output_nesting_depth(src_col_schema);
+
+  CUDF_EXPECTS(remap.find({src_col_schema, src_file_idx}) == remap.end(),
+               "Attempting to remap a schema more than once");
+  auto inserted =
+    remap.insert(std::pair<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>>{
+      {src_col_schema, src_file_idx}, {}});
+  auto& depth_remap = inserted.first->second;
+
+  std::vector<int>& rep_depth_remap = (depth_remap.first);
+  rep_depth_remap.resize(schema.max_repetition_level + 1);
+  std::vector<int>& def_depth_remap = (depth_remap.second);
+  def_depth_remap.resize(schema.max_definition_level + 1);
+
+  // compute "X" from above
+  for (int s_idx = schema.max_repetition_level; s_idx >= 0; s_idx--) {
+    auto find_shallowest = [&](int r) {
+      int shallowest = -1;
+      int cur_depth  = max_depth - 1;
+      int schema_idx = mapped_src_col_schema;
+      while (schema_idx > 0) {
+        auto& cur_schema = md.get_schema(schema_idx, src_file_idx);
+        if (cur_schema.max_repetition_level == r) {
+          // if this is a repeated field, map it one level deeper
+          shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        // if it's one-level encoding list
+        else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx, src_file_idx))) {
+          shallowest = cur_depth - 1;
+        }
+        if (!cur_schema.is_stub()) { cur_depth--; }
+        schema_idx = cur_schema.parent_idx;
+      }
+      return shallowest;
+    };
+    rep_depth_remap[s_idx] = find_shallowest(s_idx);
+  }
+
+  // compute "Y" from above
+  for (int s_idx = schema.max_definition_level; s_idx >= 0; s_idx--) {
+    auto find_deepest = [&](int d) {
+      cudf::io::parquet::detail::SchemaElement prev_schema;
+      int schema_idx = mapped_src_col_schema;
+      int r1         = 0;
+      while (schema_idx > 0) {
+        cudf::io::parquet::detail::SchemaElement cur_schema =
+          md.get_schema(schema_idx, src_file_idx);
+        if (cur_schema.max_definition_level == d) {
+          // if this is a repeated field, map it one level deeper
+          r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
+                                    : cur_schema.max_repetition_level;
+          break;
+        }
+        prev_schema = cur_schema;
+        schema_idx  = cur_schema.parent_idx;
+      }
+
+      // we now know R1 from above. return the deepest nesting level that has the
+      // same repetition level
+      schema_idx = mapped_src_col_schema;
+      int depth  = max_depth - 1;
+      while (schema_idx > 0) {
+        cudf::io::parquet::detail::SchemaElement cur_schema =
+          md.get_schema(schema_idx, src_file_idx);
+        if (cur_schema.max_repetition_level == r1) {
+          // if this is a repeated field, map it one level deeper
+          depth = cur_schema.is_stub() ? depth + 1 : depth;
+          break;
+        }
+        if (!cur_schema.is_stub()) { depth--; }
+        prev_schema = cur_schema;
+        schema_idx  = cur_schema.parent_idx;
+      }
+      return depth;
+    };
+    def_depth_remap[s_idx] = find_deepest(s_idx);
+  }
+}
+
+/**
  * @brief Return the number of total pages from the given column chunks.
  *
  * @param chunks List of column chunk descriptors
@@ -159,9 +295,8 @@ struct get_page_nesting_size {
  *
  * @return The total number of pages
  */
-[[nodiscard]] size_t count_page_headers(
-  cudf::detail::hostdevice_vector<cudf::io::parquet::detail::ColumnChunkDesc>& chunks,
-  rmm::cuda_stream_view stream)
+[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
+                                        rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
 
@@ -192,8 +327,7 @@ struct get_page_nesting_size {
  * @brief Count the total number of pages using page index information.
  */
 [[nodiscard]] size_t count_page_headers_with_pgidx(
-  cudf::detail::hostdevice_vector<cudf::io::parquet::detail::ColumnChunkDesc>& chunks,
-  rmm::cuda_stream_view stream)
+  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
@@ -222,7 +356,7 @@ struct page_index_info {
 // functor to copy page_index_info into the PageInfo struct
 struct copy_page_info {
   device_span<page_index_info const> page_indexes;
-  device_span<cudf::io::parquet::detail::PageInfo> pages;
+  device_span<PageInfo> pages;
 
   __device__ void operator()(size_type idx)
   {
@@ -247,7 +381,7 @@ struct copy_page_info {
  * @brief Writes to the page_start_value field of the PageNestingInfo struct, keyed by schema.
  */
 struct start_offset_output_iterator {
-  cudf::io::parquet::detail::PageInfo const* pages;
+  PageInfo const* pages;
   size_t cur_index;
   input_col_info const* input_cols;
   size_type max_depth;
@@ -287,7 +421,7 @@ struct start_offset_output_iterator {
   {
     auto const indices = reduction_indices{index, max_depth, num_pages};
 
-    cudf::io::parquet::detail::PageInfo const& p = pages[indices.page_idx];
+    PageInfo const& p = pages[indices.page_idx];
     if (p.src_col_schema != input_cols[indices.col_idx].schema_idx ||
         p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY ||
         indices.depth_idx >= input_cols[indices.col_idx].nesting_depth) {
@@ -298,9 +432,9 @@ struct start_offset_output_iterator {
 };
 
 struct page_to_string_size {
-  cudf::io::parquet::detail::ColumnChunkDesc const* chunks;
+  ColumnChunkDesc const* chunks;
 
-  __device__ size_t operator()(cudf::io::parquet::detail::PageInfo const& page) const
+  __device__ size_t operator()(PageInfo const& page) const
   {
     auto const chunk = chunks[page.chunk_idx];
 
@@ -313,7 +447,7 @@ struct page_to_string_size {
 };
 
 struct page_offset_output_iter {
-  cudf::io::parquet::detail::PageInfo* p;
+  PageInfo* p;
 
   using value_type        = size_t;
   using difference_type   = size_t;
@@ -333,13 +467,37 @@ struct page_offset_output_iter {
   __device__ reference operator*() { return p->str_offset; }
 };
 
+// update chunk_row field in subpass page from pass page
+struct update_subpass_chunk_row {
+  device_span<PageInfo> pass_pages;
+  device_span<PageInfo> subpass_pages;
+  device_span<size_t> page_src_index;
+
+  __device__ void operator()(size_t i)
+  {
+    subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
+  }
+};
+
+// update num_rows field from pass page to subpass page
+struct update_pass_num_rows {
+  device_span<PageInfo> pass_pages;
+  device_span<PageInfo> subpass_pages;
+  device_span<size_t> page_src_index;
+
+  __device__ void operator()(size_t i)
+  {
+    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
+  }
+};
+
 /**
  * @brief Set fields on the pages that can be derived from page indexes.
  *
  * This replaces some preprocessing steps, such as page string size calculation.
  */
-void fill_in_page_info(host_span<cudf::io::parquet::detail::ColumnChunkDesc> chunks,
-                       device_span<cudf::io::parquet::detail::PageInfo> pages,
+void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
+                       device_span<PageInfo> pages,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
@@ -379,19 +537,19 @@ void fill_in_page_info(host_span<cudf::io::parquet::detail::ColumnChunkDesc> chu
  */
 std::string encoding_to_string(cudf::io::parquet::detail::Encoding encoding)
 {
+  using Encoding = cudf::io::parquet::detail::Encoding;
   switch (encoding) {
-    case cudf::io::parquet::detail::Encoding::PLAIN: return "PLAIN";
-    case cudf::io::parquet::detail::Encoding::GROUP_VAR_INT: return "GROUP_VAR_INT";
-    case cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY: return "PLAIN_DICTIONARY";
-    case cudf::io::parquet::detail::Encoding::RLE: return "RLE";
-    case cudf::io::parquet::detail::Encoding::BIT_PACKED: return "BIT_PACKED";
-    case cudf::io::parquet::detail::Encoding::DELTA_BINARY_PACKED: return "DELTA_BINARY_PACKED";
-    case cudf::io::parquet::detail::Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      return "DELTA_LENGTH_BYTE_ARRAY";
-    case cudf::io::parquet::detail::Encoding::DELTA_BYTE_ARRAY: return "DELTA_BYTE_ARRAY";
-    case cudf::io::parquet::detail::Encoding::RLE_DICTIONARY: return "RLE_DICTIONARY";
-    case cudf::io::parquet::detail::Encoding::BYTE_STREAM_SPLIT: return "BYTE_STREAM_SPLIT";
-    case cudf::io::parquet::detail::Encoding::NUM_ENCODINGS:
+    case Encoding::PLAIN: return "PLAIN";
+    case Encoding::GROUP_VAR_INT: return "GROUP_VAR_INT";
+    case Encoding::PLAIN_DICTIONARY: return "PLAIN_DICTIONARY";
+    case Encoding::RLE: return "RLE";
+    case Encoding::BIT_PACKED: return "BIT_PACKED";
+    case Encoding::DELTA_BINARY_PACKED: return "DELTA_BINARY_PACKED";
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY: return "DELTA_LENGTH_BYTE_ARRAY";
+    case Encoding::DELTA_BYTE_ARRAY: return "DELTA_BYTE_ARRAY";
+    case Encoding::RLE_DICTIONARY: return "RLE_DICTIONARY";
+    case Encoding::BYTE_STREAM_SPLIT: return "BYTE_STREAM_SPLIT";
+    case Encoding::NUM_ENCODINGS:
     default: return "UNKNOWN(" + std::to_string(static_cast<int>(encoding)) + ")";
   }
 }
@@ -423,8 +581,8 @@ std::string encoding_to_string(cudf::io::parquet::detail::Encoding encoding)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns Human readable string with unsupported encodings
  */
-[[nodiscard]] std::string list_unsupported_encodings(
-  device_span<cudf::io::parquet::detail::PageInfo const> pages, rmm::cuda_stream_view stream)
+[[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
+                                                     rmm::cuda_stream_view stream)
 {
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
@@ -442,10 +600,9 @@ std::string encoding_to_string(cudf::io::parquet::detail::Encoding encoding)
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns The sorted vector of pages
  */
-cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo> sort_pages(
-  device_span<cudf::io::parquet::detail::PageInfo const> unsorted_pages,
-  device_span<cudf::io::parquet::detail::ColumnChunkDesc const> chunks,
-  rmm::cuda_stream_view stream)
+cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const> unsorted_pages,
+                                                     device_span<ColumnChunkDesc const> chunks,
+                                                     rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -455,10 +612,9 @@ cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo> sort_pages(
     unsorted_pages.begin(),
     unsorted_pages.end(),
     page_keys.begin(),
-    cuda::proclaim_return_type<int32_t>(
-      [chunks = chunks.begin()] __device__(cudf::io::parquet::detail::PageInfo const& page) {
-        return chunks[page.chunk_idx].src_col_index;
-      }));
+    cuda::proclaim_return_type<int32_t>([chunks = chunks.begin()] __device__(PageInfo const& page) {
+      return chunks[page.chunk_idx].src_col_index;
+    }));
   // we are doing this by sorting indices first and then transforming the output because nvcc
   // started generating kernels using too much shared memory when trying to sort the pages
   // directly.
@@ -469,16 +625,15 @@ cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo> sort_pages(
                              page_keys.end(),
                              sort_indices.begin(),
                              thrust::less<int>());
-  auto pass_pages = cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo>(
-    unsorted_pages.size(), unsorted_pages.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    sort_indices.begin(),
-                    sort_indices.end(),
-                    pass_pages.d_begin(),
-                    cuda::proclaim_return_type<cudf::io::parquet::detail::PageInfo>(
-                      [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) {
-                        return unsorted_pages[i];
-                      }));
+  auto pass_pages =
+    cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    sort_indices.begin(),
+    sort_indices.end(),
+    pass_pages.d_begin(),
+    cuda::proclaim_return_type<PageInfo>([unsorted_pages = unsorted_pages.begin()] __device__(
+                                           int32_t i) { return unsorted_pages[i]; }));
   stream.synchronize();
   return pass_pages;
 }
@@ -489,7 +644,7 @@ cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo> sort_pages(
  * @param pass_intermediate_data The struct containing pass information
  */
 void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass,
-                         device_span<cudf::io::parquet::detail::PageInfo> unsorted_pages,
+                         device_span<PageInfo> unsorted_pages,
                          bool has_page_index,
                          rmm::cuda_stream_view stream)
 {
@@ -580,15 +735,14 @@ void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass
                          pass.page_offsets.begin());
 
   // setup dict_page for each chunk if necessary
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream),
-    pass.pages.d_begin(),
-    pass.pages.d_end(),
-    [chunks = pass.chunks.d_begin()] __device__(cudf::io::parquet::detail::PageInfo const& p) {
-      if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
-        chunks[p.chunk_idx].dict_page = &p;
-      }
-    });
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   pass.pages.d_begin(),
+                   pass.pages.d_end(),
+                   [chunks = pass.chunks.d_begin()] __device__(PageInfo const& p) {
+                     if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
+                       chunks[p.chunk_idx].dict_page = &p;
+                     }
+                   });
 
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
@@ -693,6 +847,170 @@ void impl::build_string_dict_indices()
   pass.chunks.device_to_host_sync(_stream);
 }
 
+void impl::allocate_nesting_info()
+{
+  auto& pass    = *_pass_itm_data;
+  auto& subpass = *pass.subpass;
+
+  auto const num_columns         = _input_columns.size();
+  auto& pages                    = subpass.pages;
+  auto& page_nesting_info        = subpass.page_nesting_info;
+  auto& page_nesting_decode_info = subpass.page_nesting_decode_info;
+
+  // generate the number of nesting info structs needed per-page, by column
+  std::vector<int> per_page_nesting_info_size(num_columns);
+  auto iter = thrust::make_counting_iterator(size_type{0});
+  std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
+    // Schema index of the current input column
+    auto const schema_idx = _input_columns[i].schema_idx;
+    // Get the max_definition_level of this column across all sources.
+    auto max_definition_level = _metadata->get_schema(schema_idx).max_definition_level + 1;
+    std::for_each(thrust::make_counting_iterator(1),
+                  thrust::make_counting_iterator(_num_sources),
+                  [&](auto const src_file_idx) {
+                    auto const& schema = _metadata->get_schema(
+                      _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
+                    max_definition_level =
+                      std::max(max_definition_level, schema.max_definition_level + 1);
+                  });
+
+    return std::max(max_definition_level, _metadata->get_output_nesting_depth(schema_idx));
+  });
+
+  // compute total # of page_nesting infos needed and allocate space. doing this in one
+  // buffer to keep it to a single gpu allocation
+  auto counting_iter = thrust::make_counting_iterator(size_t{0});
+  size_t const total_page_nesting_infos =
+    std::accumulate(counting_iter, counting_iter + num_columns, 0, [&](int total, size_t index) {
+      return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
+    });
+
+  page_nesting_info = cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageNestingInfo>{
+    total_page_nesting_infos, _stream};
+  page_nesting_decode_info =
+    cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageNestingDecodeInfo>{
+      total_page_nesting_infos, _stream};
+
+  // update pointers in the PageInfos
+  int target_page_index = 0;
+  int src_info_index    = 0;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const src_col_schema = _input_columns[idx].schema_idx;
+
+    for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
+      pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
+      pages[target_page_index + p_idx].nesting_decode =
+        page_nesting_decode_info.device_ptr() + src_info_index;
+
+      pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size[idx];
+      // Set the number of output nesting levels from the zeroth source as nesting must be
+      // identical across sources.
+      pages[target_page_index + p_idx].num_output_nesting_levels =
+        _metadata->get_output_nesting_depth(src_col_schema);
+
+      src_info_index += per_page_nesting_info_size[idx];
+    }
+    target_page_index += subpass.column_page_count[idx];
+  }
+
+  // Reset the target_page_index
+  target_page_index = 0;
+
+  // fill in
+  int nesting_info_index = 0;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const src_col_schema = _input_columns[idx].schema_idx;
+
+    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
+    // nesting depth must be same across sources so getting it from the zeroth source is ok
+    int const max_output_depth = _metadata->get_output_nesting_depth(src_col_schema);
+
+    // Map to store depths if this column has lists
+    std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
+    // if this column has lists, generate depth remapping
+    std::for_each(
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(_num_sources),
+      [&](auto const src_file_idx) {
+        auto const mapped_schema_idx = _metadata->map_schema_index(src_col_schema, src_file_idx);
+        if (_metadata->get_schema(mapped_schema_idx, src_file_idx).max_repetition_level > 0) {
+          generate_depth_remappings(
+            depth_remapping, src_col_schema, mapped_schema_idx, src_file_idx, *_metadata);
+        }
+      });
+
+    // fill in host-side nesting info
+    int schema_idx = src_col_schema;
+    // This is okay as we only use this to check stubness of cur_schema and
+    // to get its parent's indices, both of which are one to one mapped.
+    auto cur_schema = _metadata->get_schema(schema_idx);
+    int cur_depth   = max_output_depth - 1;
+    while (schema_idx > 0) {
+      // stub columns (basically the inner field of a list schema element) are not real columns.
+      // we can ignore them for the purposes of output nesting info
+      if (!cur_schema.is_stub()) {
+        // initialize each page within the chunk
+        for (size_t p_idx = 0; p_idx < subpass.column_page_count[idx]; p_idx++) {
+          // Source file index for the current page.
+          auto const src_file_idx =
+            pass.chunks[pages[target_page_index + p_idx].chunk_idx].src_file_idx;
+          cudf::io::parquet::detail::PageNestingInfo* pni =
+            &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size[idx])];
+
+          cudf::io::parquet::detail::PageNestingDecodeInfo* nesting_info =
+            &page_nesting_decode_info[nesting_info_index +
+                                      (p_idx * per_page_nesting_info_size[idx])];
+
+          auto const mapped_src_col_schema =
+            _metadata->map_schema_index(src_col_schema, src_file_idx);
+          // if we have lists, set our start and end depth remappings
+          if (_metadata->get_schema(mapped_src_col_schema, src_file_idx).max_repetition_level > 0) {
+            auto remap = depth_remapping.find({src_col_schema, src_file_idx});
+            CUDF_EXPECTS(remap != depth_remapping.end(),
+                         "Could not find depth remapping for schema");
+            std::vector<int> const& rep_depth_remap = (remap->second.first);
+            std::vector<int> const& def_depth_remap = (remap->second.second);
+
+            for (size_t m = 0; m < rep_depth_remap.size(); m++) {
+              nesting_info[m].start_depth = rep_depth_remap[m];
+            }
+            for (size_t m = 0; m < def_depth_remap.size(); m++) {
+              nesting_info[m].end_depth = def_depth_remap[m];
+            }
+          }
+
+          // Get the schema from the current input source.
+          auto& actual_cur_schema = _metadata->get_schema(
+            _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
+
+          // values indexed by output column index
+          nesting_info[cur_depth].max_def_level = actual_cur_schema.max_definition_level;
+          pni[cur_depth].size                   = 0;
+          pni[cur_depth].type                   = cudf::io::parquet::detail::to_type_id(
+            actual_cur_schema, _strings_to_categorical, _timestamp_type.id());
+          pni[cur_depth].nullable =
+            cur_schema.repetition_type == cudf::io::parquet::detail::OPTIONAL;
+        }
+
+        // move up the hierarchy
+        cur_depth--;
+      }
+
+      // next schema
+      schema_idx = cur_schema.parent_idx;
+      cur_schema = _metadata->get_schema(schema_idx);
+    }
+
+    // Offset the page and nesting info indices
+    target_page_index += subpass.column_page_count[idx];
+    nesting_info_index += (per_page_nesting_info_size[idx] * subpass.column_page_count[idx]);
+  }
+
+  // copy nesting info to the device
+  page_nesting_info.host_to_device_async(_stream);
+  page_nesting_decode_info.host_to_device_async(_stream);
+}
+
 bool impl::read_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
@@ -726,7 +1044,7 @@ bool impl::read_column_chunks()
   return total_decompressed_size > 0;
 }
 
-void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_bytes)
+void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 
@@ -736,7 +1054,7 @@ void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_byt
   auto& chunks = pass.chunks;
 
   // Move column chunk buffers to raw page data.
-  _pass_itm_data->raw_page_data = std::move(column_chunk_bytes);
+  _pass_itm_data->raw_page_data = std::move(column_chunk_buffers);
 
   pass.has_compressed_data = read_column_chunks();
 
@@ -744,12 +1062,153 @@ void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_byt
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  rmm::device_uvector<cudf::io::parquet::detail::PageInfo> unsorted_pages(total_pages, _stream);
+  rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
+}
+
+void impl::preprocess_subpass_pages(size_t chunk_read_limit)
+{
+  auto& pass    = *_pass_itm_data;
+  auto& subpass = *pass.subpass;
+
+  // iterate over all input columns and determine if they contain lists.
+  // TODO: we could do this once at the file level instead of every time we get in here. the set of
+  // columns we are processing does not change over multiple passes/subpasses/output chunks.
+  bool has_lists = false;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const& input_col  = _input_columns[idx];
+    size_t const max_depth = input_col.nesting_depth();
+
+    auto* cols = &_output_buffers;
+    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
+
+      // if this has a list parent, we have to get column sizes from the
+      // data computed during ComputePageSizes
+      if (out_buf.user_data &
+          cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+        has_lists = true;
+        break;
+      }
+    }
+    if (has_lists) { break; }
+  }
+
+  // in some cases we will need to do further preprocessing of pages.
+  // - if we have lists, the num_rows field in PageInfo will be incorrect coming out of the file
+  // - if we are doing a chunked read, we need to compute the size of all string data
+  if (has_lists || chunk_read_limit > 0) {
+    // computes:
+    // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into
+    // account), not just the number of values. PageNestingInfo::size for each level of nesting, for
+    // each page.
+    //
+    // we will be applying a later "trim" pass if skip_rows/num_rows is being used, which can happen
+    // if:
+    // - user has passed custom row bounds
+    // - we will be doing a chunked read
+    ComputePageSizes(subpass.pages,
+                     pass.chunks,
+                     0,  // 0-max size_t. process all possible rows
+                     std::numeric_limits<size_t>::max(),
+                     true,                  // compute num_rows
+                     chunk_read_limit > 0,  // compute string sizes
+                     _pass_itm_data->level_type_size,
+                     _stream);
+  }
+
+  auto iter = thrust::make_counting_iterator(0);
+
+  // copy our now-correct row counts  back to the base pages stored in the pass.
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
+  }
+
+  // computes:
+  // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
+  // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
+  // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
+  // gives us the absolute row index
+  auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
+  auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                key_input,
+                                key_input + pass.pages.size(),
+                                page_input,
+                                chunk_row_output_iter{pass.pages.device_ptr()});
+
+  // copy chunk_row into the subpass pages
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  }
+
+  // retrieve pages back
+  pass.pages.device_to_host_async(_stream);
+  if (!subpass.single_subpass) { subpass.pages.device_to_host_async(_stream); }
+  _stream.synchronize();
+
+  // at this point we have an accurate row count so we can compute how many rows we will actually be
+  // able to decode for this pass. we will have selected a set of pages for each column in the
+  // row group, but not every page will have the same number of rows. so, we can only read as many
+  // rows as the smallest batch (by column) we have decompressed.
+  size_t first_page_index = 0;
+  size_t max_row          = std::numeric_limits<size_t>::max();
+  auto const last_pass_row =
+    _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1];
+  // for each column
+  for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
+    // compute max row for this column in the subpass
+    auto const& last_page  = subpass.pages[first_page_index + (subpass.column_page_count[idx] - 1)];
+    auto const& last_chunk = pass.chunks[last_page.chunk_idx];
+    auto max_col_row       = static_cast<size_t>(last_chunk.start_row) +
+                       static_cast<size_t>(last_page.chunk_row) +
+                       static_cast<size_t>(last_page.num_rows);
+
+    // special case.  list rows can span page boundaries, but we can't tell if that is happening
+    // here because we have not yet decoded the pages. the very last row starting in the page may
+    // not terminate in the page. to handle this, only decode up to the second to last row in the
+    // subpass since we know that will safely completed.
+    bool const is_list =
+      last_chunk.max_level[cudf::io::parquet::detail::level_type::REPETITION] > 0;
+    // corner case: only decode up to the second-to-last row, except if this is the last page in the
+    // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
+    // just 1 row.
+    if (is_list && max_col_row < last_pass_row) {
+      // compute min row for this column in the subpass
+      auto const& first_page  = subpass.pages[first_page_index];
+      auto const& first_chunk = pass.chunks[first_page.chunk_idx];
+      auto const min_col_row =
+        static_cast<size_t>(first_chunk.start_row) + static_cast<size_t>(first_page.chunk_row);
+
+      // must have at least 2 rows in the subpass.
+      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
+      max_col_row--;
+    }
+
+    max_row = std::min(max_row, max_col_row);
+
+    first_page_index += subpass.column_page_count[idx];
+  }
+  subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
+  auto const pass_end = pass.skip_rows + pass.num_rows;
+  max_row             = std::min(max_row, pass_end);
+  subpass.num_rows    = max_row - subpass.skip_rows;
+
+  // now split up the output into chunks as necessary
+  compute_output_chunks_for_subpass();
 }
 
 void impl::allocate_columns(size_t skip_rows, size_t num_rows)
@@ -785,8 +1244,7 @@ void impl::allocate_columns(size_t skip_rows, size_t num_rows)
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
+  for (auto const& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_buffers;

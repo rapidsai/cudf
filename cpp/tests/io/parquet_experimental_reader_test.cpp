@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include "cudf/io/text/byte_range_info.hpp"
 #include "cudf/utilities/default_stream.hpp"
 #include "cudf/utilities/memory_resource.hpp"
 #include "cudf/utilities/span.hpp"
 #include "parquet_common.hpp"
+#include "rmm/device_uvector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -37,7 +39,6 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 
 #include <array>
-#include <limits>
 
 // Base test fixture for tests
 struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
@@ -125,6 +126,32 @@ auto create_parquet_with_stats(bool is_concatenated = false)
   return std::pair{cudf::table{std::move(columns)}, buffer};
 }
 
+std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
+  cudf::host_span<char const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  cudf::host_span<cudf::size_type const> /* chunk_source_map */,
+  rmm::cuda_stream_view stream = cudf::get_default_stream())
+{
+  std::vector<rmm::device_buffer> column_chunk_buffers{};
+  column_chunk_buffers.reserve(byte_ranges.size());
+
+  std::transform(
+    byte_ranges.begin(),
+    byte_ranges.end(),
+    std::back_inserter(column_chunk_buffers),
+    [&](auto const& byte_range) {
+      auto const chunk_offset = host_buffer.data() + byte_range.offset();
+      auto const chunk_size   = byte_range.size();
+      auto chunk_buffer       = rmm::device_buffer(chunk_size, stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        chunk_buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+      return chunk_buffer;
+    });
+
+  stream.synchronize_no_throw();
+  return column_chunk_buffers;
+}
+
 }  // namespace
 
 TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
@@ -189,6 +216,20 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
                                  thrust::identity<bool>{}),
                 10);
     }
+
+    auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
+      reader, stats_filtered_row_groups, options);
+
+    auto column_chunk_buffers =
+      fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
+
+    [[maybe_unused]] auto [tbl, meta] =
+      cudf::experimental::io::materialize_filter_columns(reader,
+                                                         filtered_data_pages,
+                                                         stats_filtered_row_groups,
+                                                         std::move(column_chunk_buffers),
+                                                         options,
+                                                         stream);
   };
 
   // Only test filtering row groups

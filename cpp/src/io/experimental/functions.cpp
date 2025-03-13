@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/parquet/experimental/hybrid_scan_impl.hpp"
-
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -103,19 +101,29 @@ std::vector<std::vector<bool>> filter_data_pages_with_stats(
   return reader->filter_data_pages_with_stats(input_row_group_indices, options, stream);
 }
 
+std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                             cudf::host_span<size_type const> row_group_indices,
+                             cudf::io::parquet_reader_options const& options)
+{
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+  return reader->get_column_chunk_byte_ranges(input_row_group_indices, options);
+}
+
 // API # 8
-[[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
+cudf::io::table_with_metadata materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-  cudf::mutable_column_view input_rows,
+  cudf::host_span<std::vector<bool> const> filtered_data_pages,
   cudf::host_span<size_type const> row_group_indices,
-  std::vector<rmm::device_buffer> column_chunk_bytes,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
   return reader->materialize_filter_columns(
-    input_rows, input_row_group_indices, std::move(column_chunk_bytes), options, stream);
+    filtered_data_pages, input_row_group_indices, std::move(column_chunk_buffers), options, stream);
 }
 
 }  // namespace cudf::experimental::io

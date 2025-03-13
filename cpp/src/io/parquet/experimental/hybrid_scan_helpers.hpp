@@ -17,7 +17,6 @@
 #pragma once
 
 #include "io/parquet/parquet_gpu.hpp"
-#include "io/parquet/reader_impl_chunking.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/io/detail/utils.hpp>
