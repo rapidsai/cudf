@@ -123,8 +123,7 @@ class ConfigOptions:
         # Validate executor_options
         executor = config.get("executor", "pylibcudf")
         if executor == "dask-experimental":
-            executor_options = config.get("executor_options", {})
-            unsupported = executor_options.keys() - {
+            unsupported = config.get("executor_options", {}).keys() - {
                 "max_rows_per_partition",
                 "parquet_blocksize",
                 "cardinality_factor",
