@@ -36,53 +36,53 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
-template <typename T, int32_t index>
+template <typename T, int32_t Index>
 struct accessor {
   using type                     = T;
-  static constexpr int32_t INDEX = index;
+  static constexpr int32_t index = Index;
 
   static __device__ decltype(auto) element(cudf::jit::mutable_column_device_view const* views,
                                            cudf::size_type row)
   {
-    return views[INDEX].element<T>(row);
+    return views[index].element<T>(row);
   }
 
   static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
                                            cudf::size_type row)
   {
-    return views[INDEX].element<T>(row);
+    return views[index].element<T>(row);
   }
 
   static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
                                 cudf::size_type row,
                                 T value)
   {
-    views[INDEX].assign<T>(row, value);
+    views[index].assign<T>(row, value);
   }
 };
 
-template <typename accessor>
+template <typename Accessor>
 struct scalar {
-  using type                     = typename accessor::type;
-  static constexpr int32_t INDEX = accessor::INDEX;
+  using type                     = typename Accessor::type;
+  static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::jit::mutable_column_device_view const* views,
                                            cudf::size_type row)
   {
-    return accessor::element(views, 0);
+    return Accessor::element(views, 0);
   }
 
   static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
                                            cudf::size_type row)
   {
-    return accessor::element(views, 0);
+    return Accessor::element(views, 0);
   }
 
   static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
                                 cudf::size_type row,
                                 type value)
   {
-    return accessor::assign(views, 0, value);
+    return Accessor::assign(views, 0, value);
   }
 };
 
