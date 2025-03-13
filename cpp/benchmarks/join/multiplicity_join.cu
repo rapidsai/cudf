@@ -50,19 +50,19 @@ void nvbench_full_join(nvbench::state& state)
 }
 
 NVBENCH_BENCH(nvbench_inner_join)
-  .set_name("low_multiplicity_inner_join")
+  .set_name("high_multiplicity_inner_join")
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH(nvbench_left_join)
-  .set_name("low_multiplicity_left_join")
+  .set_name("high_multiplicity_left_join")
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
 NVBENCH_BENCH(nvbench_full_join)
-  .set_name("low_multiplicity_full_join")
+  .set_name("high_multiplicity_full_join")
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000})
   .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
