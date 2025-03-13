@@ -474,8 +474,8 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
                    agg,
                    lists::detail::distinct(lists_column_view{collect_result->view()},
                                            nulls_equal,
-                                           duplicate_keep_option::KEEP_ANY,
                                            nans_equal,
+                                           duplicate_keep_option::KEEP_ANY,
                                            stream,
                                            mr));
 }
