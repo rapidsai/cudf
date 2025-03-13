@@ -45,16 +45,13 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_sumh_transformations: Fixed by https://github.com/rapidsai/cudf/pull/18259
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 # test_q1 & test_dask_order_dependent_ops: https://github.com/rapidsai/cudf/issues/18253
-# test_cross_join_suffix & test_cross_join: Fixed by https://github.com/rapidsai/cudf/pull/18256
 TESTS_THAT_NEED_CUDF_FIX="
 test_is_finite_expr or \
 test_is_finite_series or \
 test_sumh_transformations or \
 test_maybe_convert_dtypes_pandas or \
 test_q1 or \
-test_dask_order_dependent_ops or \
-test_cross_join_suffix or \
-test_cross_join
+test_dask_order_dependent_ops
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741

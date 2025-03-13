@@ -410,7 +410,12 @@ class Merge:
         common_names = set(left_result._column_names) & set(
             right_result._column_names
         )
-        cols_to_suffix = common_names - self._key_columns_with_same_name
+
+        cols_to_suffix = (
+            common_names
+            if self.how == "cross"
+            else common_names - self._key_columns_with_same_name
+        )
         data = {
             (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
             for name, col in left_result._column_labels_and_values
@@ -420,7 +425,10 @@ class Merge:
         # key columns from the right table are removed.
         for name, col in right_result._column_labels_and_values:
             if name in common_names:
-                if name not in self._key_columns_with_same_name:
+                if (
+                    self.how == "cross"
+                    or name not in self._key_columns_with_same_name
+                ):
                     r_label = f"{name}{self.rsuffix}"
                     if r_label in data:
                         raise NotImplementedError(
