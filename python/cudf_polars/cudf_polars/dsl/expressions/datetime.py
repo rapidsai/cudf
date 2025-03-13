@@ -126,6 +126,11 @@ class TemporalFunction(Expr):
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
+        if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
+            self.children[0].dtype
+        ):
+            raise NotImplementedError("ToString is not supported on duration types")
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -139,17 +144,16 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
-        if self.name == TemporalFunction.Name.ToString:
-            if plc.traits.is_timestamp(column.obj.type()):
-                func = plc.strings.convert.convert_datetime.from_timestamps
-            elif plc.traits.is_duration(column.obj.type()):
-                func = plc.strings.convert.convert_durations.from_durations
-            else:
-                raise ValueError("Unsupported type for ToString")
-            (format,) = self.options
-            names = plc.interop.from_arrow(pa.array([], type=pa.string()))
-            result = func(column.obj, format, names)
-            return Column(result)
+        if self.name == TemporalFunction.Name.ToString and plc.traits.is_timestamp(
+            column.obj.type()
+        ):
+            return Column(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    self.options[0],
+                    plc.interop.from_arrow(pa.array([], type=pa.string())),
+                )
+            )
         if self.name is TemporalFunction.Name.IsLeapYear:
             return Column(
                 plc.datetime.is_leap_year(column.obj),

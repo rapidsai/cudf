@@ -165,7 +165,7 @@ def test_strftime_duration(format):
     )
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
-    assert_gpu_result_equal(q)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
