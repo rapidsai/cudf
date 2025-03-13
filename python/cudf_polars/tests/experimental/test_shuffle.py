@@ -12,6 +12,7 @@ from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.experimental.parallel import evaluate_dask, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +41,7 @@ def test_hash_shuffle(df, engine):
 
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
-    options = {}
+    options = ConfigOptions({})
     qir1 = Shuffle(qir.schema, keys, options, qir)
 
     # Add second Shuffle node (on the same keys)

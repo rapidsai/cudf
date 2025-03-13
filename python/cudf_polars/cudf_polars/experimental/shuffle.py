@@ -242,10 +242,10 @@ def _(
     # Extract "shuffle_method" configuration
     if (
         shuffle_method := ir.config_options.get(
-            "executor_options.shuffle_options.shuffle_method",
+            "executor_options.shuffle_method",
             default=None,
         )
-    ) not in _SHUFFLE_METHODS:
+    ) not in (*_SHUFFLE_METHODS, None):
         raise ValueError(
             f"{shuffle_method} is not a supported shuffle method. "
             f"Expected one of: {_SHUFFLE_METHODS}."

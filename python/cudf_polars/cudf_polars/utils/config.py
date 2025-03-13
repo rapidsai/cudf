@@ -130,11 +130,8 @@ class ConfigOptions:
                 "cardinality_factor",
                 "groupby_n_ary",
                 "bcast_join_limit",
-                "shuffle_options",
+                "shuffle_method",
             }
-            assert {"shuffle_method"}.issuperset(
-                executor_options.get("shuffle_options", {})
-            )
         else:
             unsupported = config.get("executor_options", {}).keys()
         if unsupported:
