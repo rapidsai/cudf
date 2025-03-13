@@ -541,7 +541,7 @@ class DatetimeColumn(column.ColumnBase):
                 and np.isnat(other)
                 and np.datetime_data(other)[0] == "generic"
             ):
-                # TODO: Should we be using self.time_unit to not modify the resolution?
+                # TODO: Should we be using self.time_unit to not modify the result resolution?
                 other = type(other)("NaT", "ns")
             scalar = pa.scalar(other)
             if pa.types.is_timestamp(scalar.type):
