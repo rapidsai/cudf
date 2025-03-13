@@ -110,7 +110,6 @@ class TemporalFunction(Expr):
         Name.OrdinalDay,
         Name.MonthStart,
         Name.MonthEnd,
-        Name.OrdinalDay,
     }
 
     def __init__(
