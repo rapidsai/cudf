@@ -166,9 +166,9 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.get("executor_options", {})
-        .get("cardinality_factor", {})
-        .items()
+        for c, f in ir.config_options.get(
+            "executor_options.cardinality_factor", default={}
+        ).items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -278,7 +278,7 @@ def _(
 
     # Simple N-ary tree reduction
     j = 0
-    n_ary = ir.config_options.get("executor_options", {}).get("groupby_n_ary", 32)
+    n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
     graph: MutableMapping[Any, Any] = {}
     name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]

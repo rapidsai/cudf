@@ -34,14 +34,7 @@ def df():
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby(df, engine, op, keys):
     q = getattr(df.group_by(*keys), op)()
-
-    from cudf_polars import Translator
-    from cudf_polars.experimental.parallel import evaluate_dask
-
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    evaluate_dask(ir)
-
-    # assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])
