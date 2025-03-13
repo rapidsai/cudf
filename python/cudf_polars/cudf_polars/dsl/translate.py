@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
@@ -47,7 +48,7 @@ class Translator:
 
     def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config_options = config.ConfigOptions(engine.config.copy())
+        self.config_options = config.ConfigOptions(copy.deepcopy(engine.config))
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:

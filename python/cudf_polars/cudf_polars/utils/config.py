@@ -30,7 +30,7 @@ class ConfigOptions:
 
     def __init__(self, options: dict[str, Any]):
         self.validate(options)
-        self.config_options = copy.deepcopy(options)
+        self.config_options = options
 
     def set(self, name: str, value: Any) -> Self:
         """
