@@ -19,6 +19,7 @@ from pylibcudf.strings.convert.convert_integers import (
 )
 from pylibcudf.traits import is_floating_point
 
+from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from cudf_polars.typing import ColumnHeader, ColumnOptions
+    from cudf_polars.typing import ColumnHeader, ColumnOptions, Slice
 
 __all__: list[str] = ["Column"]
 
@@ -357,3 +358,26 @@ class Column:
     def null_count(self) -> int:
         """Return the number of Null values in the column."""
         return self.obj.null_count()
+
+    def slice(self, zlice: Slice | None) -> Self:
+        """
+        Slice a column.
+
+        Parameters
+        ----------
+        zlice
+            optional, tuple of start and length, negative values of start
+            treated as for python indexing. If not provided, returns self.
+
+        Returns
+        -------
+        New column (if zlice is not None) otherwise self (if it is)
+        """
+        if zlice is None:
+            return self
+        (table,) = plc.copying.slice(
+            plc.Table([self.obj]),
+            conversion.from_polars_slice(zlice, num_rows=self.size),
+        )
+        (column,) = table.columns()
+        return type(self)(column, name=self.name).sorted_like(self)
