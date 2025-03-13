@@ -5,6 +5,7 @@ import operator
 import re
 from decimal import Decimal
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -89,7 +90,8 @@ def test_scalar_unary_operations(slr, dtype, op, request):
         pytest.mark.xfail(
             condition=op in {np.ceil, np.floor}
             and not isinstance(slr, float)
-            and parse(np.__version__) >= parse("2.1"),
+            and parse(np.__version__) >= parse("2.1")
+            and parse(cp.__version__) < parse("14.0"),
             reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
