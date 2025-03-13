@@ -48,4 +48,6 @@ class Slice(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return df.slice((self.offset, self.length)).columns[0]
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
+        return column.slice((self.offset, self.length))
