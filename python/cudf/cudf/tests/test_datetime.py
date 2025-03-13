@@ -212,7 +212,7 @@ def test_dt_index(data, field):
 def test_setitem_datetime():
     df = DataFrame()
     df["date"] = pd.date_range("20010101", "20010105").values
-    assert np.issubdtype(df.date.dtype, np.datetime64)
+    assert df.date.dtype.kind == "M"
 
 
 def test_sort_datetime():
@@ -930,6 +930,8 @@ def test_str_to_datetime_error():
         [None] * 7,
         [10, 20, 30, None, 100, 200, None],
         [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+        datetime.datetime(1993, 6, 22, 13, 30),
+        datetime.datetime(2005, 1, 22, 10, 00),
         np.datetime64("2005-02"),
         np.datetime64("2005-02-25"),
         np.datetime64("2005-02-25T03:30"),
