@@ -213,7 +213,7 @@ class TimeDeltaColumn(ColumnBase):
             else other.dtype
         )
 
-        if other_cudf_dtype == "m":
+        if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
             # when comparing to non-timedelta dtypes. We should do the same.
             if op in {

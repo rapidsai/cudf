@@ -1087,12 +1087,12 @@ def test_datetime_series_cmpops_with_scalars(data, other_scalars, dtype, op):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize("op", [np.add, np.subtract])
-def test_datetime_series_ops_with_cudf_scalars(data, scalar, dtype, op):
+def test_datetime_series_ops_with_scalars_misc(data, scalar, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas()
 
     expect = op(psr, scalar)
-    got = op(gsr, cudf.Scalar(scalar))
+    got = op(gsr, scalar)
 
     assert_eq(expect, got)
 
