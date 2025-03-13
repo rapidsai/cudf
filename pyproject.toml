@@ -99,6 +99,10 @@ select = [
     "RUF",
     # banned-api
     "TID251",
+    # flake8-debugger
+    "T10",
+    # #flake8-print
+    "T20"
 ]
 ignore = [
     # whitespace before :
@@ -134,3 +138,6 @@ exclude = [
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
+"ci/*" = ["T201"]
+"docs/*" = ["T201"]
+"cpp/*" = ["T201"]
