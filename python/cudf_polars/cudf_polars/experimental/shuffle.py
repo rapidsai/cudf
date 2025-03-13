@@ -174,8 +174,8 @@ def _partition_dataframe(
 
 
 def _simple_shuffle_graph(
-    name_out: str,
     name_in: str,
+    name_out: str,
     keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
@@ -239,7 +239,7 @@ def _(
             "executor_options.shuffle_method",
             default=None,
         )
-    ) not in (*_SHUFFLE_METHODS, None):
+    ) not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
         raise ValueError(
             f"{shuffle_method} is not a supported shuffle method. "
             f"Expected one of: {_SHUFFLE_METHODS}."
@@ -275,8 +275,8 @@ def _(
 
     # Simple task-based fall-back
     return _simple_shuffle_graph(
-        get_key_name(ir),
         get_key_name(ir.children[0]),
+        get_key_name(ir),
         ir.keys,
         partition_info[ir.children[0]].count,
         partition_info[ir].count,
