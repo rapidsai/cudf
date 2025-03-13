@@ -133,11 +133,12 @@ class TemporalFunction(Expr):
         Name.TotalMinutes,
     ]
 
-    _valid_ops: ClassVar[list[Name]] = [
+    _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
-        *_ADDITIONAL_COMPONENTS,
+        Name.IsLeapYear,
         Name.OrdinalDay,
-    ]
+        *_ADDITIONAL_COMPONENTS,
+    }
 
     def __init__(
         self,
@@ -191,6 +192,10 @@ class TemporalFunction(Expr):
             )
             return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
 
+        if self.name is TemporalFunction.Name.IsLeapYear:
+            return Column(
+                plc.datetime.is_leap_year(column.obj),
+            )
         if self.name is TemporalFunction.Name.OrdinalDay:
             return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:
