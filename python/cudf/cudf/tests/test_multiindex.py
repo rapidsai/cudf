@@ -428,7 +428,6 @@ def test_multiindex_loc_rows_1_2_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-
     assert_eq(pdf.loc[("c", "forest"), :], gdf.loc[("c", "forest"), :])
 
 
@@ -436,7 +435,6 @@ def test_multiindex_loc_rows_1_1_key(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-
     assert_eq(pdf.loc[("c",), :], gdf.loc[("c",), :])
 
 
