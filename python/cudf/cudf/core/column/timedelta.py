@@ -238,12 +238,20 @@ class TimeDeltaColumn(ColumnBase):
                 )
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, pa.Scalar):
-                    if other.is_valid():
-                        other = other.cast(
-                            cudf_dtype_to_pa_type(common_dtype)
-                        ).cast(cudf_dtype_to_pa_type(out_dtype))
+                    if other.is_valid:
+                        # pyarrow.cast doesn't support casting duration to float
+                        # so go through numpy
+                        other_np = pa.array([other]).to_numpy(
+                            zero_copy_only=False
+                        )
+                        other_np = other_np.astype(common_dtype).astype(
+                            out_dtype
+                        )
+                        other = pa.array(other_np)[0]
                     else:
-                        other = other.cast(cudf_dtype_to_pa_type(out_dtype))
+                        other = pa.scalar(
+                            None, type=cudf_dtype_to_pa_type(out_dtype)
+                        )
                 else:
                     other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
@@ -283,6 +291,22 @@ class TimeDeltaColumn(ColumnBase):
         elif is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
+            elif isinstance(other, (np.datetime64, np.timedelta64)):
+                unit = np.datetime_data(other)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    if np.isnat(other):
+                        # TODO: Use self.time_unit to not modify the result resolution?
+                        to_unit = "ns"
+                    else:
+                        to_unit = self.time_unit
+                    if np.isnat(other):
+                        # Workaround for https://github.com/numpy/numpy/issues/28496
+                        # Once fixed, can always use the astype below
+                        other = type(other)("NaT", to_unit)
+                    else:
+                        other = other.astype(
+                            np.dtype(f"{other.dtype.kind}8[{to_unit}]")
+                        )
             scalar = pa.scalar(other)
             if (
                 pa.types.is_timestamp(scalar.type)
