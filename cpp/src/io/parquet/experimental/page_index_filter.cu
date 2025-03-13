@@ -524,8 +524,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
-std::vector<std::vector<cudf::io::text::byte_range_info>>
-aggregate_reader_metadata::get_filter_columns_data_pages(
+std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_page_indices(
   cudf::column_view input_rows,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
@@ -541,9 +540,8 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   auto const total_rows  = input_rows.size();
   auto const num_columns = output_dtypes.size();
 
-  // Compute byte offsets and row offsets for all pages across all filter columns.
+  // Compute the requirement of all pages across all filter columns.
   // TODO: MH: Would make sense to not recompute all this.
-  std::vector<std::vector<cudf::io::text::byte_range_info>> all_page_byte_ranges(num_columns);
   std::vector<std::vector<size_type>> page_row_counts(num_columns);
   std::vector<std::vector<size_type>> page_row_offsets(num_columns);
   std::for_each(
@@ -580,17 +578,24 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                 page_row_counts[col_idx].emplace_back(last_row_idx - first_row_idx);
                 page_row_offsets[col_idx].emplace_back(page_row_offsets[col_idx].back() +
                                                        page_row_counts[col_idx].back());
-
-                all_page_byte_ranges[col_idx].emplace_back(
-                  offset_index.page_locations[page_idx].offset,
-                  offset_index.page_locations[page_idx].compressed_page_size);
               }
             }
           });
         });
     });
 
-  if (input_rows.is_empty()) { return all_page_byte_ranges; }
+  // Lambda to make a vector with all pages required
+  auto const all_data_page_indices = [&]() {
+    std::vector<std::vector<bool>> all_data_page_indices(num_columns);
+    std::transform(
+      thrust::counting_iterator<size_t>(0),
+      thrust::counting_iterator(num_columns),
+      all_data_page_indices.begin(),
+      [&](auto col_idx) { return std::vector<bool>(page_row_counts[col_idx].size(), true); });
+    return all_data_page_indices;
+  };
+
+  if (input_rows.is_empty()) { return all_data_page_indices(); }
 
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
 
@@ -600,7 +605,7 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                      input_rows.template begin<bool>(),
                      input_rows.template end<bool>(),
                      thrust::identity<bool>{})) {
-    return all_page_byte_ranges;
+    return all_data_page_indices();
   }
 
   auto const total_pages =
@@ -609,16 +614,20 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
                     size_t{0},
                     [](auto sum, auto const& offsets) { return sum + offsets.size() - 1; });
 
-  // Vector to hold vectors of byte ranges of filtered pages for each column
-  auto data_page_bytes = std::vector<std::vector<cudf::io::text::byte_range_info>>();
-  data_page_bytes.reserve(num_columns);
   auto mr = cudf::get_current_device_resource_ref();
 
-  // For all columns, look up which pages contain at least one valid row. i.e. !validity_it[row_idx]
-  // or is_row_required[row_idx] satisfies, and add its byte range to the output list of byte ranges
-  // for the column.
+  // Vector to hold vectors of byte ranges of filtered pages for each column
+  auto filtered_data_page_indices = std::vector<std::vector<bool>>();
+  filtered_data_page_indices.reserve(num_columns);
+  auto total_filtered_pages = size_t{0};
+
+  // For all columns, look up which pages contain at least one valid row. i.e.
+  // !validity_it[row_idx] or is_row_required[row_idx] satisfies, and add its byte range to the
+  // output list of byte ranges for the column.
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     // Construct a row indices mapping based on page row counts and offsets
+
+    auto const total_pages_in_this_column = page_row_counts[col_idx].size();
 
     // TODO: MH: Would make sense to not recompute `make_page_indices()`.
     auto const page_indices =
@@ -648,26 +657,21 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
     size_t const num_filtered_pages =
       thrust::distance(d_select_page_indices.begin(), filtered_uniq_page_end_iter);
 
+    total_filtered_pages += num_filtered_pages;
+
     // Copy the filtered page indices for this column to host
     auto h_select_page_indices = cudf::detail::make_host_vector_sync(
       cudf::device_span<cudf::size_type const>{d_select_page_indices.data(), num_filtered_pages},
       stream);
 
     // Vector to hold byte ranges of filtered pages for the this column
-    auto page_ranges = std::vector<cudf::io::text::byte_range_info>(num_filtered_pages);
-    std::transform(h_select_page_indices.begin(),
-                   h_select_page_indices.end(),
-                   page_ranges.begin(),
-                   [&](auto const page_idx) { return all_page_byte_ranges[col_idx][page_idx]; });
+    auto filtered_page_indices = std::vector<bool>(total_pages_in_this_column, false);
+    std::for_each(h_select_page_indices.begin(),
+                  h_select_page_indices.end(),
+                  [&](auto const page_idx) { filtered_page_indices[page_idx] = true; });
 
-    data_page_bytes.emplace_back(std::move(page_ranges));
+    filtered_data_page_indices.emplace_back(std::move(filtered_page_indices));
   }
-
-  auto const total_filtered_pages = std::accumulate(
-    data_page_bytes.cbegin(),
-    data_page_bytes.cend(),
-    size_t{0},
-    [](auto sum, auto const& data_page_bytes) { return sum + data_page_bytes.size(); });
 
   CUDF_EXPECTS(total_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
@@ -676,8 +680,8 @@ aggregate_reader_metadata::get_filter_columns_data_pages(
   std::cout << "Num pages after filter = " << total_filtered_pages << " out of " << total_pages
             << std::endl;
 
-  // Return the final lists of data page byte ranges for all columns
-  return data_page_bytes;
+  // Return the final lists of data page requirements for all columns
+  return filtered_data_page_indices;
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

@@ -165,12 +165,12 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
-  [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
-  get_filter_columns_data_pages(cudf::column_view input_rows,
-                                cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                host_span<data_type const> output_dtypes,
-                                host_span<int const> output_column_schemas,
-                                rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::vector<std::vector<bool>> compute_filtered_data_page_indices(
+    cudf::column_view input_rows,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    rmm::cuda_stream_view stream) const;
 };
 
 /**

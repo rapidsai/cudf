@@ -961,7 +961,7 @@ void reader::impl::allocate_level_decode_space()
     rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
 
   // distribute the buffers
-  uint8_t* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
+  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto& p = pages[idx];
 

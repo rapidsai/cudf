@@ -561,7 +561,6 @@ struct get_page_span {
 
 /**
  * @brief Return the span of page indices for a given column index
-
  */
 struct get_page_span_by_column {
   cudf::device_span<size_type const> page_offsets;

@@ -758,13 +758,13 @@ void impl::compute_output_chunks_for_subpass()
   return;
 }
 
-void impl::handle_chunking(std::vector<rmm::device_buffer>& data_pages_bytes,
+void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_bytes,
                            cudf::io::parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(data_pages_bytes, options);
+    setup_next_pass(std::move(column_chunk_bytes), options);
   }
 
   auto& pass = *_pass_itm_data;
@@ -792,15 +792,15 @@ void impl::handle_chunking(std::vector<rmm::device_buffer>& data_pages_bytes,
       if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass(data_pages_bytes, options);
+      setup_next_pass(std::move(column_chunk_bytes), options);
     }
   }
 
   // setup the next sub pass
-  setup_next_subpass(data_pages_bytes, options);
+  setup_next_subpass(options);
 }
 
-void impl::setup_next_pass(std::vector<rmm::device_buffer>& data_pages_bytes,
+void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_bytes,
                            cudf::io::parquet_reader_options const& options)
 {
   auto const num_passes = _file_itm_data.num_passes();
@@ -845,8 +845,7 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer>& data_pages_bytes,
     // load page information for the chunk. this retrieves the compressed bytes for all the
     // pages, and their headers (which we can access without decompressing)
 
-    // MH: Define this
-    // read_compressed_data();
+    read_compressed_data(std::move(column_chunk_bytes));
 
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N
@@ -883,8 +882,7 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer>& data_pages_bytes,
   }
 }
 
-void impl::setup_next_subpass(std::vector<rmm::device_buffer>& data_pages_bytes,
-                              cudf::io::parquet_reader_options const& options)
+void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<cudf::io::parquet::detail::subpass_intermediate_data>();

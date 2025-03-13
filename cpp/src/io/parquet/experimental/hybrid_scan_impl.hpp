@@ -82,22 +82,15 @@ class impl {
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
-  [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+  [[nodiscard]] std::vector<std::vector<bool>> filter_data_pages_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr);
+    rmm::cuda_stream_view stream);
 
-  [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
-  get_filter_columns_data_pages(cudf::column_view input_rows,
-                                cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                cudf::io::parquet_reader_options const& options,
-                                rmm::cuda_stream_view stream) const;
-
-  [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+  [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::mutable_column_view input_rows,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    std::vector<rmm::device_buffer>& data_pages_bytes,
+    std::vector<rmm::device_buffer> column_chunk_bytes,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
@@ -110,7 +103,7 @@ class impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                    std::vector<rmm::device_buffer>& data_pages_bytes,
+                    std::vector<rmm::device_buffer> column_chunk_bytes,
                     cudf::io::parquet_reader_options const& options);
 
   /**
@@ -129,7 +122,7 @@ class impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void handle_chunking(std::vector<rmm::device_buffer>& data_pages_bytes,
+  void handle_chunking(std::vector<rmm::device_buffer> column_chunk_bytes,
                        cudf::io::parquet_reader_options const& options);
 
   /**
@@ -140,7 +133,7 @@ class impl {
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void setup_next_pass(std::vector<rmm::device_buffer>& data_pages_bytes,
+  void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_bytes,
                        cudf::io::parquet_reader_options const& options);
 
   /**
@@ -153,8 +146,7 @@ class impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    *
    */
-  void setup_next_subpass(std::vector<rmm::device_buffer>& data_pages_bytes,
-                          cudf::io::parquet_reader_options const& options);
+  void setup_next_subpass(cudf::io::parquet_reader_options const& options);
 
   /**
    * @brief Populate the output table metadata from the parquet file metadata.
@@ -164,9 +156,18 @@ class impl {
   void populate_metadata(table_metadata& out_metadata) const;
 
   /**
-   * @brief Read compressed data and page information for the current pass.
+   * @brief Read the set of column chunks to be processed for this pass.
+   *
+   * Does not decompress the chunk data.
+   *
+   * @return boolean indicating if compressed chunks were found
    */
-  void read_compressed_data();
+  bool read_column_chunks();
+
+  /**
+   * @brief Read compressed column chunks data and page information for the current pass.
+   */
+  void read_compressed_data(std::vector<rmm::device_buffer> column_chunk_bytes);
 
   /**
    * @brief Build string dictionary indices for a pass.
@@ -279,6 +280,16 @@ class impl {
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
   }
 
+  /**
+   * @brief Read a chunk of data and return an output table.
+   *
+   * This function is called internally and expects all preprocessing steps have already been done.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @return The output table along with columns' metadata
+   */
+  cudf::io::table_with_metadata read_chunk_internal();
+
  private:
   /**
    * @brief Check if the user has specified custom row bounds
@@ -310,7 +321,7 @@ class impl {
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 
   // name to reference converter to extract AST output filter
-  // named_to_reference_converter _expr_conv{std::nullopt, cudf::io::table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, cudf::io::table_metadata{}};
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
@@ -334,6 +345,7 @@ class impl {
 
   cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
+  bool _uses_custom_row_bounds{false};
 
   std::unique_ptr<cudf::io::parquet::detail::pass_intermediate_data> _pass_itm_data;
 };

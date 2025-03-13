@@ -86,33 +86,19 @@ std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_b
     bloom_filter_data, row_group_indices, options, stream);
 }
 
-std::unique_ptr<cudf::column> hybrid_scan_reader::filter_data_pages_with_stats(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
-{
-  CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  return _impl->filter_data_pages_with_stats(row_group_indices, options, stream, mr);
-}
-
-std::vector<std::vector<cudf::io::text::byte_range_info>>
-hybrid_scan_reader::get_filter_columns_data_pages(
-  cudf::column_view input_rows,
+std::vector<std::vector<bool>> hybrid_scan_reader::filter_data_pages_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  CUDF_EXPECTS(input_rows.type().id() == cudf::type_id::BOOL8, "");
-
-  return _impl->get_filter_columns_data_pages(input_rows, row_group_indices, options, stream);
+  return _impl->filter_data_pages_with_stats(row_group_indices, options, stream);
 }
 
-std::unique_ptr<cudf::table> hybrid_scan_reader::materialize_filter_columns(
+cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(
   cudf::mutable_column_view input_rows,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  std::vector<rmm::device_buffer>& data_pages_bytes,
+  std::vector<rmm::device_buffer> column_chunk_bytes,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -120,7 +106,7 @@ std::unique_ptr<cudf::table> hybrid_scan_reader::materialize_filter_columns(
   CUDF_EXPECTS(input_rows.type().id() == cudf::type_id::BOOL8, "");
   // TODO: Implement this
   return _impl->materialize_filter_columns(
-    input_rows, row_group_indices, data_pages_bytes, options, stream);
+    input_rows, row_group_indices, std::move(column_chunk_bytes), options, stream);
 }
 
 }  // namespace cudf::experimental::io::parquet

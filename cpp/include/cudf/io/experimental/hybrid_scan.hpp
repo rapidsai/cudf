@@ -37,6 +37,7 @@ namespace experimental::io {
 namespace parquet {
 
 namespace detail {
+
 /**
  * @brief Internal experimental Parquet reader optimized for hybrid scan
  */
@@ -88,22 +89,15 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
-  [[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+  [[nodiscard]] std::vector<std::vector<bool>> filter_data_pages_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
+    rmm::cuda_stream_view stream) const;
 
-  [[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
-  get_filter_columns_data_pages(cudf::column_view input_rows,
-                                cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                cudf::io::parquet_reader_options const& options,
-                                rmm::cuda_stream_view stream) const;
-
-  [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+  [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::mutable_column_view input_rows,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    std::vector<rmm::device_buffer>& data_pages_bytes,
+    std::vector<rmm::device_buffer> column_chunk_bytes,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
@@ -158,23 +152,14 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
   rmm::cuda_stream_view stream);
 
 // API # 7
-[[nodiscard]] std::unique_ptr<cudf::column> filter_data_pages_with_stats(
+[[nodiscard]] std::vector<std::vector<bool>> filter_data_pages_with_stats(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 // API # 8
-[[nodiscard]] std::vector<std::vector<cudf::io::text::byte_range_info>>
-get_filter_columns_data_pages(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-                              cudf::column_view input_rows,
-                              cudf::host_span<size_type const> row_group_indices,
-                              cudf::io::parquet_reader_options const& options,
-                              rmm::cuda_stream_view stream);
-
-// API # 9
-[[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+[[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::mutable_column_view input_rows,
   cudf::host_span<size_type const> row_group_indices,

@@ -178,16 +178,17 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
     std::cout << "Num row groups after filter = " << filtered_row_groups.size() << " out of "
               << input_row_groups.size() << std::endl;
 
-    auto mr = cudf::get_current_device_resource_ref();
+    auto filtered_data_pages = cudf::experimental::io::filter_data_pages_with_stats(
+      reader, stats_filtered_row_groups, options, stream);
 
-    auto row_map = cudf::experimental::io::filter_data_pages_with_stats(
-      reader, stats_filtered_row_groups, options, stream, mr);
-
-    auto data_pages_bytes = cudf::experimental::io::get_filter_columns_data_pages(
-      reader, row_map->view(), filtered_row_groups, options, stream);
-
-    EXPECT_EQ(data_pages_bytes.size(), table.num_columns());
-    if (is_testing_pages) { EXPECT_EQ(data_pages_bytes.front().size(), 10); }
+    EXPECT_EQ(filtered_data_pages.size(), table.num_columns());
+    if (is_testing_pages) {
+      EXPECT_EQ(thrust::count_if(thrust::host,
+                                 filtered_data_pages.front().cbegin(),
+                                 filtered_data_pages.front().cend(),
+                                 thrust::identity<bool>{}),
+                10);
+    }
   };
 
   // Only test filtering row groups
