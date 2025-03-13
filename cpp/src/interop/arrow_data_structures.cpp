@@ -84,9 +84,6 @@ cudf::column_metadata get_column_metadata(cudf::column_view const& input)
 std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& input)
 {
   auto meta = std::vector<cudf::column_metadata>{};
-  for (auto i = 0; i < input.num_columns(); ++i) {
-    meta.push_back(get_column_metadata(input.column(i)));
-  }
   std::transform(input.begin(), input.end(), std::back_inserter(meta), [](auto& cv) {
     return get_column_metadata(cv);
   });
