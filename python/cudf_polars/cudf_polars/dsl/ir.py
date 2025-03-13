@@ -530,6 +530,10 @@ class Scan(IR):
             )
         elif typ == "parquet":
             parquet_options = config_options.get("parquet_options", {})
+            filters = None
+            if predicate is not None and row_index is None:
+                # Can't apply filters during read if we have a row index.
+                filters = to_parquet_filter(predicate.value)
             if parquet_options.get("chunked", True):
                 options = plc.io.parquet.ParquetReaderOptions.builder(
                     plc.io.SourceInfo(paths)
@@ -545,6 +549,8 @@ class Scan(IR):
                     options.set_num_rows(nrows)
                 if with_columns is not None:
                     options.set_columns(with_columns)
+                if filters is not None:
+                    options.set_filter(filters)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=parquet_options.get(
@@ -588,10 +594,6 @@ class Scan(IR):
                     names=names,
                 )
             else:
-                filters = None
-                if predicate is not None and row_index is None:
-                    # Can't apply filters during read if we have a row index.
-                    filters = to_parquet_filter(predicate.value)
                 options = plc.io.parquet.ParquetReaderOptions.builder(
                     plc.io.SourceInfo(paths)
                 ).build()
@@ -609,9 +611,9 @@ class Scan(IR):
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
                 )
-                if filters is not None:
-                    # Mask must have been applied.
-                    return df
+            if filters is not None:
+                # Mask must have been applied.
+                return df
 
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [

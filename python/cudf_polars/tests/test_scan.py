@@ -360,11 +360,21 @@ def large_df(df, tmpdir_factory, chunked_slice):
 @pytest.mark.parametrize(
     "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
 )
+@pytest.mark.parametrize(
+    "filter", [None, pl.col("a") > 3], ids=["no_filters", "with_filters"]
+)
 def test_scan_parquet_chunked(
-    request, chunked_slice, large_df, chunk_read_limit, pass_read_limit
+    large_df,
+    chunk_read_limit,
+    pass_read_limit,
+    filter,
 ):
+    if filter is None:
+        q = large_df
+    else:
+        q = large_df.filter(filter)
     assert_gpu_result_equal(
-        large_df,
+        q,
         engine=pl.GPUEngine(
             raise_on_fail=True,
             parquet_options={
