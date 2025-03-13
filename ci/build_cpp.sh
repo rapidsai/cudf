@@ -9,8 +9,6 @@ source rapids-configure-sccache
 
 source rapids-date-string
 
-source ./ci/use_conda_packages_from_prs.sh
-
 export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
@@ -27,6 +25,8 @@ mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 export RAPIDS_ARTIFACTS_DIR
 
 source rapids-rattler-channel-string
+
+source ./ci/use_conda_packages_from_prs.sh
 
 # --no-build-id allows for caching with `sccache`
 # more info is available at

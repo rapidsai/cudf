@@ -15,8 +15,6 @@ rapids-generate-version > ./VERSION
 
 rapids-logger "Begin py build"
 
-source ./ci/use_conda_packages_from_prs.sh
-
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
@@ -24,6 +22,8 @@ export RAPIDS_PACKAGE_VERSION
 
 # populates `RATTLER_CHANNELS` array
 source rapids-rattler-channel-string
+
+source ./ci/use_conda_packages_from_prs.sh
 
 rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
