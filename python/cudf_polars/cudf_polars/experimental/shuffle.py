@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import operator
 from typing import TYPE_CHECKING, Any
 
@@ -21,12 +20,13 @@ from cudf_polars.experimental.base import _concat, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping, Sequence
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
 
 
 # Supported shuffle methods
@@ -92,42 +92,32 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("keys", "options")
-    _non_child = ("schema", "keys", "options")
+    __slots__ = ("config_options", "keys")
+    _non_child = ("schema", "keys", "config_options")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    options: dict[str, Any]
-    """Shuffling options."""
+    config_options: ConfigOptions
+    """Configuration options."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.options = options
-        self._non_child_args = (schema, keys, options)
+        self.config_options = config_options
+        self._non_child_args = (schema, keys, config_options)
         self.children = (df,)
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            tuple(self.schema.items()),
-            self.keys,
-            json.dumps(self.options),
-            self.children,
-        )
 
     @classmethod
     def do_evaluate(
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: DataFrame,
     ):  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -251,7 +241,10 @@ def _(
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
     if (
-        shuffle_method := ir.options.get("shuffle_method", "tasks")
+        shuffle_method := ir.config_options.get(
+            "executor_options.shuffle_options.shuffle_method",
+            default=None,
+        )
     ) not in _SHUFFLE_METHODS:
         raise ValueError(
             f"{shuffle_method} is not a supported shuffle method. "
@@ -261,7 +254,7 @@ def _(
     # Try using rapidsmp shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmp"
     _keys: list[Col]
-    if shuffle_method == "rapidsmp" and len(
+    if shuffle_method in (None, "rapidsmp") and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
         shuffle_on = [k.name for k in _keys]
@@ -278,10 +271,13 @@ def _(
                 CudfPolarsIntegration,
             )
         except (ImportError, ValueError) as err:
-            raise ValueError(
-                "Rapidsmp is not installed correctly or the current "
-                "Dask cluster does not support rapidsmp shuffling."
-            ) from err
+            if shuffle_method == "rapidsmp":
+                # Only raise an error if the user specifically
+                # set the shuffle method to "rapidsmp"
+                raise ValueError(
+                    "Rapidsmp is not installed correctly or the current "
+                    "Dask cluster does not support rapidsmp shuffling."
+                ) from err
 
     # Simple task-based fall-back
     return _simple_shuffle_graph(

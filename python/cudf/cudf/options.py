@@ -138,7 +138,7 @@ def describe_option(name: str | None = None):
     """
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
-        print(_build_option_description(name, _OPTIONS[name]))
+        print(_build_option_description(name, _OPTIONS[name]))  # noqa: T201
 
 
 def _make_contains_validator(valid_options: Container) -> Callable:

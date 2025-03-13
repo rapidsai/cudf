@@ -19,13 +19,14 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 def _maybe_shuffle_frame(
     frame: IR,
     on: tuple[NamedExpr, ...],
     partition_info: MutableMapping[IR, PartitionInfo],
-    shuffle_options: dict[str, Any],
+    config_options: ConfigOptions,
     output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
@@ -40,7 +41,7 @@ def _maybe_shuffle_frame(
         frame = Shuffle(
             frame.schema,
             on,
-            shuffle_options,
+            config_options,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -57,25 +58,19 @@ def _make_hash_join(
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Extract shuffle_options
-    parallel_options = ir.config_options.get("executor_options", {})
-    shuffle_options: dict[str, Any] = {
-        "shuffle_method": parallel_options.get("shuffle_method", "tasks"),
-    }
-
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
-        shuffle_options,
+        ir.config_options,
         output_count,
     )
     new_right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
-        shuffle_options,
+        ir.config_options,
         output_count,
     )
     if left != new_left or right != new_right:
@@ -106,8 +101,9 @@ def _should_bcast_join(
 ) -> bool:
     # Check bcast_join_limit
     # (Maximum number of partitions in "small" table)
-    parallel_options = ir.config_options.get("executor_options", {})
-    bcast_join_limit = parallel_options.get("bcast_join_limit", 16)
+    bcast_join_limit = ir.config_options.get(
+        "executor_options.bcast_join_limit", default=16
+    )
 
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
@@ -150,7 +146,6 @@ def _make_bcast_join(
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
-        shuffle_options: dict[str, Any] = {}
         left_count = partition_info[left].count
         right_count = partition_info[right].count
 
@@ -172,7 +167,7 @@ def _make_bcast_join(
                 right,
                 ir.right_on,
                 partition_info,
-                shuffle_options,
+                ir.config_options,
                 right_count,
             )
         else:
@@ -180,7 +175,7 @@ def _make_bcast_join(
                 left,
                 ir.left_on,
                 partition_info,
-                shuffle_options,
+                ir.config_options,
                 left_count,
             )
 

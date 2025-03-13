@@ -202,46 +202,6 @@ def _callback(
             raise ValueError(f"Unknown executor '{executor}'")
 
 
-def validate_config_options(config: dict) -> None:
-    """
-    Validate the configuration options for the GPU engine.
-
-    Parameters
-    ----------
-    config
-        Configuration options to validate.
-
-    Raises
-    ------
-    ValueError
-        If the configuration contains unsupported options.
-    """
-    if unsupported := (
-        config.keys()
-        - {"raise_on_fail", "parquet_options", "executor", "executor_options"}
-    ):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings: {unsupported}"
-        )
-    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
-        config.get("parquet_options", {})
-    )
-
-    # Validate executor_options
-    executor = config.get("executor", "pylibcudf")
-    if executor == "dask-experimental":
-        unsupported = config.get("executor_options", {}).keys() - {
-            "max_rows_per_partition",
-            "parquet_blocksize",
-            "shuffle_method",
-            "bcast_join_limit",
-        }
-    else:
-        unsupported = config.get("executor_options", {}).keys()
-    if unsupported:
-        raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
-
-
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
@@ -269,7 +229,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
     executor = config.config.get("executor", None)
-    validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)

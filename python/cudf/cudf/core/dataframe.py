@@ -4247,7 +4247,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+        how : {'left', 'right', 'outer', 'inner', 'cross', 'leftsemi', 'leftanti'}, \
             default 'inner'
             Type of merge to be performed.
 
@@ -4258,6 +4258,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
               full outer join.
             - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
             - leftsemi : similar to ``inner`` join, but only returns columns
                from the left dataframe and ignores all columns from the
                right dataframe.
@@ -4378,8 +4380,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         other : DataFrame
-        how : str
-            Only accepts "left", "right", "inner", "outer"
+        how : {'left', 'right', 'outer', 'inner', 'cross'}, default 'left'
+            How to handle the operation of the two objects.
+
+            * left: use calling frame's index (or column if on is specified)
+            * right: use `other`'s index.
+            * outer: form union of calling frame's index (or column if on is
+              specified) with `other`'s index, and sort it lexicographically.
+            * inner: form intersection of calling frame's index (or column if
+              on is specified) with `other`'s index, preserving the order
+              of the calling's one.
+            * cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
         lsuffix, rsuffix : str
             The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
             column names when avoiding conflicts.

@@ -26,14 +26,14 @@ def test_join(how, reverse, max_rows_per_partition, bcast_join_limit):
     left = pl.LazyFrame(
         {
             "x": range(15),
-            "y": ["cat", "dog", "fish"] * 5,
+            "y": [1, 2, 3] * 5,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
         }
     )
     right = pl.LazyFrame(
         {
             "xx": range(6),
-            "y": ["dog", "bird", "fish"] * 2,
+            "y": [2, 4, 3] * 2,
             "zz": [1, 2] * 3,
         }
     )
@@ -50,7 +50,7 @@ def test_join(how, reverse, max_rows_per_partition, bcast_join_limit):
         right2 = pl.LazyFrame(
             {
                 "xxx": range(6),
-                "yyy": ["dog", "bird", "fish"] * 2,
+                "yyy": [2, 4, 3] * 2,
                 "zzz": [3, 4] * 3,
             }
         )
