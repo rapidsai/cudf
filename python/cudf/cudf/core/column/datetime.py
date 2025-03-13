@@ -531,6 +531,8 @@ class DatetimeColumn(column.ColumnBase):
         elif is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
+            elif isinstance(other, pd.Timestamp):
+                other = other.to_numpy()
             elif isinstance(other, str):
                 try:
                     other = pd.Timestamp(other)
