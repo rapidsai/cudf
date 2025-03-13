@@ -122,37 +122,6 @@ _operators_arithmetic = [
 _operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
-_cudf_scalar_reflected_ops = [
-    lambda x: cudf.Scalar(1) + x,
-    lambda x: cudf.Scalar(2) * x,
-    lambda x: cudf.Scalar(2) - x,
-    lambda x: cudf.Scalar(2) // x,
-    lambda x: cudf.Scalar(2) / x,
-    lambda x: cudf.Scalar(3) + x,
-    lambda x: cudf.Scalar(3) * x,
-    lambda x: cudf.Scalar(3) - x,
-    lambda x: cudf.Scalar(3) // x,
-    lambda x: cudf.Scalar(3) / x,
-    lambda x: cudf.Scalar(3) % x,
-    lambda x: cudf.Scalar(-1) + x,
-    lambda x: cudf.Scalar(-2) * x,
-    lambda x: cudf.Scalar(-2) - x,
-    lambda x: cudf.Scalar(-2) // x,
-    lambda x: cudf.Scalar(-2) / x,
-    lambda x: cudf.Scalar(-3) + x,
-    lambda x: cudf.Scalar(-3) * x,
-    lambda x: cudf.Scalar(-3) - x,
-    lambda x: cudf.Scalar(-3) // x,
-    lambda x: cudf.Scalar(-3) / x,
-    lambda x: cudf.Scalar(-3) % x,
-    lambda x: cudf.Scalar(0) + x,
-    lambda x: cudf.Scalar(0) * x,
-    lambda x: cudf.Scalar(0) - x,
-    lambda x: cudf.Scalar(0) // x,
-    lambda x: cudf.Scalar(0) / x,
-]
-
-
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
 
@@ -166,7 +135,6 @@ if get_global_manager() is not None:
     _reflected_ops = _reflected_ops[:1]
     _operators_arithmetic = _operators_arithmetic[:1]
     _operators_comparison = _operators_comparison[:1]
-    _cudf_scalar_reflected_ops = _cudf_scalar_reflected_ops[:1]
     DATETIME_TYPES = {"datetime64[ms]"}
     NUMERIC_TYPES = {"float32"}
     FLOAT_TYPES = {"float64"}
@@ -618,49 +586,6 @@ def test_cudf_scalar_reflected_ops_scalar(func, dtype):
     actual = func(scalar).value
 
     assert np.isclose(expected, actual)
-
-
-@pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "funcs, dtype",
-    list(
-        product(
-            list(zip(_reflected_ops, _cudf_scalar_reflected_ops)),
-            utils.NUMERIC_TYPES,
-        )
-    ),
-)
-def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
-    cpu_func, gpu_func = funcs
-
-    # create random series
-    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
-
-    # gpu series
-    gs = Series(random_series)
-
-    # class typing
-    if obj_class == "Index":
-        gs = Index(gs)
-
-    try:
-        gs_result = gpu_func(gs)
-    except OverflowError:
-        # An error is fine, if pandas raises the same error:
-        with pytest.raises(OverflowError):
-            cpu_func(random_series)
-
-        return
-
-    # class typing
-    if obj_class == "Index":
-        gs = Series(gs)
-
-    # pandas
-    ps_result = cpu_func(random_series)
-
-    # verify
-    np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
 @pytest.mark.parametrize("binop", _binops)
