@@ -8,6 +8,8 @@ set -euo pipefail
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
+source ./ci/use_conda_packages_from_prs.sh
+
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"

@@ -17,6 +17,8 @@ rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
+source ./ci/use_conda_packages_from_prs.sh
+
 rapids-dependency-file-generator \
   --output conda \
   --file-key docs \

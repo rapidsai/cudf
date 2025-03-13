@@ -8,6 +8,8 @@ rapids-logger "Create checks conda environment"
 
 ENV_YAML_DIR="$(mktemp -d)"
 
+source ./ci/use_conda_packages_from_prs.sh
+
 rapids-dependency-file-generator \
   --output conda \
   --file-key checks \
