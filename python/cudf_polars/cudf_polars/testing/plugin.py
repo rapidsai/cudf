@@ -212,6 +212,9 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # polars that the requested timezone is unknown.
     # Since this is random, just skip it, rather than xfailing.
     "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+    # TODO: Remove once we once we depend once we depend on
+    # polars version with pola-rs/polars/pull/21721
+    "tests/unit/io/test_parquet.py::test_general_prefiltering": "Due to unknown timezones in polars rust layer",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
