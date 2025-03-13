@@ -142,6 +142,24 @@ def decompose(
                 f"for this aggregation type:\n{type(expr)}\n"
                 f"Only {_GB_AGG_SUPPORTED} are supported."
             )
+    elif isinstance(expr, BinOp):
+        # The expectation is that each operand of the BinOp is decomposable.
+        # We can then combine the decompositions of the operands to form the
+        # decomposition of the BinOp.
+        (left, right) = expr.children
+        (left_selection, right_selection), aggregations, reductions = combine(
+            decompose(f"{name}__left", left),
+            decompose(f"{name}__right", right),
+        )
+
+        selection = NamedExpr(
+            name,
+            _wrap_unary(
+                BinOp(dtype, expr.op, left_selection.value, right_selection.value)
+            ),
+        )
+        return selection, aggregations, reductions
+
     else:  # pragma: no cover
         # Unsupported expression
         raise NotImplementedError(
