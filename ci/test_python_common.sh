@@ -20,6 +20,8 @@ FILE_KEY=$1
 rapids-dependency-file-generator \
   --output conda \
   --file-key "${FILE_KEY}" \
+  --prepend-channel "${RMM_CHANNEL}" \
+  --prepend-channel "${LIBRMM_CHANNEL}" \
   --prepend-channel "${CPP_CHANNEL}" \
   --prepend-channel "${PYTHON_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
