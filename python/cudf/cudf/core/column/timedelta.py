@@ -291,6 +291,8 @@ class TimeDeltaColumn(ColumnBase):
         elif is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
+            elif isinstance(other, pd.Timedelta):
+                other = other.to_numpy()
             elif isinstance(other, (np.datetime64, np.timedelta64)):
                 unit = np.datetime_data(other)[0]
                 if unit not in {"s", "ms", "us", "ns"}:
