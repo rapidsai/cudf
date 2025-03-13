@@ -341,11 +341,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     StripType(int nativeId) { this.nativeId = nativeId; }
   }
 
+  /**
+   * Used for the dropListDuplicates function
+   * Specifies which duplicate to keep
+   * @see cudf::duplicate_keep_option in /cpp/include/cudf/stream_compaction.hpp,
+   * from which this enum is based off of. Values should be kept in sync.
+   */
   public enum DuplicateKeepOption {
-    KEEP_ANY(0),
-    KEEP_FIRST(1),
-    KEEP_LAST(2),
-    KEEP_NONE(3);
+    KEEP_ANY(0),    // keep any instance of a value
+    KEEP_FIRST(1),  // only keep the first instance of an value
+    KEEP_LAST(2),   // keep the last instance of an value
+    KEEP_NONE(3);   // remove all instances of values with duplicates
     final int nativeId;
 
     DuplicateKeepOption(int nativeId) { this.nativeId = nativeId; }
@@ -2548,7 +2554,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
    * producing a LIST column in which each list contain only unique elements.
    *
-   * Order of the output elements within each list will be preserved as in the input
+   * Relative ordering elements will be kept the same, by default can keep any of the duplicates
+   * Example: [0,3,4,0] may produce either [0,3,4] or [3,4,0], both of which are valid here
    *
    * @return A new LIST column having unique list elements.
    */
@@ -2562,7 +2569,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Order of the output elements within each list will be preserved as in the input
    *
-   * @param keepOption
+   * @param keep_option Flag to specify which element to keep (first, last, any)
    * @return A new LIST column having unique list elements.
    */
   public final ColumnVector dropListDuplicates(DuplicateKeepOption keepOption) {

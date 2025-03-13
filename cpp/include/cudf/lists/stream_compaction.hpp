@@ -89,7 +89,6 @@ std::unique_ptr<column> apply_boolean_mask(
  * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
-  // TODO: add defaults for nulls_equal, nans_equal, keep_option after distinct() is deprecated
   lists_column_view const& input,
   null_equality nulls_equal         = null_equality::EQUAL,
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,

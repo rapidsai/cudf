@@ -544,6 +544,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
                    lists::detail::distinct(lists_column_view{merged_result->view()},
                                            merge_sets_agg._nulls_equal,
                                            merge_sets_agg._nans_equal,
+                                           cudf::duplicate_keep_option::KEEP_ANY,
                                            stream,
                                            mr));
 }
