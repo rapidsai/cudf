@@ -79,8 +79,8 @@ def _pick_initial_a_b(data, max_constant, init_bins, rng):
         longest = _new_bin_length(_longest_bin_length(bins))
 
         if score <= max_constant and longest <= MAX_SIZE_FOR_INITIAL_BIN:
-            print(f"Attempting to build table using {score:.6f}n space")
-            print(f"Longest bin was {longest}")
+            print(f"Attempting to build table using {score:.6f}n space")  # noqa: T201
+            print(f"Longest bin was {longest}")  # noqa: T201
             break
 
     return bins, a, b
@@ -126,7 +126,7 @@ def _perfect_hash(integers, max_constant, rng):
     max_bin_length = 0
     for i, b in enumerate(init_bins):
         if i % 500 == 0:
-            print(f"Processing bin {i} / {len(init_bins)} of size = {len(b)}")
+            print(f"Processing bin {i} / {len(init_bins)} of size = {len(b)}")  # noqa: T201
         internal_table, coeff_a, coeff_b = _find_hash_for_internal(b, rng)
         bin_length = len(internal_table)
         max_bin_length = max(bin_length, max_bin_length)
@@ -140,13 +140,13 @@ def _perfect_hash(integers, max_constant, rng):
         ] + np.uint64(bin_length)
         flattened_bins.extend(internal_table)
 
-    print(
+    print(  # noqa: T201
         "Final table size {} elements compared to {} for original".format(
             len(flattened_bins), len(integers)
         )
     )
 
-    print("Max bin length was", max_bin_length)
+    print("Max bin length was", max_bin_length)  # noqa: T201
 
     return (
         init_a,
@@ -294,4 +294,4 @@ def hash_vocab(
             f"Incorrect value found. Got {val} expected {value}"
         )
 
-    print("All present tokens return correct value.")
+    print("All present tokens return correct value.")  # noqa: T201
