@@ -2339,6 +2339,11 @@ def test_merge_left_on_right_index_sort():
     [
         {"lkey": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]},
         {"lkey": ["foo", "bar", "baz", "foo"], "value": [5, 3, 2, 1]},
+        {
+            "lkey": ["foo", "bar", "baz", "foo"],
+            "value": [5, 3, 2, 1],
+            "extra_left": [1, 2, 3, 4],
+        },
     ],
 )
 @pytest.mark.parametrize(
@@ -2346,6 +2351,11 @@ def test_merge_left_on_right_index_sort():
     [
         {"rkey": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]},
         {"rkey": ["foo", "bar", "baz", "foo"], "value": [8, 7, 6, 5]},
+        {
+            "rkey": ["foo", "bar", "baz", "foo"],
+            "value": [8, 7, 6, 5],
+            "extra_right": [10, 2, 30, 4],
+        },
     ],
 )
 @pytest.mark.parametrize("sort", [True, False])
@@ -2359,4 +2369,24 @@ def test_cross_join_overlapping(left_data, right_data, sort):
         pdf2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort
     )
     result = df1.join(df2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "suffixes",
+    [
+        ("_left", "_right"),
+        ("", "_right"),
+        ("_left", ""),
+    ],
+)
+def test_cross_merge(suffixes):
+    df1 = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf1 = df1.to_pandas()
+
+    df2 = cudf.DataFrame({"a": [11, 12, 13], "d": [40, 50, 60]})
+    pdf2 = df2.to_pandas()
+
+    expected = pdf1.merge(pdf2, how="cross", suffixes=suffixes)
+    result = df1.merge(df2, how="cross", suffixes=suffixes)
     assert_eq(result, expected)
