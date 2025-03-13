@@ -104,12 +104,14 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
-    _valid_ops: ClassVar[list[Name]] = [
+    _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
+        Name.IsLeapYear,
+        Name.OrdinalDay,
         Name.MonthStart,
         Name.MonthEnd,
         Name.OrdinalDay,
-    ]
+    }
 
     def __init__(
         self,
@@ -161,11 +163,15 @@ class TemporalFunction(Expr):
             )
 
             return Column(result)
-        elif self.name is TemporalFunction.Name.MonthEnd:
+        if self.name is TemporalFunction.Name.MonthEnd:
             return Column(
                 plc.unary.cast(
                     plc.datetime.last_day_of_month(column.obj), column.obj.type()
                 )
+            )
+        if self.name is TemporalFunction.Name.IsLeapYear:
+            return Column(
+                plc.datetime.is_leap_year(column.obj),
             )
         if self.name is TemporalFunction.Name.OrdinalDay:
             return Column(plc.datetime.day_of_year(column.obj))

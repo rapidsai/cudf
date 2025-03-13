@@ -107,8 +107,9 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  auto const space = std::string(" ");  // workaround to ARM issue
   auto pairs =
-    cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
+    cudf::strings::split_record(input, cudf::string_scalar(space, true, stream, mr), 1, stream, mr);
   auto content = pairs->release();
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }
