@@ -925,9 +925,6 @@ def test_minhash():
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(1, a=params, b=params, width=6)
-    with pytest.raises(ValueError):
-        params = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash(np.uint64(1), a=params, b=params, width=8)
 
 
 def test_minhash_ngrams():
@@ -967,9 +964,6 @@ def test_minhash_ngrams():
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(width=6, seed=1, a=params, b=params)
-    with pytest.raises(ValueError):
-        params = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash(width=8, seed=np.uint64(1), a=params, b=params)
 
 
 def test_jaccard_index():

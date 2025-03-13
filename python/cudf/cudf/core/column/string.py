@@ -5480,19 +5480,23 @@ class StringMethods(ColumnMethods):
         """
         a_column = column.as_column(a)
         b_column = column.as_column(b)
+        if a_column.dtype != np.uint32 and a_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a and b Series as uint32 or unint64, got {type(a)}"
+            )
         if a_column.dtype != b_column.dtype:
             raise ValueError(
-                f"Expecting a and b Series dtype to match,  got {type(a)}"
+                f"Expecting a and b Series dtype to match, got {type(a)}"
             )
-        seed = a.dtype(seed)
-        if a.dtype == np.uint32:
+        seed = a.dtype.type(seed)
+        if a_column.dtype == np.uint32:
             if isinstance(self._parent.dtype, cudf.ListDtype):
                 plc_column = plc.nvtext.minhash.minhash_ngrams(
                     self._column.to_pylibcudf(mode="read"),
                     width,
                     seed,
-                    a._column.to_pylibcudf(mode="read"),
-                    b._column.to_pylibcudf(mode="read"),
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
                 return self._return_or_inplace(result)
@@ -5500,8 +5504,8 @@ class StringMethods(ColumnMethods):
                 plc_column = plc.nvtext.minhash.minhash(
                     self._column.to_pylibcudf(mode="read"),
                     seed,
-                    a._column.to_pylibcudf(mode="read"),
-                    b._column.to_pylibcudf(mode="read"),
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
                     width,
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
@@ -5512,8 +5516,8 @@ class StringMethods(ColumnMethods):
                     self._column.to_pylibcudf(mode="read"),
                     width,
                     seed,
-                    a._column.to_pylibcudf(mode="read"),
-                    b._column.to_pylibcudf(mode="read"),
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
                 return self._return_or_inplace(result)
@@ -5521,8 +5525,8 @@ class StringMethods(ColumnMethods):
                 plc_column = plc.nvtext.minhash.minhash64(
                     self._column.to_pylibcudf(mode="read"),
                     seed,
-                    a._column.to_pylibcudf(mode="read"),
-                    b._column.to_pylibcudf(mode="read"),
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
                     width,
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
