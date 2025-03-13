@@ -183,9 +183,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "__le__",
             "__ge__",
         }:
-            if isinstance(other, pa.Scalar):
-                other = self.dtype._as_plc_scalar(other)
-            return binaryop.binaryop(lhs, rhs, op, bool)
+            if isinstance(rhs, pa.Scalar):
+                rhs = self.dtype._as_plc_scalar(rhs)
+            return binaryop.binaryop(lhs, rhs, op, np.dtype(np.bool_))
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
