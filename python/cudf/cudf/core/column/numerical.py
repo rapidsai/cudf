@@ -25,6 +25,7 @@ from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    cudf_dtype_to_pa_type,
     find_common_type,
     min_signed_type,
     min_unsigned_type,
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -132,52 +134,27 @@ class NumericalColumn(NumericalBaseColumn):
             include_nan and bool(self.nan_count != 0)
         )
 
-    def __setitem__(self, key: Any, value: Any):
-        """
-        Set the value of ``self[key]`` to ``value``.
-
-        If ``value`` and ``self`` are of different types, ``value`` is coerced
-        to ``self.dtype``.
-        """
-
-        # Normalize value to scalar/column
-        value_normalized: cudf.Scalar | ColumnBase = (
-            cudf.Scalar(
-                value,
-                dtype=self.dtype
-                if cudf.utils.utils._is_null_host_scalar(value)
-                else None,
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if is_scalar(value):
+            scalar = pa.scalar(
+                value
+                if not cudf.utils.utils._is_null_host_scalar(value)
+                else None
             )
-            if is_scalar(value)
-            else as_column(value)
-        )
-
-        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
-            raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
-        else:
-            value_normalized = value_normalized.astype(self.dtype)
-
-        out: ColumnBase | None  # If None, no need to perform mimic inplace.
-        device_value = (
-            value_normalized.device_value
-            if isinstance(value_normalized, cudf.Scalar)
-            else value_normalized
-        )
-        if isinstance(key, slice):
-            out = self._scatter_by_slice(key, device_value)
-        else:
-            key = as_column(
-                key,
-                dtype="float64"
-                if isinstance(key, list) and len(key) == 0
-                else None,
+            if pa.types.is_boolean(scalar.type) and self.dtype.kind != "b":
+                raise TypeError(
+                    f"Invalid value {value} for dtype {self.dtype}"
+                )
+            return pa_scalar_to_plc_scalar(
+                scalar.cast(cudf_dtype_to_pa_type(self.dtype))
             )
-            if not isinstance(key, cudf.core.column.NumericalColumn):
-                raise ValueError(f"Invalid scatter map type {key.dtype}.")
-            out = self._scatter_by_column(key, device_value)
-
-        if out:
-            self._mimic_inplace(out, inplace=True)
+        else:
+            col = as_column(value)
+            if col.dtype.kind == "b" and self.dtype.kind != "b":
+                raise TypeError(
+                    f"Invalid value {value} for dtype {self.dtype}"
+                )
+            return col.astype(self.dtype)
 
     @acquire_spill_lock()
     def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
@@ -257,7 +234,7 @@ class NumericalColumn(NumericalBaseColumn):
             # not a binary operator, so no need to promote
             out_dtype = self.dtype
         elif out_dtype is None:
-            out_dtype = np.result_type(self.dtype, other.dtype)
+            out_dtype = find_common_type((self.dtype, other.dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
@@ -342,7 +319,7 @@ class NumericalColumn(NumericalBaseColumn):
         #   => np.int64
         # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
         #   => np.int64
-        common_dtype = np.result_type(self.dtype, other)
+        common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
         if common_dtype.kind in {"b", "i", "u", "f"}:
             if self.dtype.kind == "b":
                 common_dtype = min_signed_type(other)
@@ -384,7 +361,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -395,7 +372,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
@@ -405,7 +382,7 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_decimal_column(self, dtype: Dtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
@@ -741,7 +718,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.dtype
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
-            return np.result_dtype(self.dtype, np.dtype("uint64"))
+            return find_common_type((self.dtype, np.dtype(np.uint64)))
         elif reduction_op in {"var", "std", "mean"}:
             return np.dtype("float64")
 

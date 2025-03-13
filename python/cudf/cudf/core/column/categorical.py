@@ -150,7 +150,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series._from_column(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
@@ -620,7 +620,7 @@ class CategoricalColumn(column.ColumnBase):
         return self._codes
 
     @property
-    def ordered(self) -> bool:
+    def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
@@ -711,32 +711,39 @@ class CategoricalColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         other = self._wrap_binop_normalization(other)
-        # TODO: This is currently just here to make mypy happy, but eventually
-        # we'll need to properly establish the APIs for these methods.
-        if not isinstance(other, CategoricalColumn):
-            raise ValueError
-        # Note: at this stage we are guaranteed that the dtypes are equal.
-        if not self.ordered and op not in {
-            "__eq__",
-            "__ne__",
-            "NULL_EQUALS",
-            "NULL_NOT_EQUALS",
-        }:
+        equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
+        if not self.ordered and op not in equality_ops:
             raise TypeError(
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
+        if not isinstance(other, CategoricalColumn):
+            if op not in equality_ops:
+                raise TypeError(
+                    f"Cannot compare a Categorical for op {op} with a "
+                    "non-categorical type. If you want to compare values, "
+                    "decategorize the Categorical first."
+                )
+            elif op not in equality_ops.union(
+                {"__gt__", "__lt__", "__ge__", "__le__"}
+            ):
+                # TODO: Other non-comparison ops may raise or be supported
+                return NotImplemented
+            return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def normalize_binop_value(self, other: ScalarLike) -> Self:
+    def normalize_binop_value(
+        self, other: ColumnBinaryOperand
+    ) -> column.ColumnBase:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
-                return NotImplemented
+                # We'll compare self's decategorized values later
+                return other
             if other.dtype != self.dtype:
                 raise TypeError(
                     "Categoricals can only compare with the same type"
                 )
-            return cast(Self, other)
+            return other
         codes = column.as_column(
             self._encode(other), length=len(self), dtype=self.codes.dtype
         )
@@ -1086,20 +1093,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
-    def as_categorical_column(self, dtype: Dtype) -> Self:
-        if isinstance(dtype, str) and dtype == "category":
-            return self
-        if isinstance(dtype, pd.CategoricalDtype):
-            dtype = cudf.CategoricalDtype.from_pandas(dtype)
-        if (
-            isinstance(dtype, cudf.CategoricalDtype)
-            and dtype.categories is None
-            and dtype.ordered is None
-        ):
-            return self
-        elif not isinstance(dtype, CategoricalDtype):
-            raise ValueError("dtype must be CategoricalDtype")
-
+    def as_categorical_column(self, dtype: cudf.CategoricalDtype) -> Self:
         if not isinstance(self.categories, type(dtype.categories._column)):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
@@ -1130,16 +1124,16 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self) -> StringColumn:
         return self._get_decategorized_column().as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(dtype)
 
-    def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(dtype)
 
     def _get_decategorized_column(self) -> ColumnBase:

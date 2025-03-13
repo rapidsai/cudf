@@ -83,8 +83,8 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
-    cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
     is_dtype_obj_numeric,
@@ -216,11 +216,10 @@ class _DataFrameIndexer(_FrameIndexer):
             return df[df._column_names[0]]
         else:
             if df._num_columns > 0:
-                dtypes = df.dtypes.values.tolist()
-                normalized_dtype = np.result_type(*dtypes)
-                for name, col in df._column_labels_and_values:
-                    df[name] = col.astype(normalized_dtype)
-
+                normalized_dtype = find_common_type(
+                    [dtype for _, dtype in df._dtypes]
+                )
+                df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -285,7 +284,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
             else:
                 tmp_arg = arg
-                if is_scalar(arg[0]):
+                if isinstance(arg, tuple) and is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, converting it to
                     # an array kind.
@@ -299,6 +298,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                                 "typecast to common dtype."
                             )
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
+                elif all(is_scalar(a) for a in tmp_arg):
+                    tmp_arg = (tmp_arg, slice(None))
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
                 tmp_arg = (
@@ -337,6 +338,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         },
                         index=cudf.Index._from_column(tmp_arg[0]),
                     )
+                    columns_df = columns_df.copy(deep=False)
                     columns_df[cantor_name] = column.as_column(
                         range(len(columns_df))
                     )
@@ -1887,18 +1889,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
-            if len(set(dtype.keys()) - set(self._column_names)) > 0:
+            if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
+            dtype = {
+                col_name: cudf.dtype(dtype)
+                for col_name, dtype in dtype.items()  # type: ignore[union-attr]
+            }
         else:
-            dtype = {cc: dtype for cc in self._column_names}
+            dtype = {cc: cudf.dtype(dtype) for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
     def _clean_renderable_dataframe(self, output: Self) -> str:
@@ -4244,7 +4250,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+        how : {'left', 'right', 'outer', 'inner', 'cross', 'leftsemi', 'leftanti'}, \
             default 'inner'
             Type of merge to be performed.
 
@@ -4255,6 +4261,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
               full outer join.
             - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
             - leftsemi : similar to ``inner`` join, but only returns columns
                from the left dataframe and ignores all columns from the
                right dataframe.
@@ -4375,8 +4383,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         other : DataFrame
-        how : str
-            Only accepts "left", "right", "inner", "outer"
+        how : {'left', 'right', 'outer', 'inner', 'cross'}, default 'left'
+            How to handle the operation of the two objects.
+
+            * left: use calling frame's index (or column if on is specified)
+            * right: use `other`'s index.
+            * outer: form union of calling frame's index (or column if on is
+              specified) with `other`'s index, and sort it lexicographically.
+            * inner: form intersection of calling frame's index (or column if
+              on is specified) with `other`'s index, preserving the order
+              of the calling's one.
+            * cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
         lsuffix, rsuffix : str
             The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
             column names when avoiding conflicts.
@@ -6140,7 +6158,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if isinstance(q, numbers.Number):
             q_is_number = True
             qs = [float(q)]
-        elif pd.api.types.is_list_like(q):
+        elif not is_scalar(q):
             q_is_number = False
             qs = q
         else:
@@ -6345,13 +6363,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
+        dtypes = [dtype for _, dtype in filtered._dtypes]
+        is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
             and common_dtype == CUDF_STRING_DTYPE
-            and any(dtype != CUDF_STRING_DTYPE for dtype in filtered._dtypes)
+            and any(dtype != CUDF_STRING_DTYPE for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -6669,12 +6688,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
@@ -6841,6 +6868,22 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
+
+        def cudf_dtype_from_pydata_dtype(dtype):
+            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+            Python dtype.
+            """
+            if cudf.api.types._is_categorical_dtype(dtype):
+                return cudf.core.dtypes.CategoricalDtype
+            elif cudf.api.types.is_decimal32_dtype(dtype):
+                return cudf.core.dtypes.Decimal32Dtype
+            elif cudf.api.types.is_decimal64_dtype(dtype):
+                return cudf.core.dtypes.Decimal64Dtype
+            elif cudf.api.types.is_decimal128_dtype(dtype):
+                return cudf.core.dtypes.Decimal128Dtype
+            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+                return dtype.type
+            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
@@ -7331,8 +7374,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             ]
 
             # Collect datatypes and cast columns as that type
-            common_type = np.result_type(
-                *(col.dtype for col in columns if col is not None)
+            common_type = find_common_type(
+                [col.dtype for col in columns if col is not None]
             )
 
             all_nulls = functools.cache(

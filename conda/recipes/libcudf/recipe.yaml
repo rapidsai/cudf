@@ -70,7 +70,7 @@ cache:
           - cuda-nvrtc =${{ cuda_version }}
           - cuda-nvrtc-dev =${{ cuda_version }}
           - cuda-nvtx =${{ cuda_version }}
-          - if: linux64
+          - if: linux and x86_64
             then:
               - libcufile =${{ cuda11_libcufile_host_version }}
               - libcufile-dev =${{ cuda11_libcufile_host_version }}
@@ -78,7 +78,7 @@ cache:
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - libcurand-dev
-          - if: linux64
+          - if: linux and x86_64
             then:
               - libcufile-dev
       - cuda-version =${{ cuda_version }}
@@ -95,10 +95,19 @@ outputs:
       version: ${{ version }}
     build:
       script:
-        - cmake --install cpp/build
+        content: |
+          cmake --install cpp/build
+          # Check that no hidden symbols are present in the shared library
+          LIB="$PREFIX/lib/libcudf.so"
+          test -f "$LIB"
+          ./ci/check_symbols.sh "$LIB"
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
+      prefix_detection:
+        ignore:
+          # See https://github.com/rapidsai/build-planning/issues/160
+          - lib/libcudf.so
     requirements:
       build:
         - cmake ${{ cmake_version }}
@@ -117,12 +126,12 @@ outputs:
         - if: cuda_major == "11"
           then:
             - cudatoolkit
-            - if: linux64
+            - if: linux and x86_64
               then:
                 - libcufile ${{ cuda11_libcufile_run_version }}
           else:
             - cuda-nvrtc
-            - if: linux64
+            - if: linux and x86_64
               then:
                 - libcufile
         - nvcomp ${{ nvcomp_version }}
@@ -139,14 +148,17 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     tests:
       - script:
-        - test -f $PREFIX/lib/libcudf.so
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
@@ -179,11 +191,15 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     tests:
       - script:
         - test -f $PREFIX/lib/libcudf_kafka.so
@@ -255,11 +271,15 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}
@@ -312,11 +332,15 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
           - nvcomp
+          - if: cuda_major == "11"
+            then:
+              - cudatoolkit
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
       license: ${{ load_from_file("python/libcudf/pyproject.toml").project.license.text }}

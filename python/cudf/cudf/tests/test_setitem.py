@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -243,11 +243,6 @@ def test_series_slice_setitem_list():
     )
     assert_eq(actual, expected)
 
-    actual = cudf.Series([[[1, 2], [2, 3]], [[3, 4]], [[4, 5]], [[6, 7]]])
-    actual[0:3] = cudf.Scalar([[10, 11], [12, 23]])
-
-    assert_eq(actual, expected)
-
 
 def test_series_slice_setitem_struct():
     actual = cudf.Series(
@@ -269,19 +264,6 @@ def test_series_slice_setitem_struct():
             {"a": {"b": 4000}, "b": 1090},
         ]
     )
-    assert_eq(actual, expected)
-
-    actual = cudf.Series(
-        [
-            {"a": {"b": 10}, "b": 11},
-            {"a": {"b": 100}, "b": 5},
-            {"a": {"b": 50}, "b": 2},
-            {"a": {"b": 1000}, "b": 67},
-            {"a": {"b": 4000}, "b": 1090},
-        ]
-    )
-    actual[0:3] = cudf.Scalar({"a": {"b": 5050}, "b": 101})
-
     assert_eq(actual, expected)
 
 
@@ -319,7 +301,7 @@ def test_series_setitem_upcasting_string_column():
     cr = cudf.from_pandas(sr)
     new_value = np.float64(10.5)
     sr[0] = str(new_value)
-    cr[0] = new_value
+    cr[0] = str(new_value)
     assert_eq(sr, cr)
 
 

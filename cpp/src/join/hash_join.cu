@@ -17,11 +17,12 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join.hpp>
+#include <cudf/detail/join/hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -47,6 +48,8 @@
 namespace cudf {
 namespace detail {
 namespace {
+using multimap_type = cudf::hash_join::impl_type::map_type;
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.

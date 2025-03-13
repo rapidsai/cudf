@@ -31,84 +31,83 @@ sccache --zero-stats
 
 rapids-logger "Building pylibcudf"
 
-# TODO: Remove `--test skip` flag once importing on a CPU node works correctly
 # --no-build-id allows for caching with `sccache`
 # more info is available at
 # https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
-rattler-build build --recipe conda/recipes/pylibcudf \
+rapids-telemetry-record build-pylibcudf.log \
+  rattler-build build --recipe conda/recipes/pylibcudf \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
 sccache --zero-stats
 
 rapids-logger "Building cudf"
 
-rattler-build build --recipe conda/recipes/cudf \
+rapids-telemetry-record build-cudf.log \
+   rattler-build build --recipe conda/recipes/cudf \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-cudf.txt sccache --show-adv-stats
 sccache --zero-stats
 
 rapids-logger "Building dask-cudf"
 
-rattler-build build --recipe conda/recipes/dask-cudf \
+rapids-telemetry-record build-dask-cudf.log \
+    rattler-build build --recipe conda/recipes/dask-cudf \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-dask-cudf.txt sccache --show-adv-stats
 sccache --zero-stats
 
 rapids-logger "Building cudf_kafka"
 
-rattler-build build --recipe conda/recipes/cudf_kafka \
+rapids-telemetry-record build-cudf_kafka.log \
+    rattler-build build --recipe conda/recipes/cudf_kafka \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-cudf_kafka.txt sccache --show-adv-stats
 sccache --zero-stats
 
 rapids-logger "Building custreamz"
 
-rattler-build build --recipe conda/recipes/custreamz \
+rapids-telemetry-record build-custreamz.log \
+    rattler-build build --recipe conda/recipes/custreamz \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-custreamz.txt sccache --show-adv-stats
 sccache --zero-stats
 
 rapids-logger "Building cudf-polars"
 
-rattler-build build --recipe conda/recipes/cudf-polars \
+rapids-telemetry-record build-cudf-polars.log \
+    rattler-build build --recipe conda/recipes/cudf-polars \
                     --experimental \
                     --no-build-id \
                     --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
-                    --test skip \
                     "${RATTLER_CHANNELS[@]}"
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
 
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache

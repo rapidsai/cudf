@@ -5033,7 +5033,7 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype: Dtype | dict[Any, Dtype],
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
