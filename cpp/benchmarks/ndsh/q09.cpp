@@ -28,18 +28,18 @@
 
 #include <nvbench/nvbench.cuh>
 
-enum class engine_type : int32_t { binaryops = 0, ast = 1, transforms = 2 };
+enum class engine_type : int32_t { BINARYOP = 0, AST = 1, TRANSFORM = 2 };
 
 engine_type engine_from_string(std::string const& str)
 {
-  if (str == "binaryops") {
-    return engine_type::binaryops;
+  if (str == "binaryop") {
+    return engine_type::BINARYOP;
   } else if (str == "ast") {
-    return engine_type::ast;
-  } else if (str == "transforms") {
-    return engine_type::transforms;
+    return engine_type::AST;
+  } else if (str == "transform") {
+    return engine_type::TRANSFORM;
   } else {
-    CUDF_FAILS("unrecognized engine enum: " + str);
+    CUDF_FAIL("unrecognized engine enum: " + str);
   }
 }
 
@@ -107,7 +107,7 @@ struct q9_data {
  * @param stream The CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_binaryops(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_binaryop(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -139,7 +139,7 @@ struct q9_data {
   return amount;
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_transforms(
+[[nodiscard]] std::unique_ptr<cudf::column> compute_amount_transform(
   cudf::column_view const& discount,
   cudf::column_view const& extendedprice,
   cudf::column_view const& supplycost,
@@ -210,12 +210,12 @@ struct q9_data {
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   switch (engine) {
-    case engine_type::binaryops:
-      return compute_amount_binaryops(discount, extendedprice, supplycost, quantity, stream, mr);
-    case engine_type::ast:
+    case engine_type::BINARYOP:
+      return compute_amount_binaryop(discount, extendedprice, supplycost, quantity, stream, mr);
+    case engine_type::AST:
       return compute_amount_ast(discount, extendedprice, supplycost, quantity, stream, mr);
-    case engine_type::transforms:
-      return compute_amount_transforms(discount, extendedprice, supplycost, quantity, stream, mr);
+    case engine_type::TRANSFORM:
+      return compute_amount_transform(discount, extendedprice, supplycost, quantity, stream, mr);
     default: CUDF_UNREACHABLE("invalid engine_type enum");
   }
 }
@@ -323,6 +323,30 @@ void ndsh_q9(nvbench::state& state)
   });
 }
 
+void ndsh_q9_noio(nvbench::state& state)
+{
+  auto const scale_factor = state.get_float64("scale_factor");
+  auto const engine       = engine_from_string(state.get_string("engine"));
+
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
+  generate_parquet_data_sources(
+    scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
+
+  q9_data const data = load_data(sources);
+
+  std::unique_ptr<table_with_names> result;
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    result = compute_profit(state,
+                            engine,
+                            data,
+                            launch.get_stream().get_stream(),
+                            cudf::get_current_device_resource_ref());
+  });
+
+  if (result) { result->to_parquet("q9_noio.parquet"); }
+}
+
 // unlike `ndsh_q9`, `ndsh_q9_amount` benchmarks only the amount calculation part of the benchmark
 void ndsh_q9_amount(nvbench::state& state)
 {
@@ -356,9 +380,14 @@ void ndsh_q9_amount(nvbench::state& state)
 NVBENCH_BENCH(ndsh_q9)
   .set_name("ndsh_q9")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("engine", {"binaryops", "ast", "transforms"});
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});
+
+NVBENCH_BENCH(ndsh_q9_noio)
+  .set_name("ndsh_q9_noio")
+  .add_float64_axis("scale_factor", {0.01, 0.1, 1})
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});
 
 NVBENCH_BENCH(ndsh_q9_amount)
   .set_name("ndsh_q9_amount")
   .add_float64_axis("scale_factor", {0.01, 0.1, 1})
-  .add_string_axis("engine", {"binaryops", "ast", "transforms"});
+  .add_string_axis("engine", {"binaryop", "ast", "transform"});
