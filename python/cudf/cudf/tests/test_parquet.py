@@ -223,8 +223,7 @@ def parquet_path_or_buf(datadir):
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".parquet file is not found")
-        else:
-            print(type(excpr).__name__)
+        raise excpr
 
     def _make_parquet_path_or_buf(src):
         if src == "filepath":
@@ -472,7 +471,6 @@ def test_parquet_read_filtered(tmpdir):
     tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
-
     assert len(df_filtered) < len(df)
     assert len(tbl_filtered) <= len(df_filtered)
 

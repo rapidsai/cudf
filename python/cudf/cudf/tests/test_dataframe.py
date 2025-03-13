@@ -11293,3 +11293,25 @@ def test_empty_construction_rangeindex_columns(data):
     result = cudf.DataFrame(data=data).columns
     expected = pd.RangeIndex(0)
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_midx_columns_loc():
+    idx_1 = ["Hi", "Lo"]
+    idx_2 = ["I", "II", "III"]
+    idx = cudf.MultiIndex.from_product([idx_1, idx_2])
+
+    data_rand = (
+        np.random.default_rng(seed=0)
+        .uniform(0, 1, 3 * len(idx))
+        .reshape(3, -1)
+    )
+    df = cudf.DataFrame(data_rand, index=["A", "B", "C"], columns=idx)
+    pdf = df.to_pandas()
+
+    assert_eq(df.shape, pdf.shape)
+
+    expected = pdf.loc[["A", "B"]]
+    actual = df.loc[["A", "B"]]
+
+    assert_eq(expected, actual)
+    assert_eq(df, pdf)
