@@ -118,17 +118,17 @@ class ListColumn(ColumnBase):
         else:
             return result
 
-    def __setitem__(self, key, value):
-        if isinstance(value, list):
-            value = cudf.Scalar(value)
-        if isinstance(value, cudf.Scalar):
-            if value.dtype != self.dtype:
-                raise TypeError("list nesting level mismatch")
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar:
+        if isinstance(value, list) or value is None:
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(value, type=self.dtype.to_arrow())
+            )
         elif value is NA:
-            value = cudf.Scalar(value, dtype=self.dtype)
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=self.dtype.to_arrow())
+            )
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
-        super().__setitem__(key, value)
 
     @property
     def base_size(self):

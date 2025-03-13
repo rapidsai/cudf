@@ -830,6 +830,11 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return result_col
 
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if isinstance(value, (np.str_, np.datetime64)):
+            value = pd.Timestamp(value.item())
+        return super()._cast_setitem_value(value)
+
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:

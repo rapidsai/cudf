@@ -13,6 +13,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase
@@ -190,6 +191,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 f"{op} not supported for the following dtypes: "
                 f"{self.dtype}, {other.dtype}"
             )
+
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if isinstance(value, np.integer):
+            value = value.item()
+        if is_scalar(value):
+            return self._scalar_to_plc_scalar(value)
+        return super()._cast_setitem_value(value)
 
     def _scalar_to_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
         """Return a pylibcudf.Scalar that matches the type of self.dtype"""
