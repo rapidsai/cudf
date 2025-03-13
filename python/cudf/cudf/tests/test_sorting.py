@@ -329,7 +329,6 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
-        # print(col._column)
         name = col.name
         for i, df in enumerate(dfs):
             nrows += len(df)

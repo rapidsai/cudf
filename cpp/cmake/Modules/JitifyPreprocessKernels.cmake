@@ -23,6 +23,7 @@ target_link_libraries(jitify_preprocess PUBLIC ${CMAKE_DL_LIBS})
 function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
+  get_target_property(libcudacxx_raw_includes CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
   set(includes)
   foreach(inc IN LISTS libcudacxx_raw_includes CUDAToolkit_INCLUDE_DIRS)
     list(APPEND includes "-I${inc}")
