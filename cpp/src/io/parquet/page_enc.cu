@@ -2981,7 +2981,7 @@ CUDF_KERNEL void __launch_bounds__(encode_block_size)
 {
   __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
-  auto const page_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const page_idx = cudf::detail::grid_1d::global_thread_id();
   if (page_idx >= pages.size()) { return; }
 
   auto page             = pages[page_idx];
