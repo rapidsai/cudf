@@ -470,11 +470,14 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
-  cache.add_result(
-    values,
-    agg,
-    lists::detail::distinct(
-      lists_column_view{collect_result->view()}, nulls_equal, nans_equal, stream, mr));
+  cache.add_result(values,
+                   agg,
+                   lists::detail::distinct(lists_column_view{collect_result->view()},
+                                           nulls_equal,
+                                           duplicate_keep_option::KEEP_ANY,
+                                           nans_equal,
+                                           stream,
+                                           mr));
 }
 
 /**
