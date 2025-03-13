@@ -497,7 +497,7 @@ def test_options_mode():
 # Codecov and Profiler interfere with each-other,
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
-def test_profiler():
+def test_cudf_pandas_profiler():
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
@@ -1918,7 +1918,6 @@ def assert_functions_called(profiler, functions):
 
     # Get all called functions as (filename, lineno, func_name)
     called_functions = {func[2] for func in stats.stats.keys()}
-    print(called_functions)
     for func_str in functions:
         assert func_str in called_functions
 
