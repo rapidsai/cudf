@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 # Supported multi-partition aggregations
-_GB_AGG_SUPPORTED = ("sum", "count", "mean")
+_GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max")
 
 
 def combine(
@@ -67,9 +67,12 @@ def decompose(
 
     Returns
     -------
-    Tuple containing the `NamedExpr`s for each of the
-    three parallel-aggregation phases: (1) selection,
-    (2) initial aggregation, and (3) reduction.
+    NamedExpr
+        The expression selecting the *output* column or columns.
+    list[NamedExpr]
+        The initial aggregation expressions.
+    list[NamedExpr]
+        The reduction expressions.
     """
     dtype = expr.dtype
     expr = expr.children[0] if isinstance(expr, Cast) else expr
@@ -100,7 +103,11 @@ def decompose(
         ]
         return selection, aggregation, reduction
     if isinstance(expr, Agg):
-        if expr.name in ("sum", "count"):
+        if expr.name in ("sum", "count", "min", "max"):
+            if expr.name in ("sum", "count"):
+                aggfunc = "sum"
+            else:
+                aggfunc = expr.name
             selection = NamedExpr(name, _wrap_unary(Col(dtype, name)))
             aggregation = [NamedExpr(name, expr)]
             reduction = [
@@ -108,7 +115,7 @@ def decompose(
                     name,
                     # Sum reduction may require casting.
                     # Do it for all cases to be safe (for now)
-                    Cast(dtype, Agg(dtype, "sum", None, Col(dtype, name))),
+                    Cast(dtype, Agg(dtype, aggfunc, None, Col(dtype, name))),
                 )
             ]
             return selection, aggregation, reduction

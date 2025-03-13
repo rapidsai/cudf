@@ -52,7 +52,7 @@ def test_groupby_single_partitions(df, op, keys):
     )
 
 
-@pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
+@pytest.mark.parametrize("op", ["sum", "mean", "len", "count", "min", "max"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
