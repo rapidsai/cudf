@@ -89,16 +89,20 @@ def test_groupby_raises(df, engine):
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+def test_groupby_agg_literal(df, engine):
+    q = df.group_by("y").agg(1)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "op",
     [
         pl.max("x") - pl.min("x"),
         pl.mean("x") * pl.sum("x"),
         pl.max("x") + pl.max("z"),
+        pl.max("x") + 1,
     ],
 )
-def test_groupby_nested_expression(
-    df: pl.LazyFrame, engine: pl.GPUEngine, op: pl.Expr
-) -> None:
+def test_groupby_agg_binop(df: pl.LazyFrame, engine: pl.GPUEngine, op: pl.Expr) -> None:
     q = df.group_by("y").agg(op)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

@@ -9,7 +9,16 @@ from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.expr import Agg, BinOp, Cast, Col, Len, NamedExpr, UnaryFunction
+from cudf_polars.dsl.expr import (
+    Agg,
+    BinOp,
+    Cast,
+    Col,
+    Len,
+    Literal,
+    NamedExpr,
+    UnaryFunction,
+)
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
@@ -159,6 +168,12 @@ def decompose(
             ),
         )
         return selection, aggregations, reductions
+
+    elif isinstance(expr, Literal):
+        selection = NamedExpr(name, _wrap_unary(Col(dtype, name)))
+        aggregation = []
+        reduction = [NamedExpr(name, expr)]
+        return selection, aggregation, reduction
 
     else:  # pragma: no cover
         # Unsupported expression
