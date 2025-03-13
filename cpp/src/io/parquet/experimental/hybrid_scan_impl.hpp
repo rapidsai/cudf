@@ -107,6 +107,13 @@ class impl {
   enum class read_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
 
   /**
+   * @brief Initialize the necessary options related internal variables for use later on.
+   */
+  void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                          cudf::io::parquet_reader_options const& options,
+                          rmm::cuda_stream_view stream);
+
+  /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk

@@ -731,6 +731,18 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  initialize_options(row_group_indices, options, stream);
+  prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
+
+  // Make sure we haven't gone past the input passes
+  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
+  return read_chunk_internal();
+}
+
+void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                              cudf::io::parquet_reader_options const& options,
+                              rmm::cuda_stream_view stream)
+{
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
@@ -738,6 +750,7 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
+
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
@@ -748,13 +761,8 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
 
   _num_sources = row_group_indices.size();
 
+  // CUDA stream to use for internal operations
   _stream = stream;
-
-  prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
-
-  // Make sure we haven't gone past the input passes
-  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
-  return read_chunk_internal();
 }
 
 cudf::io::table_with_metadata impl::read_chunk_internal()
