@@ -102,6 +102,7 @@ class hybrid_scan_reader {
 
   [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
     cudf::mutable_column_view input_rows,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer>& data_pages_bytes,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
@@ -176,6 +177,7 @@ get_filter_columns_data_pages(std::unique_ptr<parquet::hybrid_scan_reader> const
 [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::mutable_column_view input_rows,
+  cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer>& data_pages_bytes,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream);

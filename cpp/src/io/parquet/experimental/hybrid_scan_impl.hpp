@@ -94,10 +94,66 @@ class impl {
                                 cudf::io::parquet_reader_options const& options,
                                 rmm::cuda_stream_view stream) const;
 
+  [[nodiscard]] std::unique_ptr<cudf::table> materialize_filter_columns(
+    cudf::mutable_column_view input_rows,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::vector<rmm::device_buffer>& data_pages_bytes,
+    cudf::io::parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
+
  private:
   using table_metadata = cudf::io::table_metadata;
 
+  /**
+   * @brief Perform the necessary data preprocessing for parsing file later on.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   */
+  void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                    std::vector<rmm::device_buffer>& data_pages_bytes,
+                    cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @brief Preprocess step for the entire file.
+   *
+   * Only ever called once. This function reads in rowgroup and associated chunk
+   * information and computes the schedule of top level passes (see `pass_intermediate_data`).
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   */
   void prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                          cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @brief Ratchet the pass/subpass/chunk process forward.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   */
+  void handle_chunking(std::vector<rmm::device_buffer>& data_pages_bytes,
+                       cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @brief Setup step for the next input read pass.
+   *
+   * A 'pass' is defined as a subset of row groups read out of the globally
+   * requested set of all row groups.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   */
+  void setup_next_pass(std::vector<rmm::device_buffer>& data_pages_bytes,
+                       cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @brief Setup step for the next decompression subpass.
+   *
+   * A 'subpass' is defined as a subset of pages within a pass that are
+   * decompressed and decoded as a batch. Subpasses may be further subdivided
+   * into output chunks.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   *
+   */
+  void setup_next_subpass(std::vector<rmm::device_buffer>& data_pages_bytes,
                           cudf::io::parquet_reader_options const& options);
 
   /**
@@ -114,7 +170,6 @@ class impl {
 
   /**
    * @brief Build string dictionary indices for a pass.
-   *
    */
   void build_string_dict_indices();
 
@@ -248,6 +303,9 @@ class impl {
   using input_column_info            = cudf::io::parquet::detail::input_column_info;
   using inline_column_buffer         = cudf::io::detail::inline_column_buffer;
   using reader_column_schema         = cudf::io::reader_column_schema;
+
+  rmm::cuda_stream_view _stream;
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 

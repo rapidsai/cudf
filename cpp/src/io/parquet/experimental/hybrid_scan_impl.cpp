@@ -18,7 +18,6 @@
 
 #include "hybrid_scan_helpers.hpp"
 
-// #include "error.hpp"
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -254,6 +253,26 @@ std::vector<std::vector<cudf::io::text::byte_range_info>> impl::get_filter_colum
     input_rows, row_group_indices, output_dtypes, _output_column_schemas, stream);
 }
 
+std::unique_ptr<cudf::table> impl::materialize_filter_columns(
+  cudf::mutable_column_view input_rows,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::vector<rmm::device_buffer>& data_pages_bytes,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  if (not _file_preprocessed) {
+    // setup file level information
+    // - read row group information
+    // - setup information on (parquet) chunks
+    // - compute schedule of input passes
+    prepare_row_groups(row_group_indices, options);
+  }
+
+  // Make sure we haven't gone past the input passes
+  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
+  return {};
+}
+
 void impl::populate_metadata(table_metadata& out_metadata) const
 {
   // Return column names
@@ -269,6 +288,26 @@ void impl::populate_metadata(table_metadata& out_metadata) const
   out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
   out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
                                      out_metadata.per_file_user_data[0].end()};
+}
+
+void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                        std::vector<rmm::device_buffer>& data_pages_bytes,
+                        cudf::io::parquet_reader_options const& options)
+{
+  // if we have not preprocessed at the whole-file level, do that now
+  if (not _file_preprocessed) {
+    // setup file level information
+    // - read row group information
+    // - setup information on (parquet) chunks
+    // - compute schedule of input passes
+    prepare_row_groups(row_group_indices, options);
+  }
+
+  // handle any chunking work (ratcheting through the subpasses and chunks within
+  // our current pass) if in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
+    handle_chunking(data_pages_bytes, options);
+  }
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

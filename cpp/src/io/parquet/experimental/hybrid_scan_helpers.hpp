@@ -120,10 +120,7 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
     tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
     add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
                    int64_t row_start,
-                   std::optional<size_type> const& row_count,
-                   host_span<data_type const> output_dtypes,
-                   host_span<int const> output_column_schemas,
-                   std::optional<std::reference_wrapper<ast::expression const>> filter);
+                   std::optional<size_type> const& row_count);
 
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     host_span<std::vector<size_type> const> row_group_indices,

@@ -124,13 +124,9 @@ aggregate_reader_metadata::select_filter_columns(
     std::nullopt, filter_columns_names, include_index, strings_to_categorical, timestamp_type_id);
 }
 std::tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
-aggregate_reader_metadata::add_row_groups(
-  host_span<std::vector<size_type> const> row_group_indices,
-  int64_t row_start,
-  std::optional<size_type> const& row_count,
-  host_span<data_type const> output_dtypes,
-  host_span<int const> output_column_schemas,
-  std::optional<std::reference_wrapper<ast::expression const>> filter)
+aggregate_reader_metadata::add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+                                          int64_t row_start,
+                                          std::optional<size_type> const& row_count)
 {
   // Compute the number of rows to read and skip
   auto [rows_to_skip, rows_to_read] = [&]() {
@@ -151,12 +147,14 @@ aggregate_reader_metadata::add_row_groups(
   CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                "Must specify row groups for each source");
 
+  auto total_row_groups = 0;
   for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
     auto const& fmd = per_file_metadata[src_idx];
     for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
       CUDF_EXPECTS(
         rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
         "Invalid rowgroup index");
+      total_row_groups++;
       selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
       // if page-level indexes are present, then collect extra chunk and page info.
       column_info_for_row_group(selection.back(), 0);
@@ -165,6 +163,8 @@ aggregate_reader_metadata::add_row_groups(
       num_rows_per_source[src_idx] += rows_this_rg;
     }
   }
+
+  CUDF_EXPECTS(total_row_groups > 0, "No row groups added");
 
   return {rows_to_skip, rows_to_read, std::move(selection)};
 }
