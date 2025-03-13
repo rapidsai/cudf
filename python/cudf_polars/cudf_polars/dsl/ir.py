@@ -534,10 +534,14 @@ class Scan(IR):
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
                 filters = to_parquet_filter(predicate.value)
+            options = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(paths)
+            ).build()
+            if with_columns is not None:
+                options.set_columns(with_columns)
+            if filters is not None:
+                options.set_filter(filters)
             if parquet_options.get("chunked", True):
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -547,10 +551,6 @@ class Scan(IR):
                 nrows = n_rows + skip_rows
                 if nrows > -1:
                     options.set_num_rows(nrows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
-                if filters is not None:
-                    options.set_filter(filters)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=parquet_options.get(
@@ -594,17 +594,10 @@ class Scan(IR):
                     names=names,
                 )
             else:
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
                 if n_rows != -1:
                     options.set_num_rows(n_rows)
                 if skip_rows != 0:
                     options.set_skip_rows(skip_rows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
-                if filters is not None:
-                    options.set_filter(filters)
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
