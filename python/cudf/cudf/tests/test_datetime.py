@@ -1078,7 +1078,7 @@ def test_datetime_series_cmpops_with_scalars(data, other_scalars, dtype, op):
         datetime.timedelta(days=768),
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
-        pytest.param(np.timedelta64("nat"), marks=pytest.mark.xfail),
+        np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
