@@ -99,12 +99,6 @@ def _should_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
 ) -> bool:
-    # Check bcast_join_limit
-    # (Maximum number of partitions in "small" table)
-    bcast_join_limit = ir.config_options.get(
-        "executor_options.bcast_join_limit", default=16
-    )
-
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
         small_count = partition_info[right].count
@@ -129,7 +123,12 @@ def _should_bcast_join(
     # 3. The "kind" of join is compatible with a broadcast join
     return (
         not large_shuffled
-        and small_count <= bcast_join_limit
+        and small_count
+        <= ir.config_options.get(
+            # Maximum number of "small"-table partitions to bcast
+            "executor_options.bcast_join_limit",
+            default=16,
+        )
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
