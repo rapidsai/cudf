@@ -16,66 +16,53 @@
 
 #include <benchmarks/join/join_common.hpp>
 
-template <typename Key, bool Nullable>
-void nvbench_inner_join(nvbench::state& state,
-                        nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+void nvbench_inner_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
-  auto const selectivity  = static_cast<float>(state.get_float64("selectivity"));
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
     return cudf::inner_join(left_input, right_input, compare_nulls);
   };
-  BM_join<Key, Nullable>(state, join, selectivity, multiplicity);
+  BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
 
-template <typename Key, bool Nullable>
-void nvbench_left_join(nvbench::state& state, nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+void nvbench_left_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
-  auto const selectivity  = static_cast<float>(state.get_float64("selectivity"));
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
     return cudf::left_join(left_input, right_input, compare_nulls);
   };
-  BM_join<Key, Nullable>(state, join, selectivity, multiplicity);
+  BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
 
-template <typename Key, bool Nullable>
-void nvbench_full_join(nvbench::state& state, nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
+void nvbench_full_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
-  auto const selectivity  = static_cast<float>(state.get_float64("selectivity"));
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
     return cudf::full_join(left_input, right_input, compare_nulls);
   };
-  BM_join<Key, Nullable>(state, join, selectivity, multiplicity);
+  BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
 
-NVBENCH_BENCH_TYPES(nvbench_inner_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH(nvbench_inner_join)
   .set_name("low_multiplicity_inner_join")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
-  .add_float64_axis("selectivity", {0.3, 0.6, 0.9});
+  .add_int64_axis("left_size", {100'000})
+  .add_int64_axis("right_size", {100'000})
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
-NVBENCH_BENCH_TYPES(nvbench_left_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH(nvbench_left_join)
   .set_name("low_multiplicity_left_join")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
-  .add_float64_axis("selectivity", {0.3, 0.6, 0.9});
+  .add_int64_axis("left_size", {100'000})
+  .add_int64_axis("right_size", {100'000})
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});
 
-NVBENCH_BENCH_TYPES(nvbench_full_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH(nvbench_full_join)
   .set_name("low_multiplicity_full_join")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000})
-  .add_float64_axis("selectivity", {0.3, 0.6, 0.9});
+  .add_int64_axis("left_size", {100'000})
+  .add_int64_axis("right_size", {100'000})
+  .add_int64_axis("multiplicity", {10, 20, 50, 100, 1'000, 10'000, 50'000});

@@ -66,7 +66,7 @@ template <typename Key,
           join_t join_type = join_t::HASH,
           typename state_type,
           typename Join>
-void BM_join(state_type& state, Join JoinFunc, double selectivity = 0.3, int multiplicity = 1)
+void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double selectivity = 0.3)
 {
   auto const right_size = static_cast<cudf::size_type>(state.get_int64("right_size"));
   auto const left_size  = static_cast<cudf::size_type>(state.get_int64("left_size"));
