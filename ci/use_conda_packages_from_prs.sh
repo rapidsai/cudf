@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 # download CI artifacts
 LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1858 cpp)
