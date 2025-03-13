@@ -91,9 +91,9 @@ std::unique_ptr<column> apply_boolean_mask(
 std::unique_ptr<column> distinct(
   // TODO: add defaults for nulls_equal, nans_equal, keep_option after distinct() is deprecated
   lists_column_view const& input,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  duplicate_keep_option keep_option,
+  null_equality nulls_equal = null_equality::EQUAL,
+  nan_equality nans_equal = nan_equality::ALL_EQUAL,
+  duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -121,9 +121,9 @@ std::unique_ptr<column> distinct(
  */
 [[deprecated]] std::unique_ptr<column> distinct(
   lists_column_view const& input,
-  null_equality nulls_equal         = null_equality::EQUAL,
-  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
