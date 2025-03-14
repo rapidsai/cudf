@@ -10,6 +10,7 @@ import warnings
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -528,7 +529,11 @@ class DatetimeColumn(column.ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, (ColumnBase, cudf.DateOffset)):
             return other
-        elif is_scalar(other):
+        elif is_scalar(other) or (
+            isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0
+        ):
+            if isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+                other = other[()]
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
             elif isinstance(other, pd.Timestamp):

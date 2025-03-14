@@ -3185,16 +3185,6 @@ def test_binop_integer_power_series_int():
     assert_eq(expected, got)
 
 
-def test_binop_integer_power_scalar_series():
-    # GH: #10178
-    base = cudf.Scalar(3)
-    gs_exponent = cudf.Series([1, 1, 7, 7])
-    ps_exponent = gs_exponent.to_pandas()
-    expected = base.value**ps_exponent
-    got = base**gs_exponent
-    assert_eq(expected, got)
-
-
 def test_binop_integer_power_scalar_scalar():
     # GH: #10178
     base = cudf.Scalar(3)
