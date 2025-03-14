@@ -153,6 +153,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::size_type* agg_mask_offsets,
                                            cudf::aggregation::Kind const* d_agg_kinds)
 {
+  if (cardinality == 0) { return; }
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < buckets; idx += block.num_threads()) {
     auto const target_idx =
