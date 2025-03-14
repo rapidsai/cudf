@@ -72,7 +72,7 @@ class Shuffle(IR):
         keys: tuple[NamedExpr, ...],
         options: dict[str, Any],
         df: DataFrame,
-    ):  # pragma: no cover
+    ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition Shuffle evaluation is a no-op
         return df
