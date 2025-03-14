@@ -38,7 +38,7 @@ def test_join_rapidsmp(max_rows_per_partition: int) -> None:
         executor="dask-experimental",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
-            "bcast_join_limit": 2,
+            "broadcast_join_limit": 2,
             "shuffle_method": "rapidsmp",
         },
     )

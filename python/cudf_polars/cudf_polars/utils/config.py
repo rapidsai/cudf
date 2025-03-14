@@ -128,7 +128,7 @@ class ConfigOptions:
                 "parquet_blocksize",
                 "cardinality_factor",
                 "groupby_n_ary",
-                "bcast_join_limit",
+                "broadcast_join_limit",
                 "shuffle_method",
             }
         else:
