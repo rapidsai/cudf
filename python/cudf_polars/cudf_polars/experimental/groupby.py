@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import itertools
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
@@ -130,11 +131,10 @@ def decompose(
             return selection, aggregation, reduction
         elif expr.name == "mean":
             (child,) = expr.children
+            token = str(uuid.uuid4().hex)  # prevent collisions with user's names
             (sum, count), aggregations, reductions = combine(
-                # TODO: Avoid possibility of a name collision
-                # (even though the likelihood is small)
-                decompose(f"{name}__mean_sum", Agg(dtype, "sum", None, child)),
-                decompose(f"{name}__mean_count", Len(dtype)),
+                decompose(f"{name}__mean_sum_{token}", Agg(dtype, "sum", None, child)),
+                decompose(f"{name}__mean_count_{token}", Len(dtype)),
             )
             selection = NamedExpr(
                 name,
@@ -156,9 +156,10 @@ def decompose(
         # We can then combine the decompositions of the operands to form the
         # decomposition of the BinOp.
         (left, right) = expr.children
+        token = str(uuid.uuid4().hex)  # prevent collisions with user's names
         (left_selection, right_selection), aggregations, reductions = combine(
-            decompose(f"{name}__left", left),
-            decompose(f"{name}__right", right),
+            decompose(f"{name}__left_{token}", left),
+            decompose(f"{name}__right_{token}", right),
         )
 
         selection = NamedExpr(
