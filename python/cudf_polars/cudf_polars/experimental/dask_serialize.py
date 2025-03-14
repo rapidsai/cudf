@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
@@ -24,6 +24,16 @@ __all__ = ["register"]
 
 def register() -> None:
     """Register dask serialization routines for DataFrames."""
+
+    @overload
+    def serialize_column_or_frame(
+        x: DataFrame,
+    ) -> tuple[DataFrameHeader, list[memoryview]]: ...
+
+    @overload
+    def serialize_column_or_frame(
+        x: Column,
+    ) -> tuple[ColumnHeader, list[memoryview]]: ...
 
     @cuda_serialize.register((Column, DataFrame))
     def serialize_column_or_frame(
@@ -46,6 +56,16 @@ def register() -> None:
         with log_errors():
             metadata, gpudata = frames
             return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
+
+    @overload
+    def dask_serialize_column_or_frame(
+        x: DataFrame,
+    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]: ...
+
+    @overload
+    def dask_serialize_column_or_frame(
+        x: Column,
+    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
 
     @dask_serialize.register((Column, DataFrame))
     def dask_serialize_column_or_frame(
