@@ -2040,7 +2040,7 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.343", "0.500"],
             cudf.Decimal64Dtype(scale=3, precision=6),
             ["68.60", "100.0"],
-            cudf.Decimal64Dtype(scale=6, precision=13),
+            cudf.Decimal64Dtype(scale=3, precision=10),
         ),
         (
             operator.truediv,
@@ -2071,7 +2071,7 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
         (
             operator.truediv,
-            20,
+            ["20", "20"],
             cudf.Decimal128Dtype(scale=2, precision=6),
             ["20", "20"],
             cudf.Decimal128Dtype(scale=2, precision=6),
