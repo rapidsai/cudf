@@ -537,7 +537,10 @@ class DatetimeColumn(column.ColumnBase):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
             elif isinstance(other, pd.Timestamp):
-                other = other.to_numpy()
+                if other.tz is not None:
+                    raise NotImplementedError(
+                        "Binary operations with timezone aware operands is not supported."
+                    )
             elif isinstance(other, str):
                 try:
                     other = pd.Timestamp(other)
