@@ -51,7 +51,7 @@ test_is_finite_series or \
 test_sumh_transformations or \
 test_maybe_convert_dtypes_pandas or \
 test_q1 or \
-test_dask_order_dependent_ops
+test_dask_order_dependent_ops \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
@@ -61,7 +61,7 @@ TESTS_TO_ALWAYS_SKIP="
 test_array_dunder_with_copy or \
 test_to_arrow or \
 test_to_arrow_with_nulls or \
-test_pandas_object_series
+test_pandas_object_series \
 "
 
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
