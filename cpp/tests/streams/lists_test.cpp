@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/stream_compaction.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
@@ -31,6 +29,7 @@
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 
 class ListTest : public cudf::test::BaseFixture {};
 

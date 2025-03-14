@@ -31,4 +31,4 @@ public enum DuplicateKeepOption {
   final int nativeId;
 
   DuplicateKeepOption(int nativeId) { this.nativeId = nativeId; }
-} 
+}
