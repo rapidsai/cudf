@@ -1377,7 +1377,7 @@ _SPECIAL_METHODS: set[str] = {
     "__add__",
     "__and__",
     "__bool__",
-    "__call__",
+    # "__call__",
     "__getattr__",
     "__complex__",
     "__contains__",
