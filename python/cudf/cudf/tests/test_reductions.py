@@ -173,9 +173,8 @@ def test_sum_of_squares(dtype, nelem):
     expect = (data**2).sum()
 
     if cudf.dtype(dtype).kind in {"u", "i"}:
-        if 0 <= expect <= np.iinfo(dtype).max:
-            np.testing.assert_array_almost_equal(expect, got)
-            np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
+        np.testing.assert_array_almost_equal(expect, got)
+        np.testing.assert_array_almost_equal(expect, got_df.iloc[0])
     else:
         np.testing.assert_approx_equal(
             expect, got, significant=accuracy_for_dtype[dtype]

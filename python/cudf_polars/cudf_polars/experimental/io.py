@@ -22,14 +22,16 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
 
 
 @lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    rows_per_partition = ir.config_options.get("executor_options", {}).get(
-        "max_rows_per_partition", 1_000_000
+    rows_per_partition = ir.config_options.get(
+        "executor_options.max_rows_per_partition",
+        default=1_000_000,
     )
 
     nrows = max(ir.df.shape()[0], 1)
@@ -91,8 +93,10 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            parallel_options = ir.config_options.get("executor_options", {})
-            blocksize: int = parallel_options.get("parquet_blocksize", 1024**3)
+            blocksize: int = ir.config_options.get(
+                "executor_options.parquet_blocksize",
+                default=1024**3,
+            )
             stats = _sample_pq_statistics(ir)
             file_size = sum(float(stats[column]) for column in ir.schema)
             if file_size > 0:
@@ -168,7 +172,7 @@ class SplitScan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -270,11 +274,9 @@ def _(
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = ir.config_options.copy()
-            config_options["parquet_options"] = config_options.get(
-                "parquet_options", {}
-            ).copy()
-            config_options["parquet_options"]["chunked"] = False
+            config_options = ir.config_options.set(
+                name="parquet_options.chunked", value=False
+            )
 
             slices: list[SplitScan] = []
             for path in paths:

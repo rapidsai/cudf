@@ -166,9 +166,9 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.get("executor_options", {})
-        .get("cardinality_factor", {})
-        .items()
+        for c, f in ir.config_options.get(
+            "executor_options.cardinality_factor", default={}
+        ).items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -251,8 +251,8 @@ def _(
     return new_node, partition_info
 
 
-def _tree_node(do_evaluate, batch, *args):
-    return do_evaluate(*args, _concat(batch))
+def _tree_node(do_evaluate, nbatch, *args):
+    return do_evaluate(*args[nbatch:], _concat(*args[:nbatch]))
 
 
 @generate_ir_tasks.register(GroupBy)
@@ -278,7 +278,7 @@ def _(
 
     # Simple N-ary tree reduction
     j = 0
-    n_ary = ir.config_options.get("executor_options", {}).get("groupby_n_ary", 32)
+    n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
     graph: MutableMapping[Any, Any] = {}
     name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]
@@ -289,7 +289,8 @@ def _(
             graph[(name, j, i)] = (
                 _tree_node,
                 ir.do_evaluate,
-                batch,
+                len(batch),
+                *batch,
                 *ir._non_child_args,
             )
             new_keys.append((name, j, i))
@@ -298,7 +299,8 @@ def _(
     graph[(name, 0)] = (
         _tree_node,
         ir.do_evaluate,
-        keys,
+        len(keys),
+        *keys,
         *ir._non_child_args,
     )
     return graph
