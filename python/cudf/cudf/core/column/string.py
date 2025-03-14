@@ -6190,10 +6190,7 @@ class StringColumn(column.ColumnBase):
         if is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
-            scalar = pa.scalar(other)
-            if not pa.types.is_string(scalar.type):
-                return NotImplemented
-            return scalar
+            return pa.scalar(other)
         elif isinstance(other, type(self)):
             return other
         return NotImplemented
