@@ -15,8 +15,6 @@ from pandas.api import types as pd_types  # noqa: TID251
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
-import pylibcudf as plc
-
 import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
@@ -37,7 +35,7 @@ if TYPE_CHECKING:
 
     from typing_extension import Self
 
-    from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf._typing import Dtype, DtypeObj
     from cudf.core.buffer import Buffer
 
 
@@ -914,17 +912,6 @@ class DecimalDtype(_BaseDtype):
     def __hash__(self) -> int:
         return hash(self.to_arrow())
 
-    def _as_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
-        """Return a pylibcudf.Scalar that matches the type of self"""
-        from cudf.core.scalar import pa_scalar_to_plc_scalar
-
-        if not isinstance(scalar, pa.Scalar):
-            # e.g casting int to decimal type isn't allow, but OK in the constructor?
-            pa_scalar = pa.scalar(scalar, type=cudf_dtype_to_pa_type(self))
-        else:
-            pa_scalar = scalar.cast(self.to_arrow())
-        return pa_scalar_to_plc_scalar(pa_scalar)
-
 
 @doc_apply(
     decimal_dtype_template.format(
@@ -936,17 +923,6 @@ class Decimal32Dtype(DecimalDtype):
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
     ITEMSIZE = 4
 
-    def _as_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
-        from cudf.core.column import ColumnBase
-
-        plc_scalar = super()._as_plc_scalar(scalar)
-        # pyarrow.Scalar only supports Decimal128 so conversion
-        # from pyarrow would only return a pylibcudf.Scalar with Decimal128
-        col = ColumnBase.from_pylibcudf(
-            plc.Column.from_scalar(plc_scalar, 1)
-        ).astype(self)
-        return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
-
 
 @doc_apply(
     decimal_dtype_template.format(
@@ -957,17 +933,6 @@ class Decimal64Dtype(DecimalDtype):
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
     ITEMSIZE = 8
-
-    def _as_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
-        from cudf.core.column import ColumnBase
-
-        plc_scalar = super()._as_plc_scalar(scalar)
-        # pyarrow.Scalar only supports Decimal128 so conversion
-        # from pyarrow would only return a pylibcudf.Scalar with Decimal128
-        col = ColumnBase.from_pylibcudf(
-            plc.Column.from_scalar(plc_scalar, 1)
-        ).astype(self)
-        return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
 
 
 @doc_apply(

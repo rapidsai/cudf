@@ -2298,7 +2298,7 @@ def test_binops_with_NA_consistent(dtype, op):
 )
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
     if isinstance(lhs, (int, float)):
-        a = cudf.Scalar(lhs, l_dtype)
+        a = lhs
     else:
         a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
