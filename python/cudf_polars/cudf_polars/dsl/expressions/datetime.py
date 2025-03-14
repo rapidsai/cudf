@@ -148,11 +148,7 @@ class TemporalFunction(Expr):
                 days_to_subtract,
                 plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
                 plc.binaryop.BinaryOperator.SUB,
-                plc.DataType(plc.TypeId.INT32),
-            )
-
-            days_to_subtract = plc.unary.cast(
-                days_to_subtract, plc.DataType(plc.TypeId.DURATION_DAYS)
+                plc.DataType(plc.TypeId.DURATION_DAYS),
             )
             result = plc.binaryop.binary_operation(
                 ends,
