@@ -22,7 +22,6 @@ import java.util.*;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-import ai.rapids.cudf.StreamCompaction.DuplicateKeepOption;
 
 /**
  * This class represents the column_view of a column analogous to its cudf cpp counterpart.
