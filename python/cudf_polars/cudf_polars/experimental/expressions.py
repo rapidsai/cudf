@@ -195,11 +195,11 @@ def evaluate_chunk(
     children: tuple[Expr, ...],
     *references: Column,
 ) -> Column:
-    """Evaluate a single aggregation."""
+    """Evaluate the sub-expression of a simple FusedExpr node."""
     return expr.evaluate(df, mapping=dict(zip(children, references, strict=True)))
 
 
-def evaluate_chunk_multi(
+def evaluate_chunk_multi_agg(
     df: DataFrame,
     exprs: Sequence[Expr],
     children: tuple[Expr, ...],
@@ -212,7 +212,7 @@ def evaluate_chunk_multi(
     )
 
 
-def combine_chunks_multi(
+def combine_chunks_multi_agg(
     column_chunks: Sequence[tuple[Column]],
     combine_aggs: Sequence[Agg],
     finalize: tuple[plc.DataType, str] | None,
@@ -289,7 +289,7 @@ def make_agg_graph(
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
         graph[(chunk_name, i)] = (
-            evaluate_chunk_multi,
+            evaluate_chunk_multi_agg,
             (child_name, i),
             chunk_aggs,
             expr.children,
@@ -301,7 +301,7 @@ def make_agg_graph(
 
     # Combine and finalize
     graph[(key_name, 0)] = (
-        combine_chunks_multi,
+        combine_chunks_multi_agg,
         list(graph.keys()),
         combine_aggs,
         finalize,
