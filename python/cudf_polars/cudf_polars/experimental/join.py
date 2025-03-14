@@ -313,6 +313,6 @@ def _(
             if len(_concat_list) == 1:
                 graph[(out_name, part_out)] = graph.pop(_concat_list[0])
             else:
-                graph[(out_name, part_out)] = (_concat, _concat_list)
+                graph[(out_name, part_out)] = (_concat, *_concat_list)
 
         return graph

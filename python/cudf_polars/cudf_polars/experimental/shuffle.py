@@ -200,7 +200,7 @@ def _simple_shuffle_graph(
                 (split_name, part_in),
                 part_out,
             )
-        graph[(name_out, part_out)] = (_concat, _concat_list)
+        graph[(name_out, part_out)] = (_concat, *_concat_list)
     return graph
 
 
