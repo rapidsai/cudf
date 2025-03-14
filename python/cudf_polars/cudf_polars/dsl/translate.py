@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
@@ -23,7 +24,7 @@ import pylibcudf as plc
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -41,13 +42,13 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
-    config
+    engine
         GPU engine configuration.
     """
 
-    def __init__(self, visitor: NodeTraverser, config: GPUEngine):
+    def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config = config
+        self.config_options = config.ConfigOptions(copy.deepcopy(engine.config))
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -233,7 +234,7 @@ def _(
         typ,
         reader_options,
         cloud_options,
-        translator.config.config.copy(),
+        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -260,7 +261,7 @@ def _(
         schema,
         node.df,
         node.projection,
-        translator.config.config.copy(),
+        translator.config_options,
     )
 
 
@@ -288,7 +289,7 @@ def _(
         aggs,
         node.maintain_order,
         node.options,
-        translator.config.config.copy(),
+        translator.config_options,
         inp,
     )
 
@@ -640,14 +641,13 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         elif name in "top_k":
             (col, k) = children
-            assert isinstance(col, expr.Col)
             assert isinstance(k, expr.Literal)
             (descending,) = options
             return expr.Slice(
                 dtype,
                 0,
                 k.value.as_py(),
-                expr.Sort(dtype, (True, True, not descending), col),
+                expr.Sort(dtype, (False, True, not descending), col),
             )
 
         return expr.UnaryFunction(dtype, name, options, *children)
