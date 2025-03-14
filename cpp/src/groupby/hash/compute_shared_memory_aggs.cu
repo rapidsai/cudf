@@ -112,13 +112,13 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                           cudf::size_type* shmem_agg_res_offsets,
                                           cudf::size_type* shmem_agg_mask_offsets,
                                           cudf::aggregation::Kind const* d_agg_kinds,
-                                          cudf::size_type offset)
+                                          cudf::size_type agg_location_offset)
 {
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, source_idx)) {
-      auto const target_idx = local_mapping_index[source_idx] + offset;
+      auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
         auto const source_col = source.column(col_idx);
 
@@ -153,7 +153,6 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::size_type* agg_mask_offsets,
                                            cudf::aggregation::Kind const* d_agg_kinds)
 {
-  if (cardinality == 0) { return; }
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < buckets; idx += block.num_threads()) {
     auto const target_idx =
@@ -194,12 +193,14 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { return; }
+  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
 
-  auto constexpr threshold_size = 32;
-  auto const buckets            = cuda::std::max(cardinality, threshold_size);
-  auto const offset =
-    buckets != cardinality ? (block.thread_rank() % (buckets / cardinality)) * cardinality : 0;
+  auto constexpr min_shmem_agg_locations = 32;
+  auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
+  auto const num_agg_locations =
+    multiplication_factor > 1 ? multiplication_factor * cardinality : cardinality;
+  auto const agg_location_offset =
+    multiplication_factor > 1 ? (threadIdx.x % multiplication_factor) * cardinality : 0;
 
   auto const num_cols = output_values.num_columns();
 
@@ -227,7 +228,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      num_cols,
                                      shmem_agg_res_offsets,
                                      shmem_agg_mask_offsets,
-                                     buckets,
+                                     num_agg_locations,
                                      total_agg_size);
     }
     block.sync();
@@ -239,7 +240,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_storage,
                                   shmem_agg_res_offsets,
                                   shmem_agg_mask_offsets,
-                                  buckets,
+                                  num_agg_locations,
                                   d_agg_kinds);
     block.sync();
 
@@ -254,7 +255,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                               shmem_agg_res_offsets,
                               shmem_agg_mask_offsets,
                               d_agg_kinds,
-                              offset);
+                              agg_location_offset);
     block.sync();
 
     compute_final_aggregations(block,
@@ -263,7 +264,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                input_values,
                                output_values,
                                cardinality,
-                               buckets,
+                               num_agg_locations,
                                global_mapping_index,
                                shmem_agg_storage,
                                shmem_agg_res_offsets,
