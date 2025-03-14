@@ -138,6 +138,54 @@ def test_date_extract(field):
 
 
 @pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_month_start(dtype):
+    data = pl.DataFrame(
+        {
+            "dates": pl.Series(
+                [
+                    datetime.date(2024, 1, 1),
+                    datetime.date(2024, 10, 11),
+                    datetime.date(2024, 10, 31),
+                    datetime.date(2000, 2, 1),
+                    datetime.date(2000, 2, 29),
+                    datetime.date(2000, 3, 1),
+                ],
+                dtype=dtype,
+            )
+        }
+    ).lazy()
+
+    q = data.select(pl.col("dates").dt.month_start())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_month_end(dtype):
+    data = pl.DataFrame(
+        {
+            "dates": pl.Series(
+                [
+                    datetime.date(2024, 1, 1),
+                    datetime.date(2024, 10, 11),
+                    datetime.date(2024, 10, 31),
+                    datetime.date(2000, 2, 1),
+                    datetime.date(2000, 2, 29),
+                    datetime.date(2000, 3, 1),
+                ],
+                dtype=dtype,
+            )
+        }
+    ).lazy()
+
+    q = data.select(pl.col("dates").dt.month_end())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [
