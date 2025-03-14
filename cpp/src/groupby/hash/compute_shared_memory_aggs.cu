@@ -200,7 +200,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
   auto const num_agg_locations =
     multiplication_factor > 1 ? multiplication_factor * cardinality : cardinality;
   auto const agg_location_offset =
-    multiplication_factor > 1 ? (threadIdx.x % multiplication_factor) * cardinality : 0;
+    multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
 
   auto const num_cols = output_values.num_columns();
 
