@@ -104,7 +104,13 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
-    _valid_ops: ClassVar[set[Name]] = {*_COMPONENT_MAP.keys(), Name.Week, Name.IsoYear}
+    _valid_ops: ClassVar[set[Name]] = {
+        *_COMPONENT_MAP.keys(),
+        Name.IsLeapYear,
+        Name.OrdinalDay,
+        Name.Week,
+        Name.IsoYear,
+    }
 
     def __init__(
         self,
@@ -158,6 +164,10 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(result)
+        if self.name is TemporalFunction.Name.IsLeapYear:
+            return Column(
+                plc.datetime.is_leap_year(column.obj),
+            )
         if self.name is TemporalFunction.Name.OrdinalDay:
             return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:
