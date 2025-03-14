@@ -110,6 +110,7 @@ class kvikio_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, this->size() - offset);
+    
     if constexpr (std::is_same_v<HandleT, kvikio::FileHandle>) {
       return _kvikio_handle.pread(dst, read_size, offset, kvikio::defaults::task_size(), kvikio::defaults::gds_threshold(), false);
     } else if constexpr (std::is_same_v<HandleT, kvikio::RemoteHandle>) {
