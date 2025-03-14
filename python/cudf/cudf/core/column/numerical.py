@@ -235,12 +235,7 @@ class NumericalColumn(NumericalBaseColumn):
             else other.dtype
         )
 
-        if out_dtype is not None:
-            pass  # out_dtype was already set to bool
-        if isinstance(other, pa.Scalar) and not other.is_valid:
-            # not a binary operator, so no need to promote
-            out_dtype = self.dtype
-        elif out_dtype is None:
+        if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
