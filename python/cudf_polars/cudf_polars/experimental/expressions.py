@@ -131,8 +131,7 @@ def extract_partition_counts(
 
 
 def _replace(e: Expr, rec: ExprTransformer) -> Expr:
-    mapping = rec.state["mapping"]
-    return mapping[e] if e in mapping else reuse_if_unchanged(e, rec)
+    return rec.state["mapping"].get(e, reuse_if_unchanged(e, rec))
 
 
 def replace(e: Expr, mapping: Mapping[Expr, Expr]) -> Expr:
