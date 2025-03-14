@@ -22,6 +22,7 @@ import java.util.*;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
+import ai.rapids.cudf.StreamCompaction.DuplicateKeepOption;
 
 /**
  * This class represents the column_view of a column analogous to its cudf cpp counterpart.
@@ -339,22 +340,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     final int nativeId;
 
     StripType(int nativeId) { this.nativeId = nativeId; }
-  }
-
-  /**
-   * Used for the dropListDuplicates function
-   * Specifies which duplicate to keep
-   * @see cudf::duplicate_keep_option in /cpp/include/cudf/stream_compaction.hpp,
-   * from which this enum is based off of. Values should be kept in sync.
-   */
-  public enum DuplicateKeepOption {
-    KEEP_ANY(0),    // keep any instance of a value
-    KEEP_FIRST(1),  // only keep the first instance of an value
-    KEEP_LAST(2),   // keep the last instance of an value
-    KEEP_NONE(3);   // remove all instances of values with duplicates
-    final int nativeId;
-
-    DuplicateKeepOption(int nativeId) { this.nativeId = nativeId; }
   }
 
   /**
