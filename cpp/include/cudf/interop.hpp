@@ -44,7 +44,7 @@ struct ArrowArrayStream;
 // avoid needing to include nanoarrow headers.
 typedef int32_t ArrowDeviceType;  // NOLINT
 
-#define ARROW_DEVICE_CUDA 2
+#define ARROW_DEVICE_CUDA 2  // NOLINT
 ///@endcond
 
 namespace CUDF_EXPORT cudf {
@@ -317,7 +317,7 @@ class arrow_column {
    * @param mr Device memory resource used for any allocations during conversion
    * @return unique_column_view_t containing a view of the column data
    */
-  unique_column_view_t view(
+  [[nodiscard]] unique_column_view_t view(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
@@ -406,7 +406,7 @@ class arrow_table {
    * @param mr Device memory resource used for any allocations during conversion
    * @return unique_table_view_t containing a view of the table data
    */
-  unique_table_view_t view(
+  [[nodiscard]] unique_table_view_t view(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
