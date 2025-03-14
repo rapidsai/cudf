@@ -56,14 +56,14 @@ std::unique_ptr<cudf::column> substring_deduplicate(
  * @brief Builds a suffix array for the input strings column
  *
  * @param input Strings column to build suffix array for
- * @param bitonic If true, use bitonic sort to build the suffix array
+ * @param min_width Minimum number of bytes must match to specify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted suffix array and corresponding sizes
  */
 std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
   cudf::strings_column_view const& input,
-  bool bitonic                      = false,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

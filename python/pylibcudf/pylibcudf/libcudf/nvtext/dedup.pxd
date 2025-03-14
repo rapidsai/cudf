@@ -19,4 +19,5 @@ cdef extern from "nvtext/dedup.hpp" namespace "nvtext" nogil:
         size_type min_width) except +libcudf_exception_handler
 
     cdef suffix_array_type build_suffix_array(
-        column_view source_strings) except +libcudf_exception_handler
+        column_view source_strings,
+        size_type min_width) except +libcudf_exception_handler

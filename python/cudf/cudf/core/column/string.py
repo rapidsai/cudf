@@ -5346,7 +5346,6 @@ class StringMethods(ColumnMethods):
     def substring_deduplicate(self, min_width) -> SeriesOrIndex:
         """
 
-
         Parameters
         ----------
         min_width : int32
@@ -5364,10 +5363,10 @@ class StringMethods(ColumnMethods):
             retain_index=False,
         )
 
-    def build_suffix_array(self) -> SeriesOrIndex:
+    def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
         """ """
         return self._return_or_inplace(
-            self._column.build_suffix_array(),  # type: ignore[arg-type]
+            self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
             inplace=False,
             expand=False,
             retain_index=False,
@@ -6361,9 +6360,9 @@ class StringColumn(column.ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def build_suffix_array(self) -> Self:
+    def build_suffix_array(self, min_width: int) -> Self:
         result = plc.nvtext.dedup.build_suffix_array(
-            self.to_pylibcudf(mode="read")
+            self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 

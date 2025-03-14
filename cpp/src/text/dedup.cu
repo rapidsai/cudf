@@ -51,11 +51,13 @@ namespace {
 
 using string_index = cudf::strings::detail::string_index_pair;
 
-struct sort_comparator_fn {
+struct bitonic_sort_comparator_fn {
   char const* d_chars;
   int64_t chars_size;
+  int64_t size;
   __device__ bool operator()(int64_t lhs, int64_t rhs) const
   {
+    if (lhs >= size || rhs >= size) { return lhs < rhs; }
     constexpr int64_t max_size = cuda::std::numeric_limits<cudf::size_type>::max();
 
     auto const lhs_size = static_cast<cudf::size_type>(cuda::std::min(max_size, chars_size - lhs));
@@ -66,8 +68,12 @@ struct sort_comparator_fn {
   }
 };
 
-__global__ [[maybe_unused]] void bitonic_sort_step(
-  sort_comparator_fn scfn, int64_t* d_indices, int64_t size, int64_t size2, int64_t j, int64_t k)
+__global__ void bitonic_sort_step(bitonic_sort_comparator_fn scfn,
+                                  int64_t* d_indices,
+                                  int64_t size,
+                                  int64_t size2,  // size2 is the power of 2 greater than size
+                                  int64_t j,
+                                  int64_t k)
 {
   auto const i   = cudf::detail::grid_1d::global_thread_id();
   auto const ixj = i ^ j;
@@ -77,32 +83,17 @@ __global__ [[maybe_unused]] void bitonic_sort_step(
   if (ixj > i) {
     auto const di   = d_indices[i];
     auto const dixj = d_indices[ixj];
-    auto const gtlt = (i & k) == 0 ? '>' : '<';
-    if (di == 2 || dixj == 2 || di == 16 || dixj == 16)
-      printf("%ld=%ld %c %ld=%ld\n", i, di, gtlt, ixj, dixj);
     if ((i & k) == 0) {
-      if (di >= size || dixj >= size) {
-        if (dixj < di) {
-          auto const temp = di;
-          d_indices[i]    = dixj;
-          d_indices[ixj]  = temp;
-        }
-      } else if (scfn(dixj, di)) {  //(dev_values[i] > dev_values[ixj])
-        auto const temp = di;       // dev_values[i];
-        d_indices[i]    = dixj;     // dev_values[i]   = dev_values[ixj];
-        d_indices[ixj]  = temp;     // dev_values[ixj] = temp;
+      if (scfn(dixj, di)) {      //(dev_values[i] > dev_values[ixj])
+        auto const temp = di;    // dev_values[i];
+        d_indices[i]    = dixj;  // dev_values[i]   = dev_values[ixj];
+        d_indices[ixj]  = temp;  // dev_values[ixj] = temp;
       }
     } else {
-      if (di >= size || dixj >= size) {
-        if (dixj < di) {
-          auto const temp = di;
-          d_indices[i]    = dixj;
-          d_indices[ixj]  = temp;
-        }
-      } else if (scfn(di, dixj)) {  //(dev_values[i] < dev_values[ixj])
-        auto const temp = di;       // dev_values[i];
-        d_indices[i]    = dixj;     // dev_values[i]   = dev_values[ixj];
-        d_indices[ixj]  = temp;     // dev_values[ixj] = temp;
+      if (scfn(di, dixj)) {      //(dev_values[i] < dev_values[ixj])
+        auto const temp = di;    // dev_values[i];
+        d_indices[i]    = dixj;  // dev_values[i]   = dev_values[ixj];
+        d_indices[ixj]  = temp;  // dev_values[ixj] = temp;
       }
     }
   }
@@ -236,39 +227,23 @@ build_suffix_array(cudf::strings_column_view const& input,
   auto const chars_size    = last_offset - first_offset;
   CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
 
-  auto size    = chars_size - min_width + 1;
-  auto indices = rmm::device_uvector<int64_t>(size, stream);
+  auto const size  = chars_size - min_width + 1;
+  auto const size2 = 1L << static_cast<int32_t>(std::ceil(std::log2(size)));
+
+  auto indices = rmm::device_uvector<int64_t>(size2, stream);
   auto sizes   = rmm::device_uvector<int16_t>(indices.size(), stream);
 
-  if (min_width > 0) {
-    auto const cmp_op = sort_comparator_fn{d_input_chars, chars_size};
-    auto const seq    = thrust::make_counting_iterator<int64_t>(0);
-    auto tmp_bytes    = std::size_t{0};
-    cub::DeviceMergeSort::SortKeysCopy(
-      nullptr, tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
-    // std::cout << indices.size() * sizeof(int64_t) << "/" << tmp_bytes << std::endl;
-    cub::DeviceMergeSort::SortKeysCopy(
-      tmp_stg.data(), tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
-  } else {
-    size             = chars_size - 8 + 1;
-    auto const size2 = 1L << static_cast<int32_t>(std::ceil(std::log2(size)));
-    std::cout << "size: " << size << " size2: " << size2 << std::endl;
-    indices.resize(size2, stream);
-    std::cout << "indices size: " << indices.size() << std::endl;
-    thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
-    auto const cmp_op = sort_comparator_fn{d_input_chars, chars_size};
-    auto const grid   = cudf::detail::grid_1d(size2, 512);
-    for (auto k = 2L; k <= size2; k <<= 1) {
-      for (auto j = k >> 1; j > 0; j = j >> 1) {
-        // printf("--------- k=%ld j=%ld\n", k, j);
-        bitonic_sort_step<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-          cmp_op, indices.data(), size, size2, j, k);
-      }
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
+  auto const cmp_op = bitonic_sort_comparator_fn{d_input_chars, chars_size, size};
+  auto const grid   = cudf::detail::grid_1d(size2, 512);
+  for (auto k = 2L; k <= size2; k <<= 1) {
+    for (auto j = k >> 1; j > 0; j = j >> 1) {
+      bitonic_sort_step<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        cmp_op, indices.data(), size, size2, j, k);
     }
-    // std::cout << "bitonic-sort " << (int)cudaStreamSynchronize(stream.value()) << std::endl;
-    indices.resize(size, stream);
   }
+  indices.resize(size, stream);
+  sizes.resize(size, stream);
 
   return std::make_pair(std::make_unique<rmm::device_uvector<int64_t>>(std::move(indices)),
                         std::make_unique<rmm::device_uvector<int16_t>>(std::move(sizes)));
@@ -353,11 +328,11 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
 
 std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
   cudf::strings_column_view const& input,
-  bool bitonic,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return std::get<0>(detail::build_suffix_array(input, bitonic ? 0 : 8, stream, mr));
+  return std::get<0>(detail::build_suffix_array(input, min_width, stream, mr));
 }
 }  // namespace nvtext

@@ -56,7 +56,7 @@ cpdef Column substring_deduplicate(Column input, size_type min_width):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column build_suffix_array(Column input):
+cpdef Column build_suffix_array(Column input, size_type min_width):
     """
     Builds a suffix array for the input strings column
 
@@ -75,6 +75,6 @@ cpdef Column build_suffix_array(Column input):
     cdef cpp_suffix_array_type c_result
 
     with nogil:
-        c_result = cpp_build_suffix_array(input.view())
+        c_result = cpp_build_suffix_array(input.view(), min_width)
 
     return _column_from_suffix_array(move(c_result))
