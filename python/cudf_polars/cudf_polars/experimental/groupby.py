@@ -251,8 +251,8 @@ def _(
     return new_node, partition_info
 
 
-def _tree_node(do_evaluate, batch, *args):
-    return do_evaluate(*args, _concat(batch))
+def _tree_node(do_evaluate, nbatch, *args):
+    return do_evaluate(*args[nbatch:], _concat(*args[:nbatch]))
 
 
 @generate_ir_tasks.register(GroupBy)
@@ -289,7 +289,8 @@ def _(
             graph[(name, j, i)] = (
                 _tree_node,
                 ir.do_evaluate,
-                batch,
+                len(batch),
+                *batch,
                 *ir._non_child_args,
             )
             new_keys.append((name, j, i))
@@ -298,7 +299,8 @@ def _(
     graph[(name, 0)] = (
         _tree_node,
         ir.do_evaluate,
-        keys,
+        len(keys),
+        *keys,
         *ir._non_child_args,
     )
     return graph
