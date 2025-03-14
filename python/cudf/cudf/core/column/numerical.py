@@ -293,7 +293,7 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, (int, float, complex)):
                 # Go via NumPy to get the value
                 other = np.array(other)
-                if other.dtype.kind in "ifc":
+                if other.dtype.kind in "uifc":
                     other = other.item()
 
             # Try and match pandas and hence numpy. Deduce the common
