@@ -23,6 +23,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
+from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -283,17 +284,18 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
         keys = [translate_named_expr(translator, n=e) for e in node.keys]
-    return ir.GroupBy(
-        schema,
-        keys,
-        aggs,
-        node.maintain_order,
-        node.options,
-        translator.config_options,
-        inp,
-    )
+        original_aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
+    is_rolling = node.options.rolling is not None
+    is_dynamic = node.options.dynamic is not None
+    if is_dynamic:
+        raise NotImplementedError("group_by_dynamic")
+    elif is_rolling:
+        raise NotImplementedError("group_by_rolling")
+    else:
+        return rewrite_groupby(
+            node, schema, keys, original_aggs, translator.config_options, inp
+        )
 
 
 @_translate_ir.register

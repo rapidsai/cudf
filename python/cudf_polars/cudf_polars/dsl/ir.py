@@ -842,42 +842,19 @@ class Reduce(IR):
 class GroupBy(IR):
     """Perform a groupby."""
 
-    class AggInfos:
-        """Serializable wrapper for GroupBy aggregation info."""
-
-        agg_requests: Sequence[expr.NamedExpr]
-        agg_infos: Sequence[expr.AggInfo]
-
-        def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
-            self.agg_requests = tuple(agg_requests)
-            self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
-
-        def __reduce__(self) -> tuple[Any, ...]:
-            """Pickle an AggInfos object."""
-            return (type(self), (self.agg_requests,))
-
-    class GroupbyOptions:
-        """Serializable wrapper for polars GroupbyOptions."""
-
-        def __init__(self, polars_groupby_options: Any):
-            self.dynamic = polars_groupby_options.dynamic
-            self.rolling = polars_groupby_options.rolling
-            self.slice = polars_groupby_options.slice
-
     __slots__ = (
-        "agg_infos",
         "agg_requests",
         "config_options",
         "keys",
         "maintain_order",
-        "options",
+        "zlice",
     )
     _non_child = (
         "schema",
         "keys",
         "agg_requests",
         "maintain_order",
-        "options",
+        "zlice",
         "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
@@ -886,8 +863,8 @@ class GroupBy(IR):
     """Aggregation expressions."""
     maintain_order: bool
     """Preserve order in groupby."""
-    options: GroupbyOptions
-    """Arbitrary options."""
+    zlice: Zlice | None
+    """Optional slice to apply after grouping."""
     config_options: ConfigOptions
     """GPU-specific configuration options"""
 
@@ -897,7 +874,7 @@ class GroupBy(IR):
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: Any,
+        zlice: Zlice | None,
         config_options: ConfigOptions,
         df: IR,
     ):
@@ -905,52 +882,15 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = self.GroupbyOptions(options)
+        self.zlice = zlice
         self.config_options = config_options
         self.children = (df,)
-        if self.options.rolling:
-            raise NotImplementedError(
-                "rolling window/groupby"
-            )  # pragma: no cover; rollingwindow constructor has already raised
-        if self.options.dynamic:
-            raise NotImplementedError("dynamic group by")
-        if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
-            raise NotImplementedError("Nested aggregations in groupby")
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            self.options,
-            self.AggInfos(self.agg_requests),
+            self.zlice,
         )
-
-    @staticmethod
-    def check_agg(agg: expr.Expr) -> int:
-        """
-        Determine if we can handle an aggregation expression.
-
-        Parameters
-        ----------
-        agg
-            Expression to check
-
-        Returns
-        -------
-        depth of nesting
-
-        Raises
-        ------
-        NotImplementedError
-            For unsupported expression nodes.
-        """
-        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
-            return max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, expr.Agg):
-            return 1 + max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal, expr.LiteralColumn)):
-            return 0
-        else:
-            raise NotImplementedError(f"No handler for {agg=}")
 
     @classmethod
     def do_evaluate(
@@ -958,8 +898,7 @@ class GroupBy(IR):
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: GroupbyOptions,
-        agg_info_wrapper: AggInfos,
+        zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -976,32 +915,35 @@ class GroupBy(IR):
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
-        # TODO: uniquify
         requests = []
-        replacements: list[expr.Expr] = []
-        for info in agg_info_wrapper.agg_infos:
-            for pre_eval, req, rep in info.requests:
-                if pre_eval is None:
-                    # A count aggregation, doesn't touch the column,
-                    # but we need to have one. Rather than evaluating
-                    # one, just use one of the key columns.
-                    col = keys[0].obj
-                else:
-                    col = pre_eval.evaluate(df).obj
-                requests.append(plc.groupby.GroupByRequest(col, [req]))
-                replacements.append(rep)
+        names = []
+        for request in agg_requests:
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use a key column
+                col = keys[0].obj
+            elif isinstance(value, expr.Agg):
+                (child,) = value.children
+                col = child.evaluate(df).obj
+            else:
+                # Anything else, we pre-evaluate
+                col = value.evaluate(df).obj
+            requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
+            names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        raw_columns: list[Column] = []
-        for i, table in enumerate(raw_tables):
-            (column,) = table.columns()
-            raw_columns.append(Column(column, name=f"tmp{i}"))
-        mapping = dict(zip(replacements, raw_columns, strict=True))
+        results = [
+            Column(column, name=name)
+            for name, column in zip(
+                names,
+                itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                strict=True,
+            )
+        ]
         result_keys = [
             Column(grouped_key, name=key.name)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        result_subs = DataFrame(raw_columns)
-        results = [req.evaluate(result_subs, mapping=mapping) for req in agg_requests]
         broadcasted = broadcast(*result_keys, *results)
         # Handle order preservation of groups
         if maintain_order and not sorted:
@@ -1044,7 +986,7 @@ class GroupBy(IR):
                     ordered_table.columns(), broadcasted, strict=True
                 )
             ]
-        return DataFrame(broadcasted).slice(options.slice)
+        return DataFrame(broadcasted).slice(zlice)
 
 
 class ConditionalJoin(IR):

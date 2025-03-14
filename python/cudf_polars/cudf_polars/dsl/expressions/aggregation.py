@@ -14,13 +14,8 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    AggInfo,
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import UnaryFunction
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -124,38 +119,19 @@ class Agg(Expr):
         "linear": plc.types.Interpolation.LINEAR,
     }
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth >= 1:
-            raise NotImplementedError(
-                "Nested aggregations in groupby"
-            )  # pragma: no cover; check_agg trips first
-        if (isminmax := self.name in {"min", "max"}) and self.options:
-            raise NotImplementedError("Nan propagation in groupby for min/max")
-        (child,) = self.children
-        ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        request = self.request
-        # These are handled specially here because we don't set up the
-        # request for the whole-frame agg because we can avoid a
-        # reduce for these.
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
         if self.name == "first":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 0, null_handling=plc.types.NullPolicy.INCLUDE
             )
         elif self.name == "last":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 -1, null_handling=plc.types.NullPolicy.INCLUDE
             )
-        if request is None:
-            raise NotImplementedError(
-                f"Aggregation {self.name} in groupby"
-            )  # pragma: no cover; __init__ trips first
-        if isminmax and plc.traits.is_floating_point(self.dtype):
-            assert expr is not None
-            # Ignore nans in these groupby aggs, do this by masking
-            # nans in the input
-            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, request, self)])
+        else:
+            assert self.request is not None, "Init should have raised"
+            return self.request
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation

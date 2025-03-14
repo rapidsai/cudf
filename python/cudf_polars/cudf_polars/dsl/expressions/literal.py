@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
@@ -46,9 +46,9 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return AggInfo([])
+    @property
+    def agg_request(self) -> NoReturn:  # noqa: D102
+        raise NotImplementedError("Not expecting to require agg request of literal")
 
 
 class LiteralColumn(Expr):
@@ -80,6 +80,6 @@ class LiteralColumn(Expr):
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return AggInfo([])
+    @property
+    def agg_request(self) -> NoReturn:  # noqa: D102
+        raise NotImplementedError("Not expecting to require agg request of literal")
