@@ -63,14 +63,13 @@ struct DecompressTest : public cudf::test::BaseFixture, public testing::WithPara
       } else {
         CUDF_FAIL("Device decompression has not been implemented");
       }
-    } else if (type == hw::CPU) {
+    } else {
       if constexpr (has_cpu_impl<Decompressor>::value) {
         return HostDecompress(compressed, uncompressed_size);
       } else {
         CUDF_FAIL("Host decompression has not been implemented");
       }
     }
-    return std::vector<uint8_t>{};
   }
 
   std::vector<uint8_t> DeviceDecompress(cudf::host_span<uint8_t const> compressed,
@@ -112,14 +111,14 @@ struct DecompressTest : public cudf::test::BaseFixture, public testing::WithPara
   template <typename T, typename = void>
   struct has_gpu_impl : std::false_type {};
 
+  template <typename T>
+  struct has_gpu_impl<T, std::void_t<decltype(&T::device_dispatch)>> : std::true_type {};
+
   template <typename T, typename = void>
   struct has_cpu_impl : std::false_type {};
 
   template <typename T>
   struct has_cpu_impl<T, std::void_t<decltype(&T::host_dispatch)>> : std::true_type {};
-
-  template <typename T>
-  struct has_gpu_impl<T, std::void_t<decltype(&T::device_dispatch)>> : std::true_type {};
 };
 
 struct HostCompressTest : public cudf::test::BaseFixture {
