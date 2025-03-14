@@ -916,7 +916,7 @@ def test_minhash():
             cudf.Series([0, 0, 0], dtype=np.uint64),
         ]
     )
-    actual = strings.str.minhash64(0, a=params, b=params, width=5)
+    actual = strings.str.minhash(0, a=params, b=params, width=5)
     assert_eq(expected, actual)
 
     # test wrong seed types
@@ -925,9 +925,6 @@ def test_minhash():
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(1, a=params, b=params, width=6)
-    with pytest.raises(ValueError):
-        params = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash64(1, a=params, b=params, width=8)
 
 
 def test_minhash_ngrams():
@@ -942,7 +939,7 @@ def test_minhash_ngrams():
             cudf.Series([1408797893, 2817595786, 4226393679], dtype=np.uint32),
         ]
     )
-    actual = strings.str.minhash_ngrams(ngrams=2, seed=0, a=params, b=params)
+    actual = strings.str.minhash(width=2, seed=0, a=params, b=params)
     assert_eq(expected, actual)
 
     params = cudf.Series([1, 2, 3], dtype=np.uint64)
@@ -958,18 +955,15 @@ def test_minhash_ngrams():
             ),
         ]
     )
-    actual = strings.str.minhash64_ngrams(ngrams=2, seed=0, a=params, b=params)
+    actual = strings.str.minhash(width=2, seed=0, a=params, b=params)
     assert_eq(expected, actual)
 
     # test wrong input types
     with pytest.raises(ValueError):
-        strings.str.minhash_ngrams(ngrams=7, seed=1, a="a", b="b")
+        strings.str.minhash(width=7, seed=1, a="a", b="b")
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.int32)
-        strings.str.minhash_ngrams(ngrams=6, seed=1, a=params, b=params)
-    with pytest.raises(ValueError):
-        params = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash64_ngrams(ngrams=8, seed=1, a=params, b=params)
+        strings.str.minhash(width=6, seed=1, a=params, b=params)
 
 
 def test_jaccard_index():
