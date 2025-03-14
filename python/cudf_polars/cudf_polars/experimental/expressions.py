@@ -10,7 +10,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Expr, NamedExpr
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     reuse_if_unchanged,
@@ -64,20 +64,6 @@ class FusedExpr(Expr):
             e.is_pointwise or isinstance(e, FusedExpr)
             for e in traversal(list(sub_expr.children))
         ), f"Invalid FusedExpr sub-expression: {sub_expr}"
-
-    def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:  # pragma: no cover
-        """Evaluate this expression given a dataframe for context."""
-        return self.sub_expr.evaluate(df, context=context, mapping=mapping)
-
-    # def collect_agg(self, *, depth: int) -> AggInfo:  # pragma: no cover
-    #     """Collect information about aggregations in groupbys."""
-    #     return self.sub_expr.collect_agg(depth=depth)
 
 
 def extract_partition_counts(
