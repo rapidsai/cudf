@@ -524,7 +524,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
-std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_page_indices(
+std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_validity(
   cudf::column_view input_rows,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
@@ -585,17 +585,17 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_
     });
 
   // Lambda to make a vector with all pages required
-  auto const all_data_page_indices = [&]() {
-    std::vector<std::vector<bool>> all_data_page_indices(num_columns);
+  auto const all_valid_data_pages = [&]() {
+    std::vector<std::vector<bool>> all_valid_data_pages(num_columns);
     std::transform(
       thrust::counting_iterator<size_t>(0),
       thrust::counting_iterator(num_columns),
-      all_data_page_indices.begin(),
+      all_valid_data_pages.begin(),
       [&](auto col_idx) { return std::vector<bool>(page_row_counts[col_idx].size(), true); });
-    return all_data_page_indices;
+    return all_valid_data_pages;
   };
 
-  if (input_rows.is_empty()) { return all_data_page_indices(); }
+  if (input_rows.is_empty()) { return all_valid_data_pages(); }
 
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
 
@@ -605,7 +605,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_
                      input_rows.template begin<bool>(),
                      input_rows.template end<bool>(),
                      thrust::identity<bool>{})) {
-    return all_data_page_indices();
+    return all_valid_data_pages();
   }
 
   auto const total_pages =
@@ -617,8 +617,8 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_
   auto mr = cudf::get_current_device_resource_ref();
 
   // Vector to hold vectors of byte ranges of filtered pages for each column
-  auto filtered_data_page_indices = std::vector<std::vector<bool>>();
-  filtered_data_page_indices.reserve(num_columns);
+  auto data_page_validity = std::vector<std::vector<bool>>();
+  data_page_validity.reserve(num_columns);
   auto total_filtered_pages = size_t{0};
 
   // For all columns, look up which pages contain at least one valid row. i.e.
@@ -665,12 +665,12 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_
       stream);
 
     // Vector to hold byte ranges of filtered pages for the this column
-    auto filtered_page_indices = std::vector<bool>(total_pages_in_this_column, false);
+    auto valid_pages = std::vector<bool>(total_pages_in_this_column, false);
     std::for_each(h_select_page_indices.begin(),
                   h_select_page_indices.end(),
-                  [&](auto const page_idx) { filtered_page_indices[page_idx] = true; });
+                  [&](auto const page_idx) { valid_pages[page_idx] = true; });
 
-    filtered_data_page_indices.emplace_back(std::move(filtered_page_indices));
+    data_page_validity.emplace_back(std::move(valid_pages));
   }
 
   CUDF_EXPECTS(total_filtered_pages < total_pages,
@@ -681,7 +681,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_filtered_data_
             << std::endl;
 
   // Return the final lists of data page requirements for all columns
-  return filtered_data_page_indices;
+  return data_page_validity;
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

@@ -539,8 +539,6 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -565,8 +563,6 @@ std::pair<std::vector<cudf::io::text::byte_range_info>,
 impl::get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
                             cudf::io::parquet_reader_options const& options) const
 {
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -593,8 +589,6 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_page
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -621,8 +615,6 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -652,8 +644,6 @@ std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
 
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Save the name to reference converter to extract output filter AST in
-  // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -673,7 +663,7 @@ std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
                                                            stream,
                                                            mr);
 
-  return _metadata->compute_filtered_data_page_indices(
+  return _metadata->compute_data_page_validity(
     predicate->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 }
 
@@ -731,7 +721,7 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  initialize_options(row_group_indices, options, stream);
+  initialize_options(row_group_indices, filtered_data_pages, options, stream);
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
 
   // Make sure we haven't gone past the input passes
@@ -740,6 +730,7 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                              cudf::host_span<std::vector<bool> const> filtered_data_pages,
                               cudf::io::parquet_reader_options const& options,
                               rmm::cuda_stream_view stream)
 {
@@ -748,6 +739,8 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   table_metadata metadata;
   populate_metadata(metadata);
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+
+  _data_page_validity = filtered_data_pages;
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
 

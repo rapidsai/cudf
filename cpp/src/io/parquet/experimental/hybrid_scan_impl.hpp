@@ -110,6 +110,7 @@ class impl {
    * @brief Initialize the necessary options related internal variables for use later on.
    */
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                          cudf::host_span<std::vector<bool> const> filtered_data_pages,
                           cudf::io::parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
 
@@ -365,6 +366,8 @@ class impl {
   cudf::data_type _timestamp_type{type_id::EMPTY};
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
+
+  cudf::host_span<std::vector<bool> const> _data_page_validity;
 
   cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

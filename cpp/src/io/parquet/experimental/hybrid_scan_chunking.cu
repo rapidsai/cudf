@@ -131,45 +131,6 @@ struct get_span_size {
 };
 
 /**
- * @brief Return the size of a span in an array of spans, handling out-of-bounds indices.
- *
- */
-struct get_span_size_by_index {
-  cudf::device_span<page_span const> page_indices;
-
-  __device__ size_t operator()(size_t i) const
-  {
-    return i >= page_indices.size() ? 0 : page_indices[i].end - page_indices[i].start;
-  }
-};
-
-/**
- * @brief Copy page from appropriate source location (as defined by page_offsets) to the destination
- * location, and store the index mapping.
- */
-struct copy_subpass_page {
-  cudf::device_span<cudf::io::parquet::detail::PageInfo const> src_pages;
-  cudf::device_span<cudf::io::parquet::detail::PageInfo> dst_pages;
-  cudf::device_span<size_t> page_src_index;
-  cudf::device_span<size_t const> page_offsets;
-  cudf::device_span<page_span const> page_indices;
-
-  [[maybe_unused]] __device__ void operator()(size_t i) const
-  {
-    auto const index =
-      thrust::lower_bound(thrust::seq, page_offsets.begin(), page_offsets.end(), i) -
-      page_offsets.begin();
-    auto const col_index = page_offsets[index] == i ? index : index - 1;
-    // index within the pages for the column
-    auto const col_page_index = i - page_offsets[col_index];
-    auto const src_page_index = page_indices[col_index].start + col_page_index;
-
-    dst_pages[i]      = src_pages[src_page_index];
-    page_src_index[i] = src_page_index;
-  }
-};
-
-/**
  * @brief Decompresses a set of pages contained in the set of chunks.
  *
  * This function handles the case where `pages` is only a subset of all available
@@ -909,33 +870,10 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
   // check to see if we are processing the entire pass (enabling us to skip a bunch of work)
   subpass.single_subpass = total_pages == pass.pages.size();
 
+  CUDF_EXPECTS(subpass.single_subpass, "Hybrid scan reader must read in one subpass");
+
   // in the single pass case, no page copying is necessary - just use what's in the pass itself
-  if (subpass.single_subpass) {
-    subpass.pages = pass.pages;
-  }
-  // copy the appropriate subset of pages from each column and store the mapping back to the source
-  // (pass) pages
-  else {
-    subpass.page_buf = cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageInfo>(
-      total_pages, total_pages, _stream);
-    subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
-    auto iter              = thrust::make_counting_iterator(0);
-    rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
-    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(_stream),
-                                     iter,
-                                     iter + num_columns + 1,
-                                     dst_offsets.begin(),
-                                     get_span_size_by_index{page_indices},
-                                     0,
-                                     thrust::plus<size_t>{});
-    thrust::for_each(
-      rmm::exec_policy_nosync(_stream),
-      iter,
-      iter + total_pages,
-      copy_subpass_page{
-        pass.pages, subpass.page_buf, subpass.page_src_index, dst_offsets, page_indices});
-    subpass.pages = subpass.page_buf;
-  }
+  subpass.pages = pass.pages;
 
   auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
