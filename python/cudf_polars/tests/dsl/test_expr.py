@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -95,3 +95,12 @@ def test_equality_cse():
     assert e1 == e2
     assert e1 != e3
     assert e2 != e3
+
+
+def test_reconstruct_named_expr():
+    ne1 = expr.NamedExpr("a", expr.Col(plc.DataType(plc.TypeId.INT8), "a"))
+    new_value = expr.Col(plc.DataType(plc.TypeId.INT16), "a")
+    ne2 = ne1.reconstruct(new_value)
+    assert ne1.name == ne2.name
+    assert ne1 != ne2
+    assert ne2.value == new_value

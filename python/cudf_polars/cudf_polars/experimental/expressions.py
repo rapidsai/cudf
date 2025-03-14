@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
-# ruff: noqa: D101
 """Multi-partition Expr classes and utilities."""
 
 from __future__ import annotations
@@ -24,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.expressions.base import AggInfo
     from cudf_polars.typing import ExprTransformer
 
 
@@ -33,13 +30,20 @@ _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean")
 
 class FusedExpr(Expr):
     """
-    A single Expr node representing a fused Expr sub-graph.
+    A single fused component of a decomposed Expr graph.
 
     Notes
     -----
-    A FusedExpr may not contain more than one non-pointwise
-    Expr nodes. If the object does contain a non-pointwise
-    node, that node must be the root of sub_expr.
+    - A FusedExpr object points to a single node in a
+    decomposed Expr graph (i.e. ``sub_expr``).
+    - A FusedExpr object may have children, but those
+    children must be other FusedExpr objects.
+    - When a FusedExpr object is evaluated, it will
+    substitute it's evaluated children into ``sub_expr``,
+    and evaluate the re-written sub-expression.
+    - A FusedExpr object may point to a non-pointwise
+    Expr node. However, all other nodes in ``sub_expr``
+    must be pointwise or FusedExpr children.
     """
 
     __slots__ = ("sub_expr",)
@@ -49,12 +53,17 @@ class FusedExpr(Expr):
         self,
         dtype: plc.DataType,
         sub_expr: Expr,
-        *children: Expr,
+        *children: FusedExpr,
     ):
         self.dtype = dtype
         self.sub_expr = sub_expr
+        assert all(isinstance(c, FusedExpr) for c in children)
         self.children = children
         self.is_pointwise = sub_expr.is_pointwise
+        assert all(
+            e.is_pointwise or isinstance(e, FusedExpr)
+            for e in traversal(list(sub_expr.children))
+        ), f"Invalid FusedExpr sub-expression: {sub_expr}"
 
     def do_evaluate(
         self,
@@ -66,9 +75,9 @@ class FusedExpr(Expr):
         """Evaluate this expression given a dataframe for context."""
         return self.sub_expr.evaluate(df, context=context, mapping=mapping)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:  # pragma: no cover
-        """Collect information about aggregations in groupbys."""
-        return self.sub_expr.collect_agg(depth=depth)
+    # def collect_agg(self, *, depth: int) -> AggInfo:  # pragma: no cover
+    #     """Collect information about aggregations in groupbys."""
+    #     return self.sub_expr.collect_agg(depth=depth)
 
 
 def extract_partition_counts(
@@ -151,7 +160,7 @@ def rename_agg(agg: Agg, new_name: str, *, new_options: Any = None):
     return replace(agg, {agg: Agg(agg.dtype, new_name, new_options, *agg.children)})
 
 
-def _decompose(expr: Expr, rec: ExprTransformer):
+def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
     # Used by `decompose_expr_graph`
 
     # Transform child expressions first
@@ -161,14 +170,19 @@ def _decompose(expr: Expr, rec: ExprTransformer):
         # Non-leaf node.
         # Construct child lists for new expressions
         # (both the fused expression and the sub-expression)
-        sub_expr_children, fused_children = [], []
+        fused_children: list[FusedExpr] = []
+        sub_expr_children: list[Expr] = []
         for child in new_children:
             # All children should be FusedExpr
-            assert isinstance(child, FusedExpr)
+            assert isinstance(child, FusedExpr), "FusedExpr children must be FusedExpr."
             if child.is_pointwise:
                 # Pointwise children must be fused into the
                 # "new" FusedExpr node with root `expr`
-                fused_children.extend(list(child.children))
+                for c in child.children:
+                    assert isinstance(c, FusedExpr), (
+                        "FusedExpr children must be FusedExpr."
+                    )
+                    fused_children.append(c)
                 sub_expr_children.append(child.sub_expr)
             else:
                 # Non-pointwise children must remain as
