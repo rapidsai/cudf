@@ -48,7 +48,7 @@ def register() -> None:
         header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
     ) -> DataFrame:
         with log_errors():
-            metadata, gpudata = frames
+            metadata, gpudata = frames  # TODO: check if this is a length-2 list...
             return DataFrame.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
 
     @cuda_deserialize.register(Column)
