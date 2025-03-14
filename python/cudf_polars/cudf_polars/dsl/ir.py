@@ -842,20 +842,6 @@ class Reduce(IR):
 class GroupBy(IR):
     """Perform a groupby."""
 
-    class AggInfos:
-        """Serializable wrapper for GroupBy aggregation info."""
-
-        agg_requests: Sequence[expr.NamedExpr]
-        agg_infos: Sequence[expr.AggInfo]
-
-        def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
-            self.agg_requests = tuple(agg_requests)
-            self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
-
-        def __reduce__(self) -> tuple[Any, ...]:
-            """Pickle an AggInfos object."""
-            return (type(self), (self.agg_requests,))
-
     class GroupbyOptions:
         """Serializable wrapper for polars GroupbyOptions."""
 
@@ -865,7 +851,6 @@ class GroupBy(IR):
             self.slice = polars_groupby_options.slice
 
     __slots__ = (
-        "agg_infos",
         "agg_requests",
         "config_options",
         "keys",
@@ -914,43 +899,12 @@ class GroupBy(IR):
             )  # pragma: no cover; rollingwindow constructor has already raised
         if self.options.dynamic:
             raise NotImplementedError("dynamic group by")
-        if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
-            raise NotImplementedError("Nested aggregations in groupby")
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
             self.options,
-            self.AggInfos(self.agg_requests),
         )
-
-    @staticmethod
-    def check_agg(agg: expr.Expr) -> int:
-        """
-        Determine if we can handle an aggregation expression.
-
-        Parameters
-        ----------
-        agg
-            Expression to check
-
-        Returns
-        -------
-        depth of nesting
-
-        Raises
-        ------
-        NotImplementedError
-            For unsupported expression nodes.
-        """
-        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
-            return max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, expr.Agg):
-            return 1 + max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal, expr.LiteralColumn)):
-            return 0
-        else:
-            raise NotImplementedError(f"No handler for {agg=}")
 
     @classmethod
     def do_evaluate(
@@ -959,7 +913,6 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: GroupbyOptions,
-        agg_info_wrapper: AggInfos,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -976,32 +929,31 @@ class GroupBy(IR):
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
-        # TODO: uniquify
         requests = []
-        replacements: list[expr.Expr] = []
-        for info in agg_info_wrapper.agg_infos:
-            for pre_eval, req, rep in info.requests:
-                if pre_eval is None:
-                    # A count aggregation, doesn't touch the column,
-                    # but we need to have one. Rather than evaluating
-                    # one, just use one of the key columns.
-                    col = keys[0].obj
-                else:
-                    col = pre_eval.evaluate(df).obj
-                requests.append(plc.groupby.GroupByRequest(col, [req]))
-                replacements.append(rep)
+        names = []
+        for request in agg_requests:
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use a key column
+                col = keys[0].obj
+            elif isinstance(value, expr.Col):
+                col = value.evaluate(df).obj
+            else:
+                assert isinstance(value, expr.Agg)
+                (child,) = value.children
+                col = child.evaluate(df).obj
+            requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
+            names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        raw_columns: list[Column] = []
-        for i, table in enumerate(raw_tables):
+        results: list[Column] = []
+        for name, table in zip(names, raw_tables, strict=True):
             (column,) = table.columns()
-            raw_columns.append(Column(column, name=f"tmp{i}"))
-        mapping = dict(zip(replacements, raw_columns, strict=True))
+            results.append(Column(column, name=name))
         result_keys = [
             Column(grouped_key, name=key.name)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        result_subs = DataFrame(raw_columns)
-        results = [req.evaluate(result_subs, mapping=mapping) for req in agg_requests]
         broadcasted = broadcast(*result_keys, *results)
         # Handle order preservation of groups
         if maintain_order and not sorted:

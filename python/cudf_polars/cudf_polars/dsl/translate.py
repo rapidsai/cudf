@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import itertools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
@@ -23,6 +24,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
+from cudf_polars.dsl.utils import decompose_aggs, unique_names
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -283,17 +285,79 @@ def _(
 ) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
+        original_aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
         keys = [translate_named_expr(translator, n=e) for e in node.keys]
-    return ir.GroupBy(
-        schema,
-        keys,
-        aggs,
-        node.maintain_order,
-        node.options,
-        translator.config_options,
-        inp,
+    if len(original_aggs) == 0:
+        return ir.Distinct(
+            schema,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            None,
+            node.options.slice,
+            node.maintain_order,
+            ir.Select(schema, keys, True, inp),  # noqa: FBT003
+        )
+    temp_prefix = "_" * max(map(len, schema))
+    pre, aggs, post = decompose_aggs(original_aggs, unique_names(temp_prefix))
+    assert len(post) == len(original_aggs), (
+        f"Unexpected number of post-aggs {len(post)=} {len(original_aggs)=}"
     )
+    simple_types = (expr.Col, expr.Len, expr.Literal, expr.LiteralColumn)
+    # Order-preserving unique
+    pre = list(dict.fromkeys(pre).keys())
+    aggs = list(dict.fromkeys(aggs).keys())
+    assert all(isinstance(agg.value, (expr.Agg, *simple_types)) for agg in aggs), (
+        f"Unexpected agg type {aggs}"
+    )
+    needs_pre = any(not isinstance(e.value, simple_types) for e in pre)
+    needs_post = any(not isinstance(e.value, expr.Col) for e in post)
+
+    if needs_pre:
+        inp = ir.HStack(
+            inp.schema | {e.name: e.value.dtype for e in pre},
+            pre,
+            True,  # noqa: FBT003
+            inp,
+        )
+
+    if needs_post:
+        group_schema = {e.name: e.value.dtype for e in itertools.chain(keys, aggs)}
+    else:
+        group_schema = schema
+
+    if len(aggs) == 0:
+        inp = ir.Distinct(
+            group_schema,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            None,
+            node.options.slice,
+            node.maintain_order,
+            ir.Select(group_schema, keys, True, inp),  # noqa: FBT003
+        )
+    else:
+        inp = ir.GroupBy(
+            group_schema,
+            keys,
+            aggs,
+            node.maintain_order,
+            node.options,
+            translator.config_options,
+            inp,
+        )
+    if needs_post:
+        return ir.Select(
+            schema,
+            [
+                *(
+                    expr.NamedExpr(key.name, (expr.Col(key.value.dtype, key.name)))
+                    for key in keys
+                ),
+                *post,
+            ],
+            True,  # noqa: FBT003
+            inp,
+        )
+    else:
+        return inp
 
 
 @_translate_ir.register

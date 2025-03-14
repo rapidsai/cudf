@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -131,30 +131,29 @@ class Expr(Node["Expr"]):
         except KeyError:
             return self.do_evaluate(df, context=context, mapping=mapping)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation | None:
         """
-        Collect information about aggregations in groupbys.
-
-        Parameters
-        ----------
-        depth
-            The depth of aggregating (reduction or sampling)
-            expressions we are currently at.
+        The aggregation for this expression in a grouped aggregation.
 
         Returns
         -------
-        Aggregation info describing the expression to aggregate in the
-        groupby.
+        Aggregation request, or None if none is required.
+
+        Notes
+        -----
+        This presumes that the IR translation has decomposed groupby
+        reductions only into cases we can handle.
 
         Raises
         ------
         NotImplementedError
             If we can't currently perform the aggregation request, for
-            example nested aggregations like ``a.max().min()``.
+            example aggregations of non-pointwise expressions.
         """
         raise NotImplementedError(
-            f"Collecting aggregation info for {type(self).__name__}"
-        )  # pragma: no cover; check_agg trips first
+            f"Aggregating {type(self).__name__} not supported."
+        )  # pragma: no cover; translation of grouped aggs trips first
 
 
 class ErrorExpr(Expr):
@@ -233,10 +232,6 @@ class NamedExpr:
             self.name
         )
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return self.value.collect_agg(depth=depth)
-
 
 class Col(Expr):
     __slots__ = ("name",)
@@ -261,9 +256,9 @@ class Col(Expr):
         # evaluation of the IR produces names.
         return df.column_map[self.name].rename(None)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return AggInfo([(self, plc.aggregation.collect_list(), self)])
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
+        return plc.aggregation.collect_list()
 
 
 class ColRef(Expr):
