@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cudf/stream_compaction.hpp"
+#include <cudf/stream_compaction.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -169,7 +169,7 @@ TEST_F(ListTest, Distinct)
   cudf::lists::distinct(list_col,
                         cudf::null_equality::EQUAL,
                         cudf::nan_equality::ALL_EQUAL,
-                        cudf::duplicate_keep_option::KEEP_FIRST,
+                        cudf::duplicate_keep_option::KEEP_ANY,
                         cudf::test::get_default_stream());
 }
 
