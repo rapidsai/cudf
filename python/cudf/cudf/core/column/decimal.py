@@ -189,7 +189,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
-                f"{self.dtype}, {other.dtype}"
+                f"{self.dtype}, {other_cudf_dtype}"
             )
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
