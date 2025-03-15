@@ -68,11 +68,13 @@ python -m pip install ipykernel
 python -m ipykernel install --user --name python3
 
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
+# TODO: Root-cause why we cannot run the tests in profile.py in parallel and reconsider adding
+# them back. Tracking https://github.com/rapidsai/cudf/issues/18261
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --numprocesses=8 \
     --dist=worksteal \
-    -k "not test_cudf_pandas_profiler" \
+    -k "not profiler" \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
@@ -87,7 +89,7 @@ python -m pytest -p cudf.pandas \
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
     --numprocesses=1 \
-    -k "test_cudf_pandas_profiler" \
+    -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py "$pandas_version_constraint")
@@ -102,7 +104,7 @@ for version in "${versions[@]}"; do
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
         --numprocesses=8 \
         --dist=worksteal \
-        -k "not test_cudf_pandas_profiler" \
+        -k "not profiler" \
         --cov-config=./python/cudf/.coveragerc \
         --cov=cudf \
         --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
@@ -112,6 +114,6 @@ for version in "${versions[@]}"; do
     python -m pytest -p cudf.pandas \
         --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
         --numprocesses=1 \
-        -k "test_cudf_pandas_profiler" \
+        -k "profiler" \
         ./python/cudf/cudf_pandas_tests/
 done
