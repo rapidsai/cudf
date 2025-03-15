@@ -117,8 +117,9 @@ class kvikio_source : public datasource {
                                   offset,
                                   kvikio::defaults::task_size(),
                                   kvikio::defaults::gds_threshold(),
-                                  false);
-    } else if constexpr (std::is_same_v<HandleT, kvikio::RemoteHandle>) {
+                                  false /* no to sync_default_stream */);
+    } else {
+      // HandleT is kvikio::RemoteHandle
       return _kvikio_handle.pread(dst, read_size, offset);
     }
   }
