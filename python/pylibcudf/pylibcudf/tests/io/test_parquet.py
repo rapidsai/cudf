@@ -57,6 +57,7 @@ def test_read_parquet_basic(
     assert res.num_row_groups_after_stats_filter is None
     assert res.num_row_groups_after_bloom_filter is None
 
+
 @pytest.mark.parametrize("if_prune_rowgroup,result", [(True, 0), (False, 1)])
 def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     col_list = list(range(1, 10))
@@ -84,8 +85,11 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
         )
     options.set_filter(filter)
     plc_table_w_meta = plc.io.parquet.read_parquet(options)
-    assert plc_table_w_meta.num_input_row_groups == 1  # Input has only one rowgroup
+    assert (
+        plc_table_w_meta.num_input_row_groups == 1
+    )  # Input has only one rowgroup
     assert plc_table_w_meta.num_row_groups_after_stats_filter == result
+
 
 @pytest.mark.parametrize(
     "pa_filters,plc_filters",
