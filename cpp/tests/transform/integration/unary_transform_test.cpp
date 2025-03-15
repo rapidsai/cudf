@@ -22,6 +22,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
@@ -333,6 +334,53 @@ __device__ inline void transform(
     cudf::transform({a, b, c}, ptx, cudf::data_type(cudf::type_to_id<T>()), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, expected);
+}
+
+template <typename T>
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
+{
+  using T = TypeParam;
+
+  auto type_name = cudf::type_to_name(cudf::data_type(cudf::type_to_id<T>()));
+
+  // clang-format off
+  std::string const cuda =
+    "__device__ void transform("
+    + type_name + "* out, "
+    + type_name + " a,"
+    + type_name + " b,"
+    + type_name + " c) {\n"
+    + "*out = ((a + b) * c);"
+    + " }";
+  // clang-format on
+
+  T const A(10, numeric::scale_type{0});
+  T const B(20, numeric::scale_type{-1});
+  T const C(5, numeric::scale_type{-2});
+  T const RES = ((A + B) * C);
+
+  std::vector<typename T::rep> a_host(200, A.value());
+  std::vector<typename T::rep> b_host(200, B.value());
+  std::vector<typename T::rep> c_host(1, C.value());
+  std::vector<typename T::rep> expected_host(200, RES.value());
+
+  cudf::test::fixed_point_column_wrapper<typename T::rep> a(
+    a_host.begin(), a_host.end(), A.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> b(
+    b_host.begin(), b_host.end(), B.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> c(
+    c_host.begin(), c_host.end(), C.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> expected(
+    expected_host.begin(), expected_host.end(), RES.scale());
+
+  std::unique_ptr<cudf::column> cuda_result =
+    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>(), RES.scale()), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 }
 
 }  // namespace transformation
