@@ -541,6 +541,7 @@ class DatetimeColumn(column.ColumnBase):
                     raise NotImplementedError(
                         "Binary operations with timezone aware operands is not supported."
                     )
+                other = other.to_numpy()
             elif isinstance(other, str):
                 try:
                     other = pd.Timestamp(other)
