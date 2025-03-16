@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import operator
 
@@ -29,17 +29,17 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 from cudf.core.udf.strings_typing import (
+    ManagedUDFString,
     StringView,
     UDFString,
-    ManagedUDFString,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
+    managed_udf_string,
     size_type,
     string_return_attrs,
     string_unary_funcs,
     string_view,
-    managed_udf_string,
 )
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
@@ -73,7 +73,7 @@ SUPPORTED_NUMBA_TYPES = (
     types.NPTimedelta,
     StringView,
     UDFString,
-    ManagedUDFString
+    ManagedUDFString,
 )
 
 

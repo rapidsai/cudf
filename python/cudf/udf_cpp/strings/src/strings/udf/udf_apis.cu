@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -85,8 +86,6 @@ std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
   return result;
 }
 
-
-
 }  // namespace detail
 
 // external APIs
@@ -104,7 +103,6 @@ std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
   return detail::column_from_managed_udf_string_array(
     managed_strings, size, cudf::get_default_stream());
 }
-
 
 }  // namespace udf
 }  // namespace strings

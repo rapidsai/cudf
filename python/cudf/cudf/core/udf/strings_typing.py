@@ -1,14 +1,16 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import operator
-from numba.core import cgutils
+
 import numpy as np
 from numba import types
+from numba.core import cgutils
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.descriptor import cuda_target
+
 import rmm
 
 # libcudf size_type
@@ -86,7 +88,10 @@ class udf_string_model(models.StructModel):
     def __init__(self, dmm, fe_type):
         super().__init__(dmm, fe_type, self._members)
 
+
 udf_string = UDFString()
+
+
 @register_model(ManagedUDFString)
 class managed_udf_string_model(models.StructModel):
     _members = (("meminfo", types.voidptr), ("udf_string", udf_string))
@@ -152,8 +157,10 @@ class StringLength(AbstractTemplate):
             # literal -> int32
             return nb_signature(size_type, string_view)
 
+
 def NRT_decref(st):
     pass
+
 
 @cuda_decl_registry.register_global(NRT_decref)
 class NRT_decref_typing(AbstractTemplate):
@@ -161,14 +168,6 @@ class NRT_decref_typing(AbstractTemplate):
         if isinstance(args[0], ManagedUDFString):
             return nb_signature(types.void, managed_udf_string)
 
-def NRT_print_refct(st):
-    pass
-
-@cuda_decl_registry.register_global(NRT_print_refct)
-class NRT_print_refct_typing(AbstractTemplate):
-    def generic(self, args, kws):
-        if isinstance(args[0], ManagedUDFString):
-            return nb_signature(types.void, managed_udf_string)
 
 def register_stringview_binaryop(op, retty):
     """

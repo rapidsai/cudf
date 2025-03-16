@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,11 @@
 #include <cudf/strings/udf/starts_with.cuh>
 #include <cudf/strings/udf/strip.cuh>
 #include <cudf/strings/udf/udf_string.cuh>
-#include <nrt.cuh>
+
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+
+#include <nrt.cuh>
 
 #include <limits>
 #include <type_traits>
@@ -721,7 +723,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 #undef make_definition_corr
 }
 
-
 /*
 NRT CUDA functions
 */
@@ -762,16 +763,8 @@ extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_s
   return 0;
 }
 
-extern "C" int __device__ extern_NRT_Decref(int &retval, void *ptr)
+extern "C" int __device__ extern_NRT_Decref(int& retval, void* ptr)
 {
-    NRT_decref(reinterpret_cast<NRT_MemInfo*>(ptr));
-    return 0;
+  NRT_decref(reinterpret_cast<NRT_MemInfo*>(ptr));
+  return 0;
 }
-
-
-extern "C" int __device__ extern_NRT_PrintRefct(int &retval, void *ptr)
-{
-    NRT_print_refct(reinterpret_cast<NRT_MemInfo*>(ptr));
-    return 0;
-}
-

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import operator
 
@@ -10,7 +10,6 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
-from cudf.core.udf.strings_typing import managed_udf_string
 
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
@@ -24,6 +23,7 @@ from cudf.core.udf.masked_typing import (
     NAType,
     _supported_masked_types,
 )
+from cudf.core.udf.strings_typing import managed_udf_string
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -284,6 +284,7 @@ def pack_return_masked_impl(context, builder, sig, args):
         )
         context.nrt.incref(builder, managed_udf_string, struct.value)
     return args[0]
+
 
 @cuda_lower(api.pack_return, types.Boolean)
 @cuda_lower(api.pack_return, types.Number)

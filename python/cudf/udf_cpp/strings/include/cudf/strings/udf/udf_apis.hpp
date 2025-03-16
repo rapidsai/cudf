@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
@@ -61,7 +62,6 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
  */
 std::unique_ptr<cudf::column> column_from_managed_udf_string_array(
   managed_udf_string* managed_strings, cudf::size_type size);
-
 
 }  // namespace udf
 }  // namespace strings

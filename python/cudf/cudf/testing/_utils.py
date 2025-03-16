@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import itertools
 import string
@@ -19,8 +19,14 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
-from cudf.core.udf.strings_lowering import cast_string_view_to_managed_udf_string
-from cudf.core.udf.strings_typing import StringView, string_view, managed_udf_string
+from cudf.core.udf.strings_lowering import (
+    cast_string_view_to_managed_udf_string,
+)
+from cudf.core.udf.strings_typing import (
+    StringView,
+    managed_udf_string,
+    string_view,
+)
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [

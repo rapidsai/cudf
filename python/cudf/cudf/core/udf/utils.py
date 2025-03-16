@@ -15,8 +15,16 @@ from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
 from numba.core.extending import register_model
 from numba.np import numpy_support
-from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void, voidptr
-from numba.cuda.runtime.nrt import rtsys
+from numba.types import (
+    CPointer,
+    Poison,
+    Record,
+    Tuple,
+    boolean,
+    int64,
+    void,
+)
+
 import rmm
 
 from cudf._lib import strings_udf
@@ -25,10 +33,10 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
+    NRT_decref,
+    managed_udf_string,
     str_view_arg_handler,
     string_view,
-    managed_udf_string,
-    NRT_decref,
 )
 from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
@@ -327,7 +335,9 @@ def _get_input_args_from_frame(fr: IndexedFrame) -> list:
 
 def _return_arr_from_dtype(dtype, size):
     if dtype == _cudf_str_dtype:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(managed_udf_string))
+        return rmm.DeviceBuffer(
+            size=size * _get_extensionty_size(managed_udf_string)
+        )
     return cp.empty(size, dtype=dtype)
 
 
@@ -336,17 +346,23 @@ def _post_process_output_col(col, retty):
         result = ColumnBase.from_pylibcudf(
             strings_udf.column_from_managed_udf_string_array(col)
         )
-        @cuda.jit(void(CPointer(managed_udf_string), int64), link=[_ptx_file()], extensions=[str_view_arg_handler], nrt=True)
+
+        @cuda.jit(
+            void(CPointer(managed_udf_string), int64),
+            link=[_ptx_file()],
+            extensions=[str_view_arg_handler],
+            nrt=True,
+        )
         def free_managed_udf_string_array(ary, size):
             gid = cuda.grid(1)
             if gid < size:
                 NRT_decref(ary[gid])
+
         with _CUDFNumbaConfig():
             free_managed_udf_string_array.forall(result.size)(col, result.size)
         return result
 
     return as_column(col, retty)
-
 
 
 # The only supported data layout in NVVM.
