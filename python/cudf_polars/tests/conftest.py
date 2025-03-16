@@ -16,8 +16,8 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="pylibcudf",
-        choices=("pylibcudf", "dask-experimental"),
+        default="in-memory",
+        choices=("in-memory", "partitioned-experimental", "dask-experimental"),
         help="Executor to use for GPUEngine.",
     )
 

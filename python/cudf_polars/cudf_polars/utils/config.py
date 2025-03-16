@@ -121,8 +121,8 @@ class ConfigOptions:
         )
 
         # Validate executor_options
-        executor = config.get("executor", "pylibcudf")
-        if executor == "dask-experimental":
+        executor = config.get("executor", "in-memory")
+        if executor in ("partitioned-experimental", "dask-experimental"):
             unsupported = config.get("executor_options", {}).keys() - {
                 "max_rows_per_partition",
                 "parquet_blocksize",

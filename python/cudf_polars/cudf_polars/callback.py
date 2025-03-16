@@ -181,7 +181,8 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "partitioned-experimental", "dask-experimental"]
+    | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -192,8 +193,12 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
+        if executor is None or executor == "in-memory":
             return ir.evaluate(cache={}).to_polars()
+        elif executor == "partitioned-experimental":
+            from cudf_polars.experimental.parallel import evaluate_partitioned
+
+            return evaluate_partitioned(ir).to_polars()
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 

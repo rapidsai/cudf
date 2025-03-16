@@ -11,8 +11,8 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 # Test the default "cudf" executor
 python -m pytest --cache-clear "$@" tests
 
-# Test the "dask-experimental" executor
-python -m pytest --cache-clear "$@" tests --executor dask-experimental
+# Test the "partitioned-experimental" executor
+python -m pytest --cache-clear "$@" tests --executor partitioned-experimental
 
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
