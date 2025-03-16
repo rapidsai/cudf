@@ -26,6 +26,7 @@ from cudf.core.udf.strings_typing import (
     string_view,
     udf_string,
     NRT_decref,
+    NRT_print_refct
 )
 
 _STR_VIEW_PTR = types.CPointer(string_view)
@@ -305,6 +306,28 @@ def decref_managed_udf_string(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_device_nrt_decref,
+        nb_signature(types.void, types.voidptr),
+        (managed.meminfo,),
+    )
+    return
+
+_device_nrt_print_refct = cuda.declare_device(
+    "extern_NRT_PrintRefct",
+    types.void(types.voidptr)
+)
+
+def call_device_nrt_print_refct(meminfo):
+    return _device_nrt_print_refct(meminfo)
+
+@cuda_lower(NRT_print_refct, managed_udf_string)
+def print_refct_managed_udf_string(context, builder, sig, args):
+    managed_ptr = args[0]
+    managed = cgutils.create_struct_proxy(managed_udf_string)(
+        context, builder, value=managed_ptr
+    )
+    _ = context.compile_internal(
+        builder,
+        call_device_nrt_print_refct,
         nb_signature(types.void, types.voidptr),
         (managed.meminfo,),
     )

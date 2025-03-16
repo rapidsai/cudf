@@ -79,14 +79,6 @@ def _ptx_file():
         "shim_",
     )
 
-@functools.cache
-def _ptx_file_udf_apis():
-    return _get_ptx_file(
-        os.path.join(
-            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
-        ),
-        "udf_apis_",
-    )
 
 @_performance_tracking
 def _get_udf_return_type(argty, func: Callable, args=()):
@@ -306,7 +298,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
     kernel = cuda.jit(
-        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
+        sig, link=[_ptx_file()], extensions=[str_view_arg_handler], nrt=True
     )(_kernel)
 
     return kernel
@@ -338,23 +330,19 @@ def _return_arr_from_dtype(dtype, size):
         return rmm.DeviceBuffer(size=size * _get_extensionty_size(managed_udf_string))
     return cp.empty(size, dtype=dtype)
 
-def _finalize_string_column(col):
-    """
-    Call the freeing kernel and attach the memsys.
-    """
-    udf_apis_ptx = _ptx_file_udf_apis()
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
         result = ColumnBase.from_pylibcudf(
             strings_udf.column_from_managed_udf_string_array(col)
         )
-        @cuda.jit(void(CPointer(managed_udf_string), int64), extensions=[str_view_arg_handler])
+        @cuda.jit(void(CPointer(managed_udf_string), int64), link=[_ptx_file()], extensions=[str_view_arg_handler], nrt=True)
         def free_managed_udf_string_array(ary, size):
             gid = cuda.grid(1)
             if gid < size:
                 NRT_decref(ary[gid])
-        free_managed_udf_string_array.forall(result.size)(col, result.size)
+        with _CUDFNumbaConfig():
+            free_managed_udf_string_array.forall(result.size)(col, result.size)
         return result
 
     return as_column(col, retty)

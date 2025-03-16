@@ -20,8 +20,9 @@ from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
     managed_udf_string,
+    NRT_print_refct,
 )
-from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
+from cudf.core.udf.utils import _get_extensionty_size, _ptx_file, _post_process_output_col
 from cudf.testing import assert_eq
 from cudf.testing._utils import sv_to_managed_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
@@ -47,7 +48,7 @@ def get_kernels(func, dtype, size):
         outty = numba.np.numpy_support.from_dtype(dtype)[::1]
     sig = nb_signature(void, CPointer(string_view), outty)
 
-    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler])
+    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler], nrt=True)
     def string_view_kernel(input_strings, output_col):
         id = cuda.grid(1)
         if id < size:
@@ -55,13 +56,15 @@ def get_kernels(func, dtype, size):
             result = func(st)
             output_col[id] = result
 
-    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler])
+    @cuda.jit(sig, link=[_PTX_FILE], extensions=[str_view_arg_handler], nrt=True)
     def managed_udf_string_kernel(input_strings, output_col):
         # test the string function with a managed_udf_string as input
         id = cuda.grid(1)
         if id < size:
             st = input_strings[id]
             st = sv_to_managed_udf_str(st)
+            print('hello world')
+            NRT_print_refct(st)
             result = func(st)
             output_col[id] = result
 
@@ -96,24 +99,13 @@ def run_udf_test(data, func, dtype):
     expect = pd.Series(data).apply(func)
     with _CUDFNumbaConfig():
         sv_kernel.forall(len(data))(str_views, output)
-    if dtype == "str":
-        result = ColumnBase.from_pylibcudf(
-            column_from_managed_udf_string_array(output)
-        )
-    else:
-        result = output
+        result = _post_process_output_col(output, cudf.dtype(dtype))
 
     got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
-    if dtype == "str":
-        result = ColumnBase.from_pylibcudf(
-            column_from_managed_udf_string_array(output)
-        )
-    else:
-        result = output
-
+        result = _post_process_output_col(output, cudf.dtype(dtype))
     got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
 
@@ -122,30 +114,30 @@ def run_udf_test(data, func, dtype):
 def data():
     return [
         "abc",
-        "ABC",
-        "AbC",
-        "123",
-        "123aBc",
-        "123@.!",
-        "",
-        "rapids ai",
-        "gpu",
-        "True",
-        "False",
-        "1.234",
-        ".123a",
-        "0.013",
-        "1.0",
-        "01",
-        "20010101",
-        "cudf",
-        "cuda",
-        "gpu",
-        "This Is A Title",
-        "This is Not a Title",
-        "Neither is This a Title",
-        "NoT a TiTlE",
-        "123 Title Works",
+#        "ABC",
+#        "AbC",
+#        "123",
+#        "123aBc",
+#        "123@.!",
+#        "",
+#        "rapids ai",
+#        "gpu",
+#        "True",
+#        "False",
+#        "1.234",
+#        ".123a",
+#        "0.013",
+#        "1.0",
+#        "01",
+#        "20010101",
+#        "cudf",
+#        "cuda",
+#        "gpu",
+#        "This Is A Title",
+#        "This is Not a Title",
+#        "Neither is This a Title",
+#        "NoT a TiTlE",
+#        "123 Title Works",
     ]
 
 

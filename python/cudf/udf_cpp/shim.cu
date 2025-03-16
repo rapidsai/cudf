@@ -761,3 +761,17 @@ extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_s
 
   return 0;
 }
+
+extern "C" int __device__ extern_NRT_Decref(int &retval, void *ptr)
+{
+    NRT_decref(reinterpret_cast<NRT_MemInfo*>(ptr));
+    return 0;
+}
+
+
+extern "C" int __device__ extern_NRT_PrintRefct(int &retval, void *ptr)
+{
+    NRT_print_refct(reinterpret_cast<NRT_MemInfo*>(ptr));
+    return 0;
+}
+

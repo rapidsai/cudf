@@ -161,6 +161,15 @@ class NRT_decref_typing(AbstractTemplate):
         if isinstance(args[0], ManagedUDFString):
             return nb_signature(types.void, managed_udf_string)
 
+def NRT_print_refct(st):
+    pass
+
+@cuda_decl_registry.register_global(NRT_print_refct)
+class NRT_print_refct_typing(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], ManagedUDFString):
+            return nb_signature(types.void, managed_udf_string)
+
 def register_stringview_binaryop(op, retty):
     """
     Helper function wrapping numba's low level extension API. Provides
