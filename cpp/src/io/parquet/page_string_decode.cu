@@ -21,6 +21,7 @@
 #include "rle_stream.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
@@ -498,6 +499,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
 {
   using cudf::detail::warp_size;
   using WarpReduce = cub::WarpReduce<uleb128_t>;
+
   __shared__ typename WarpReduce::TempStorage temp_storage[2];
 
   __shared__ __align__(16) delta_binary_decoder prefixes;
@@ -550,7 +552,8 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     // note: warp_sum will only be valid on lane 0.
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
     __syncwarp();
-    auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cub::Max());
+    auto const warp_max =
+      WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cudf::detail::maximum{});
 
     if (lane_id == 0) {
       total_bytes += warp_sum;

@@ -97,6 +97,12 @@ select = [
     "NPY002",
     # Ruff-specific rules
     "RUF",
+    # banned-api
+    "TID251",
+    # flake8-debugger
+    "T10",
+    # #flake8-print
+    "T20"
 ]
 ignore = [
     # whitespace before :
@@ -119,6 +125,12 @@ exclude = [
     "cpp/scripts/gdb-pretty-printers.py",
 ]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.result_type".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.issubdtype".msg = "Check the .kind attributes on dtype objects instead"
+"pandas.api.types".msg = "Use cudf.api.types instead"
+
 [tool.ruff.lint.per-file-ignores]
 # We use "== None" to demonstrate null handling in this notebook
 "docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
@@ -126,3 +138,6 @@ exclude = [
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
+"ci/*" = ["T201"]
+"docs/*" = ["T201"]
+"cpp/*" = ["T201"]

@@ -29,14 +29,14 @@ def register() -> None:
     @cuda_deserialize.register(DataFrame)
     def _(header, frames):
         with log_errors():
-            assert len(frames) == 2
-            return DataFrame.deserialize(header, tuple(frames))
+            metadata, gpudata = frames
+            return DataFrame.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
 
     @cuda_deserialize.register(Column)
     def _(header, frames):
         with log_errors():
-            assert len(frames) == 2
-            return Column.deserialize(header, tuple(frames))
+            metadata, gpudata = frames
+            return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
 
     @dask_serialize.register((Column, DataFrame))
     def _(x: DataFrame | Column):
