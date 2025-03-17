@@ -25,6 +25,7 @@ from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    cudf_dtype_to_pa_type,
     find_common_type,
     min_signed_type,
     min_unsigned_type,
@@ -133,52 +134,27 @@ class NumericalColumn(NumericalBaseColumn):
             include_nan and bool(self.nan_count != 0)
         )
 
-    def __setitem__(self, key: Any, value: Any):
-        """
-        Set the value of ``self[key]`` to ``value``.
-
-        If ``value`` and ``self`` are of different types, ``value`` is coerced
-        to ``self.dtype``.
-        """
-
-        # Normalize value to scalar/column
-        value_normalized: cudf.Scalar | ColumnBase = (
-            cudf.Scalar(
-                value,
-                dtype=self.dtype
-                if cudf.utils.utils._is_null_host_scalar(value)
-                else None,
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if is_scalar(value):
+            scalar = pa.scalar(
+                value
+                if not cudf.utils.utils._is_null_host_scalar(value)
+                else None
             )
-            if is_scalar(value)
-            else as_column(value)
-        )
-
-        if self.dtype.kind != "b" and value_normalized.dtype.kind == "b":
-            raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
-        else:
-            value_normalized = value_normalized.astype(self.dtype)
-
-        out: ColumnBase | None  # If None, no need to perform mimic inplace.
-        device_value = (
-            value_normalized.device_value
-            if isinstance(value_normalized, cudf.Scalar)
-            else value_normalized
-        )
-        if isinstance(key, slice):
-            out = self._scatter_by_slice(key, device_value)
-        else:
-            key = as_column(
-                key,
-                dtype="float64"
-                if isinstance(key, list) and len(key) == 0
-                else None,
+            if pa.types.is_boolean(scalar.type) and self.dtype.kind != "b":
+                raise TypeError(
+                    f"Invalid value {value} for dtype {self.dtype}"
+                )
+            return pa_scalar_to_plc_scalar(
+                scalar.cast(cudf_dtype_to_pa_type(self.dtype))
             )
-            if not isinstance(key, cudf.core.column.NumericalColumn):
-                raise ValueError(f"Invalid scatter map type {key.dtype}.")
-            out = self._scatter_by_column(key, device_value)
-
-        if out:
-            self._mimic_inplace(out, inplace=True)
+        else:
+            col = as_column(value)
+            if col.dtype.kind == "b" and self.dtype.kind != "b":
+                raise TypeError(
+                    f"Invalid value {value} for dtype {self.dtype}"
+                )
+            return col.astype(self.dtype)
 
     @acquire_spill_lock()
     def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
