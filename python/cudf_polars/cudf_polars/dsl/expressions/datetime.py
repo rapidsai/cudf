@@ -146,9 +146,7 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
-        if self.name == TemporalFunction.Name.ToString and plc.traits.is_timestamp(
-            column.obj.type()
-        ):
+        if self.name == TemporalFunction.Name.ToString:
             return Column(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
