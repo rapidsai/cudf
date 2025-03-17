@@ -5343,7 +5343,7 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
-    def substring_deduplicate(self, min_width) -> SeriesOrIndex:
+    def substring_duplicates(self, min_width) -> SeriesOrIndex:
         """
 
         Parameters
@@ -5357,7 +5357,7 @@ class StringMethods(ColumnMethods):
 
         """
         return self._return_or_inplace(
-            self._column.substring_deduplicate(min_width),  # type: ignore[arg-type]
+            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
             inplace=False,
             expand=False,
             retain_index=False,
@@ -6403,8 +6403,8 @@ class StringColumn(column.ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def substring_deduplicate(self, min_width: int) -> Self:
-        result = plc.nvtext.dedup.substring_deduplicate(
+    def substring_duplicates(self, min_width: int) -> Self:
+        result = plc.nvtext.dedup.substring_duplicates(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]

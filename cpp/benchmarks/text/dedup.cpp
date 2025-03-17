@@ -22,7 +22,7 @@
 
 #include <nvbench/nvbench.cuh>
 
-static void bench_substring_deduplicate(nvbench::state& state)
+static void bench_substring_duplicates(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
@@ -42,7 +42,7 @@ static void bench_substring_deduplicate(nvbench::state& state)
   // suffix array is the largest part for either API
   state.add_global_memory_writes<nvbench::int64_t>(num_rows);
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = nvtext::substring_deduplicate(input, dup_width);
+    auto result = nvtext::substring_duplicates(input, dup_width);
   });
 }
 
@@ -70,7 +70,7 @@ static void bench_suffix_array(nvbench::state& state)
   });
 }
 
-NVBENCH_BENCH(bench_substring_deduplicate)
+NVBENCH_BENCH(bench_substring_duplicates)
   .set_name("deduplicate")
   .add_int64_axis("dup_width", {50})
   .add_int64_axis("min_width", {0})

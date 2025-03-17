@@ -69,10 +69,10 @@ struct bitonic_sort_comparator_fn {
 };
 
 __global__ void bitonic_sort_step(bitonic_sort_comparator_fn scfn,
-                                  int64_t* d_indices,
+                                  cudf::size_type* d_indices,
                                   int64_t size2,  // size2 is the power of 2 greater than size
-                                  int64_t right,
-                                  int64_t left)
+                                  cudf::size_type right,
+                                  cudf::size_type left)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
   if (tid >= size2) { return; }
@@ -109,7 +109,7 @@ struct find_duplicates_fn {
   char const* d_chars;
   int64_t chars_size;
   cudf::size_type width;
-  int64_t const* d_indices;
+  cudf::size_type const* d_indices;
   __device__ int16_t operator()(int64_t idx) const
   {
     if (idx == 0) { return 0; }
@@ -134,7 +134,7 @@ struct find_duplicates_fn {
 
 struct collapse_overlaps_fn {
   char const* d_chars;
-  int64_t const* d_offsets;
+  cudf::size_type const* d_offsets;
   int16_t const* d_sizes;
   __device__ string_index operator()(int64_t idx) const
   {
@@ -168,6 +168,7 @@ struct collapse_overlaps_fn {
   }
 };
 
+#if 0
 template <typename Iterator, typename Stencil, typename Predicate>
 Iterator remove_if_safe(
   Iterator first, Iterator last, Stencil stencil, Predicate const& fn, rmm::cuda_stream_view stream)
@@ -201,9 +202,10 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
   }
   return result;
 }
+#endif
 }  // namespace
 
-std::pair<std::unique_ptr<rmm::device_uvector<int64_t>>,
+std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
           std::unique_ptr<rmm::device_uvector<int16_t>>>
 build_suffix_array_fn(cudf::device_span<char const> chars_span,
                       cudf::size_type min_width,
@@ -213,7 +215,7 @@ build_suffix_array_fn(cudf::device_span<char const> chars_span,
   auto const size  = static_cast<int64_t>(chars_span.size()) - min_width + 1;
   auto const size2 = 1L << static_cast<int32_t>(std::ceil(std::log2(size)));
 
-  auto indices = rmm::device_uvector<int64_t>(size2, stream);
+  auto indices = rmm::device_uvector<cudf::size_type>(size2, stream);
   auto sizes   = rmm::device_uvector<int16_t>(indices.size(), stream);
 
   thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end());
@@ -228,11 +230,11 @@ build_suffix_array_fn(cudf::device_span<char const> chars_span,
   indices.resize(size, stream);
   sizes.resize(size, stream);
 
-  return std::make_pair(std::make_unique<rmm::device_uvector<int64_t>>(std::move(indices)),
+  return std::make_pair(std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices)),
                         std::make_unique<rmm::device_uvector<int16_t>>(std::move(sizes)));
 }
 
-std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   cudf::strings_column_view const& input,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,
@@ -249,10 +251,10 @@ std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
   return std::get<0>(build_suffix_array_fn(chars_span, min_width, stream, mr));
 }
 
-std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view const& input,
-                                                    cudf::size_type min_width,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view const& input,
+                                                   cudf::size_type min_width,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
   auto d_strings = cudf::column_device_view::create(input.parent(), stream);
@@ -275,13 +277,13 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
                     find_duplicates_fn{d_input_chars, chars_size, min_width, indices->data()});
 
   // remove the non-candidate entries from indices and sizes
-  remove_if_safe(
+  thrust::remove_if(
+    rmm::exec_policy(stream),
     indices->begin(),
     indices->end(),
     thrust::counting_iterator<int64_t>(0),
-    [d_sizes = sizes->data()] __device__(int64_t idx) -> bool { return d_sizes[idx] == 0; },
-    stream);
-  auto end = remove_safe(sizes->begin(), sizes->end(), 0, stream);
+    [d_sizes = sizes->data()] __device__(int64_t idx) -> bool { return d_sizes[idx] == 0; });
+  auto end = thrust::remove(rmm::exec_policy(stream), sizes->begin(), sizes->end(), 0);
   sizes->resize(thrust::distance(sizes->begin(), end), stream);
   indices->resize(sizes->size(), stream);
 
@@ -318,16 +320,16 @@ std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view co
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> substring_deduplicate(cudf::strings_column_view const& input,
-                                                    cudf::size_type min_width,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view const& input,
+                                                   cudf::size_type min_width,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::substring_deduplicate(input, min_width, stream, mr);
+  return detail::substring_duplicates(input, min_width, stream, mr);
 }
 
-std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   cudf::strings_column_view const& input,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream,

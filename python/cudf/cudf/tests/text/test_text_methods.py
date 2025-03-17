@@ -1081,7 +1081,7 @@ def test_byte_pair_encoding(separator, input, results):
     assert_eq(expected, actual)
 
 
-def test_substring_deduplicate():
+def test_substring_duplicates():
     text = (
         " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    "
         "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   "
@@ -1091,7 +1091,7 @@ def test_substring_deduplicate():
         "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  "
     )
     input = cudf.Series([text])
-    actual = input.str.substring_deduplicate(15)
+    actual = input.str.substring_duplicates(15)
     expected = cudf.Series(
         [" 01234567890123456789 ", ". 012345678901234", " reprehenderit "]
     )

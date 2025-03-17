@@ -46,7 +46,7 @@ namespace CUDF_EXPORT nvtext {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with updated strings
  */
-std::unique_ptr<cudf::column> substring_deduplicate(
+std::unique_ptr<cudf::column> substring_duplicates(
   cudf::strings_column_view const& input,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> substring_deduplicate(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted suffix array and corresponding sizes
  */
-std::unique_ptr<rmm::device_uvector<int64_t>> build_suffix_array(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   cudf::strings_column_view const& input,
   cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
