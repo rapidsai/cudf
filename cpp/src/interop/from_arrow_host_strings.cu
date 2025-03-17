@@ -50,6 +50,8 @@ namespace detail {
 
 namespace {
 
+constexpr int chars_buffer_idx = 2;
+
 std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
                                           ArrowArray const* input,
                                           std::unique_ptr<rmm::device_buffer>&& mask,
@@ -58,14 +60,14 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
 {
   // offsets column should contain no nulls so we can put nullptr for the bitmask
   // nulls are tracked in the parent string column itself, not in the offsets
-  void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
-  ArrowArray offsets_array      = {
-         .length     = input->offset + input->length + 1,
-         .null_count = 0,
-         .offset     = 0,
-         .n_buffers  = 2,
-         .n_children = 0,
-         .buffers    = offset_buffers,
+  void const* offset_buffers[] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
+  ArrowArray offsets_array     = {
+        .length     = input->offset + input->length + 1,
+        .null_count = 0,
+        .offset     = 0,
+        .n_buffers  = 2,
+        .n_children = 0,
+        .buffers    = offset_buffers,
   };
 
   // chars_column does not contain any nulls, they are tracked by the parent string column
@@ -80,14 +82,14 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
       CUDF_FAIL("Unsupported string type", cudf::data_type_error);
     }
   }();
-  void const* char_buffers[2] = {nullptr, input->buffers[2]};
-  ArrowArray char_array       = {
-          .length     = char_data_length,
-          .null_count = 0,
-          .offset     = 0,
-          .n_buffers  = 2,
-          .n_children = 0,
-          .buffers    = char_buffers,
+  void const* char_buffers[] = {nullptr, input->buffers[chars_buffer_idx]};
+  ArrowArray char_array      = {
+         .length     = char_data_length,
+         .null_count = 0,
+         .offset     = 0,
+         .n_buffers  = 2,
+         .n_children = 0,
+         .buffers    = char_buffers,
   };
 
   nanoarrow::UniqueSchema offset_schema;
@@ -135,6 +137,8 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView* schema,
                mr);
 }
 
+constexpr int stringview_vector_idx = 1;
+
 std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
                                               ArrowArray const* input,
                                               std::unique_ptr<rmm::device_buffer>&& mask,
@@ -146,7 +150,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
   NANOARROW_THROW_NOT_OK(ArrowArrayViewSetArray(&view, input, nullptr));
 
   // first copy stringview array to device
-  auto items   = view.buffer_views[1].data.as_binary_view;
+  auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
                                 items + input->offset,
