@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import operator
 from typing import TYPE_CHECKING, Any
 
@@ -18,12 +17,13 @@ from cudf_polars.experimental.base import _concat, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping
+    from collections.abc import MutableMapping
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
 
 
 class Shuffle(IR):
@@ -35,42 +35,32 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("keys", "options")
-    _non_child = ("schema", "keys", "options")
+    __slots__ = ("config_options", "keys")
+    _non_child = ("schema", "keys", "config_options")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    options: dict[str, Any]
-    """Shuffling options."""
+    config_options: ConfigOptions
+    """Configuration options."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.options = options
-        self._non_child_args = (schema, keys, options)
+        self.config_options = config_options
+        self._non_child_args = (schema, keys, config_options)
         self.children = (df,)
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            tuple(self.schema.items()),
-            self.keys,
-            json.dumps(self.options),
-            self.children,
-        )
 
     @classmethod
     def do_evaluate(
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: DataFrame,
     ):  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -133,8 +123,8 @@ def _partition_dataframe(
 
 
 def _simple_shuffle_graph(
-    name_out: str,
     name_in: str,
+    name_out: str,
     keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
@@ -196,8 +186,8 @@ def _(
 
     # TODO: Optionally use rapidsmp.
     return _simple_shuffle_graph(
-        get_key_name(ir),
         get_key_name(ir.children[0]),
+        get_key_name(ir),
         ir.keys,
         partition_info[ir.children[0]].count,
         partition_info[ir].count,
