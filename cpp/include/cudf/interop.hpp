@@ -325,6 +325,8 @@ class arrow_column {
   std::shared_ptr<arrow_array_container>
     container;  ///< Shared pointer to container for the ArrowDeviceArray data; shared_ptr allows
                 ///< re-export via to_arrow
+  owned_columns_t view_columns;  ///< Cached view that manages ownership of non-view-only data.
+  column_view cached_view;
 };
 
 /**
@@ -445,6 +447,8 @@ class arrow_table {
   std::shared_ptr<arrow_array_container>
     container;  ///< Shared pointer to container for the ArrowDeviceArray data; shared_ptr allows
                 ///< re-export via to_arrow
+  owned_columns_t view_columns;  ///< Cached view that manages ownership of non-view-only data.
+  table_view cached_view;
 };
 
 }  // namespace interop
