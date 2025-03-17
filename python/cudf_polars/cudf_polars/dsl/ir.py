@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import Schema, Slice as Zlice
+    from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
 
@@ -297,7 +298,7 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: dict[str, Any]
+    config_options: ConfigOptions
     """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
@@ -321,7 +322,7 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -426,7 +427,7 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            json.dumps(self.config_options),
+            self.config_options,
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -441,7 +442,7 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -529,7 +530,7 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            parquet_options = config_options.get("parquet_options", {})
+            parquet_options = config_options.get("parquet_options", default={})
             filters = None
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
@@ -541,7 +542,7 @@ class Scan(IR):
                 options.set_columns(with_columns)
             if filters is not None:
                 options.set_filter(filters)
-            if parquet_options.get("chunked", True):
+            if parquet_options.get("chunked", default=True):
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -553,11 +554,13 @@ class Scan(IR):
                     options.set_num_rows(nrows)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=parquet_options.get(
-                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
+                    chunk_read_limit=config_options.get(
+                        "parquet_options.chunk_read_limit",
+                        default=cls.PARQUET_DEFAULT_CHUNK_SIZE,
                     ),
-                    pass_read_limit=parquet_options.get(
-                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
+                    pass_read_limit=config_options.get(
+                        "parquet_options.pass_read_limit",
+                        default=cls.PARQUET_DEFAULT_PASS_LIMIT,
                     ),
                 )
                 chk = reader.read_chunk()
@@ -712,7 +715,7 @@ class DataFrameScan(IR):
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    config_options: dict[str, Any]
+    config_options: ConfigOptions
     """GPU-specific configuration options"""
 
     def __init__(
@@ -720,7 +723,7 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
     ):
         self.schema = schema
         self.df = df
@@ -746,7 +749,7 @@ class DataFrameScan(IR):
             schema_hash,
             id(self.df),
             self.projection,
-            json.dumps(self.config_options),
+            self.config_options,
         )
 
     @classmethod
@@ -886,7 +889,7 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     options: GroupbyOptions
     """Arbitrary options."""
-    config_options: dict[str, Any]
+    config_options: ConfigOptions
     """GPU-specific configuration options"""
 
     def __init__(
@@ -896,7 +899,7 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: Any,
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
@@ -920,18 +923,6 @@ class GroupBy(IR):
             maintain_order,
             self.options,
             self.AggInfos(self.agg_requests),
-        )
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            tuple(self.schema.items()),
-            self.keys,
-            self.maintain_order,
-            self.options,
-            json.dumps(self.config_options),
-            self.children,
         )
 
     @staticmethod
@@ -1160,8 +1151,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options")
+    __slots__ = ("config_options", "left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1183,6 +1174,8 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
+    config_options: ConfigOptions
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1190,6 +1183,7 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
+        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1197,6 +1191,7 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
+        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order

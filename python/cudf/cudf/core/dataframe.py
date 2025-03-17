@@ -284,7 +284,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
             else:
                 tmp_arg = arg
-                if is_scalar(arg[0]):
+                if isinstance(arg, tuple) and is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, converting it to
                     # an array kind.
@@ -298,6 +298,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                                 "typecast to common dtype."
                             )
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
+                elif all(is_scalar(a) for a in tmp_arg):
+                    tmp_arg = (tmp_arg, slice(None))
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
                 tmp_arg = (
@@ -336,6 +338,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         },
                         index=cudf.Index._from_column(tmp_arg[0]),
                     )
+                    columns_df = columns_df.copy(deep=False)
                     columns_df[cantor_name] = column.as_column(
                         range(len(columns_df))
                     )
