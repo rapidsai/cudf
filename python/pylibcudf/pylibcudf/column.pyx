@@ -436,7 +436,7 @@ def _datatype_from_dtype_desc(desc):
 
 
 def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
+    shape: Sequence[int], strides: None | Sequence[int], itemsize: int
 ) -> bool:
     """Determine if shape and strides are C-contiguous
 
@@ -444,8 +444,9 @@ def is_c_contiguous(
     ----------
     shape : Sequence[int]
         Number of elements in each dimension.
-    strides : Sequence[int]
+    strides : None | Sequence[int]
         The stride of each dimension in bytes.
+        If None, the memory layout is C-contiguous.
     itemsize : int
         Size of an element in bytes.
 
