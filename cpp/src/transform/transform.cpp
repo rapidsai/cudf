@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/jit/runtime_support.h>
 #include <cudf/jit/types.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -189,6 +190,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type), "Transforms only support fixed-width types");
   CUDF_EXPECTS(
     std::all_of(

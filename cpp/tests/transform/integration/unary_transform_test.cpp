@@ -25,10 +25,19 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/jit/runtime_support.h>
 #include <cudf/transform.hpp>
 
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require 11.5 runtime";
+    }
+  }
+};
 
 template <class dtype, class Op, class Data>
 void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
