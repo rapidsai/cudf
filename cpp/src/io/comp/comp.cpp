@@ -32,6 +32,7 @@
 
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
+#include <zstd.h>
 
 #include <numeric>
 
@@ -74,6 +75,33 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression failed at deallocation");
 
   return dst;
+}
+
+std::vector<std::uint8_t> compress_zstd(host_span<uint8_t const> src)
+{
+  auto check_error_code = [](size_t err_code, size_t line) {
+    if (err_code != 0) {
+      std::stringstream ss;
+      ss << "CUDF failure at: " << __FILE__ << ":" << line << ": " << ZSTD_getErrorName(err_code)
+         << std::endl;
+      throw cudf::logic_error(ss.str());
+    }
+  };
+  auto const compressed_size_estimate = ZSTD_compressBound(src.size());
+  check_error_code(ZSTD_isError(compressed_size_estimate), __LINE__);
+  std::vector<std::uint8_t> compressed_buffer(compressed_size_estimate);
+
+  // This function compresses in a single frame
+  auto const compressed_size_actual =
+    ZSTD_compress(reinterpret_cast<void*>(compressed_buffer.data()),
+                  compressed_size_estimate,
+                  reinterpret_cast<const void*>(src.data()),
+                  src.size(),
+                  1);
+  check_error_code(ZSTD_isError(compressed_size_actual), __LINE__);
+  compressed_buffer.resize(compressed_size_actual);
+
+  return compressed_buffer;
 }
 
 namespace snappy {
@@ -339,6 +367,7 @@ void host_compress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP:
     case compression_type::SNAPPY:
+    case compression_type::ZSTD:
     case compression_type::NONE: return true;
     default: return false;
   }
@@ -411,6 +440,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return snappy::compress(src);
+    case compression_type::ZSTD: return compress_zstd(src);
     default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
