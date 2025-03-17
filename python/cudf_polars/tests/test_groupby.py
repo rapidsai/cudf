@@ -45,6 +45,7 @@ def keys(request):
 
 @pytest.fixture(
     params=[
+        [],
         ["int"],
         ["float", "int"],
         [pl.col("float") + pl.col("int")],
