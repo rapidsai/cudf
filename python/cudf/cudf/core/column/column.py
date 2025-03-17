@@ -73,7 +73,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import (
     _array_ufunc,
     _is_null_host_scalar,
-    is_na_like,
     mask_dtype,
 )
 
@@ -2836,19 +2835,23 @@ def as_column(
     if dtype is not None:
         dtype = cudf.dtype(dtype)
         try:
-            # pyarrow cannot infer pd.NA values
-            sanitized_nas = [
-                val if not is_na_like(val) else None for val in arbitrary
-            ]
             arbitrary = pa.array(
-                sanitized_nas,
+                arbitrary,
                 type=cudf_dtype_to_pa_type(dtype),
                 from_pandas=from_pandas,
             )
-        except (pa.ArrowInvalid, pa.ArrowTypeError):
-            if not isinstance(dtype, np.dtype):
-                dtype = dtype.to_pandas()
-            arbitrary = pd.Series(arbitrary, dtype=dtype)
+        except (pa.ArrowInvalid, pa.ArrowTypeError) as err:
+            if err.args[0].startswith("Could not convert <NA>"):
+                # nan_as_null=False, but we want to allow pd.NA values
+                arbitrary = pa.array(
+                    arbitrary,
+                    type=cudf_dtype_to_pa_type(dtype),
+                    from_pandas=True,
+                )
+            else:
+                if not isinstance(dtype, np.dtype):
+                    dtype = dtype.to_pandas()
+                arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     else:
         for element in arbitrary:
