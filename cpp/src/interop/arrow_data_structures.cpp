@@ -319,27 +319,6 @@ arrow_table::arrow_table(cudf::table&& input,
   cached_view  = *tmp;
 }
 
-unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr) const
-{
-  return from_arrow_device(&container->schema, &container->owner, stream, mr);
-}
-
-void arrow_table::to_arrow_schema(ArrowSchema* output,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr) const
-{
-  ArrowSchemaDeepCopy(&container->schema, output);
-}
-
-void arrow_table::to_arrow(ArrowDeviceArray* output,
-                           ArrowDeviceType device_type,
-                           rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref mr) const
-{
-  arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
-}
-
 arrow_table::arrow_table(ArrowSchema&& schema,
                          ArrowDeviceArray&& input,
                          rmm::cuda_stream_view stream,
@@ -389,4 +368,26 @@ arrow_table::arrow_table(ArrowArrayStream&& input,
   view_columns = std::move(tmp.view_columns);
   cached_view  = tmp.cached_view;
 }
+
+void arrow_table::to_arrow_schema(ArrowSchema* output,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr) const
+{
+  ArrowSchemaDeepCopy(&container->schema, output);
+}
+
+void arrow_table::to_arrow(ArrowDeviceArray* output,
+                           ArrowDeviceType device_type,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr) const
+{
+  arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
+}
+
+unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr) const
+{
+  return from_arrow_device(&container->schema, &container->owner, stream, mr);
+}
+
 }  // namespace cudf::interop
