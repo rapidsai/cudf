@@ -121,7 +121,7 @@ class ConfigOptions:
         )
 
         # Validate executor_options
-        executor = config.get("executor", "in-memory")
+        executor = config.get("executor", "single")
         if executor in ("partitioned-experimental", "dask-experimental"):
             unsupported = config.get("executor_options", {}).keys() - {
                 "max_rows_per_partition",

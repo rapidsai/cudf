@@ -181,8 +181,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["in-memory", "partitioned-experimental", "dask-experimental"]
-    | None,
+    executor: Literal["single", "partitioned-experimental", "dask-experimental"] | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -193,7 +192,7 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "in-memory":
+        if executor is None or executor == "single":
             return ir.evaluate(cache={}).to_polars()
         elif executor == "partitioned-experimental":
             from cudf_polars.experimental.parallel import evaluate_partitioned

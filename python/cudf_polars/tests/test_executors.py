@@ -11,7 +11,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize(
-    "executor", [None, "in-memory", "partitioned-experimental", "dask-experimental"]
+    "executor", [None, "single", "partitioned-experimental", "dask-experimental"]
 )
 def test_executor_basics(executor):
     if executor == "dask-experimental":
@@ -44,7 +44,7 @@ def test_cudf_cache_evaluate():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"), pl.col("a"))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    assert_gpu_result_equal(query, executor="in-memory")
+    assert_gpu_result_equal(query, executor="single")
 
 
 @pytest.mark.parametrize("executor", ["partitioned-experimental", "dask-experimental"])
@@ -71,7 +71,7 @@ def test_unknown_executor():
         assert_gpu_result_equal(df, executor="unknown-executor")
 
 
-@pytest.mark.parametrize("executor", [None, "in-memory", "partitioned-experimental"])
+@pytest.mark.parametrize("executor", [None, "single", "partitioned-experimental"])
 def test_unknown_executor_options(executor):
     df = pl.LazyFrame({})
 
