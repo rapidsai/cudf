@@ -71,7 +71,7 @@ jobs:
   changed-files:
     secrets: inherit
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-25.04
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@changed-files-always
     with:
       files_yaml: |
         test_cpp:
