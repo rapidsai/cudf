@@ -167,42 +167,6 @@ struct collapse_overlaps_fn {
     return string_index(d_ptr, size);
   }
 };
-
-#if 0
-template <typename Iterator, typename Stencil, typename Predicate>
-Iterator remove_if_safe(
-  Iterator first, Iterator last, Stencil stencil, Predicate const& fn, rmm::cuda_stream_view stream)
-{
-  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
-                             static_cast<std::size_t>(std::numeric_limits<int>::max()));
-
-  auto result = first;
-  auto itr    = first;
-  while (itr != last) {
-    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
-    result   = thrust::remove_if(rmm::exec_policy(stream), itr, end, stencil, fn);
-    itr      = end;
-  }
-  return result;
-}
-
-// handles ranges above int32 max
-template <typename Iterator, typename T>
-Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
-{
-  auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
-                             static_cast<std::size_t>(std::numeric_limits<int>::max()));
-
-  auto result = first;
-  auto itr    = first;
-  while (itr != last) {
-    auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
-    result   = thrust::remove(rmm::exec_policy(stream), itr, end, value);
-    itr      = end;
-  }
-  return result;
-}
-#endif
 }  // namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
@@ -246,6 +210,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
   CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
+               "input size cannot exceed the 2GB");
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
   return std::get<0>(build_suffix_array_fn(chars_span, min_width, stream, mr));
