@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import time
 import types
+from collections.abc import Callable
 from io import BytesIO, StringIO
 
 import cupy as cp
@@ -2079,3 +2080,14 @@ def test_pickle_round_trip_proxy_numpy_array(array):
     np.testing.assert_equal(
         pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
     )
+
+
+def test_pandas_objects_not_callable():
+    series = xpd.Series([1, 2, 3])
+    dataframe = xpd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    index = xpd.Index([1, 2, 3])
+    range_index = xpd.RangeIndex(start=0, stop=10, step=1)
+    assert isinstance(series, Callable)
+    assert isinstance(dataframe, Callable)
+    assert isinstance(index, Callable)
+    assert isinstance(range_index, Callable)
