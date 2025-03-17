@@ -32,6 +32,32 @@
 
 namespace cudf::interop {
 
+/**
+ * @brief A wrapper around ArrowDeviceArray data used for flexible lifetime management.
+ *
+ * The arrow_array_container is the core object for storing and managing the
+ * lifetime of arrow data in libcudf. Ultimately, data is always owned by this
+ * container type regardless of the source. There are a few important cases to
+ * consider:
+ * 1. We are importing third-party Arrow device data: The data is moved
+ *    directly into the container.
+ * 2. We are converting a cudf arrow/table: We construct an ArrowDeviceArray
+ *    that owns the data formerly owned by the cudf object and then fall back
+ *    to case 1 with the new array.
+ * 3. We are importing third-party Arrow host data: We construct a cudf
+ *    column/table from the Arrow data and then fall back to case 2.
+ *
+ * Any export of arrow_column or arrow_table to an arrow array produces
+ * an ArrowDeviceArray whose private_data is an instance of a cudf-internal
+ * type (the ArrowArrayPrivateData struct) that also holds a shared pointer to
+ * this container, ensuring shared ownership and of the data and compatible
+ * management of its lifetime. All the release semantics boil down to a simple
+ * deletion of a shared_ptr, so no actually freeing needs to be done manually.
+ * The shared_ptr's reference counting is sufficient across all use cases. The
+ * original array's release callback is called when the container is
+ * destructed, which in practice means when all shared references to the
+ * container are gone.
+ */
 struct arrow_array_container {
   arrow_array_container() = default;
 

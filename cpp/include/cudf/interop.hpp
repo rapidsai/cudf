@@ -189,9 +189,6 @@ using unique_column_view_t =
 
 namespace interop {
 
-/**
- * @brief A wrapper around ArrowDeviceArray data used for flexible lifetime management.
- */
 struct arrow_array_container;
 
 /**
@@ -238,7 +235,8 @@ class arrow_column {
    * @brief Construct a new arrow column object
    *
    * The input array will be moved into the arrow_column, so it is no longer
-   * suitable for use afterwards.
+   * suitable for use afterwards. For consistency, this is done even if the
+   * source array points to host data.
    *
    * @param schema Arrow schema for the column
    * @param input ArrowDeviceArray data for the column
@@ -254,7 +252,8 @@ class arrow_column {
    * @brief Construct a new arrow column object
    *
    * The input array will be released, so it is no longer suitable for use
-   * afterwards.
+   * afterwards. This is done for consistency with other constructors of arrow_table even though the
+   * source data is always host data.
    *
    * @param schema Arrow schema for the column
    * @param input ArrowArray data for the column
@@ -341,7 +340,8 @@ class arrow_table {
    * @brief Construct a new arrow table object
    *
    * The input array will be moved into the arrow_table, so it is no longer
-   * suitable for use afterwards.
+   * suitable for use afterwards. For consistency, this is done even if the
+   * source array points to host data.
    *
    * @param schema Arrow schema for the table
    * @param input ArrowDeviceArray data for the table
@@ -357,7 +357,8 @@ class arrow_table {
    * @brief Construct a new arrow table object
    *
    * The stream will be released after the table is created, so it is no longer
-   * suitable for use afterwards.
+   * suitable for use afterwards. This is done for consistency with other constructors of
+   * arrow_table even though the source data is always host data.
    *
    * @param input ArrowArrayStream data for the table
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -371,7 +372,8 @@ class arrow_table {
    * @brief Construct a new arrow table object
    *
    * The input array will be released, so it is no longer suitable for use
-   * afterwards.
+   * afterwards. This is done for consistency with other constructors of arrow_table even though the
+   * source data is always host data.
    *
    * @param schema Arrow schema for the table
    * @param input ArrowArray data for the table
