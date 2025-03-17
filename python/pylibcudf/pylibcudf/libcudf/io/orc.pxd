@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int64_t, uint8_t
@@ -10,6 +10,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "cudf/io/orc.hpp" \
@@ -77,6 +78,11 @@ cdef extern from "cudf/io/orc.hpp" \
 
     cdef cudf_io_types.table_with_metadata read_orc(
         orc_reader_options opts
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata read_orc(
+        orc_reader_options opts,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
     cdef cppclass orc_writer_options:
@@ -147,6 +153,11 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options options
     ) except +libcudf_exception_handler
 
+    cdef void write_orc(
+        orc_writer_options options,
+        cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
     cdef cppclass chunked_orc_writer_options:
         chunked_orc_writer_options() except +libcudf_exception_handler
         cudf_io_types.sink_info get_sink() except +libcudf_exception_handler
@@ -214,6 +225,10 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_chunked_writer() except +libcudf_exception_handler
         orc_chunked_writer(
             chunked_orc_writer_options args
+        ) except +libcudf_exception_handler
+        orc_chunked_writer(
+            chunked_orc_writer_options args,
+            cuda_stream_view stream,
         ) except +libcudf_exception_handler
         orc_chunked_writer& write(
             cudf_table_view.table_view table_,

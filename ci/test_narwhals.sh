@@ -40,23 +40,43 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --constructors=polars[lazy]
 
 rapids-logger "Run narwhals tests for cuDF Pandas"
-# TODO: Investigate which of the tests we can avoid skipping
-# Tracking Issue: https://github.com/rapidsai/cudf/issues/18248
+
+# test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
+# test_sumh_transformations: Fixed by https://github.com/rapidsai/cudf/pull/18259
+# test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
+# test_q1 & test_dask_order_dependent_ops: https://github.com/rapidsai/cudf/issues/18253
+TESTS_THAT_NEED_CUDF_FIX=" \
+test_is_finite_expr or \
+test_is_finite_series or \
+test_sumh_transformations or \
+test_maybe_convert_dtypes_pandas or \
+test_q1 or \
+test_dask_order_dependent_ops \
+"
+
+# test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
+# test_to_arrow & test_to_arrow_with_nulls: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719254791
+# test_pandas_object_series: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719180627
+TESTS_TO_ALWAYS_SKIP=" \
+test_array_dunder_with_copy or \
+test_to_arrow or \
+test_to_arrow_with_nulls or \
+test_pandas_object_series \
+"
+
+TEST_THAT_NEED_NARHWHALS_FIX=" \
+test_eager_only_sqlframe or \
+test_series_only_sqlframe \
+"
+
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
     -k "not ( \
-        test_pandas_object_series or \
-        test_is_finite_expr or \
-        test_is_finite_series or \
-        test_array_dunder_with_copy or \
-        test_maybe_convert_dtypes_pandas or \
-        test_to_arrow or \
-        test_to_arrow_with_nulls or \
-        test_sumh_transformations or \
-        test_dask_order_dependent_ops or \
-        test_q1 \
+        ${TESTS_THAT_NEED_CUDF_FIX} or \
+        ${TESTS_TO_ALWAYS_SKIP} or \
+        ${TEST_THAT_NEED_NARHWHALS_FIX} \
     )" \
     --numprocesses=8 \
     --dist=worksteal
