@@ -33,6 +33,17 @@ function(jit_preprocess_files)
     get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
     list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
 
+    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL 11.5)
+      set(JIT_INT128_FLAGS
+          --device-int128
+          # CCCL WAR for not using the correct INT128 feature macro:
+          # https://github.com/NVIDIA/cccl/issues/3801, can be removed in CCCL >= 3.0
+          -D__SIZEOF_INT128__=16
+      )
+    else()
+      set(JIT_INT128_FLAGS "")
+    endif()
+
     # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation in how conda builds
     # glibc
     add_custom_command(
@@ -45,8 +56,8 @@ function(jit_preprocess_files)
         "${CMAKE_COMMAND}" -E env LD_LIBRARY_PATH=${CUDAToolkit_LIBRARY_DIR}
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
-        --device-int128 -D__SIZEOF_INT128__=16 -remove-unused-globals -D_FILE_OFFSET_BITS=64
-        -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
+        ${JIT_INT128_FLAGS} -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__
+        -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
         --no-preinclude-workarounds --no-replace-pragma-once
       COMMENT "Custom command to JIT-compile files."
     )
