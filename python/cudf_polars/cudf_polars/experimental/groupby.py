@@ -253,11 +253,10 @@ def _(
                 "maintain_order not supported for multiple output partitions."
             )
 
-        shuffle_options: dict[str, Any] = {}
         gb_inter = Shuffle(
             pwise_schema,
             ir.keys,
-            shuffle_options,
+            ir.config_options,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
