@@ -427,7 +427,7 @@ struct VectorOfArrays {
   {
     auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
 
-    [[maybe_unused]] auto rc = ArrowSchemaDeepCopy(private_data->schema.get(), out_schema);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaDeepCopy(private_data->schema.get(), out_schema));
     return 0;
   }
 
