@@ -291,9 +291,10 @@ class arrow_column {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  void to_arrow_schema(ArrowSchema* output,
-                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  void to_arrow_schema(
+    ArrowSchema* output,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Convert the column to an ArrowDeviceArray
@@ -422,9 +423,10 @@ class arrow_table {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
    */
-  void to_arrow_schema(ArrowSchema* output,
-                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  void to_arrow_schema(
+    ArrowSchema* output,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
    * @brief Convert the table to an ArrowDeviceArray

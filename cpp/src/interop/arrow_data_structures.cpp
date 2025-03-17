@@ -270,7 +270,7 @@ arrow_column::arrow_column(ArrowSchema&& schema,
 
 void arrow_column::to_arrow_schema(ArrowSchema* output,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   rmm::device_async_resource_ref mr) const
 {
   ArrowSchemaDeepCopy(&container->schema, output);
 }
@@ -316,7 +316,7 @@ unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
 
 void arrow_table::to_arrow_schema(ArrowSchema* output,
                                   rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+                                  rmm::device_async_resource_ref mr) const
 {
   ArrowSchemaDeepCopy(&container->schema, output);
 }
