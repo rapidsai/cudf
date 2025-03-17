@@ -154,8 +154,16 @@ jitify2::Kernel get_kernel(mutable_column_view output,
       .instantiate(build_jit_typenames(output, inputs));
 
   return cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."});
+    .get_kernel(kernel_name,
+                {},
+                {{"transform/jit/operation-udf.hpp", cuda_source}},
+                {"-arch=sm_.",
+                 "--device-int128",
+                 // TODO: remove when we upgrade to CCCL >= 3.0
+
+                 // CCCL WAR for not using the correct INT128 feature macro:
+                 // https://github.com/NVIDIA/cccl/issues/3801
+                 "-D__SIZEOF_INT128__=16"});
 }
 
 void transform_operation(mutable_column_view output,

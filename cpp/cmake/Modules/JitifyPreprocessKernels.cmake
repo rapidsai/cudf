@@ -45,12 +45,8 @@ function(jit_preprocess_files)
         "${CMAKE_COMMAND}" -E env LD_LIBRARY_PATH=${CUDAToolkit_LIBRARY_DIR}
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
-        --device-int128
-        # TODO: remove when we upgrade to CCCL >= 3.0 CCCL WAR for not using the correct INT128
-        # feature macro: https://github.com/NVIDIA/cccl/issues/3801
-        -D__SIZEOF_INT128__=16 -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__
-        -I${CUDF_SOURCE_DIR}/include -I${CUDF_SOURCE_DIR}/src ${includes}
-        --no-preinclude-workarounds --no-replace-pragma-once
+        -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
+        -I${CUDF_SOURCE_DIR}/src ${includes} --no-preinclude-workarounds --no-replace-pragma-once
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()
