@@ -9,6 +9,7 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
@@ -149,7 +150,7 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, list(partition_info[ir].keys(ir)))
+        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
         return graph, key_name
     else:
         return graph, (key_name, 0)

@@ -44,8 +44,10 @@ namespace {
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
+  auto const elements  = input.size() / 2;
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
-    static_cast<size_t>(input.size()),
+    static_cast<size_t>(elements),
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{-1},
     cuco::empty_value{-1},
     bpe_equal{input},
@@ -60,7 +62,7 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
     cuda::proclaim_return_type<cuco::pair<cudf::size_type, cudf::size_type>>(
       [] __device__(cudf::size_type idx) { return cuco::make_pair(idx, idx); }));
 
-  merge_pairs_map->insert_async(iter, iter + (input.size() / 2), stream.value());
+  merge_pairs_map->insert_async(iter, iter + elements, stream.value());
 
   return merge_pairs_map;
 }
@@ -70,6 +72,7 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
 {
   auto mp_table_map = std::make_unique<mp_table_map_type>(
     static_cast<size_t>(input.size()),
+    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key{-1},
     cuco::empty_value{-1},
     mp_equal{input},
@@ -104,8 +107,9 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  auto const space = std::string(" ");  // workaround to ARM issue
   auto pairs =
-    cudf::strings::split_record(input, cudf::string_scalar(" ", true, stream, mr), 1, stream, mr);
+    cudf::strings::split_record(input, cudf::string_scalar(space, true, stream, mr), 1, stream, mr);
   auto content = pairs->release();
   return create_bpe_merge_pairs_impl(std::move(content.children.back()), stream);
 }

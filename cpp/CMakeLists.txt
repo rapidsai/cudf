@@ -305,12 +305,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
+# find zstd
+include(cmake/thirdparty/get_zstd.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -643,6 +645,7 @@ add_library(
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
+  src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/round/round.cu
@@ -820,6 +823,7 @@ set_target_properties(
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -876,6 +880,7 @@ target_include_directories(
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
+          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -935,7 +940,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1043,6 +1048,17 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudftestutil_objects OBJECT)
+  target_link_libraries(
+    cudftestutil_objects
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PRIVATE cudf::cudftestutil_impl
+  )
+  add_library(cudf::cudftestutil_objects ALIAS cudftestutil_objects)
 
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(

@@ -16,6 +16,7 @@
 
 #include "arrow_utilities.hpp"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -234,15 +235,18 @@ template <>
 int dispatch_to_arrow_host::operator()<cudf::dictionary32>(ArrowArray* out) const
 {
   nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(
-    tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
-    column));
+
+  auto const dcv          = cudf::dictionary_column_view(column);
+  auto const dict_indices = dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT32)->view()
+                                           : dcv.get_indices_annotated();
+  auto const keys =
+    dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT64)->view() : dcv.keys();
+
+  NANOARROW_RETURN_NOT_OK(
+    initialize_array(tmp.get(), id_to_arrow_type(dict_indices.type().id()), column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-  auto dcv          = cudf::dictionary_column_view(column);
-  auto dict_indices = dcv.get_indices_annotated();
   switch (dict_indices.type().id()) {
     case type_id::INT8:
     case type_id::UINT8:
@@ -271,7 +275,7 @@ int dispatch_to_arrow_host::operator()<cudf::dictionary32>(ArrowArray* out) cons
     default: CUDF_FAIL("unsupported type for dictionary indices");
   }
 
-  NANOARROW_RETURN_NOT_OK(get_column(dcv.keys(), stream, mr, tmp->dictionary));
+  NANOARROW_RETURN_NOT_OK(get_column(keys, stream, mr, tmp->dictionary));
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;

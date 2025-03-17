@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -564,16 +564,17 @@ class DatetimeColumn(column.ColumnBase):
             other = np.timedelta64(other)
 
         if isinstance(other, np.datetime64):
+            other_time_unit = np.datetime_data(other.dtype)[0]
             if np.isnat(other):
-                other_time_unit = np.datetime_data(other.dtype)[0]
                 if other_time_unit not in {"s", "ms", "ns", "us"}:
                     other_time_unit = "ns"
 
                 return cudf.Scalar(
                     None, dtype=f"datetime64[{other_time_unit}]"
                 )
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
+                other = other.astype(self.dtype)
 
-            other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = np.datetime_data(other.dtype)[0]
@@ -586,7 +587,9 @@ class DatetimeColumn(column.ColumnBase):
                 )
 
             if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype(np.dtype("timedelta64[s]"))
+                other = other.astype(
+                    np.dtype(f"timedelta64[{self.time_unit}]")
+                )
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -597,7 +600,7 @@ class DatetimeColumn(column.ColumnBase):
 
         return NotImplemented
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
         elif isinstance(dtype, pd.DatetimeTZDtype):
@@ -607,13 +610,13 @@ class DatetimeColumn(column.ColumnBase):
             )
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
+    def as_timedelta_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.NumericalColumn:
         col = cudf.core.column.NumericalColumn(
             data=self.base_data,  # type: ignore[arg-type]
@@ -846,6 +849,11 @@ class DatetimeColumn(column.ColumnBase):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
+
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if isinstance(value, (np.str_, np.datetime64)):
+            value = pd.Timestamp(value.item())
+        return super()._cast_setitem_value(value)
 
     def indices_of(
         self, value: ScalarLike
@@ -1132,7 +1140,9 @@ class DatetimeTZColumn(DatetimeColumn):
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self._local_time.as_string_column()
 
-    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype: np.dtype | pd.DatetimeTZDtype
+    ) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
