@@ -291,17 +291,10 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-// If it proves to be a bottleneck we could do this work on construction of the
-// container and store the extra columns in the container. Then the container
-// can safely return copies of the view ad infinitum and this call can be
-// stream- and mr-free, matching the cudf::column::view method. Also doing this
-// on construction would allow us to cache column data for the types where the
-// representation is not identical between arrow and cudf (like bools) and
-// avoiding constant back-and-forth conversion.
-unique_column_view_t arrow_column::view(rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr) const
+column_view arrow_column::view(rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr) const
 {
-  return from_arrow_device_column(&container->schema, &container->owner, stream, mr);
+  return cached_view;
 }
 
 arrow_table::arrow_table(cudf::table&& input,
@@ -384,10 +377,9 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-unique_table_view_t arrow_table::view(rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr) const
+table_view arrow_table::view(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
-  return from_arrow_device(&container->schema, &container->owner, stream, mr);
+  return cached_view;
 }
 
 }  // namespace cudf::interop
