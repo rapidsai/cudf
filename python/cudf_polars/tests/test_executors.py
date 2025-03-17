@@ -49,6 +49,9 @@ def test_cudf_cache_evaluate():
 
 @pytest.mark.parametrize("executor", ["partitioned-experimental", "dask-experimental"])
 def test_dask_experimental_map_function_get_hashable(executor):
+    if executor == "dask-experimental":
+        pytest.importorskip("dask")
+
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),

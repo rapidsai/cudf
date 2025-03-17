@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Synchronous task scheduler."""
 
@@ -17,7 +17,8 @@ Key: TypeAlias = str | int | tuple["Key", ...]
 Graph: TypeAlias = MutableMapping[Key, Any]
 
 
-# NOTE: This is the single-threaded scheduler from `dask.core`.
+# NOTE: This is a slimmed-down version of the single-threaded
+# (synchronous) scheduler in `dask.core`.
 
 
 def ishashable(x):

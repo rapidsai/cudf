@@ -193,12 +193,20 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "single":
+            # Default single-partition executor
             return ir.evaluate(cache={}).to_polars()
         elif executor == "partitioned-experimental":
+            # Experimental multi-partition executor.
+            # This executor will schedule tasks on a
+            # single python thread (on a single GPU)
             from cudf_polars.experimental.parallel import evaluate_partitioned
 
             return evaluate_partitioned(ir).to_polars()
         elif executor == "dask-experimental":
+            # Experimental multi-partition Dask executor.
+            # This executor will use Dask to schedule tasks.
+            # If a distributed client is detected, tasks
+            # will run on the corresponding Dask cluster.
             from cudf_polars.experimental.parallel import evaluate_dask
 
             return evaluate_dask(ir).to_polars()
