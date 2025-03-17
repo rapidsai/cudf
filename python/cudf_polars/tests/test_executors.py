@@ -10,13 +10,8 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.parametrize(
-    "executor", [None, "single", "partitioned-experimental", "dask-experimental"]
-)
+@pytest.mark.parametrize("executor", [None, "single", "multi-experimental"])
 def test_executor_basics(executor):
-    if executor == "dask-experimental":
-        pytest.importorskip("dask")
-
     df = pl.LazyFrame(
         {
             "a": pl.Series([[1, 2], [3]], dtype=pl.List(pl.Int8())),
@@ -47,11 +42,7 @@ def test_cudf_cache_evaluate():
     assert_gpu_result_equal(query, executor="single")
 
 
-@pytest.mark.parametrize("executor", ["partitioned-experimental", "dask-experimental"])
-def test_dask_experimental_map_function_get_hashable(executor):
-    if executor == "dask-experimental":
-        pytest.importorskip("dask")
-
+def test_dask_experimental_map_function_get_hashable():
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
@@ -61,7 +52,7 @@ def test_dask_experimental_map_function_get_hashable(executor):
         }
     )
     q = df.unpivot(index="d")
-    assert_gpu_result_equal(q, executor=executor)
+    assert_gpu_result_equal(q, executor="multi-experimental")
 
 
 def test_unknown_executor():
@@ -74,7 +65,7 @@ def test_unknown_executor():
         assert_gpu_result_equal(df, executor="unknown-executor")
 
 
-@pytest.mark.parametrize("executor", [None, "single", "partitioned-experimental"])
+@pytest.mark.parametrize("executor", [None, "single", "multi-experimental"])
 def test_unknown_executor_options(executor):
     df = pl.LazyFrame({})
 

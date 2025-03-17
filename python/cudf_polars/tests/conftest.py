@@ -17,7 +17,7 @@ def pytest_addoption(parser):
         "--executor",
         action="store",
         default="single",
-        choices=("single", "partitioned-experimental", "dask-experimental"),
+        choices=("single", "multi-experimental"),
         help="Executor to use for GPUEngine.",
     )
 
@@ -33,10 +33,10 @@ def pytest_configure(config):
 
     if (
         config.getoption("--dask-cluster")
-        and config.getoption("--executor") != "dask-experimental"
+        and config.getoption("--executor") != "multi-experimental"
     ):
         raise pytest.UsageError(
-            "--dask-cluster requires --executor='dask-experimental'"
+            "--dask-cluster requires --executor='multi-experimental'"
         )
 
     cudf_polars.testing.asserts.Executor = config.getoption("--executor")
@@ -45,7 +45,7 @@ def pytest_configure(config):
 def pytest_sessionstart(session):
     if (
         session.config.getoption("--dask-cluster")
-        and session.config.getoption("--executor") == "dask-experimental"
+        and session.config.getoption("--executor") == "multi-experimental"
     ):
         from dask import config
         from dask.distributed import Client, LocalCluster

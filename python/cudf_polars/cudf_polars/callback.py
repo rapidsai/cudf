@@ -181,7 +181,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["single", "partitioned-experimental", "dask-experimental"] | None,
+    executor: Literal["single", "multi-experimental"] | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -195,21 +195,11 @@ def _callback(
         if executor is None or executor == "single":
             # Default single-partition executor
             return ir.evaluate(cache={}).to_polars()
-        elif executor == "partitioned-experimental":
-            # Experimental multi-partition executor.
-            # This executor will schedule tasks on a
-            # single python thread (on a single GPU)
-            from cudf_polars.experimental.parallel import evaluate_partitioned
+        elif executor == "multi-experimental":
+            # Experimental multi-partition executor
+            from cudf_polars.experimental.parallel import evaluate_multi
 
-            return evaluate_partitioned(ir).to_polars()
-        elif executor == "dask-experimental":
-            # Experimental multi-partition Dask executor.
-            # This executor will use Dask to schedule tasks.
-            # If a distributed client is detected, tasks
-            # will run on the corresponding Dask cluster.
-            from cudf_polars.experimental.parallel import evaluate_dask
-
-            return evaluate_dask(ir).to_polars()
+            return evaluate_multi(ir).to_polars()
         else:
             raise ValueError(f"Unknown executor '{executor}'")
 

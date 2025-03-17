@@ -16,7 +16,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 def test_join(how, reverse, max_rows_per_partition):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"max_rows_per_partition": max_rows_per_partition},
     )
     left = pl.LazyFrame(

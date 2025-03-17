@@ -53,7 +53,7 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
     q = scan_fn(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
     )
     assert_gpu_result_equal(q, engine=engine)
 
@@ -65,7 +65,7 @@ def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"parquet_blocksize": blocksize},
     )
     assert_gpu_result_equal(q, engine=engine)

@@ -122,7 +122,7 @@ class ConfigOptions:
 
         # Validate executor_options
         executor = config.get("executor", "single")
-        if executor in ("partitioned-experimental", "dask-experimental"):
+        if executor == "multi-experimental":
             unsupported = config.get("executor_options", {}).keys() - {
                 "max_rows_per_partition",
                 "parquet_blocksize",

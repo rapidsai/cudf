@@ -11,11 +11,11 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 # Test the default "cudf" executor
 python -m pytest --cache-clear "$@" tests
 
-# Test the "partitioned-experimental" executor
-python -m pytest --cache-clear "$@" tests --executor partitioned-experimental
+# Test the "multi-experimental" executor
+python -m pytest --cache-clear "$@" tests --executor multi-experimental
 
 # Run experimental tests with Distributed cluster
 python -m pytest --cache-clear "$@" "tests/experimental" \
-    --executor dask-experimental \
+    --executor multi-experimental \
     --dask-cluster \
     --cov-fail-under=0  # No code-coverage requirement for these tests.

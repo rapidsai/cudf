@@ -10,7 +10,7 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.experimental.parallel import evaluate_dask, lower_ir_graph
+from cudf_polars.experimental.parallel import evaluate_multi, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
 
 
@@ -18,7 +18,7 @@ from cudf_polars.experimental.shuffle import Shuffle
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"max_rows_per_partition": 4},
     )
 
@@ -60,7 +60,7 @@ def test_hash_shuffle(df, engine):
     partition_info = lower_ir_graph(qir3)[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
-    # Check that Dask evaluation works
-    result = evaluate_dask(qir3).to_polars()
+    # Check that multi-partition evaluation works
+    result = evaluate_multi(qir3).to_polars()
     expect = df.collect(engine="cpu")
     assert_frame_equal(result, expect, check_row_order=False)

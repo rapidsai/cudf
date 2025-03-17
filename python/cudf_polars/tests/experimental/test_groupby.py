@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"max_rows_per_partition": 4},
     )
 
@@ -45,7 +45,7 @@ def test_groupby_single_partitions(df, op, keys):
         q,
         engine=pl.GPUEngine(
             raise_on_fail=True,
-            executor="dask-experimental",
+            executor="multi-experimental",
             executor_options={"max_rows_per_partition": 1e9},
         ),
         check_row_order=False,
@@ -64,7 +64,7 @@ def test_groupby_agg(df, engine, op, keys):
 def test_groupby_agg_config_options(df, op, keys):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby

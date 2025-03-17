@@ -28,7 +28,7 @@ def test_parallel_dataframescan(df, max_rows_per_partition):
     total_row_count = len(df.collect())
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"max_rows_per_partition": max_rows_per_partition},
     )
     assert_gpu_result_equal(df, engine=engine)
@@ -46,7 +46,7 @@ def test_parallel_dataframescan(df, max_rows_per_partition):
 def test_dataframescan_concat(df):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="multi-experimental",
         executor_options={"max_rows_per_partition": 1_000},
     )
     df2 = pl.concat([df, df])

@@ -15,17 +15,17 @@ from cudf_polars import Translator
 from cudf_polars.dsl.traversal import traversal
 
 
-def test_evaluate_dask():
+def test_evaluate_multi():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
     got_gpu = q.collect(engine=GPUEngine(raise_on_fail=True))
-    got_dask = q.collect(
-        engine=GPUEngine(raise_on_fail=True, executor="dask-experimental")
+    got_multi = q.collect(
+        engine=GPUEngine(raise_on_fail=True, executor="multi-experimental")
     )
     assert_frame_equal(expected, got_gpu)
-    assert_frame_equal(expected, got_dask)
+    assert_frame_equal(expected, got_multi)
 
 
 @pytest.mark.parametrize(

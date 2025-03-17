@@ -24,7 +24,7 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.scheduler import get as get_sync
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import MutableMapping
 
     from distributed import Client
 
@@ -169,25 +169,19 @@ def get_client():
     except (
         ImportError,
         ValueError,
-    ):  # pragma: no cover; block depends on Dask local scheduler
-        from dask import get
-
-        return get
+    ):  # pragma: no cover; block depends on local scheduler
+        return get_sync
     else:  # pragma: no cover; block depends on executor type and Distributed cluster
         return client.get
 
 
-def evaluate_partitioned(ir: IR, *, get: Callable = get_sync) -> DataFrame:
+def evaluate_multi(ir: IR) -> DataFrame:
     """Evaluate an IR graph using data partitioning."""
     ir, partition_info = lower_ir_graph(ir)
 
+    get = get_client()
     graph, key = task_graph(ir, partition_info)
     return get(graph, key)
-
-
-def evaluate_dask(ir: IR) -> DataFrame:
-    """Evaluate an IR graph with Dask."""
-    return evaluate_partitioned(ir, get=get_client())
 
 
 @generate_ir_tasks.register(IR)
