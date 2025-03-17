@@ -209,7 +209,7 @@ void arrow_obj_to_arrow(T& obj,
       break;
     }
     case ARROW_DEVICE_CPU: {
-      auto out = cudf::to_arrow_host(*obj.view().get(), stream, mr);
+      auto out = cudf::to_arrow_host(obj.view(), stream, mr);
       ArrowArrayMove(&out->array, &output->array);
       output->device_id   = -1;
       output->sync_event  = nullptr;
