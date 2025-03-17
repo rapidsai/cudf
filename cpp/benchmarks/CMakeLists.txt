@@ -99,7 +99,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                cudf::cudftestutil_impl $<TARGET_NAME_IF_EXISTS:conda_env>
+                                cudf::cudftestutil_objects $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -129,7 +129,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   target_link_libraries(
     ${CMAKE_BENCH_NAME}
     PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
-            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_impl
+            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_objects
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -291,7 +291,6 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # * interop benchmark ------------------------------------------------------------------------------
 ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
 target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
-target_include_directories(INTEROP_NVBENCH PRIVATE ${CMAKE_SOURCE_DIR}/tests/interop)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
@@ -344,16 +343,24 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(
+  BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+)
+
+# ##################################################################################################
+# * transform benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   TEXT_NVBENCH
+  text/byte_pair_encoding.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp
   text/jaccard.cpp

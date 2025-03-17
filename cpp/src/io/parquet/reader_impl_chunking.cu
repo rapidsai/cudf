@@ -1149,7 +1149,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 page_keys + pages.size(),
                                 decomp_iter,
                                 decomp_info.begin(),
-                                thrust::equal_to<int32_t>{},
+                                cuda::std::equal_to<int32_t>{},
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
@@ -1388,7 +1388,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                   page_keys + pass.pages.size(),
                                   page_size,
                                   c_info.begin(),
-                                  thrust::equal_to{},
+                                  cuda::std::equal_to{},
                                   cumulative_page_sum{});
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
@@ -1703,7 +1703,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                                 page_keys + subpass.pages.size(),
                                 page_input,
                                 c_info.begin(),
-                                thrust::equal_to{},
+                                cuda::std::equal_to{},
                                 cumulative_page_sum{});
   auto iter = thrust::make_counting_iterator(0);
   // cap the max row in all pages by the max row we expect in the subpass. input chunking

@@ -1,10 +1,15 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
-from pylibcudf.libcudf.io.avro cimport avro_reader_options, avro_reader_options_builder
+
+from pylibcudf.libcudf.io.avro cimport (
+    avro_reader_options,
+    avro_reader_options_builder,
+)
+
 from pylibcudf.libcudf.types cimport size_type
 
-
-from pylibcudf.libcudf.types cimport size_type
 
 cdef class AvroReaderOptions:
     cdef avro_reader_options c_obj
@@ -20,4 +25,4 @@ cdef class AvroReaderOptionsBuilder:
     cpdef AvroReaderOptionsBuilder num_rows(self, size_type num_rows)
     cpdef AvroReaderOptions build(self)
 
-cpdef TableWithMetadata read_avro(AvroReaderOptions options)
+cpdef TableWithMetadata read_avro(AvroReaderOptions options, Stream stream = *)

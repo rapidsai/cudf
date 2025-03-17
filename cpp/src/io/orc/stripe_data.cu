@@ -18,6 +18,7 @@
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
 
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1511,10 +1512,11 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       }
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
+
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = block_reduce(temp_storage).Reduce(last_row, cub::Max());
+      last_row = block_reduce(temp_storage).Reduce(last_row, cudf::detail::maximum{});
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
