@@ -234,8 +234,11 @@ def make_final_proxy_type(
 
     if additional_attributes is None:
         additional_attributes = {}
+    slow_type_dir = dir(slow_type)
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        # if name == "Series" and method == "__call__":
+        #     import pdb;pdb.set_trace()
+        if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
@@ -243,7 +246,7 @@ def make_final_proxy_type(
         elif v is not _DELETE:
             cls_dict[k] = v
 
-    for slow_name in dir(slow_type):
+    for slow_name in slow_type_dir:
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
         else:
@@ -286,6 +289,7 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: str | None = None,
+    additional_attributes: Mapping[str, Any] | None = None,
 ) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -352,8 +356,17 @@ def make_intermediate_proxy_type(
         "_fsproxy_state": _fsproxy_state,
     }
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if additional_attributes is None:
+        additional_attributes = {}
+
+    for k, v in additional_attributes.items():
+        if v is _DELETE and k in cls_dict:
+            del cls_dict[k]
+        elif v is not _DELETE:
+            cls_dict[k] = v
 
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):

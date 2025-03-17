@@ -114,9 +114,9 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type):
+def make_intermediate_proxy_type(name, fast_type, slow_type, **kwargs):
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__
+        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
 
 
@@ -169,7 +169,6 @@ Timedelta = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
-        "__call__": _DELETE,
     },
 )
 
@@ -184,7 +183,6 @@ Timestamp = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
-        "__call__": _DELETE,
     },
 )
 
@@ -250,7 +248,6 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
-        "__call__": _DELETE,
     },
 )
 
@@ -296,7 +293,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "__call__": _DELETE,
     },
 )
 
@@ -352,7 +348,6 @@ Index = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -367,7 +362,6 @@ RangeIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -379,7 +373,6 @@ SparseDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -402,7 +395,6 @@ CategoricalIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -422,7 +414,6 @@ CategoricalDtype = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -439,7 +430,6 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -452,7 +442,6 @@ DatetimeArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -464,7 +453,6 @@ DatetimeTZDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -481,7 +469,6 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -497,7 +484,6 @@ try:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
-            "__call__": _DELETE,
         },
     )
 
@@ -513,7 +499,6 @@ except ImportError:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
-            "__call__": _DELETE,
         },
     )
 
@@ -526,7 +511,6 @@ TimedeltaArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -543,7 +527,6 @@ PeriodIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -557,7 +540,6 @@ PeriodArray = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -577,7 +559,6 @@ Period = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -593,7 +574,6 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
-        "__call__": _DELETE,
     },
 )
 
@@ -632,7 +612,6 @@ StringArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -662,7 +641,6 @@ StringDtype = make_final_proxy_type(
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "storage": _FastSlowAttribute("storage"),
-        "__call__": _DELETE,
     },
 )
 
@@ -676,7 +654,6 @@ BooleanArray = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -688,7 +665,6 @@ BooleanDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -702,7 +678,6 @@ IntegerArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -714,7 +689,6 @@ Int8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -727,7 +701,6 @@ Int16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -739,7 +712,6 @@ Int32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -751,7 +723,6 @@ Int64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -763,7 +734,6 @@ UInt8Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -775,7 +745,6 @@ UInt16Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -787,7 +756,6 @@ UInt32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -799,7 +767,6 @@ UInt64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -816,7 +783,6 @@ IntervalIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
-        "__call__": _DELETE,
     },
 )
 
@@ -829,7 +795,6 @@ IntervalArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -841,7 +806,6 @@ IntervalDtype = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -853,7 +817,6 @@ Interval = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -867,7 +830,6 @@ FloatingArray = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
-        "__call__": _DELETE,
     },
 )
 
@@ -879,7 +841,6 @@ Float32Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -891,7 +852,6 @@ Float64Dtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -933,6 +893,12 @@ _SeriesLocIndexer = make_intermediate_proxy_type(
 
 _DataFrameLocIndexer = make_intermediate_proxy_type(
     "_DataFrameLocIndexer",
+    cudf.core.dataframe._DataFrameLocIndexer,
+    pd.core.indexing._LocIndexer,
+)
+
+_LocIndexer = make_intermediate_proxy_type(
+    "_LocIndexer",
     cudf.core.dataframe._DataFrameLocIndexer,
     pd.core.indexing._LocIndexer,
 )
@@ -1207,7 +1173,6 @@ USFederalHolidayCalendar = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1219,7 +1184,6 @@ HolidayCalendarMetaClass = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1242,7 +1206,6 @@ AbstractHolidayCalendar = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
     metaclasses=(pd_HolidayCalendarMetaClass,),
 )
@@ -1255,7 +1218,6 @@ Holiday = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 USThanksgivingDay = make_final_proxy_type(
@@ -1266,7 +1228,6 @@ USThanksgivingDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1278,7 +1239,6 @@ USColumbusDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1290,7 +1250,6 @@ USLaborDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1302,7 +1261,6 @@ USMemorialDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1314,7 +1272,6 @@ USMartinLutherKingJr = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1326,7 +1283,6 @@ USPresidentsDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1339,7 +1295,6 @@ GoodFriday = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1351,7 +1306,6 @@ EasterMonday = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1363,7 +1317,6 @@ FY5253 = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1375,7 +1328,6 @@ BDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1387,7 +1339,6 @@ BMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1399,7 +1350,6 @@ BMonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1411,7 +1361,6 @@ BQuarterBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1423,7 +1372,6 @@ BQuarterEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1435,7 +1383,6 @@ BusinessDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1447,7 +1394,6 @@ BusinessHour = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1459,7 +1405,6 @@ BusinessMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1471,7 +1416,6 @@ BusinessMonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1483,7 +1427,6 @@ BYearBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1495,7 +1438,6 @@ BYearEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1507,7 +1449,6 @@ CBMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1519,7 +1460,6 @@ CBMonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1531,7 +1471,6 @@ CDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1543,7 +1482,6 @@ CustomBusinessDay = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1555,7 +1493,6 @@ CustomBusinessHour = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1567,7 +1504,6 @@ CustomBusinessMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1579,7 +1515,6 @@ CustomBusinessMonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1591,7 +1526,6 @@ DateOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1603,7 +1537,6 @@ BaseOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1615,7 +1548,6 @@ Day = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1627,7 +1559,6 @@ Easter = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1639,7 +1570,6 @@ FY5253Quarter = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1651,7 +1581,6 @@ Hour = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1663,7 +1592,6 @@ LastWeekOfMonth = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1675,7 +1603,6 @@ Micro = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1687,7 +1614,6 @@ Milli = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1699,7 +1625,6 @@ Minute = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1712,7 +1637,6 @@ MonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1724,7 +1648,6 @@ MonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1736,7 +1659,6 @@ Nano = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1748,7 +1670,6 @@ QuarterBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1760,7 +1681,6 @@ QuarterEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1772,7 +1692,6 @@ Second = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1784,7 +1703,6 @@ SemiMonthBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1796,7 +1714,6 @@ SemiMonthEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1808,7 +1725,6 @@ Tick = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1820,7 +1736,6 @@ Week = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1832,7 +1747,6 @@ WeekOfMonth = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1844,7 +1758,6 @@ YearBegin = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1856,7 +1769,6 @@ YearEnd = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1868,7 +1780,6 @@ Flags = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1880,7 +1791,6 @@ NamedAgg = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
-        "__call__": _DELETE,
     },
 )
 
@@ -1897,6 +1807,22 @@ ArrowExtensionArray = make_final_proxy_type(
 # excluding subclasses defined in `pandas.core.internals`.  These are
 # not strictly part of the Pandas public API, but they do appear as
 # return types.
+
+# PlotAccessor = make_final_proxy_type(
+#     "PlotAccessor",
+#     _Unusable,
+#     pd.plotting._core.PlotAccessor,
+#     fast_to_slow=_Unusable(),
+#     slow_to_fast=_Unusable(),
+#     additional_attributes={
+#             "__array__": array_method,
+#             "__array_function__": array_function_method,
+#             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+#             "__hash__": _FastSlowAttribute("__hash__"),
+#             "__call__":_FastSlowAttribute("__call__"),
+#         },
+
+# )
 
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.arrays.sparse.array.SparseArray,
@@ -1915,6 +1841,15 @@ _PANDAS_OBJ_FINAL_TYPES = [
     pd.io.sql.SQLiteDatabase,
     pd.io.sql.PandasSQL,
 ]
+
+# GroupByPlot = make_intermediate_proxy_type(
+#     "GroupByPlot",
+#     _Unusable,
+#     pd.core.groupby.groupby.GroupByPlot,
+#     additional_attributes={
+#         "__call__":_FastSlowAttribute("__call__"),
+#     }
+# )
 
 _PANDAS_OBJ_INTERMEDIATE_TYPES = [
     pd.core.groupby.groupby.GroupByPlot,
