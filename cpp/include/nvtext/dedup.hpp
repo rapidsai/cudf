@@ -53,6 +53,33 @@ std::unique_ptr<cudf::column> substring_duplicates(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Returns a duplicate strings found in the given input
+ *
+ * The internal implementation creates a suffix array of the input which
+ * requires ~10x the input size for temporary memory.
+ *
+ * The output includes any strings of at least `min_width` bytes that
+ * appear more than once in the entire input.
+ *
+ * @param input1 Strings column to dedup
+ * @param indices1 Indices of the strings in the first input
+ * @param input2 Strings column to dedup
+ * @param indices2 Indices of the strings in the second input
+ * @param min_width Minimum number of bytes must match to specify a duplicate
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with updated strings
+ */
+std::unique_ptr<cudf::column> substring_duplicates(
+  cudf::strings_column_view const& input1,
+  cudf::device_span<cudf::size_type const> indices1,
+  cudf::strings_column_view const& input2,
+  cudf::device_span<cudf::size_type const> indices2,
+  cudf::size_type min_width,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Builds a suffix array for the input strings column
  *
  * @param input Strings column to build suffix array for
