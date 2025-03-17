@@ -549,6 +549,7 @@ size_t decompress(compression_type compression,
     case compression_type::GZIP: return decompress_gzip(src, dst);
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
+    case compression_type::ZSTD: return decompress_zstd(src, dst);
     default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
