@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
+    "ClosedInterval",
+    "ColumnHeader",
+    "ColumnOptions",
+    "DataFrameHeader",
     "ExprTransformer",
     "GenericTransformer",
     "IRTransformer",
@@ -28,6 +32,8 @@ __all__: list[str] = [
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "Schema",
+    "Slice",
 ]
 
 PolarsIR: TypeAlias = Union[
@@ -66,9 +72,13 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+
 Schema: TypeAlias = dict[str, plc.DataType]
 
 Slice: TypeAlias = tuple[int, int | None]
+
+Duration: TypeAlias = tuple[int, int, int, int, bool, bool]
 
 
 class NodeTraverser(Protocol):

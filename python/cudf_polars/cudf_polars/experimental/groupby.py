@@ -12,7 +12,7 @@ import pylibcudf as plc
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, Literal, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.dsl.utils import unique_names
+from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.shuffle import Shuffle
@@ -187,7 +187,7 @@ def _(
         ir.keys,
         piecewise_exprs,
         ir.maintain_order,
-        ir.options,
+        None,
         ir.config_options,
         child,
     )
@@ -218,7 +218,7 @@ def _(
         ir.keys,
         reduction_exprs,
         ir.maintain_order,
-        ir.options,
+        ir.zlice,
         ir.config_options,
         gb_inter,
     )

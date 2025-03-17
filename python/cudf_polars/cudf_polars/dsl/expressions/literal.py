@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import pylibcudf as plc
 
@@ -42,6 +42,10 @@ class Literal(Expr):
         # datatype of pyarrow scalar is correct by construction.
         return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
+    @property
+    def agg_request(self) -> NoReturn:  # noqa: D102
+        raise NotImplementedError("Not expecting to require agg request of literal")
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
@@ -67,3 +71,7 @@ class LiteralColumn(Expr):
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
         return Column(plc.interop.from_arrow(self.value))
+
+    @property
+    def agg_request(self) -> NoReturn:  # noqa: D102
+        raise NotImplementedError("Not expecting to require agg request of literal")

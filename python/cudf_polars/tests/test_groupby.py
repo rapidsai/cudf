@@ -73,6 +73,7 @@ def keys(request):
             pl.col("datetime").max(),
             pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
         ],
+        [pl.col("float").is_not_null()],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
@@ -130,10 +131,7 @@ def test_groupby_len(df, keys):
 
 @pytest.mark.parametrize(
     "expr",
-    [
-        pl.col("float").is_not_null(),
-        (pl.col("int").max() + pl.col("float").min()).max(),
-    ],
+    [(pl.col("int").max() + pl.col("float").min()).max()],
 )
 def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)

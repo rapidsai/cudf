@@ -31,6 +31,7 @@ import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import Schema, Slice as Zlice
+    from cudf_polars.typing import ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -839,30 +840,160 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
+class Rolling(IR):
+    """Perform a rolling aggregation."""
+
+    __slots__ = (
+        "agg_requests",
+        "closed_window",
+        "following",
+        "index",
+        "keys",
+        "preceding",
+        "zlice",
+    )
+    _non_child = (
+        "schema",
+        "index",
+        "offset",
+        "period",
+        "closed_window",
+        "keys",
+        "agg_requests",
+        "zlice",
+    )
+    index: expr.NamedExpr
+    """Column being rolled over."""
+    preceding: pa.Scalar
+    """Preceding window extent defining start of window."""
+    following: pa.Scalar
+    """Following window extent defining end of window."""
+    closed_window: ClosedInterval
+    """Treatment of window endpoints."""
+    keys: tuple[expr.NamedExpr, ...]
+    """Grouping keys."""
+    agg_requests: tuple[expr.NamedExpr, ...]
+    """Aggregation expressions."""
+    zlice: Zlice | None
+    """Optional slice"""
+
+    def __init__(
+        self,
+        schema: Schema,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys: Sequence[expr.NamedExpr],
+        agg_requests: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: IR,
+    ):
+        self.schema = schema
+        self.index = index
+        self.preceding = preceding
+        self.following = following
+        self.closed_window = closed_window
+        self.keys = tuple(keys)
+        self.agg_requests = tuple(agg_requests)
+        if not all(
+            plc.rolling.is_supported_rolling_aggregation(
+                agg.value.dtype, agg.value.agg_request
+            )
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError("Unsupported rolling aggregation")
+
+        self.zlice = zlice
+        self.children = (df,)
+        self._non_child_args = (
+            index,
+            preceding,
+            following,
+            closed_window,
+            keys,
+            agg_requests,
+            zlice,
+        )
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys_in: Sequence[expr.NamedExpr],
+        aggs: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: DataFrame,
+    ) -> DataFrame:
+        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        requests: list[plc.rolling.RollingRequest] = []
+        names: list[str] = []
+        orderby = index.evaluate(df)
+        for request in aggs:
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use the orderby column
+                col = orderby.obj
+            elif isinstance(value, expr.Agg):
+                (child,) = value.children
+                col = child.evaluate(df).obj
+            else:
+                col = value.evaluate(df).obj
+            requests.append(plc.rolling.RollingRequest(col, value.agg_request))
+            names.append(name)
+        preceding_window, following_window = range_window_bounds(
+            preceding, following, closed_window
+        )
+        if orderby.is_sorted == plc.types.Sorted.NO:
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling is not sorted, please sort first"
+            )
+        if orderby.obj.null_count() != 0:
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling may not contain nulls"
+            )
+        values = plc.rolling.grouped_range_rolling_window(
+            plc.Table([k.obj for k in keys]),
+            orderby.obj,
+            orderby.order,
+            plc.types.NullOrder.AFTER,  # Doesn't matter, polars doesn't allow nulls
+            preceding_window,
+            following_window,
+            1,
+            requests,
+        )
+        return DataFrame(
+            itertools.chain(
+                keys,
+                [orderby],
+                (
+                    Column(col, name=name)
+                    for col, name in zip(values.columns(), names, strict=True)
+                ),
+            )
+        ).slice(zlice)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
-
-    class GroupbyOptions:
-        """Serializable wrapper for polars GroupbyOptions."""
-
-        def __init__(self, polars_groupby_options: Any):
-            self.dynamic = polars_groupby_options.dynamic
-            self.rolling = polars_groupby_options.rolling
-            self.slice = polars_groupby_options.slice
 
     __slots__ = (
         "agg_requests",
         "config_options",
         "keys",
         "maintain_order",
-        "options",
+        "zlice",
     )
     _non_child = (
         "schema",
         "keys",
         "agg_requests",
         "maintain_order",
-        "options",
+        "zlice",
         "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
@@ -871,8 +1002,8 @@ class GroupBy(IR):
     """Aggregation expressions."""
     maintain_order: bool
     """Preserve order in groupby."""
-    options: GroupbyOptions
-    """Arbitrary options."""
+    zlice: Zlice | None
+    """Optional slice to apply after grouping."""
     config_options: ConfigOptions
     """GPU-specific configuration options"""
 
@@ -882,7 +1013,7 @@ class GroupBy(IR):
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: Any,
+        zlice: Zlice | None,
         config_options: ConfigOptions,
         df: IR,
     ):
@@ -890,20 +1021,14 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = self.GroupbyOptions(options)
+        self.zlice = zlice
         self.config_options = config_options
         self.children = (df,)
-        if self.options.rolling:
-            raise NotImplementedError(
-                "rolling window/groupby"
-            )  # pragma: no cover; rollingwindow constructor has already raised
-        if self.options.dynamic:
-            raise NotImplementedError("dynamic group by")
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            self.options,
+            self.zlice,
         )
 
     @classmethod
@@ -912,7 +1037,7 @@ class GroupBy(IR):
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: GroupbyOptions,
+        zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -937,19 +1062,23 @@ class GroupBy(IR):
             if isinstance(value, expr.Len):
                 # A count aggregation, we need a column so use a key column
                 col = keys[0].obj
-            elif isinstance(value, expr.Col):
-                col = value.evaluate(df).obj
-            else:
-                assert isinstance(value, expr.Agg)
+            elif isinstance(value, expr.Agg):
                 (child,) = value.children
                 col = child.evaluate(df).obj
+            else:
+                # Anything else, we pre-evaluate
+                col = value.evaluate(df).obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        results: list[Column] = []
-        for name, table in zip(names, raw_tables, strict=True):
-            (column,) = table.columns()
-            results.append(Column(column, name=name))
+        results = [
+            Column(column, name=name)
+            for name, column in zip(
+                names,
+                itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                strict=True,
+            )
+        ]
         result_keys = [
             Column(grouped_key, name=key.name)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
@@ -996,7 +1125,7 @@ class GroupBy(IR):
                     ordered_table.columns(), broadcasted, strict=True
                 )
             ]
-        return DataFrame(broadcasted).slice(options.slice)
+        return DataFrame(broadcasted).slice(zlice)
 
 
 class ConditionalJoin(IR):

@@ -16,7 +16,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.nodebase import Node
 
 if TYPE_CHECKING:
-
     from cudf_polars.containers import Column, DataFrame
 
 __all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
@@ -110,13 +109,13 @@ class Expr(Node["Expr"]):
         return self.do_evaluate(df, context=context)
 
     @property
-    def agg_request(self) -> plc.aggregation.Aggregation | None:
+    def agg_request(self) -> plc.aggregation.Aggregation:
         """
         The aggregation for this expression in a grouped aggregation.
 
         Returns
         -------
-        Aggregation request, or None if none is required.
+        Aggregation request. Default is to collect the expression.
 
         Notes
         -----
@@ -126,12 +125,9 @@ class Expr(Node["Expr"]):
         Raises
         ------
         NotImplementedError
-            If we can't currently perform the aggregation request, for
-            example aggregations of non-pointwise expressions.
+            If requesting an aggregation from an unexpected expression.
         """
-        raise NotImplementedError(
-            f"Aggregating {type(self).__name__} not supported."
-        )  # pragma: no cover; translation of grouped aggs trips first
+        return plc.aggregation.collect_list()
 
 
 class ErrorExpr(Expr):
@@ -143,7 +139,7 @@ class ErrorExpr(Expr):
         self.dtype = dtype
         self.error = error
         self.children = ()
-        self.is_pointwise = True
+        self.is_pointwise = False
 
 
 class NamedExpr:
@@ -221,10 +217,6 @@ class Col(Expr):
         # Deliberately remove the name here so that we guarantee
         # evaluation of the IR produces names.
         return df.column_map[self.name].rename(None)
-
-    @property
-    def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
-        return plc.aggregation.collect_list()
 
 
 class ColRef(Expr):

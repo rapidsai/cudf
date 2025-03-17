@@ -14,10 +14,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
