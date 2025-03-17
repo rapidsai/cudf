@@ -21,8 +21,6 @@ from cudf_polars.dsl.expressions.base import (
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Agg"]
@@ -207,11 +205,7 @@ class Agg(Expr):
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
@@ -222,4 +216,4 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return self.op(child.evaluate(df, context=context))

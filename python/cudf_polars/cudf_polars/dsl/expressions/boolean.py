@@ -21,8 +21,6 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
@@ -145,11 +143,7 @@ class BooleanFunction(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name in (
@@ -164,7 +158,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
                 )
                 return Column(plc.Column.from_scalar(value, df.num_rows))
-            needles = child.evaluate(df, context=context, mapping=mapping)
+            needles = child.evaluate(df, context=context)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
                 # NaN is neither finite not infinite
@@ -179,10 +173,7 @@ class BooleanFunction(Expr):
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
             return Column(result)
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
         if self.name in (BooleanFunction.Name.Any, BooleanFunction.Name.All):
