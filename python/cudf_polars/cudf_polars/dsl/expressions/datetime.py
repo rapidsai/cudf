@@ -109,6 +109,8 @@ class TemporalFunction(Expr):
         Name.IsLeapYear,
         Name.OrdinalDay,
         Name.ToString,
+        Name.MonthStart,
+        Name.MonthEnd,
     }
 
     def __init__(
@@ -152,6 +154,30 @@ class TemporalFunction(Expr):
                     column.obj,
                     self.options[0],
                     plc.interop.from_arrow(pa.array([], type=pa.string())),
+                )
+            )
+        if self.name is TemporalFunction.Name.MonthStart:
+            ends = plc.datetime.last_day_of_month(column.obj)
+            days_to_subtract = plc.datetime.days_in_month(column.obj)
+            # must subtract 1 to avoid rolling over to the previous month
+            days_to_subtract = plc.binaryop.binary_operation(
+                days_to_subtract,
+                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.binaryop.BinaryOperator.SUB,
+                plc.DataType(plc.TypeId.DURATION_DAYS),
+            )
+            result = plc.binaryop.binary_operation(
+                ends,
+                days_to_subtract,
+                plc.binaryop.BinaryOperator.SUB,
+                column.obj.type(),
+            )
+
+            return Column(result)
+        if self.name is TemporalFunction.Name.MonthEnd:
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.last_day_of_month(column.obj), column.obj.type()
                 )
             )
         if self.name is TemporalFunction.Name.IsLeapYear:
