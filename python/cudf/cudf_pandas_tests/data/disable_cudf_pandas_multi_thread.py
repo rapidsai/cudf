@@ -39,7 +39,7 @@ def main():
     # Process the results
     for i, future in enumerate(futures):
         result = future.result()
-        print(f"Result from thread {i + 1}: {result}")
+        print(f"Result from thread {i + 1}: {result}")  # noqa: T201
 
 
 if __name__ == "__main__":
