@@ -1,5 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+import cupy as cp
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -7,6 +8,17 @@ from utils import assert_column_eq
 import rmm
 
 import pylibcudf as plc
+
+DATETIME_TYPES = [
+    pa.timestamp("s"),
+    pa.timestamp("ms"),
+    pa.timestamp("us"),
+    pa.timestamp("ns"),
+    pa.duration("s"),
+    pa.duration("ms"),
+    pa.duration("us"),
+    pa.duration("ns"),
+]
 
 VALID_TYPES = [
     pa.int8(),
@@ -20,14 +32,7 @@ VALID_TYPES = [
     pa.float32(),
     pa.float64(),
     pa.bool_(),
-    pa.timestamp("s"),
-    pa.timestamp("ms"),
-    pa.timestamp("us"),
-    pa.timestamp("ns"),
-    pa.duration("s"),
-    pa.duration("ms"),
-    pa.duration("us"),
-    pa.duration("ns"),
+    *DATETIME_TYPES,
 ]
 
 
@@ -69,6 +74,21 @@ def iface_obj(input_column):
 
 
 def test_from_cuda_array_interface(input_column, iface_obj):
-    col = plc.column.Column.from_cuda_array_interface_obj(iface_obj)
+    expect = input_column
 
-    assert_column_eq(input_column, col)
+    res = plc.Column.from_cuda_array_interface_obj(iface_obj)
+
+    assert_column_eq(expect, res)
+
+
+def test_from_1d_cupy_array(request, valid_type, input_column):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=valid_type in DATETIME_TYPES,
+            reason="Datetime types are not yet supported in cupy. See cupy/issues/2622.",
+        )
+    )
+    expect = input_column
+    res = plc.Column.from_cuda_array_interface_obj(cp.asarray(expect))
+
+    assert_column_eq(expect, res)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
@@ -455,6 +455,8 @@ def is_c_contiguous(
         The boolean answer.
     """
 
+    if strides is None:
+        return True
     if any(dim == 0 for dim in shape):
         return True
     cumulative_stride = itemsize
