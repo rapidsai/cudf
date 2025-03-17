@@ -291,11 +291,7 @@ void arrow_column::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-column_view arrow_column::view(rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr) const
-{
-  return cached_view;
-}
+column_view arrow_column::view() const { return cached_view; }
 
 arrow_table::arrow_table(cudf::table&& input,
                          cudf::host_span<column_metadata const> metadata,
@@ -377,9 +373,6 @@ void arrow_table::to_arrow(ArrowDeviceArray* output,
   arrow_obj_to_arrow(*this, container, output, device_type, stream, mr);
 }
 
-table_view arrow_table::view(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
-{
-  return cached_view;
-}
+table_view arrow_table::view() const { return cached_view; }
 
 }  // namespace cudf::interop

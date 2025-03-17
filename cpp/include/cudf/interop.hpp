@@ -316,9 +316,7 @@ class arrow_column {
    * @param mr Device memory resource used for any allocations during conversion
    * @return unique_column_view_t containing a view of the column data
    */
-  [[nodiscard]] column_view view(
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+  [[nodiscard]] column_view view() const;
 
  private:
   std::shared_ptr<arrow_array_container>
@@ -438,9 +436,7 @@ class arrow_table {
    * @param mr Device memory resource used for any allocations during conversion
    * @return unique_table_view_t containing a view of the table data
    */
-  [[nodiscard]] table_view view(
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+  [[nodiscard]] table_view view() const;
 
  private:
   std::shared_ptr<arrow_array_container>
