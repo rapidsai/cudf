@@ -1066,19 +1066,28 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
             )
+
+        if second_columns is not None:
+            empty_column = column_empty(
+                col_accessor.nrows, dtype=CUDF_STRING_DTYPE
+            )
+            new_data = {
+                second_label: col_accessor[second_label]
+                if second_label in col_accessor
+                else empty_column
+                for second_label in second_columns
+            }
+            col_accessor = ColumnAccessor(
+                new_data,
+                verify=False,
+                rangeindex=isinstance(second_columns, pd.RangeIndex),
+                multiindex=isinstance(second_columns, pd.MultiIndex),
+                level_names=tuple(second_columns.names),
+                label_dtype=second_columns.dtype,
+            )
+
         super().__init__(col_accessor, index=index)
         self._check_data_index_length_match()
-        if second_columns is not None:
-            reindexed = self.reindex(columns=second_columns, copy=False)
-            self._data = reindexed._data
-            # self._data.rangeindex = isinstance(
-            #     second_columns, cudf.RangeIndex
-            # )
-            # self._data.multiindex = isinstance(
-            #     second_columns, cudf.MultiIndex
-            # )
-            # self._data.label_dtype = second_columns.dtype
-            self._index = index
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
