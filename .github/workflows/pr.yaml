@@ -58,7 +58,7 @@ jobs:
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   update-latest-branch:
-    needs: telemetery-setup
+    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/update-latest-branch.yaml@update-latest-branch
   check-nightly-ci:
     # Switch to ubuntu-latest once it defaults to a version of Ubuntu that
