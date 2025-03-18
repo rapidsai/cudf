@@ -63,7 +63,6 @@ from cudf.core.index import (
     BaseIndex,
     RangeIndex,
     _index_from_data,
-    as_index,
     ensure_index,
 )
 from cudf.core.indexed_frame import (
@@ -857,15 +856,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(
                 columns, (cudf.BaseIndex, cudf.Series, cupy.ndarray)
             ):
-                columns = as_index(columns).to_pandas()
-            else:
+                columns = ensure_index(columns).to_pandas()
+            elif not isinstance(columns, pd.Index):
                 columns = pd.Index(columns)
 
             if columns.nunique(dropna=False) != len(columns):
                 raise ValueError("Columns cannot contain duplicate values")
 
         if index is not None:
-            index = as_index(index)
+            index = ensure_index(index)
 
         if isinstance(data, Iterator) and not is_scalar(data):
             data = list(data)
@@ -1251,6 +1250,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             self._data.rangeindex = isinstance(
                 columns, (range, pd.RangeIndex, cudf.RangeIndex)
             )
+            self._data.multiindex = isinstance(columns, pd.MultiIndex)
             self._data.label_dtype = getattr(columns, "dtype", None)
 
     @classmethod
@@ -2991,18 +2991,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             if columns is None:
                 columns = labels
+        dtypes = dict(self._dtypes)
         if columns is None:
             df = self
+            dtypes = dict(self._dtypes)
         else:
             columns = cudf.Index(columns)
-            intersection = self._data.to_pandas_index.intersection(
-                columns.to_pandas()
-            )
+            pd_columns = columns.to_pandas()
+            intersection = self._data.to_pandas_index.intersection(pd_columns)
             df = self.loc[:, intersection]
+            difference = pd_columns.difference(self._data.to_pandas_index)
+            if not difference.empty:
+                dtypes.update(
+                    {label: CUDF_STRING_DTYPE for label in difference}
+                )
 
         return df._reindex(
             column_names=columns,
-            dtypes=dict(self._dtypes),
+            dtypes=dtypes,
             deep=copy,
             index=index,
             inplace=False,
