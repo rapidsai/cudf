@@ -48,7 +48,7 @@ namespace CUDF_EXPORT nvtext {
  */
 std::unique_ptr<cudf::column> substring_duplicates(
   cudf::strings_column_view const& input,
-  cudf::size_type min_width,
+  int32_t min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -72,10 +72,10 @@ std::unique_ptr<cudf::column> substring_duplicates(
  */
 std::unique_ptr<cudf::column> substring_duplicates(
   cudf::strings_column_view const& input1,
-  cudf::device_span<cudf::size_type const> indices1,
+  cudf::device_span<int32_t const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<cudf::size_type const> indices2,
-  cudf::size_type min_width,
+  cudf::device_span<int32_t const> indices2,
+  int32_t min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -88,9 +88,9 @@ std::unique_ptr<cudf::column> substring_duplicates(
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted suffix array and corresponding sizes
  */
-std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
+std::unique_ptr<rmm::device_uvector<int32_t>> build_suffix_array(
   cudf::strings_column_view const& input,
-  cudf::size_type min_width,
+  int32_t min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
