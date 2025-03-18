@@ -5,19 +5,19 @@
     "args": {
       "CUDA": "12.8",
       "PYTHON_PACKAGE_MANAGER": "pip",
-      "BASE": "rapidsai/devcontainers:25.04-cpp-cuda12.8-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:25.06-cpp-cuda12.8-ubuntu22.04"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.04-cuda12.8-pip"
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.06-cuda12.8-pip"
   ],
   "hostRequirements": {
     "gpu": "optional"
   },
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.4": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.6": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
