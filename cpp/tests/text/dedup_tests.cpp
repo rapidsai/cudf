@@ -48,11 +48,11 @@ TEST_F(TextDedupTest, StringDedup)
 
   auto sv = cudf::strings_column_view(input);
 
-  auto results  = nvtext::substring_deduplicate(sv, 20);
+  auto results  = nvtext::substring_duplicates(sv, 20);
   auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
-  results  = nvtext::substring_deduplicate(sv, 15);
+  results  = nvtext::substring_duplicates(sv, 15);
   expected = cudf::test::strings_column_wrapper(
     {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
@@ -61,7 +61,7 @@ TEST_F(TextDedupTest, StringDedup)
   auto const sliced_input = cudf::slice(input, {1, 10}).front();
 
   sv       = cudf::strings_column_view(sliced_input);
-  results  = nvtext::substring_deduplicate(sv, 15);
+  results  = nvtext::substring_duplicates(sv, 15);
   expected = cudf::test::strings_column_wrapper({"01234567890123456789 ", " reprehenderit "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
@@ -75,7 +75,7 @@ TEST_F(TextDedupTest, SuffixArray)
 
   auto sv = cudf::strings_column_view(input);
 
-  auto expected = cudf::test::fixed_width_column_wrapper<int64_t>(
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>(
     {124, 65,  155, 31,  49,  112, 91,  73,  132, 95,  70,  28,  77,  58,  9,   41,  13,  108, 37,
      86,  140, 135, 23,  100, 152, 161, 22,  85,  48,  36,  99,  79,  125, 130, 66,  7,   5,   156,
      80,  46,  32,  0,   72,  4,   18,  50,  113, 149, 107, 144, 159, 102, 147, 19,  142, 53,  51,

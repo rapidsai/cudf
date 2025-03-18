@@ -18,8 +18,8 @@ def input_col():
 
 
 @pytest.mark.parametrize("min_width", [10, 20])
-def test_substring_deduplicate(input_col, min_width):
-    result = plc.nvtext.dedup.substring_deduplicate(
+def test_substring_duplicates(input_col, min_width):
+    result = plc.nvtext.dedup.substring_duplicates(
         plc.interop.from_arrow(input_col),
         min_width,
     )
