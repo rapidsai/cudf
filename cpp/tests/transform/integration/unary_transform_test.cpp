@@ -346,7 +346,15 @@ __device__ inline void transform(
 }
 
 template <typename T>
-struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {};
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
 TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
 
