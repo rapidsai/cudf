@@ -11,21 +11,28 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Expr, NamedExpr
+from cudf_polars.dsl.expressions.unary import Cast
+from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     reuse_if_unchanged,
     traversal,
 )
 from cudf_polars.experimental.base import get_key_name
+from cudf_polars.experimental.dispatch import generate_ir_tasks
+from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import ExprTransformer
 
 
-_SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean")
+_SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
 
 
 class FusedExpr(Expr):
@@ -245,8 +252,9 @@ def combine_chunks_multi_agg(
 
 def make_agg_graph(
     named_expr: NamedExpr,
-    child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
+    child: IR,
+    child_partition_info: PartitionInfo,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph."""
     expr = named_expr.value
@@ -269,6 +277,8 @@ def make_agg_graph(
     graph: MutableMapping[Any, Any] = {}
 
     # Define operations for each aggregation stage
+    shuffle_on: tuple[NamedExpr, ...] = ()
+    chunk_aggs: list[Expr]
     agg_name = agg.name
     if agg_name == "count":
         chunk_aggs = [agg]
@@ -280,15 +290,49 @@ def make_agg_graph(
         chunk_aggs = [sum_agg, count_agg]
         combine_aggs = [sum_agg, sum_agg]
         finalize = (agg.dtype, "DIV")
+    elif agg_name == "n_unique":
+        chunk_aggs = [Cast(agg.dtype, agg)]
+        combine_aggs = [rename_agg(agg, "sum")]
+        finalize = None
+        shuffle_on = (NamedExpr(named_expr.name, agg.children[0]),)
     else:
         chunk_aggs = [agg]
         combine_aggs = [agg]
         finalize = None
 
+    # Shuffle stage (if necessary)
+    if shuffle_on:
+        # TODO: Plumb through config options to Shuffle
+        pi: MutableMapping[IR, PartitionInfo] = {child: child_partition_info}
+        # Check partition info, and shuffle if necessary
+        if pi[child].partitioned_on != shuffle_on:
+            schema = {ne.name: child.schema[ne.name] for ne in shuffle_on}
+            if set(schema) != set(child.schema):
+                # Drop unnecessary columns before the shuffle
+                child = Select(
+                    schema,
+                    shuffle_on,
+                    False,  # noqa: FBT003
+                    child,
+                )
+                pi[child] = child_partition_info
+                graph.update(generate_ir_tasks(child, pi))
+            child = Shuffle(
+                schema,
+                shuffle_on,
+                ConfigOptions({}),
+                child,
+            )
+            pi[child] = child_partition_info
+            graph.update(generate_ir_tasks(child, pi))
+
     # Pointwise stage
+    pointwise_keys = []
+    child_name = get_key_name(child)
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
-        graph[(chunk_name, i)] = (
+        pointwise_keys.append((chunk_name, i))
+        graph[pointwise_keys[-1]] = (
             evaluate_chunk_multi_agg,
             (child_name, i),
             chunk_aggs,
@@ -302,7 +346,7 @@ def make_agg_graph(
     # Combine and finalize
     graph[(key_name, 0)] = (
         combine_chunks_multi_agg,
-        list(graph.keys()),
+        pointwise_keys,
         combine_aggs,
         finalize,
         named_expr.name,
@@ -313,11 +357,12 @@ def make_agg_graph(
 
 def make_pointwise_graph(
     named_expr: NamedExpr,
-    child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
+    child: IR,
 ) -> MutableMapping[Any, Any]:
     """Build simple pointwise FusedExpr graph."""
     expr = named_expr.value
+    child_name = get_key_name(child)
     assert isinstance(expr, FusedExpr)
     key_name = get_key_name(expr)
     expr_child_names = [get_key_name(c) for c in expr.children]
@@ -341,19 +386,25 @@ def make_pointwise_graph(
 
 def make_fusedexpr_graph(
     named_expr: NamedExpr,
-    child_name: str,
     expr_partition_counts: MutableMapping[Expr, int],
+    child: IR,
+    child_partition_info: PartitionInfo,
 ) -> MutableMapping[Any, Any]:
     """Build task graph for a FusedExpr node."""
     expr = named_expr.value
     assert isinstance(expr, FusedExpr)
-    sub_expr = expr.sub_expr
-    if isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
-        return make_agg_graph(named_expr, child_name, expr_partition_counts)
-    elif expr.is_pointwise:
-        return make_pointwise_graph(named_expr, child_name, expr_partition_counts)
+    if expr.is_pointwise:
+        # Pointwise expressions have trivial task graph
+        return make_pointwise_graph(named_expr, expr_partition_counts, child)
     else:
-        # TODO: Implement "complex" aggs (e.g. mean, std, etc)
-        raise NotImplementedError(
-            f"{type(sub_expr)} not supported for multiple partitions."
-        )
+        # Non-pointwise expressions require a reduction or a shuffle
+        sub_expr = expr.sub_expr
+        if isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
+            return make_agg_graph(
+                named_expr, expr_partition_counts, child, child_partition_info
+            )
+        else:
+            # TODO: Implement "complex" aggs (e.g. var, std, etc)
+            raise NotImplementedError(
+                f"{type(sub_expr)} not supported for multiple partitions."
+            )

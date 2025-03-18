@@ -70,7 +70,6 @@ def build_fusedexpr_select_graph(
 ) -> MutableMapping[Any, Any]:
     """Build complex Select graph."""
     (child,) = ir.children
-    child_name = get_key_name(child)
     child_count = partition_info[child].count
 
     # Build Graph to produce a column for each
@@ -91,8 +90,9 @@ def build_fusedexpr_select_graph(
             graph.update(
                 make_fusedexpr_graph(
                     ne.reconstruct(node),
-                    child_name,
                     expr_partition_counts,
+                    child,
+                    partition_info[child],
                 )
             )
 

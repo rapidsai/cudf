@@ -61,6 +61,7 @@ def test_select_unsupported_raises(df, engine):
         (pl.col("a") - (pl.col("b") + pl.col("c").max()).sum(),),
         (pl.col("b").len(),),
         (pl.col("a") - (pl.col("b") + pl.col("c").max()).mean(),),
+        (pl.col("b").n_unique(), pl.col("c").n_unique()),
     ],
 )
 def test_select_aggs(df, engine, aggs):
