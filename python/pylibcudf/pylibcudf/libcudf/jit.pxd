@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from pylibcudf.exception_handler cimport libcudf_exception_handler
