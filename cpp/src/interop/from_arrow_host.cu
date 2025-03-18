@@ -15,6 +15,7 @@
  */
 
 #include "arrow_utilities.hpp"
+#include "from_arrow_host.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -119,22 +120,6 @@ struct dispatch_copy_from_arrow_host {
   }
 };
 
-// forward declaration is needed because `type_dispatch` instantiates the
-// dispatch_copy_from_arrow_host struct causing a recursive situation for struct,
-// dictionary and list_view types.
-//
-// This function is simply a convenience wrapper around the dispatch functor with
-// some extra handling to avoid having to reproduce it for all of the nested types.
-// It also allows us to centralize the location where the recursive calls happen
-// so that we only need to forward declare this one function, rather than multiple
-// functions which handle the overloads for nested types (list, struct, etc.)
-std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
-                                        ArrowArray const* input,
-                                        data_type type,
-                                        bool skip_mask,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::device_async_resource_ref mr);
-
 template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSchemaView* schema,
                                                                         ArrowArray const* input,
@@ -175,84 +160,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
   ArrowSchemaView* schema, ArrowArray const* input, data_type type, bool skip_mask)
 {
   if (input->length == 0) { return make_empty_column(type_id::STRING); }
-
-  // offsets column should contain no nulls so we can put nullptr for the bitmask
-  // nulls are tracked in the parent string column itself, not in the offsets
-  void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
-  ArrowArray offsets_array      = {
-         .length     = input->offset + input->length + 1,
-         .null_count = 0,
-         .offset     = 0,
-         .n_buffers  = 2,
-         .n_children = 0,
-         .buffers    = offset_buffers,
-  };
-
-  // chars_column does not contain any nulls, they are tracked by the parent string column
-  // itself instead. So we pass nullptr for the validity bitmask.
-  int64_t const char_data_length = [&]() {
-    if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
-      return reinterpret_cast<int64_t const*>(offset_buffers[1])[input->length + input->offset];
-    } else if (schema->type == NANOARROW_TYPE_STRING) {
-      return static_cast<int64_t>(
-        reinterpret_cast<int32_t const*>(offset_buffers[1])[input->length + input->offset]);
-    } else {
-      CUDF_FAIL("Unsupported string type", cudf::data_type_error);
-    }
-  }();
-  void const* char_buffers[2] = {nullptr, input->buffers[2]};
-  ArrowArray char_array       = {
-          .length     = char_data_length,
-          .null_count = 0,
-          .offset     = 0,
-          .n_buffers  = 2,
-          .n_children = 0,
-          .buffers    = char_buffers,
-  };
-
-  nanoarrow::UniqueSchema offset_schema;
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(offset_schema.get(), NANOARROW_TYPE_INT32));
-
-  nanoarrow::UniqueSchema char_data_schema;
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(char_data_schema.get(), NANOARROW_TYPE_INT8));
-
-  // leverage the dispatch overloads for int32 and char(int8) to generate the child
-  // offset and char data columns for us.
-  ArrowSchemaView view;
-  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
-  auto offsets_column = [&]() {
-    if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
-      return this->operator()<int64_t>(&view, &offsets_array, data_type(type_id::INT64), true);
-    } else if (schema->type == NANOARROW_TYPE_STRING) {
-      return this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
-    } else {
-      CUDF_FAIL("Unsupported string type", cudf::data_type_error);
-    }
-  }();
-  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, char_data_schema.get(), nullptr));
-
-  rmm::device_buffer chars(char_data_length, stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(chars.data(),
-                                reinterpret_cast<uint8_t const*>(char_array.buffers[1]),
-                                chars.size(),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  auto const num_rows = offsets_column->size() - 1;
-  auto out_col        = make_strings_column(num_rows,
-                                     std::move(offsets_column),
-                                     std::move(chars),
-                                     input->null_count,
-                                     std::move(*get_mask_buffer(input)));
-
-  return input->offset == 0
-           ? std::move(out_col)
-           : std::make_unique<column>(
-               cudf::detail::slice(out_col->view(),
-                                   static_cast<size_type>(input->offset),
-                                   static_cast<size_type>(input->offset + input->length),
-                                   stream),
-               stream,
-               mr);
+  return string_column_from_arrow_host(schema, input, get_mask_buffer(input), stream, mr);
 }
 
 template <>
@@ -378,6 +286,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
                mr);
 }
 
+}  // namespace
+
 std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         ArrowArray const* input,
                                         data_type type,
@@ -399,8 +309,6 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                       rmm::device_buffer{},
                                       input->length);
 }
-
-}  // namespace
 
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
@@ -455,6 +363,16 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
 
   auto type = arrow_to_cudf_type(&view);
   return get_column_copy(&view, &input->array, type, false, stream, mr);
+}
+
+std::unique_ptr<column> get_column_from_host_copy(ArrowSchemaView* schema,
+                                                  ArrowArray const* input,
+                                                  data_type type,
+                                                  bool skip_mask,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
+{
+  return get_column_copy(schema, input, type, skip_mask, stream, mr);
 }
 
 }  // namespace detail
