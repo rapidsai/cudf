@@ -866,6 +866,27 @@ class CategoricalColumn(column.ColumnBase):
             children=(codes,),
         )
 
+    def _cast_self_and_other_for_where(
+        self, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+        if is_scalar(other):
+            try:
+                other = self._encode(other)
+            except ValueError:
+                # When other is not present in categories,
+                # fill with Null.
+                other = None
+            other = pa_scalar_to_plc_scalar(
+                pa.scalar(
+                    other,
+                    type=cudf_dtype_to_pa_type(self.codes.dtype),
+                )
+            )
+        elif isinstance(other.dtype, CategoricalDtype):
+            other = other.codes  # type: ignore[union-attr]
+
+        return self.codes, other
+
     def _encode(self, value) -> ScalarLike:
         return self.categories.find_first_value(value)
 

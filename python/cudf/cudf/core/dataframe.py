@@ -45,7 +45,7 @@ from cudf.api.types import (
 )
 from cudf.core import column, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -3118,15 +3118,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+    def where(
+        self, cond, other=None, inplace: bool = False, axis=None, level=None
+    ) -> Self | None:
         if axis is not None:
             raise NotImplementedError("axis is not supported.")
         elif level is not None:
             raise NotImplementedError("level is not supported.")
-
-        from cudf.core._internals.where import (
-            _check_and_cast_columns_with_other,
-        )
 
         # First process the condition.
         if isinstance(cond, Series):
@@ -3146,7 +3144,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ):
             raise ValueError("conditional must be same shape as self")
         elif not isinstance(cond, DataFrame):
-            cond = cudf.DataFrame(cond)
+            cond = DataFrame(cond)
 
         if set(self._column_names).intersection(set(cond._column_names)):
             if not self.index.equals(cond.index):
@@ -3169,32 +3167,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             other_cols = other
 
-        if len(self._columns) != len(other_cols):
+        if self._num_columns != len(other_cols):
             raise ValueError(
-                """Replacement list length or number of data columns
-                should be equal to number of columns of self"""
+                "other must contain the same number of columns or elements "
+                f"as self ({self._num_columns})"
             )
 
         out = []
         for (name, col), other_col in zip(
             self._column_labels_and_values, other_cols
         ):
-            source_col, other_col = _check_and_cast_columns_with_other(
-                source_col=col,
-                other=other_col,
-                inplace=inplace,
-            )
-
             if cond_col := cond._data.get(name):
-                result = source_col.copy_if_else(other_col, cond_col)
-                out.append(result._with_type_metadata(col.dtype))
+                out.append(col.where(cond_col, other_col, inplace))
             else:
-                out_mask = as_buffer(
-                    plc.null_mask.create_null_mask(
-                        len(source_col), plc.null_mask.MaskState.ALL_NULL
-                    )
-                )
-                out.append(source_col.set_mask(out_mask))
+                out.append(column_empty(len(col), dtype=col.dtype))
 
         return self._mimic_inplace(
             self._from_data_like_self(self._data._from_columns_like_self(out)),
