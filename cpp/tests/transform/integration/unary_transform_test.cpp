@@ -230,9 +230,17 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
 }
 
-struct TenaryOperationTest : public cudf::test::BaseFixture {};
+struct TernaryOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
-TEST_F(TenaryOperationTest, TransformWithScalar)
+TEST_F(TernaryOperationTest, TransformWithScalar)
 {
   std::string const cuda =
     R"***(
