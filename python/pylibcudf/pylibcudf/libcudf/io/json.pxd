@@ -10,6 +10,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "cudf/io/json.hpp" \
@@ -154,7 +155,13 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_json(
-        json_reader_options &options) except +libcudf_exception_handler
+        json_reader_options &options
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata read_json(
+        json_reader_options &options,
+        cuda_stream_view stream,
+    ) except +libcudf_exception_handler
 
     cdef cppclass json_writer_options:
         json_writer_options() except +libcudf_exception_handler
@@ -230,4 +237,10 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata write_json(
-        json_writer_options &options) except +libcudf_exception_handler
+        json_writer_options &options
+    ) except +libcudf_exception_handler
+
+    cdef cudf_io_types.table_with_metadata write_json(
+        json_writer_options &options,
+        cuda_stream_view stream,
+    ) except +libcudf_exception_handler
