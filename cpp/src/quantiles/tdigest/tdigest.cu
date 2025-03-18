@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/quantiles.hpp>
@@ -395,7 +396,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
     return cudf::detail::valid_if(
-      tdigest_is_empty, tdigest_is_empty + tdv.size(), thrust::logical_not{}, stream, mr);
+      tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
   }();
 
   return cudf::make_lists_column(input.size(),

@@ -16,10 +16,9 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
@@ -43,11 +42,13 @@ if TYPE_CHECKING:
         ColumnBinaryOperand,
         ColumnLike,
         Dtype,
+        DtypeObj,
         ScalarLike,
         SeriesOrIndex,
     )
     from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.dtypes import DecimalDtype
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -75,7 +76,7 @@ class StringMethods(ColumnMethods):
             if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
-        if not is_string_dtype(value_type):
+        if value_type != CUDF_STRING_DTYPE:
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
@@ -5431,29 +5432,34 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
-        self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int, a: ColumnLike, b: ColumnLike, width: int
     ) -> SeriesOrIndex:
         """
-        Compute the minhash of a strings column.
+        Compute the minhash of a strings column or a list strings column
+        of terms.
 
-        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function
+        if a or b are of type np.uint32 or MurmurHash3_x86_128 if a and b
+        are of type np.uint64.
 
         Calculation uses the formula (hv * a + b) % mersenne_prime
-        where hv is the hash of a substring of width characters,
+        where hv is the hash of a substring of width characters
+        or ngrams of strings if a list column,
         a and b are provided values and mersenne_prime is 2^61-1.
 
         Parameters
         ----------
-        seed : uint32
+        seed : int
             The seed used for the hash algorithm.
         a : ColumnLike
             Values for minhash calculation.
-            Must be of type uint32.
+            Must be of type uint32 or uint64.
         b : ColumnLike
             Values for minhash calculation.
-            Must be of type uint32.
+            Must be of type uint32 or uint64.
         width : int
             The width of the substring to hash.
+            Or the ngram number of strings to hash.
 
         Examples
         --------
@@ -5466,20 +5472,65 @@ class StringMethods(ColumnMethods):
         0    [1305480171, 462824409, 74608232]
         1       [32665388, 65330773, 97996158]
         dtype: list
+        >>> sl = cudf.Series([['this', 'is', 'my'], ['favorite', 'book']])
+        >>> sl.str.minhash(width=2, seed=0, a=a, b=b)
+        0      [416367551, 832735099, 1249102647]
+        1    [1906668704, 3813337405, 1425038810]
+        dtype: list
         """
         a_column = column.as_column(a)
-        if a_column.dtype != np.uint32:
-            raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(a)}"
-            )
         b_column = column.as_column(b)
-        if b_column.dtype != np.uint32:
+        if a_column.dtype != np.uint32 and a_column.dtype != np.uint64:
             raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(b)}"
+                f"Expecting a and b Series as uint32 or unint64, got {type(a)}"
             )
-        return self._return_or_inplace(
-            self._column.minhash(seed, a_column, b_column, width)  # type: ignore[arg-type]
-        )
+        if a_column.dtype != b_column.dtype:
+            raise ValueError(
+                f"Expecting a and b Series dtype to match, got {type(a)}"
+            )
+        seed = a.dtype.type(seed)
+        if a_column.dtype == np.uint32:
+            if isinstance(self._parent.dtype, cudf.ListDtype):
+                plc_column = plc.nvtext.minhash.minhash_ngrams(
+                    self._column.to_pylibcudf(mode="read"),
+                    width,
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+            else:
+                plc_column = plc.nvtext.minhash.minhash(
+                    self._column.to_pylibcudf(mode="read"),
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                    width,
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+        else:
+            if isinstance(self._parent.dtype, cudf.ListDtype):
+                plc_column = plc.nvtext.minhash.minhash64_ngrams(
+                    self._column.to_pylibcudf(mode="read"),
+                    width,
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+            else:
+                plc_column = plc.nvtext.minhash.minhash64(
+                    self._column.to_pylibcudf(mode="read"),
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                    width,
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
 
     def minhash64(
         self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
@@ -5531,6 +5582,120 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(
             self._column.minhash64(seed, a_column, b_column, width)  # type: ignore[arg-type]
         )
+
+    def minhash_ngrams(
+        self, ngrams: int, seed: np.uint32, a: ColumnLike, b: ColumnLike
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+
+        Calculation uses the formula (hv * a + b) % mersenne_prime
+        where hv is the hash of a ngrams of strings within each row,
+        a and b are provided values and mersenne_prime is 2^61-1.
+
+        Parameters
+        ----------
+        ngrams : int
+            Number of strings to hash within each row.
+        seed : uint32
+            The seed used for the hash algorithm.
+        a : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint32.
+        b : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> s = cudf.Series([['this', 'is', 'my'], ['favorite', 'book']])
+        >>> a = cudf.Series([1, 2, 3], dtype=np.uint32)
+        >>> b = cudf.Series([4, 5, 6], dtype=np.uint32)
+        >>> s.str.minhash_ngrams(ngrams=2, seed=0, a=a, b=b)
+        0      [416367551, 832735099, 1249102647]
+        1    [1906668704, 3813337405, 1425038810]
+        dtype: list
+        """
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(b)}"
+            )
+        plc_column = plc.nvtext.minhash.minhash_ngrams(
+            self._column.to_pylibcudf(mode="read"),
+            ngrams,
+            seed,
+            a._column.to_pylibcudf(mode="read"),
+            b._column.to_pylibcudf(mode="read"),
+        )
+        result = ColumnBase.from_pylibcudf(plc_column)
+        return self._return_or_inplace(result)
+
+    def minhash64_ngrams(
+        self, ngrams: int, seed: np.uint64, a: ColumnLike, b: ColumnLike
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a list column of strings.
+
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+
+        Calculation uses the formula (hv * a + b) % mersenne_prime
+        where hv is the hash of a ngrams of strings within each row,
+        a and b are provided values and mersenne_prime is 2^61-1.
+
+        Parameters
+        ----------
+        ngrams : int
+            Number of strings to hash within each row.
+        seed : uint64
+            The seed used for the hash algorithm.
+        a : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint64.
+        b : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint64.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> s = cudf.Series([['this', 'is', 'my'], ['favorite', 'book']])
+        >>> a = cudf.Series([2, 3], dtype=np.uint64)
+        >>> b = cudf.Series([5, 6], dtype=np.uint64)
+        >>> s.str.minhash64_ngrams(ngrams=2, seed=0, a=a, b=b)
+        0    [1304293339825194559, 1956440009737791829]
+        1     [472203876238918632, 1861227318965224922]
+        dtype: list
+        """
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(b)}"
+            )
+        plc_column = plc.nvtext.minhash.minhash64_ngrams(
+            self._column.to_pylibcudf(mode="read"),
+            ngrams,
+            seed,
+            a._column.to_pylibcudf(mode="read"),
+            b._column.to_pylibcudf(mode="read"),
+        )
+        result = ColumnBase.from_pylibcudf(plc_column)
+        return self._return_or_inplace(result)
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
         """
@@ -5640,7 +5805,7 @@ class StringColumn(column.ColumnBase):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
         if dtype != CUDF_STRING_DTYPE:
-            raise ValueError(f"dtypy must be {CUDF_STRING_DTYPE}")
+            raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
 
@@ -5826,23 +5991,22 @@ class StringColumn(column.ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
-    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
-        out_dtype = cudf.api.types.dtype(dtype)
-        if out_dtype.kind == "b":
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if dtype.kind == "b":
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
             return (result > np.int8(0)).fillna(False)
-        elif out_dtype.kind in {"i", "u"}:
+        elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
             cast_func = plc.strings.convert.convert_integers.to_integers
-        elif out_dtype.kind == "f":
+        elif dtype.kind == "f":
             if not self.is_float().all():
                 raise ValueError(
                     "Could not convert strings to float "
@@ -5850,10 +6014,8 @@ class StringColumn(column.ColumnBase):
                 )
             cast_func = plc.strings.convert.convert_floats.to_floats
         else:
-            raise ValueError(
-                f"dtype must be a numerical type, not {out_dtype}"
-            )
-        plc_dtype = dtype_to_pylibcudf_type(out_dtype)
+            raise ValueError(f"dtype must be a numerical type, not {dtype}")
+        plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
             return type(self).from_pylibcudf(  # type: ignore[return-value]
                 cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
@@ -5915,7 +6077,7 @@ class StringColumn(column.ColumnBase):
         return result_col  # type: ignore[return-value]
 
     def as_datetime_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.DatetimeColumn:
         not_null = self.apply_boolean_mask(self.notnull())
         if len(not_null) == 0:
@@ -5928,13 +6090,13 @@ class StringColumn(column.ColumnBase):
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(
-        self, dtype: Dtype
+        self, dtype: np.dtype
     ) -> cudf.core.column.TimeDeltaColumn:
         return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def as_decimal_column(
-        self, dtype: Dtype
+        self, dtype: DecimalDtype
     ) -> cudf.core.column.DecimalBaseColumn:
         plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
             self.to_pylibcudf(mode="read"),
@@ -5973,17 +6135,15 @@ class StringColumn(column.ColumnBase):
         else:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
-    def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = cudf.api.types.dtype(to_dtype)
-
+    def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
             return True
-        elif to_dtype.kind in {"i", "u"} and not self.is_integer().all():
-            return False
-        elif to_dtype.kind == "f" and not self.is_float().all():
-            return False
-        else:
+        elif to_dtype.kind in {"i", "u"} and self.is_integer().all():
             return True
+        elif to_dtype.kind == "f" and self.is_float().all():
+            return True
+        else:
+            return False
 
     def find_and_replace(
         self,
@@ -6122,12 +6282,11 @@ class StringColumn(column.ColumnBase):
         return NotImplemented
 
     @copy_docstring(ColumnBase.view)
-    def view(self, dtype) -> ColumnBase:
+    def view(self, dtype: DtypeObj) -> ColumnBase:
         if self.null_count > 0:
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = cudf.api.types.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size
@@ -6416,6 +6575,20 @@ class StringColumn(column.ColumnBase):
                 vocabulary,
                 pa_scalar_to_plc_scalar(pa.scalar(delimiter)),
                 default_id,
+            )
+        )
+
+    @acquire_spill_lock()
+    def wordpiece_tokenize(
+        self,
+        vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
+        max_words_per_row: int,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
+                self.to_pylibcudf(mode="read"),
+                vocabulary,
+                max_words_per_row,
             )
         )
 

@@ -9,9 +9,15 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 
 import cudf
-from cudf.api.types import is_decimal_dtype, is_dtype_equal, is_numeric_dtype
+from cudf.api.types import is_dtype_equal
 from cudf.core.column import CategoricalColumn
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+)
+from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -75,27 +81,28 @@ def _match_join_keys(
             common_type = ltype.categories.dtype
         else:
             common_type = rtype.categories.dtype
-        common_type = cudf.utils.dtypes._dtype_pandas_compatible(common_type)
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):
         return lcol, rcol
 
-    if is_decimal_dtype(ltype) or is_decimal_dtype(rtype):
+    if isinstance(
+        ltype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+    ) or isinstance(rtype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)):
         raise TypeError(
             "Decimal columns can only be merged with decimal columns "
             "of the same precision and scale"
         )
 
     if (
-        is_numeric_dtype(ltype)
-        and is_numeric_dtype(rtype)
+        is_dtype_obj_numeric(ltype)
+        and is_dtype_obj_numeric(rtype)
         and not (ltype.kind == "m" or rtype.kind == "m")
     ):
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
-            else np.result_type(ltype, rtype)
+            else find_common_type((ltype, rtype))
         )
     elif (ltype.kind == "M" and rtype.kind == "M") or (
         ltype.kind == "m" and rtype.kind == "m"

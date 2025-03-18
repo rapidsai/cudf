@@ -37,6 +37,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
+#include <functional>
 #include <utility>
 
 namespace cudf::io {

@@ -84,6 +84,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-row_groups]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection0-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-columns]": "Mismatching column read cudf#16394",
+    "tests/unit/io/test_parquet.py::test_scan_parquet_filter_statistics_load_missing_column_21391": "Mismatching column read cudf#16394",
     "tests/unit/io/test_scan.py::test_scan[single-csv-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_with_limit[single-csv-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_with_filter[single-csv-async]": "Debug output on stderr doesn't match",
@@ -197,7 +198,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_csv-write_csv]": "Need to expose include_file_paths xref: cudf#18012",
     "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics[False]": "Debug output on stderr doesn't match",
     # Maybe flaky, order-dependent?
-    "tests/unit/test_projections.py::test_schema_full_outer_join_projection_pd_13287": "Order-specific result check, query is correct but in different order",
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
 }
 
@@ -212,6 +212,9 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # polars that the requested timezone is unknown.
     # Since this is random, just skip it, rather than xfailing.
     "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+    # TODO: Remove once we once we depend once we depend on
+    # polars version with pola-rs/polars/pull/21721
+    "tests/unit/io/test_parquet.py::test_general_prefiltering": "Due to unknown timezones in polars rust layer",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",

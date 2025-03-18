@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "reader_impl_helpers.hpp"
+#include "stats_filter_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -21,7 +22,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -34,7 +34,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <limits>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -42,89 +41,25 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
 /**
- * @brief Converts statistics in column chunks to 2 device columns - min, max values.
+ * @brief Converts column chunk statistics to 2 device columns - min, max values.
+ *
+ * Each column's number of rows equals the total number of row groups.
  *
  */
-struct stats_caster {
+struct row_group_stats_caster : public stats_caster_base {
   size_type total_row_groups;
   std::vector<metadata> const& per_file_metadata;
   host_span<std::vector<size_type> const> row_group_indices;
 
-  template <typename ToType, typename FromType>
-  static ToType targetType(FromType const value)
+  row_group_stats_caster(size_type total_row_groups,
+                         std::vector<metadata> const& per_file_metadata,
+                         host_span<std::vector<size_type> const> row_group_indices)
+    : total_row_groups{total_row_groups},
+      per_file_metadata{per_file_metadata},
+      row_group_indices{row_group_indices}
   {
-    if constexpr (cudf::is_timestamp<ToType>()) {
-      return static_cast<ToType>(
-        typename ToType::duration{static_cast<typename ToType::rep>(value)});
-    } else if constexpr (std::is_same_v<ToType, string_view>) {
-      return ToType{nullptr, 0};
-    } else {
-      return static_cast<ToType>(value);
-    }
-  }
-
-  // uses storage type as T
-  template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>() or cudf::is_nested<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
-  {
-    CUDF_FAIL("unsupported type for stats casting");
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
-  {
-    CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
-    return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
-  }
-
-  // integral but not boolean, and fixed_point, and chrono.
-  template <typename T,
-            CUDF_ENABLE_IF((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
-                           cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
-  {
-    switch (type) {
-      case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
-      case INT64: return targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
-      case INT96:  // Deprecated in parquet specification
-        return targetType<T>(static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0])
-                               << 32 |
-                             reinterpret_cast<int32_t const*>(stats_val)[2]);
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
-        if (stats_size == sizeof(T)) {
-          // if type size == length of stats_val. then typecast and return.
-          if constexpr (cudf::is_chrono<T>()) {
-            return targetType<T>(*reinterpret_cast<typename T::rep const*>(stats_val));
-          } else {
-            return targetType<T>(*reinterpret_cast<T const*>(stats_val));
-          }
-        }
-        // unsupported type
-      default: CUDF_FAIL("Invalid type and stats combination");
-    }
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
-  {
-    switch (type) {
-      case FLOAT: return targetType<T>(*reinterpret_cast<float const*>(stats_val));
-      case DOUBLE: return targetType<T>(*reinterpret_cast<double const*>(stats_val));
-      default: CUDF_FAIL("Invalid type and stats combination");
-    }
-  }
-
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
-  {
-    switch (type) {
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
-        return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
-      default: CUDF_FAIL("Invalid type and stats combination");
-    }
   }
 
   // Creates device columns from column statistics (min, max)
@@ -139,82 +74,8 @@ struct stats_caster {
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
-      // Local struct to hold host columns
-      struct host_column {
-        // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
-        cudf::detail::host_vector<T> val;
-        std::vector<bitmask_type> null_mask;
-        cudf::size_type null_count = 0;
-        host_column(size_type total_row_groups, rmm::cuda_stream_view stream)
-          : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
-            null_mask(
-              cudf::util::div_rounding_up_safe<size_type>(
-                cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
-              ~bitmask_type{0})
-        {
-        }
-
-        void set_index(size_type index,
-                       std::optional<std::vector<uint8_t>> const& binary_value,
-                       Type const type)
-        {
-          if (binary_value.has_value()) {
-            val[index] = convert<T>(binary_value.value().data(), binary_value.value().size(), type);
-          }
-          if (not binary_value.has_value()) {
-            clear_bit_unsafe(null_mask.data(), index);
-            null_count++;
-          }
-        }
-
-        static auto make_strings_children(host_span<string_view> host_strings,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-        {
-          auto const total_char_count = std::accumulate(
-            host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
-              return sum + str.size_bytes();
-            });
-          auto chars = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
-          auto offsets =
-            cudf::detail::make_empty_host_vector<cudf::size_type>(host_strings.size() + 1, stream);
-          offsets.push_back(0);
-          for (auto const& str : host_strings) {
-            auto tmp =
-              str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
-            chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-            offsets.push_back(offsets.back() + tmp.length());
-          }
-          auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-          auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
-          return std::tuple{std::move(d_chars), std::move(d_offsets)};
-        }
-
-        auto to_device(cudf::data_type dtype,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr)
-        {
-          if constexpr (std::is_same_v<T, string_view>) {
-            auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
-            return cudf::make_strings_column(
-              val.size(),
-              std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
-              d_chars.release(),
-              null_count,
-              rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr});
-          }
-          return std::make_unique<column>(
-            dtype,
-            val.size(),
-            cudf::detail::make_device_uvector_async(val, stream, mr).release(),
-            rmm::device_buffer{
-              null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
-            null_count);
-        }
-      };  // local struct host_column
-      host_column min(total_row_groups, stream);
-      host_column max(total_row_groups, stream);
+      host_column<T> min(total_row_groups, stream);
+      host_column<T> max(total_row_groups, stream);
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
@@ -248,146 +109,6 @@ struct stats_caster {
   }
 };
 
-/**
- * @brief Converts AST expression to StatsAST for comparing with column statistics
- * This is used in row group filtering based on predicate.
- * statistics min value of a column is referenced by column_index*2
- * statistics max value of a column is referenced by column_index*2+1
- *
- */
-class stats_expression_converter : public ast::detail::expression_transformer {
- public:
-  stats_expression_converter(ast::expression const& expr, size_type const& num_columns)
-    : _num_columns{num_columns}
-  {
-    expr.accept(*this);
-  }
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
-  {
-    return expr;
-  }
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
-  {
-    CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-                 "Statistics AST supports only left table");
-    CUDF_EXPECTS(expr.get_column_index() < _num_columns,
-                 "Column index cannot be more than number of columns in the table");
-    return expr;
-  }
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override
-  {
-    CUDF_FAIL("Column name reference is not supported in statistics AST");
-  }
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
-  {
-    using cudf::ast::ast_operator;
-    auto const operands = expr.get_operands();
-    auto const op       = expr.get_operator();
-
-    if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-      // First operand should be column reference, second should be literal.
-      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                   "Only binary operations are supported on column reference");
-      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                   "Second operand of binary operation with column reference must be a literal");
-      v->accept(*this);
-      // Push literal into the ast::tree
-      auto const& literal =
-        _stats_expr.push(*dynamic_cast<ast::literal const*>(&operands[1].get()));
-      auto const col_index = v->get_column_index();
-      switch (op) {
-        /* transform to stats conditions. op(col, literal)
-        col1 == val --> vmin <= val && vmax >= val
-        col1 != val --> !(vmin == val && vmax == val)
-        col1 >  val --> vmax > val
-        col1 <  val --> vmin < val
-        col1 >= val --> vmax >= val
-        col1 <= val --> vmin <= val
-        */
-        case ast_operator::EQUAL: {
-          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-          _stats_expr.push(ast::operation{
-            ast::ast_operator::LOGICAL_AND,
-            _stats_expr.push(ast::operation{ast_operator::GREATER_EQUAL, vmax, literal}),
-            _stats_expr.push(ast::operation{ast_operator::LESS_EQUAL, vmin, literal})});
-          break;
-        }
-        case ast_operator::NOT_EQUAL: {
-          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-          _stats_expr.push(ast::operation{
-            ast_operator::LOGICAL_OR,
-            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmin, vmax}),
-            _stats_expr.push(ast::operation{ast_operator::NOT_EQUAL, vmax, literal})});
-          break;
-        }
-        case ast_operator::LESS: [[fallthrough]];
-        case ast_operator::LESS_EQUAL: {
-          auto const& vmin = _stats_expr.push(ast::column_reference{col_index * 2});
-          _stats_expr.push(ast::operation{op, vmin, literal});
-          break;
-        }
-        case ast_operator::GREATER: [[fallthrough]];
-        case ast_operator::GREATER_EQUAL: {
-          auto const& vmax = _stats_expr.push(ast::column_reference{col_index * 2 + 1});
-          _stats_expr.push(ast::operation{op, vmax, literal});
-          break;
-        }
-        default: CUDF_FAIL("Unsupported operation in Statistics AST");
-      };
-    } else {
-      auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
-        _stats_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
-      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _stats_expr.push(ast::operation{op, new_operands.front()});
-      }
-    }
-    return _stats_expr.back();
-  }
-
-  /**
-   * @brief Returns the AST to apply on Column chunk statistics.
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const
-  {
-    return _stats_expr.back();
-  }
-
- private:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-  {
-    std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-    for (auto const& operand : operands) {
-      auto const new_operand = operand.get().accept(*this);
-      transformed_operands.push_back(new_operand);
-    }
-    return transformed_operands;
-  }
-  ast::tree _stats_expr;
-  size_type _num_columns;
-};
 }  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
@@ -404,7 +125,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster const stats_col{
+  row_group_stats_caster const stats_col{
     static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];

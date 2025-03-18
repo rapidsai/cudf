@@ -55,16 +55,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME}
-    PRIVATE cudf::cudftestutil
-            cudf::cudftestutil_impl
-            GTest::gmock
-            GTest::gmock_main
-            GTest::gtest
-            GTest::gtest_main
-            nvtx3::nvtx3-cpp
-            $<TARGET_NAME_IF_EXISTS:conda_env>
-            "${_CUDF_TEST_EXTRA_LIBS}"
+    ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -283,6 +275,7 @@ ConfigureTest(
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
+  interop/arrow_data_structures_test.cpp
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
@@ -309,7 +302,7 @@ ConfigureTest(
 ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   PARQUET_TEST
@@ -340,7 +333,7 @@ ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
@@ -500,6 +493,7 @@ ConfigureTest(
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
+  rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
   PERCENT 70
