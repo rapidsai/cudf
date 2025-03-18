@@ -193,6 +193,17 @@ cdef class Aggregation:
             self._unsupported_agg_error("rolling")
         return agg_cast
 
+    cdef const unique_ptr[rolling_aggregation] clone_underlying_as_rolling(
+        self
+    ) except *:
+        """View the underlying aggregation as a rolling_aggregation."""
+        cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
+        cdef rolling_aggregation *agg_cast = dynamic_cast[roa_ptr](agg.get())
+        if agg_cast is NULL:
+            self._unsupported_agg_error("rolling")
+        agg.release()
+        return unique_ptr[rolling_aggregation](agg_cast)
+
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg):
         """Create a Python Aggregation from a libcudf aggregation."""
