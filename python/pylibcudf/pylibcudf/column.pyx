@@ -200,7 +200,7 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_column_view(const column_view& cv, Column owner):
+    cdef Column from_column_view(const column_view& cv, object owner):
         """Create a Column from a libcudf column_view.
 
         This method accepts shared ownership of the underlying data from the
@@ -210,11 +210,42 @@ cdef class Column:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
-        cdef DataType dtype = DataType.from_libcudf(cv.type())
-        cdef size_type size = cv.size()
-        cdef size_type null_count = cv.null_count()
+        if isinstance(owner, Column):
+            return Column.from_column_view_with_column_owner(cv, owner)
 
         children = []
+        cdef size_type i
+        if cv.num_children() != 0:
+            for i in range(cv.num_children()):
+                children.append(
+                    Column.from_column_view(cv.child(i), owner)
+                )
+
+        cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
+            <Py_ssize_t> cv.head[char](), owner
+        )
+        cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
+            <Py_ssize_t> cv.null_mask(), owner
+        )
+
+        return Column(
+            DataType.from_libcudf(cv.type()),
+            cv.size(),
+            owning_data,
+            owning_mask,
+            cv.null_count(),
+            cv.offset(),
+            children,
+        )
+
+    # Ideally this function would simply be handled via a fused type in
+    # from_column_view, but Cython seems to struggle with using the current
+    # type as fused type parameter. The exact issue is likely a bit more
+    # complex than that, I will try to root cause.
+    @staticmethod
+    cdef Column from_column_view_with_column_owner(const column_view& cv, Column owner):
+        children = []
+        cdef size_type i
         if cv.num_children() != 0:
             for i in range(cv.num_children()):
                 children.append(
@@ -222,11 +253,11 @@ cdef class Column:
                 )
 
         return Column(
-            dtype,
-            size,
+            DataType.from_libcudf(cv.type()),
+            cv.size(),
             owner._data,
             owner._mask,
-            null_count,
+            cv.null_count(),
             cv.offset(),
             children,
         )
