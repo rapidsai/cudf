@@ -144,6 +144,8 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_truediv_schema[lhs_dtype0-Int64-expected_dtype0]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_truediv_schema[lhs_dtype0-Int64-expected_dtype0]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
@@ -180,6 +182,17 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
     "tests/unit/test_empty.py::test_empty_9137": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
+    # TODO: Will be fixed in polars 1.26. See https://github.com/pola-rs/polars/pull/21206
+    "tests/unit/functions/test_repeat.py::test_repeat_by_list": "Support for repeat_by with nested list and structs in polars 1.26",
+    "tests/unit/functions/test_repeat.py::test_repeat_by_nested_list": "Support for repeat_by with nested list and structs in polars 1.26",
+    "tests/unit/functions/test_repeat.py::test_repeat_by_struct": "Support for repeat_by with nested list and structs in polars 1.26",
+    "tests/unit/functions/test_repeat.py::test_repeat_by_nested_struct": "Support for repeat_by with nested list and structs in polars 1.26",
+    "tests/unit/functions/test_repeat.py::test_repeat_by_struct_in_list": "Support for repeat_by with nested list and structs in polars 1.26",
+    "tests/unit/functions/test_repeat.py::test_repeat_by_list_in_struct": "Support for repeat_by with nested list and structs in polars 1.26",
+    # TODO: Test appears to pass in polars 1.26. Maybe fixed by https://github.com/pola-rs/polars/pull/21770?
+    "tests/unit/operations/test_rolling.py::test_rolling_var_zero_weight": "AssertionError: Series are different (nan value mismatch)",
+    # TODO: Test appears to pass in polars 1.26.
+    "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags": "TypeError: argument of type 'Mock' is not iterable",
     # Maybe flaky, order-dependent?
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
     "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_ipc-sink_ipc]": "Sink not supported for gpu engine.",
@@ -209,7 +222,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/streaming/test_streaming_io.py::test_sink_csv_nested_data": "Sink not supported for gpu engine.",
     "tests/unit/streaming/test_streaming_io.py::test_streaming_cross_join_schema": "Sink not supported for gpu engine.",
     "tests/unit/streaming/test_streaming_io.py::test_sink_ndjson_should_write_same_data": "Sink not supported for gpu engine.",
-    "tests/unit/streaming/test_streaming_io.py::test_empty_sink_parquet_join_14863": "Sink not supported for gpu engine.",
 }
 
 
