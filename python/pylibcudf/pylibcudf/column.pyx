@@ -340,7 +340,32 @@ cdef class Column:
 
     @singledispatchmethod
     @classmethod
-    def from_any(cls, obj):
+    def from_ndarray(cls, obj):
+        """
+        Create a Column from any object which supports the NumPy array interface.
+
+        Parameters
+        ----------
+        obj : Any
+            The input array to be converted into a `pylibcudf.Column`.
+
+        Returns
+        -------
+        Column
+
+        Raises
+        ------
+        TypeError
+            If the input type is neither `numpy.ndarray` nor `cupy.ndarray`.
+        ImportError
+            If NumPy or CuPy is required but not installed.
+
+        Notes
+        -----
+        - If `obj` is a 2D CuPy array, the resulting column is a list column.
+        - NumPy conversion logic is not yet implemented.
+        - Multi-dimensional arrays (ndim > 2) are not supported.
+        """
         if np_error is not None:
             raise np_error
         if cp_error is not None:
@@ -349,16 +374,17 @@ cdef class Column:
 
     if np is not None:
         @classmethod
-        def from_array_interface_obj(cls, object obj):
+        def from_numpy_array(cls, object obj):
+            # TODO: Should expand to support __array_interface__
             raise NotImplementedError(
-                "Converting to a pylibcudf Column from an array "
-                "interface object is not yet implemented."
+                "Converting to a pylibcudf Column from "
+                "a numpy object is not yet implemented."
             )
 
-        @from_any.register(np.ndarray)
+        @from_ndarray.register(np.ndarray)
         @classmethod
         def _(cls, obj):
-            return cls.from_array_interface_obj(obj)
+            return cls.from_numpy_array(obj)
 
     if cp is not None:
         @classmethod
@@ -401,7 +427,7 @@ cdef class Column:
                 children=[offsets_col, data_col],
             )
 
-        @from_any.register(cp.ndarray)
+        @from_ndarray.register(cp.ndarray)
         @classmethod
         def _(cls, obj):
             ndim = len(obj.shape)
