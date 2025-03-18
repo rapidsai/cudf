@@ -264,7 +264,6 @@ def shuffle_child(
     child: IR,
     on: Expr,
     named_expr: NamedExpr,
-    expr_partition_counts: MutableMapping[Expr, int],
     child_partition_info: PartitionInfo,
     config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[Any, Any]]:
@@ -279,8 +278,6 @@ def shuffle_child(
         Single Expr to shuffle on.
     named_expr
         Outer NamedExpr needing this shuffle.
-    expr_partition_counts
-        Expr partitioning information.
     child_partition_info
         IR partitioning information.
     config_options
@@ -297,7 +294,8 @@ def shuffle_child(
     """
     graph: MutableMapping[Any, Any] = {}
 
-    if expr_partition_counts[on] == 1 or child_partition_info.partitioned_on == on:
+    if child_partition_info.partitioned_on == on:  # pragma: no cover
+        # TODO: Add test coverage for this.
         # No shuffle necessary
         return child, graph
 
@@ -382,7 +380,6 @@ def make_agg_graph(
             child,
             agg.children[0],
             named_expr,
-            expr_partition_counts,
             child_partition_info,
             # TODO: Plumb through config options to Shuffle
             ConfigOptions({}),
