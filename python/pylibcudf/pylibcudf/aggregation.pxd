@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.aggregation cimport (
@@ -45,6 +45,7 @@ cdef class Aggregation:
     cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
     cdef const scan_aggregation* view_underlying_as_scan(self) except *
     cdef const rolling_aggregation* view_underlying_as_rolling(self) except *
+    cdef unique_ptr[rolling_aggregation] clone_underlying_as_rolling(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)
