@@ -248,7 +248,9 @@ cdef class Column:
         if cv.num_children() != 0:
             for i in range(cv.num_children()):
                 children.append(
-                    Column.from_column_view(cv.child(i), owner.child(i))
+                    Column.from_column_view_with_column_owner(
+                        cv.child(i), owner.child(i)
+                    )
                 )
 
         return Column(
