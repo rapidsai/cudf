@@ -156,7 +156,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
-      global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx % cardinality];
+      global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) + (idx % cardinality)];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);
 
@@ -197,8 +197,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 
   auto constexpr min_shmem_agg_locations = 32;
   auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
-  auto const num_agg_locations =
-    multiplication_factor > 1 ? multiplication_factor * cardinality : cardinality;
+  auto const num_agg_locations = cuda::std::max(multiplication_factor, 1) * cardinality;
   auto const agg_location_offset =
     multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
 
