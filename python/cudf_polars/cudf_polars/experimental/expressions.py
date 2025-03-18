@@ -10,7 +10,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Expr, NamedExpr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.unary import Cast
 from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
@@ -71,6 +71,16 @@ class FusedExpr(Expr):
             e.is_pointwise or isinstance(e, FusedExpr)
             for e in traversal(list(sub_expr.children))
         ), f"Invalid FusedExpr sub-expression: {sub_expr}"
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        return self.sub_expr.evaluate(df, context=context, mapping=mapping)
 
 
 def extract_partition_counts(
@@ -250,6 +260,81 @@ def combine_chunks_multi_agg(
     return col.rename(name)
 
 
+def shuffle_child(
+    child: IR,
+    on: Expr,
+    named_expr: NamedExpr,
+    expr_partition_counts: MutableMapping[Expr, int],
+    child_partition_info: PartitionInfo,
+    config_options: ConfigOptions,
+) -> tuple[IR, MutableMapping[Any, Any]]:
+    """
+    Shuffle the child IR on a single expression.
+
+    Parameters
+    ----------
+    child
+        Child IR we are shuffling.
+    on
+        Single Expr to shuffle on.
+    named_expr
+        Outer NamedExpr needing this shuffle.
+    expr_partition_counts
+        Expr partitioning information.
+    child_partition_info
+        IR partitioning information.
+    config_options
+        GPU engine configuration options.
+
+    Returns
+    -------
+    shuffled
+        New (shuffled) child. The corresponding DataFrame
+        container will only contain the columns associated
+        with the shuffle keys (``on``).
+    graph
+        Task graph needed to shuffle child.
+    """
+    graph: MutableMapping[Any, Any] = {}
+
+    if expr_partition_counts[on] == 1 or child_partition_info.partitioned_on == on:
+        # No shuffle necessary
+        return child, graph
+
+    shuffle_on = (
+        named_expr.reconstruct(
+            FusedExpr(
+                on.dtype,
+                on,
+                *[c for c in named_expr.value.children if isinstance(c, FusedExpr)],
+            )
+        ),
+    )
+
+    pi: MutableMapping[IR, PartitionInfo] = {child: child_partition_info}
+    schema = {col.name: col.dtype for col in traversal([on]) if isinstance(col, Col)}
+    if set(schema) != set(child.schema):
+        # Drop unnecessary columns before the shuffle
+        child = Select(
+            schema,
+            shuffle_on,
+            False,  # noqa: FBT003
+            child,
+        )
+        pi[child] = child_partition_info
+        graph.update(generate_ir_tasks(child, pi))
+    shuffled = Shuffle(
+        schema,
+        shuffle_on,
+        config_options,
+        child,
+    )
+    pi[shuffled] = child_partition_info
+    graph.update(generate_ir_tasks(shuffled, pi))
+
+    return shuffled, graph
+
+
 def make_agg_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
@@ -277,7 +362,6 @@ def make_agg_graph(
     graph: MutableMapping[Any, Any] = {}
 
     # Define operations for each aggregation stage
-    shuffle_on: tuple[NamedExpr, ...] = ()
     chunk_aggs: list[Expr]
     agg_name = agg.name
     if agg_name == "count":
@@ -294,37 +378,19 @@ def make_agg_graph(
         chunk_aggs = [Cast(agg.dtype, agg)]
         combine_aggs = [rename_agg(agg, "sum")]
         finalize = None
-        shuffle_on = (NamedExpr(named_expr.name, agg.children[0]),)
+        child, graph = shuffle_child(
+            child,
+            agg.children[0],
+            named_expr,
+            expr_partition_counts,
+            child_partition_info,
+            # TODO: Plumb through config options to Shuffle
+            ConfigOptions({}),
+        )
     else:
         chunk_aggs = [agg]
         combine_aggs = [agg]
         finalize = None
-
-    # Shuffle stage (if necessary)
-    if shuffle_on:
-        # TODO: Plumb through config options to Shuffle
-        pi: MutableMapping[IR, PartitionInfo] = {child: child_partition_info}
-        # Check partition info, and shuffle if necessary
-        if pi[child].partitioned_on != shuffle_on:
-            schema = {ne.name: child.schema[ne.name] for ne in shuffle_on}
-            if set(schema) != set(child.schema):
-                # Drop unnecessary columns before the shuffle
-                child = Select(
-                    schema,
-                    shuffle_on,
-                    False,  # noqa: FBT003
-                    child,
-                )
-                pi[child] = child_partition_info
-                graph.update(generate_ir_tasks(child, pi))
-            child = Shuffle(
-                schema,
-                shuffle_on,
-                ConfigOptions({}),
-                child,
-            )
-            pi[child] = child_partition_info
-            graph.update(generate_ir_tasks(child, pi))
 
     # Pointwise stage
     pointwise_keys = []
@@ -403,6 +469,10 @@ def make_fusedexpr_graph(
             return make_agg_graph(
                 named_expr, expr_partition_counts, child, child_partition_info
             )
+        # elif isinstance(sub_expr, UnaryFunction) and sub_expr.name == "unique":
+        #     return make_unique_graph(
+        #         named_expr, expr_partition_counts, child, child_partition_info
+        #     )
         else:
             # TODO: Implement "complex" aggs (e.g. var, std, etc)
             raise NotImplementedError(
