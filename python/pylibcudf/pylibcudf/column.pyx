@@ -239,9 +239,8 @@ cdef class Column:
         )
 
     # Ideally this function would simply be handled via a fused type in
-    # from_column_view, but Cython seems to struggle with using the current
-    # type as fused type parameter. The exact issue is likely a bit more
-    # complex than that, I will try to root cause.
+    # from_column_view, but this does not work due to
+    # https://github.com/cython/cython/issues/6740
     @staticmethod
     cdef Column from_column_view_with_column_owner(const column_view& cv, Column owner):
         children = []
