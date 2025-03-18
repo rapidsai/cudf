@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
@@ -18,6 +18,9 @@ cdef class Table:
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 
     @staticmethod
-    cdef Table from_table_view(const table_view& tv, Table owner)
+    cdef Table from_table_view(const table_view& tv, object owner)
+
+    @staticmethod
+    cdef Table from_table_view_with_table_owner(const table_view& tv, Table owner)
 
     cpdef list columns(self)
