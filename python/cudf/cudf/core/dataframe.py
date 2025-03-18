@@ -881,7 +881,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
-
+            index, second_index = data.index, index
             # Series.name is not None and Series.name in columns
             #   -> align
             # Series.name is not None and Series.name not in columns
@@ -909,16 +909,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             else:
                 if columns is not None and not columns.isin([data.name]).any():
-                    data = data.copy()[:0]
+                    # data = data.copy()[:0]
+                    # col_accessor = ColumnAccessor(
+                    #     {col: data._column for col in columns}, verify=False
+                    # )
+                    index = index[:0]
+                    empty = column_empty(0, dtype=CUDF_STRING_DTYPE)
                     col_accessor = ColumnAccessor(
-                        {col: data._column for col in columns}, verify=False
+                        {col: empty for col in columns}, verify=False
                     )
                 else:
                     col_accessor = ColumnAccessor(
                         {data.name: data._column}, verify=False
                     )
                     second_columns = columns
-            index, second_index = data.index, index
         elif data is None or (
             isinstance(data, dict)
             and columns is not None
@@ -2991,24 +2995,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         else:
             if columns is None:
                 columns = labels
-        dtypes = dict(self._dtypes)
         if columns is None:
             df = self
-            dtypes = dict(self._dtypes)
         else:
             columns = cudf.Index(columns)
-            pd_columns = columns.to_pandas()
-            intersection = self._data.to_pandas_index.intersection(pd_columns)
+            intersection = self._data.to_pandas_index.intersection(
+                columns.to_pandas()
+            )
+
             df = self.loc[:, intersection]
-            difference = pd_columns.difference(self._data.to_pandas_index)
-            if not difference.empty:
-                dtypes.update(
-                    {label: CUDF_STRING_DTYPE for label in difference}
-                )
 
         return df._reindex(
             column_names=columns,
-            dtypes=dtypes,
+            dtypes=dict(self._dtypes),
             deep=copy,
             index=index,
             inplace=False,
