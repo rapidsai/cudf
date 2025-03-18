@@ -724,7 +724,7 @@ def _mapping_to_column_accessor(
         col_data = {
             old_key
             if len(old_key) == final_length
-            else old_key + (cudf.NA,) * (final_length - len(old_key)): column
+            else old_key + ("",) * (final_length - len(old_key)): column
             for old_key, column in col_data.items()
         }
 
