@@ -146,7 +146,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::table_device_view input_values,
                                            cudf::mutable_table_device_view target,
                                            cudf::size_type cardinality,
-                                           cudf::size_type buckets,
+                                           cudf::size_type num_agg_locations,
                                            cudf::size_type* global_mapping_index,
                                            cuda::std::byte* shmem_agg_storage,
                                            cudf::size_type* agg_res_offsets,
@@ -154,7 +154,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::aggregation::Kind const* d_agg_kinds)
 {
   // Aggregates shared memory sources to global memory targets
-  for (auto idx = block.thread_rank(); idx < buckets; idx += block.num_threads()) {
+  for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
       global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx % cardinality];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
