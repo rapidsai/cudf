@@ -441,7 +441,6 @@ TEST(TextSubwordTest, ZeroHashBinCoefficient)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
 
-<<<<<<< HEAD
 TEST(TextSubwordTest, TokenizedToTensor)
 {
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
@@ -622,7 +621,8 @@ TEST(TextSubwordTest, ErrorChecks)
   EXPECT_THROW(
     nvtext::tokenized_to_tensor(input, std::numeric_limits<cudf::size_type>::max(), 20, true),
     std::overflow_error);
-=======
+}
+
 TEST(TextSubwordTest, WordPiece)
 {
   auto vocabulary = cudf::test::strings_column_wrapper(
@@ -767,5 +767,4 @@ TEST(TextSubwordTest, WordPieceErrors)
   auto nulls = cudf::test::strings_column_wrapper({"", "", ""}, {false, false, false});
   EXPECT_THROW(nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(nulls)),
                std::invalid_argument);
->>>>>>> branch-25.04
 }
