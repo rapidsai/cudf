@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/jit/types.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
