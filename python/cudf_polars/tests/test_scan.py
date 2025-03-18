@@ -80,15 +80,21 @@ def make_source(df, path, format):
         df.write_parquet(path)
 
 
-@pytest.mark.parametrize(
-    "format, scan_fn",
-    [
-        ("csv", pl.scan_csv),
-        ("ndjson", pl.scan_ndjson),
-        ("parquet", pl.scan_parquet),
-        ("chunked_parquet", pl.scan_parquet),
-    ],
-)
+@pytest.fixture(params=["csv", "ndjson", "parquet", "chunked_parquet"])
+def format(request):
+    return request.param
+
+
+@pytest.fixture
+def scan_fn(format):
+    if format == "csv":
+        return pl.scan_csv
+    elif format == "ndjson":
+        return pl.scan_ndjson
+    else:
+        return pl.scan_parquet
+
+
 def test_scan(
     tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
 ):
@@ -323,6 +329,14 @@ def test_scan_parquet_nested_null_raises(tmp_path):
 def test_scan_parquet_only_row_index_raises(df, tmp_path):
     make_source(df, tmp_path / "file", "parquet")
     q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_include_file_path(tmp_path, format, scan_fn, df):
+    make_source(df, tmp_path / "file", format)
+
+    q = scan_fn(tmp_path / "file", include_file_paths="files")
+
     assert_ir_translation_raises(q, NotImplementedError)
 
 
