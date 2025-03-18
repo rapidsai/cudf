@@ -236,8 +236,6 @@ def make_final_proxy_type(
         additional_attributes = {}
     slow_type_dir = dir(slow_type)
     for method in _SPECIAL_METHODS:
-        # if name == "Series" and method == "__call__":
-        #     import pdb;pdb.set_trace()
         if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
     for k, v in additional_attributes.items():
