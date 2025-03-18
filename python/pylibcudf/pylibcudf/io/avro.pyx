@@ -1,14 +1,22 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+
 from pylibcudf.libcudf.io.avro cimport (
     avro_reader_options,
     read_avro as cpp_read_avro,
 )
+
 from pylibcudf.libcudf.types cimport size_type
+
+from pylibcudf.utils cimport _get_stream
+
 
 __all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
 
@@ -126,7 +134,8 @@ cdef class AvroReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_avro(
-    AvroReaderOptions options
+    AvroReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from Avro format.
@@ -140,8 +149,11 @@ cpdef TableWithMetadata read_avro(
     ----------
     options: AvroReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj))
+        c_result = move(cpp_read_avro(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
