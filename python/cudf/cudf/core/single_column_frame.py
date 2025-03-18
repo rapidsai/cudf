@@ -12,7 +12,6 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_scalar,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -357,32 +356,6 @@ class SingleColumnFrame(Frame, NotIterable):
                     )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
-
-    @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
-        from cudf.core._internals.where import (
-            _check_and_cast_columns_with_other,
-        )
-
-        if isinstance(other, cudf.DataFrame):
-            raise NotImplementedError(
-                "cannot align with a higher dimensional Frame"
-            )
-        cond = as_column(cond)
-        if len(cond) != len(self):
-            raise ValueError(
-                """Array conditional must be same shape as self"""
-            )
-
-        if not is_scalar(other):
-            other = cudf.core.column.as_column(other)
-
-        input_col, other = _check_and_cast_columns_with_other(
-            source_col=self._column, other=other, inplace=inplace
-        )
-
-        result = input_col.copy_if_else(other, cond)
-        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):
