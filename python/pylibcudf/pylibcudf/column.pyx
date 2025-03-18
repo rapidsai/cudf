@@ -15,7 +15,22 @@ from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
-import functools
+from functools import cache, singledispatchmethod
+
+
+try:
+    import numpy as np
+    np_error = None
+except ImportError as err:
+    np = None
+    np_error = err
+
+try:
+    import cupy as cp
+    cp_error = None
+except ImportError as err:
+    cp = None
+    cp_error = err
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -275,8 +290,8 @@ cdef class Column:
             c_result = make_column_from_scalar(dereference(slr.get()), size)
         return Column.from_libcudf(move(c_result))
 
-    @staticmethod
-    def from_cuda_array_interface_obj(object obj):
+    @classmethod
+    def from_cuda_array_interface_obj(cls, object obj):
         """Create a Column from an object with a CUDA array interface.
 
         Parameters
@@ -310,8 +325,10 @@ cdef class Column:
         ):
             raise ValueError("Data must be C-contiguous")
 
+        if len(iface['shape']) > 1:
+            raise ValueError("Data must be 1-dimensional")
         size = iface['shape'][0]
-        return Column(
+        return cls(
             data_type,
             size,
             data,
@@ -320,6 +337,80 @@ cdef class Column:
             0,
             []
         )
+
+    @singledispatchmethod
+    @classmethod
+    def from_any(cls, obj):
+        if np_error is not None:
+            raise np_error
+        if cp_error is not None:
+            raise cp_error
+        raise TypeError(f"Cannot convert a {type(obj)} to a pylibcudf Column")
+
+    if np is not None:
+        @classmethod
+        def from_array_interface_obj(cls, object obj):
+            raise NotImplementedError(
+                "Converting to a pylibcudf Column from an array "
+                "interface object is not yet implemented."
+            )
+
+        @from_any.register(np.ndarray)
+        @classmethod
+        def _(cls, obj):
+            return cls.from_array_interface_obj(obj)
+
+    if cp is not None:
+        @classmethod
+        def _from_2d_cupy_array(cls, object arr):
+            """Convert a 2D CuPy array to a Column."""
+            flat_data = arr.ravel()
+
+            num_rows, num_cols = arr.shape
+            offsets = cp.arange(0, (num_rows + 1) * num_cols, num_cols, dtype=cp.int32)
+
+            data_view = gpumemoryview(flat_data)
+            offsets_view = gpumemoryview(offsets)
+            typestr = arr.__cuda_array_interface__['typestr'][1:]
+
+            data_col = cls(
+                data_type=_datatype_from_dtype_desc(typestr),
+                size=flat_data.size,
+                data=data_view,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+            offsets_col = cls(
+                data_type=DataType(type_id.INT32),
+                size=num_rows + 1,
+                data=offsets_view,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+            return cls(
+                data_type=DataType(type_id.LIST),
+                size=num_rows,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[offsets_col, data_col],
+            )
+
+        @from_any.register(cp.ndarray)
+        @classmethod
+        def _(cls, obj):
+            ndim = len(obj.shape)
+            if ndim == 1:
+                return cls.from_cuda_array_interface_obj(obj)
+            elif ndim == 2:
+                return cls._from_2d_cupy_array(obj)
+            else:
+                raise ValueError("Must pass a 1D or 2D CuPy array only")
 
     cpdef DataType type(self):
         """The type of data in the column."""
@@ -407,7 +498,7 @@ cdef class ListColumnView:
         return lists_column_view(self._column.view())
 
 
-@functools.cache
+@cache
 def _datatype_from_dtype_desc(desc):
     mapping = {
         'u1': type_id.UINT8,
