@@ -104,6 +104,14 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
+    _valid_ops: ClassVar[set[Name]] = {
+        *_COMPONENT_MAP.keys(),
+        Name.IsLeapYear,
+        Name.OrdinalDay,
+        Name.MonthStart,
+        Name.MonthEnd,
+    }
+
     def __init__(
         self,
         dtype: plc.DataType,
@@ -116,10 +124,7 @@ class TemporalFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = True
-        if (
-            self.name not in self._COMPONENT_MAP
-            and self.name is not self.Name.OrdinalDay
-        ):
+        if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
@@ -135,6 +140,34 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name is TemporalFunction.Name.MonthStart:
+            ends = plc.datetime.last_day_of_month(column.obj)
+            days_to_subtract = plc.datetime.days_in_month(column.obj)
+            # must subtract 1 to avoid rolling over to the previous month
+            days_to_subtract = plc.binaryop.binary_operation(
+                days_to_subtract,
+                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.binaryop.BinaryOperator.SUB,
+                plc.DataType(plc.TypeId.DURATION_DAYS),
+            )
+            result = plc.binaryop.binary_operation(
+                ends,
+                days_to_subtract,
+                plc.binaryop.BinaryOperator.SUB,
+                column.obj.type(),
+            )
+
+            return Column(result)
+        if self.name is TemporalFunction.Name.MonthEnd:
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.last_day_of_month(column.obj), column.obj.type()
+                )
+            )
+        if self.name is TemporalFunction.Name.IsLeapYear:
+            return Column(
+                plc.datetime.is_leap_year(column.obj),
+            )
         if self.name is TemporalFunction.Name.OrdinalDay:
             return Column(plc.datetime.day_of_year(column.obj))
         if self.name is TemporalFunction.Name.Microsecond:

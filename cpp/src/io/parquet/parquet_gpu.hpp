@@ -1005,7 +1005,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
-                      device_span<size_type> comp_page_sizes,
+                      device_span<size_type const> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
@@ -1065,12 +1065,9 @@ void EncodePageHeaders(device_span<EncPage> pages,
  * @brief Launches kernel to gather pages to a single contiguous block per chunk
  *
  * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages
  * @param[in] stream CUDA stream to use
  */
-void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<EncPage const> pages,
-                 rmm::cuda_stream_view stream);
+void GatherPages(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to calculate ColumnIndex information per chunk

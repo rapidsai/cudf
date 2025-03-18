@@ -9,7 +9,7 @@ import locale
 import re
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -849,6 +849,11 @@ class DatetimeColumn(column.ColumnBase):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
+
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if isinstance(value, (np.str_, np.datetime64)):
+            value = pd.Timestamp(value.item())
+        return super()._cast_setitem_value(value)
 
     def indices_of(
         self, value: ScalarLike
