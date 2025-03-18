@@ -11248,7 +11248,7 @@ def test_dataframe_init_column():
     with pytest.raises(TypeError):
         cudf.DataFrame(s._column)
     expect = cudf.DataFrame({"a": s})
-    actual = cudf.DataFrame._from_arrays(s._column, columns=["a"])
+    actual = cudf.DataFrame([1, 2, 3], columns=["a"])
     assert_eq(expect, actual)
 
 

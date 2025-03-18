@@ -278,7 +278,7 @@ class IndexedFrame(Frame):
         index: BaseIndex,
     ):
         super().__init__(data=data)
-        if not isinstance(index, cudf.core._base_index.BaseIndex):
+        if not isinstance(index, BaseIndex):
             raise ValueError(
                 f"index must be a cudf index not {type(index).__name__}"
             )
