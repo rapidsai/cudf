@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/jit/runtime_support.h>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
@@ -26,9 +26,8 @@ bool is_runtime_jit_supported()
   // We require a CUDA NVRTC of 11.5+ to do runtime jit
   // as we need support for __int128
 
-  int runtime      = 0;
-  auto error_value = cudaRuntimeGetVersion(&runtime);
-  CUDF_EXPECTS(error_value == cudaSuccess, "Unable to get CUDA runtime version");
+  int runtime = 0;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime));
   return runtime >= 11050;
 }
 

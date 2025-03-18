@@ -25,7 +25,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/jit/runtime_support.h>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 
 namespace transformation {
@@ -34,7 +34,7 @@ struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
   void SetUp() override
   {
     if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require 11.5 runtime";
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
     }
   }
 };

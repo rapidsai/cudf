@@ -19,7 +19,7 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/jit/runtime_support.h>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 class BinaryopTest : public cudf::test::BaseFixture {};
@@ -65,7 +65,7 @@ class BinaryopPTXTest : public BinaryopTest {
   void SetUp() override
   {
     if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require 11.5 runtime";
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
     }
   }
 };

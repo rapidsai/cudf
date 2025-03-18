@@ -22,14 +22,14 @@
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/jit/runtime_support.h>
+#include <cudf/jit/runtime_support.hpp>
 
 struct BinaryOperationNullTest : public cudf::test::BaseFixture {
  protected:
   void SetUp() override
   {
     if (!cudf::is_runtime_jit_supported()) {
-      GTEST_SKIP() << "Skipping tests that require 11.5 runtime";
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
     }
   }
 };

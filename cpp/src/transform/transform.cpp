@@ -22,7 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/runtime_support.h>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/jit/types.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
