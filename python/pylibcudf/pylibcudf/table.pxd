@@ -18,9 +18,9 @@ cdef class Table:
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 
     @staticmethod
-    cdef Table from_table_view(const table_view& tv, object owner)
+    cdef Table from_table_view(const table_view& tv, Table owner)
 
     @staticmethod
-    cdef Table from_table_view_with_table_owner(const table_view& tv, Table owner)
+    cdef Table from_table_view_of_arbitrary(const table_view& tv, object owner)
 
     cpdef list columns(self)

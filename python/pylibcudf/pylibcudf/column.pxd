@@ -35,10 +35,10 @@ cdef class Column:
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
 
     @staticmethod
-    cdef Column from_column_view(const column_view& cv, object owner)
+    cdef Column from_column_view(const column_view& cv, Column owner)
 
     @staticmethod
-    cdef Column from_column_view_with_column_owner(const column_view& cv, Column owner)
+    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
