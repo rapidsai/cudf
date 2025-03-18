@@ -714,8 +714,11 @@ def _mapping_to_column_accessor(
 
     # 3) Convert all remaining scalar data.values() to columns
     for key in scalar_keys:
+        scalar = col_data[key]
+        if scalar is None or scalar is cudf.NA:
+            scalar = pa.scalar(None, type=pa.string())
         col_data[key] = as_column(
-            col_data[key], nan_as_null=nan_as_null, length=scalar_length
+            scalar, nan_as_null=nan_as_null, length=scalar_length
         )
 
     if tuple_key_count and len(tuple_key_lengths) > 1:
