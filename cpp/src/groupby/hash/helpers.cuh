@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,16 +48,19 @@ using shmem_extent_t =
   cuco::extent<cudf::size_type,
                static_cast<cudf::size_type>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43)>;
 
+/// Probing scheme type used by groupby hash table
+using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
+
+/// Storage type used by groupby hash table
+using storage_t = cuco::storage<GROUPBY_BUCKET_SIZE>;
+
 /// Number of buckets needed by each shared memory hash set
 CUDF_HOST_DEVICE auto constexpr bucket_extent =
-  cuco::make_bucket_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
+  cuco::make_bucket_extent<probing_scheme_t, storage_t>(shmem_extent_t{});
 
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>;
-
-/// Probing scheme type used by groupby hash table
-using probing_scheme_t = cuco::linear_probing<GROUPBY_CG_SIZE, row_hash_t>;
 
 using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
   false,
@@ -75,7 +78,7 @@ using global_set_t = cuco::static_set<cudf::size_type,
                                       row_comparator_t,
                                       probing_scheme_t,
                                       cudf::detail::cuco_allocator<char>,
-                                      cuco::storage<GROUPBY_BUCKET_SIZE>>;
+                                      storage_t>;
 
 using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuco::extent<int64_t>,
@@ -83,7 +86,7 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                nullable_row_comparator_t,
                                                probing_scheme_t,
                                                cudf::detail::cuco_allocator<char>,
-                                               cuco::storage<GROUPBY_BUCKET_SIZE>>;
+                                               storage_t>;
 
 template <typename Op>
 using hash_set_ref_t = cuco::static_set_ref<
