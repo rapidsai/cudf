@@ -449,7 +449,9 @@ class Scan(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
 
-        def _include_file_paths_column(include_file_paths: str | None, df: DataFrame):
+        def _include_file_paths_column(
+            include_file_paths: str | None, df: DataFrame
+        ) -> DataFrame:
             plc_col = plc.interop.from_arrow(
                 pa.array(
                     [
