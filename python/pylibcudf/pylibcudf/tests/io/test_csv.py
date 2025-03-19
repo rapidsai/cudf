@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
 from io import StringIO
@@ -13,6 +13,8 @@ from utils import (
     sink_to_str,
     write_source_str,
 )
+
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
@@ -44,6 +46,7 @@ def csv_table_data(table_data):
     return plc.interop.from_arrow(pa_table), pa_table
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("delimiter", [",", ";"])
 def test_read_csv_basic(
     csv_table_data,
@@ -51,6 +54,7 @@ def test_read_csv_basic(
     text_compression_type,
     nrows_skiprows,
     delimiter,
+    stream,
 ):
     _, pa_table = csv_table_data
     compression_type = text_compression_type
@@ -86,7 +90,7 @@ def test_read_csv_basic(
     )
     options.set_delimiter(delimiter)
     options.set_names([str(name) for name in column_names])
-    res = plc.io.csv.read_csv(options)
+    res = plc.io.csv.read_csv(options, stream)
 
     assert_table_and_meta_eq(
         pa_table,
@@ -307,6 +311,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # bool dayfirst = False,
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("sep", [",", "*"])
 @pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("header", [True, False])
@@ -318,6 +323,7 @@ def test_write_csv(
     lineterminator,
     header,
     rows_per_chunk,
+    stream,
 ):
     plc_tbl_w_meta, pa_table = table_data_with_non_nested_pa_types
     sink = source_or_sink
@@ -336,7 +342,8 @@ def test_write_csv(
             .true_value("True")
             .false_value("False")
             .build()
-        )
+        ),
+        stream,
     )
 
     # Convert everything to string to make comparisons easier

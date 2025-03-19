@@ -16,10 +16,8 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 
 #include <nanoarrow/nanoarrow.h>
 
