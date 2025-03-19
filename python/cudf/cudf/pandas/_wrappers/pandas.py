@@ -114,9 +114,9 @@ def make_final_proxy_type(
     )
 
 
-def make_intermediate_proxy_type(name, fast_type, slow_type, **kwargs):
+def make_intermediate_proxy_type(name, fast_type, slow_type):
     return _make_intermediate_proxy_type(
-        name, fast_type, slow_type, module=slow_type.__module__, **kwargs
+        name, fast_type, slow_type, module=slow_type.__module__
     )
 
 
