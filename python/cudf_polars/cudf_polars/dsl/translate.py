@@ -27,6 +27,8 @@ from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser
@@ -310,7 +312,7 @@ def _(
             )
         return literal
 
-    def maybe_adjust_binop(e) -> expr.Expr:  # pragma: no cover
+    def maybe_adjust_binop(e: expr.NamedExpr) -> expr.NamedExpr:  # pragma: no cover
         if isinstance(e.value, expr.BinOp):
             left, right = e.value.children
             if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
@@ -319,7 +321,9 @@ def _(
                 e.value.children = (adjust_literal_dtype(left), right)
         return e
 
-    def translate_expr_and_maybe_fix_binop_args(translator, exprs):
+    def translate_expr_and_maybe_fix_binop_args(
+        translator: Translator, exprs: Sequence[pl_expr.PyExprIR]
+    ) -> list[expr.NamedExpr]:
         return [
             maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
         ]
