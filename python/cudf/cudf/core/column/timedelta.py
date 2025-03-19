@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import datetime
 import functools
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
+import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -18,13 +19,17 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
     find_common_type,
 )
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
+    is_na_like,
 )
 
 if TYPE_CHECKING:
@@ -197,14 +202,19 @@ class TimeDeltaColumn(ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
 
         this: ColumnBinaryOperand = self
         out_dtype = None
+        other_cudf_dtype = (
+            cudf_dtype_from_pa_type(other.type)
+            if isinstance(other, pa.Scalar)
+            else other.dtype
+        )
 
-        if other.dtype.kind == "m":
+        if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
             # when comparing to non-timedelta dtypes. We should do the same.
             if op in {
@@ -219,27 +229,35 @@ class TimeDeltaColumn(ColumnBase):
             }:
                 out_dtype = np.dtype(np.bool_)
             elif op == "__mod__":
-                out_dtype = find_common_type((self.dtype, other.dtype))
+                out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             elif op in {"__truediv__", "__floordiv__"}:
-                common_dtype = find_common_type((self.dtype, other.dtype))
+                common_dtype = find_common_type((self.dtype, other_cudf_dtype))
                 out_dtype = (
                     np.dtype(np.float64)
                     if op == "__truediv__"
                     else np.dtype(np.int64)
                 )
                 this = self.astype(common_dtype).astype(out_dtype)
-                if isinstance(other, cudf.Scalar):
-                    if other.is_valid():
-                        other = cudf.Scalar(
-                            other.value.astype(common_dtype).astype(out_dtype)
+                if isinstance(other, pa.Scalar):
+                    if other.is_valid:
+                        # pyarrow.cast doesn't support casting duration to float
+                        # so go through numpy
+                        other_np = pa.array([other]).to_numpy(
+                            zero_copy_only=False
                         )
+                        other_np = other_np.astype(common_dtype).astype(
+                            out_dtype
+                        )
+                        other = pa.array(other_np)[0]
                     else:
-                        other = cudf.Scalar(None, out_dtype)
+                        other = pa.scalar(
+                            None, type=cudf_dtype_to_pa_type(out_dtype)
+                        )
                 else:
                     other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
-                out_dtype = find_common_type((self.dtype, other.dtype))
-        elif other.dtype.kind in {"f", "i", "u"}:
+                out_dtype = find_common_type((self.dtype, other_cudf_dtype))
+        elif other_cudf_dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
             elif op in {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
@@ -258,6 +276,8 @@ class TimeDeltaColumn(ColumnBase):
 
         if out_dtype is None:
             return NotImplemented
+        elif isinstance(other, pa.Scalar):
+            other = pa_scalar_to_plc_scalar(other)
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
@@ -266,38 +286,47 @@ class TimeDeltaColumn(ColumnBase):
             result = result.fillna(op == "__ne__")
         return result
 
-    def normalize_binop_value(self, other) -> ColumnBinaryOperand:
-        if isinstance(other, (ColumnBase, cudf.Scalar)):
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
+        if isinstance(other, ColumnBase):
             return other
+        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+            other = other[()]
 
-        tz_error_msg = (
-            "Cannot perform binary operation on timezone-naive columns"
-            " and timezone-aware timestamps."
-        )
-        if isinstance(other, datetime.datetime):
-            if other.tzinfo is not None:
-                raise NotImplementedError(tz_error_msg)
-            other = pd.Timestamp(other).to_datetime64()
-        elif isinstance(other, datetime.timedelta):
-            other = pd.Timedelta(other).to_timedelta64()
-
-        if isinstance(other, np.timedelta64):
-            other_time_unit = np.datetime_data(other.dtype)[0]
-            if np.isnat(other):
-                return cudf.Scalar(
-                    None,
-                    dtype="timedelta64[ns]"
-                    if other_time_unit not in {"s", "ms", "ns", "us"}
-                    else self.dtype,
+        if is_scalar(other):
+            if is_na_like(other):
+                return super()._normalize_binop_operand(other)
+            elif isinstance(other, pd.Timedelta):
+                other = other.to_numpy()
+            elif isinstance(other, (np.datetime64, np.timedelta64)):
+                unit = np.datetime_data(other)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    if np.isnat(other):
+                        # TODO: Use self.time_unit to not modify the result resolution?
+                        to_unit = "ns"
+                    else:
+                        to_unit = self.time_unit
+                    if np.isnat(other):
+                        # Workaround for https://github.com/numpy/numpy/issues/28496
+                        # Once fixed, can always use the astype below
+                        other = type(other)("NaT", to_unit)
+                    else:
+                        other = other.astype(
+                            np.dtype(f"{other.dtype.kind}8[{to_unit}]")
+                        )
+            scalar = pa.scalar(other)
+            if (
+                pa.types.is_timestamp(scalar.type)
+                and scalar.type.tz is not None
+            ):
+                raise NotImplementedError(
+                    "Binary operations with timezone aware operands is not supported."
                 )
-
-            if other_time_unit not in {"s", "ms", "ns", "us"}:
-                common_dtype = np.dtype("timedelta64[s]")
-            else:
-                common_dtype = find_common_type((self.dtype, other.dtype))
-            return cudf.Scalar(other.astype(common_dtype))
-        elif is_scalar(other):
-            return cudf.Scalar(other)
+            elif pa.types.is_duration(scalar.type):
+                common_dtype = find_common_type(
+                    (self.dtype, cudf_dtype_from_pa_type(scalar.type))
+                )
+                scalar = scalar.cast(cudf_dtype_to_pa_type(common_dtype))
+            return scalar
         return NotImplemented
 
     @functools.cached_property
