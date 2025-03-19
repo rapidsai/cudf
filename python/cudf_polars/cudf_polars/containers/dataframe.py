@@ -246,7 +246,9 @@ class DataFrame:
             for c, other in zip(self.columns, like.columns, strict=True)
         )
 
-    def with_columns(self, columns: Iterable[Column], *, replace_only=False) -> Self:
+    def with_columns(
+        self, columns: Iterable[Column], *, replace_only: bool = False
+    ) -> Self:
         """
         Return a new dataframe with extra columns.
 
