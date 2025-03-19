@@ -8,6 +8,8 @@ from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
+from pylibcudf.transform cimport bools_to_mask
+
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
@@ -303,17 +305,31 @@ cdef class Column:
         -------
         Column
             A Column containing the data from the CUDA array interface.
-
-        Notes
-        -----
-        Data is not copied when creating the column. The caller is
-        responsible for ensuring the data is not mutated unexpectedly while the
-        column is in use.
         """
         data = gpumemoryview(obj)
         iface = data.__cuda_array_interface__
-        if iface.get('mask') is not None:
-            raise ValueError("mask not yet supported.")
+
+        mask = None
+        null_count = 0
+
+        mask_obj = iface.get("mask")
+        if mask_obj is not None:
+            if not hasattr(mask_obj, '__cuda_array_interface__'):
+                raise ValueError("Mask must expose `__cuda_array_interface__`.")
+
+            mask_iface = mask_obj.__cuda_array_interface__
+            mask_typestr = mask_iface['typestr']
+
+            if mask_typestr != '|b1':
+                if cp is not None:
+                    mask_obj = cp.asarray(mask_obj, dtype=cp.bool_)
+                    print(mask_obj)
+                else:
+                    raise cp_error
+
+            mask_col = cls.from_cuda_array_interface_obj(mask_obj)
+
+            mask, null_count = bools_to_mask(mask_col)
 
         typestr = iface['typestr'][1:]
         data_type = _datatype_from_dtype_desc(typestr)
@@ -332,8 +348,8 @@ cdef class Column:
             data_type,
             size,
             data,
-            None,
-            0,
+            mask,
+            null_count,
             0,
             []
         )
@@ -389,22 +405,60 @@ cdef class Column:
     if cp is not None:
         @classmethod
         def _from_2d_cupy_array(cls, object arr):
-            """Convert a 2D CuPy array to a Column."""
-            flat_data = arr.ravel()
+            """Convert a 2D CuPy array to a Column with mask support."""
 
+            if arr.ndim != 2:
+                raise ValueError("Expected a 2D CuPy array")
+            iface = arr.__cuda_array_interface__
             num_rows, num_cols = arr.shape
+            flat_data = arr.ravel()
             offsets = cp.arange(0, (num_rows + 1) * num_cols, num_cols, dtype=cp.int32)
 
             data_view = gpumemoryview(flat_data)
             offsets_view = gpumemoryview(offsets)
-            typestr = arr.__cuda_array_interface__['typestr'][1:]
+            typestr = iface['typestr'][1:]
+
+            mask = None
+            null_count = 0
+            mask_obj = iface.get("mask")
+            if mask_obj is not None:
+                if not hasattr(mask_obj, '__cuda_array_interface__'):
+                    raise ValueError("Mask must expose `__cuda_array_interface__`.")
+                mask_iface = mask_obj.__cuda_array_interface__
+                mask_typestr = mask_iface['typestr']
+                if mask_typestr != '|b1':
+                    mask_obj = cp.asarray(mask_obj, dtype=cp.bool_)
+                flat_mask = mask_obj.ravel()
+                mask_col = cls.from_cuda_array_interface_obj(flat_mask)
+                mask, null_count = bools_to_mask(mask_col)
+
+                mask_offsets_view = gpumemoryview(offsets)
+                mask_offsets_col = cls(
+                    data_type=DataType(type_id.INT32),
+                    size=num_rows + 1,
+                    data=mask_offsets_view,
+                    mask=None,
+                    null_count=0,
+                    offset=0,
+                    children=[],
+                )
+
+                mask_col = cls(
+                    data_type=DataType(type_id.LIST),
+                    size=num_rows,
+                    data=None,
+                    mask=None,
+                    null_count=null_count,
+                    offset=0,
+                    children=[mask_offsets_col, mask_col],
+                )
 
             data_col = cls(
                 data_type=_datatype_from_dtype_desc(typestr),
                 size=flat_data.size,
                 data=data_view,
-                mask=None,
-                null_count=0,
+                mask=mask,
+                null_count=null_count,
                 offset=0,
                 children=[],
             )
