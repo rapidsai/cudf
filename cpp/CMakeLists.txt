@@ -470,6 +470,7 @@ add_library(
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
+  src/interop/from_arrow_host_strings.cu
   src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
   src/io/avro/avro.cpp
@@ -554,6 +555,7 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
+  src/jit/runtime_support.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
