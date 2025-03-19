@@ -65,7 +65,7 @@ tests:
       - RAPIDS_NO_INITIALIZE=1 python -c "import cudf_polars; print(cudf_polars.__version__)"
       - CUDF_NO_INITIALIZE=1 python -c "import cudf_polars; print(cudf_polars.__version__)"
       - RAPIDS_NO_INITIALIZE=1 python -c "import cudf_polars; import polars as pl; print(pl.Series([1, 2, 3]))"
-      - RAPIDS_NO_INITIALIZE=1 python -c "import cudf_polars; import polars as pl; ldf = pl.DataFrame({'a':[1], 'b':[2]}).lazy(); print(ldf.select(pl.col("a")).collect(engine="gpu"))"
+      - RAPIDS_NO_INITIALIZE=1 python -c "import cudf_polars; import polars as pl; ldf = pl.DataFrame({'a':[1], 'b':[2]}).lazy(); print(ldf.select(pl.col('a')).collect(engine='gpu'))"
 
 about:
   homepage: ${{ load_from_file("python/cudf_polars/pyproject.toml").project.urls.Homepage }}
