@@ -63,6 +63,7 @@ jobs:
     with:
       branch: ${{ github.ref_name }}
       dry_run: true
+      all: true
   check-nightly-ci:
     # Switch to ubuntu-latest once it defaults to a version of Ubuntu that
     # provides at least Python 3.11 (see
