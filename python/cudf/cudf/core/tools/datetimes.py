@@ -15,7 +15,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
@@ -370,9 +369,9 @@ def _process_col(
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
-                col = col.astype(dtype="int64")
+                col = col.astype(np.dtype(np.int64))
             except ValueError:
-                col = col.astype(dtype="float64")
+                col = col.astype(np.dtype(np.float64))
             return _process_col(
                 col=col,
                 unit=unit,
@@ -883,7 +882,7 @@ def date_range(
             "three must be specified"
         )
 
-    if periods is not None and not cudf.api.types.is_integer(periods):
+    if periods is not None and not is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
@@ -987,7 +986,7 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = libcudf.column.Column.from_pylibcudf(
+            res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
                     pa_scalar_to_plc_scalar(pa.scalar(start)),

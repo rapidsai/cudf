@@ -46,18 +46,6 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
-  static-configure:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
-    with:
-      build_type: ${{ inputs.build_type }}
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      # Use the wheel container so we can skip conda solves and since our
-      # primary static consumers (Spark) are not in conda anyway.
-      container_image: "rapidsai/ci-wheel:latest"
-      run_script: "ci/configure_cpp_static.sh"
   cpp-linters:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
@@ -168,3 +156,14 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_polars_tests.sh"
+  narwhals-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.04
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: ci/test_narwhals.sh

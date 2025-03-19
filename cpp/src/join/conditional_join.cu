@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+constexpr int DEFAULT_CACHE_SIZE = 128;
+}
 
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   table_view const& left,
@@ -104,7 +107,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   auto const& join_output_l = left_indices->data();
 
   if (has_nulls) {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -114,7 +117,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
         parser.device_expression_data,
         join_size);
   } else {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -244,7 +247,7 @@ conditional_join(table_view const& left,
   auto const& join_output_r = right_indices->data();
 
   if (has_nulls) {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -256,7 +259,7 @@ conditional_join(table_view const& left,
         join_size,
         swap_tables);
   } else {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,

@@ -836,7 +836,7 @@ def test_listcol_as_string(data):
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             [[1, 2, 3], [4, 5, 6]],
-            "list nesting level mismatch",
+            "Could not convert .* with type list: tried to convert to int64",
         ),
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -954,6 +954,13 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     )
     ser = cudf.Series._from_column(col_empty_offset)
     assert ser.memory_usage() == 8
+
+
+def test_list_methods_setattr():
+    ser = cudf.Series([["a", "b", "c"], ["d", "e", "f"]])
+
+    with pytest.raises(AttributeError):
+        ser.list.a = "b"
 
 
 def test_dataframe_list_round_trip():

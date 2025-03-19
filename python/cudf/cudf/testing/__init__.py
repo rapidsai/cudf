@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
+from cudf.testing import narwhals_test_plugin
 from cudf.testing.testing import (
     assert_eq,
     assert_frame_equal,

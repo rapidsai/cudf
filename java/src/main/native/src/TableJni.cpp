@@ -2480,6 +2480,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                                               jint j_compression,
                                               jintArray j_precisions,
                                               jbooleanArray j_is_map,
+                                              jint j_stripe_size_rows,
                                               jobject consumer,
                                               jobject host_memory_allocator)
 {
@@ -2535,6 +2536,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                                         .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                         .key_value_metadata(kv_metadata)
                                         .compression_statistics(stats)
+                                        .stripe_size_rows(j_stripe_size_rows)
                                         .build();
     auto writer_ptr                          = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret = new cudf::jni::native_orc_writer_handle(
@@ -2555,6 +2557,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                                                                    jint j_compression,
                                                                    jintArray j_precisions,
                                                                    jbooleanArray j_is_map,
+                                                                   jint j_stripe_size_rows,
                                                                    jstring j_output_path)
 {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
@@ -2606,6 +2609,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                                         .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                         .key_value_metadata(kv_metadata)
                                         .compression_statistics(stats)
+                                        .stripe_size_rows(j_stripe_size_rows)
                                         .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret =

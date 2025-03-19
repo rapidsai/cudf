@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -227,7 +228,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
       return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
-    thrust::maximum<size_type>{});
+    cudf::detail::maximum<size_type>{});
 
   // boundary case: if no columns, return one all-null column (custrings issue #119)
   if (columns_count == 0) {

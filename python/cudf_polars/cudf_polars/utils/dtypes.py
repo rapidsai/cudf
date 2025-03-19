@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Datatype utilities."""
@@ -71,7 +71,9 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     -------
     True if casting is supported, False otherwise
     """
-    has_empty = from_.id() == plc.TypeId.EMPTY or to.id() == plc.TypeId.EMPTY
+    to_is_empty = to.id() == plc.TypeId.EMPTY
+    from_is_empty = from_.id() == plc.TypeId.EMPTY
+    has_empty = to_is_empty or from_is_empty
     return (
         (
             from_ == to
@@ -84,8 +86,16 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
                 )
             )
         )
-        or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
-        or (to.id() == plc.TypeId.STRING and is_numeric_not_bool(from_))
+        or (
+            from_.id() == plc.TypeId.STRING
+            and not to_is_empty
+            and is_numeric_not_bool(to)
+        )
+        or (
+            to.id() == plc.TypeId.STRING
+            and not from_is_empty
+            and is_numeric_not_bool(from_)
+        )
     )
 
 

@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../../rapids_config.cmake)
 

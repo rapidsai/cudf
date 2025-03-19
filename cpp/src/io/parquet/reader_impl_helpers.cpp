@@ -23,6 +23,7 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -352,11 +353,21 @@ metadata::metadata(datasource* source)
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources)
 {
+  // Avoid using the thread pool for a single source
+  if (sources.size() == 1) { return {metadata{sources[0].get()}}; }
+
+  std::vector<std::future<metadata>> metadata_ctor_tasks;
+  metadata_ctor_tasks.reserve(sources.size());
+  for (auto const& source : sources) {
+    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+      [source = source.get()] { return metadata{source}; }));
+  }
   std::vector<metadata> metadatas;
-  std::transform(
-    sources.begin(), sources.end(), std::back_inserter(metadatas), [](auto const& source) {
-      return metadata(source.get());
-    });
+  metadatas.reserve(sources.size());
+  std::transform(metadata_ctor_tasks.begin(),
+                 metadata_ctor_tasks.end(),
+                 std::back_inserter(metadatas),
+                 [](std::future<metadata>& task) { return std::move(task).get(); });
   return metadatas;
 }
 

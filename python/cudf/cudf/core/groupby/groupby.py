@@ -19,13 +19,8 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_list_like,
-    is_numeric_dtype,
-    is_string_dtype,
-)
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
@@ -45,7 +40,12 @@ from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
+    is_dtype_obj_numeric,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
@@ -92,7 +92,7 @@ _DECIMAL_AGGS = {
 
 @singledispatch
 def get_valid_aggregation(dtype):
-    if is_string_dtype(dtype):
+    if dtype == CUDF_STRING_DTYPE:
         return _STRING_AGGS
     return "ALL"
 
@@ -594,7 +594,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = stream_compaction.drop_duplicates(group_keys)
+        group_keys = [
+            ColumnBase.from_pylibcudf(col)
+            for col in stream_compaction.drop_duplicates(group_keys)
+        ]
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -1073,24 +1076,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                         plc_tables[1],
                         plc.types.NullEquality.EQUAL,
                     )
-                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
-                    right_order = libcudf.column.Column.from_pylibcudf(
-                        right_plc
-                    )
+                    left_order = ColumnBase.from_pylibcudf(left_plc)
+                    right_order = ColumnBase.from_pylibcudf(right_plc)
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sorting.sort_by_key(
+                right_order = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
                     ["first"],
                     stable=False,
-                )
+                )[0]
                 result = result._gather(
                     GatherMap.from_column_unchecked(
-                        right_order, len(result), nullify=False
+                        ColumnBase.from_pylibcudf(right_order),
+                        len(result),
+                        nullify=False,
                     )
                 )
 
@@ -1786,7 +1789,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         if not len(chunk_results):
             return self.obj.head(0)
-        if isinstance(chunk_results, ColumnBase) or cudf.api.types.is_scalar(
+        if isinstance(chunk_results, ColumnBase) or is_scalar(
             chunk_results[0]
         ):
             data = ColumnAccessor(
@@ -2523,7 +2526,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return libcudf.column.Column.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [c.to_pylibcudf(mode="read") for c in source_columns]
@@ -3075,7 +3078,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         columns = list(
             name
             for name, dtype in self.obj._dtypes
-            if (is_numeric_dtype(dtype) and name not in self.grouping.names)
+            if (
+                is_dtype_obj_numeric(dtype) and name not in self.grouping.names
+            )
         )
         return self[columns].agg(op)
 
