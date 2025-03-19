@@ -50,7 +50,7 @@ def classification_data():
 
 def test_catboost_regressor_with_dataframe(regression_data):
     X, y = regression_data
-    model = CatBoostRegressor(iterations=50, verbose=0)
+    model = CatBoostRegressor(iterations=50, verbose=0, random_seed=42)
     model.fit(X, y)
     predictions = model.predict(X)
     return predictions
@@ -58,7 +58,7 @@ def test_catboost_regressor_with_dataframe(regression_data):
 
 def test_catboost_regressor_with_numpy(regression_data):
     X, y = regression_data
-    model = CatBoostRegressor(iterations=50, verbose=0)
+    model = CatBoostRegressor(iterations=50, verbose=0, random_seed=42)
     model.fit(X.values, y.values)
     predictions = model.predict(X.values)
     return predictions
@@ -68,7 +68,7 @@ def test_catboost_classifier_with_dataframe(classification_data):
     X, y = classification_data
     cat_features = [X.columns[-2]]
     model = CatBoostClassifier(
-        iterations=50, verbose=0, cat_features=cat_features
+        iterations=50, verbose=0, cat_features=cat_features, random_seed=42
     )
     model.fit(X, y)
     predictions = model.predict(X)
@@ -77,7 +77,7 @@ def test_catboost_classifier_with_dataframe(classification_data):
 
 def test_catboost_classifier_with_numpy(classification_data):
     X, y = classification_data
-    model = CatBoostClassifier(iterations=50, verbose=0)
+    model = CatBoostClassifier(iterations=50, verbose=0, random_seed=42)
     model.fit(X.values, y.values)
     predictions = model.predict(X.values)
     return predictions
@@ -86,7 +86,7 @@ def test_catboost_classifier_with_numpy(classification_data):
 def test_catboost_with_pool_and_dataframe(regression_data):
     X, y = regression_data
     train_pool = Pool(X, y)
-    model = CatBoostRegressor(iterations=50, verbose=0)
+    model = CatBoostRegressor(iterations=50, verbose=0, random_seed=42)
     model.fit(train_pool)
     predictions = model.predict(X)
     return predictions
@@ -95,7 +95,7 @@ def test_catboost_with_pool_and_dataframe(regression_data):
 def test_catboost_with_pool_and_numpy(regression_data):
     X, y = regression_data
     train_pool = Pool(X.values, y.values)
-    model = CatBoostRegressor(iterations=50, verbose=0)
+    model = CatBoostRegressor(iterations=50, verbose=0, random_seed=42)
     model.fit(train_pool)
     predictions = model.predict(X.values)
     return predictions
@@ -103,18 +103,22 @@ def test_catboost_with_pool_and_numpy(regression_data):
 
 def test_catboost_with_categorical_features():
     data = {
-        "fea_1": rng.standard_normal(1000),
-        "fea_2": rng.choice([0, 1, 2, 3], size=1000),
-        "fea_3": rng.choice(["A", "B", "C"], size=1000),
+        "feat_int_dtype": rng.standard_normal(1000),
+        "cat_feat_int_dtype": rng.choice([0, 1, 2, 3], size=1000),
+        "cat_feat_categorical_dtype": rng.choice(["A", "B", "C"], size=1000),
         "target": rng.integers(0, 2, size=1000),
     }
     df = pd.DataFrame(data)
-    df["fea_3"] = df["fea_3"].astype("category")
-    X = df[["fea_1", "fea_2", "fea_3"]]
+    df["cat_feat_categorical_dtype"] = df["cat_feat_categorical_dtype"].astype(
+        "category"
+    )
+    X = df[
+        ["feat_int_dtype", "cat_feat_int_dtype", "cat_feat_categorical_dtype"]
+    ]
     y = df["target"]
-    cat_features = ["fea_2", "fea_3"]
+    cat_features = ["cat_feat_int_dtype", "cat_feat_categorical_dtype"]
     model = CatBoostClassifier(
-        iterations=50, verbose=0, cat_features=cat_features
+        iterations=50, verbose=0, cat_features=cat_features, random_seed=42
     )
     model.fit(X, y)
     predictions = model.predict(X)
@@ -135,7 +139,7 @@ def test_catboost_train_test_split(X, y):
     from sklearn.model_selection import train_test_split
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    model = CatBoostRegressor(iterations=50, verbose=0)
+    model = CatBoostRegressor(iterations=50, verbose=0, random_seed=42)
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     return len(X_train), len(X_test), len(y_train), len(y_test), predictions
