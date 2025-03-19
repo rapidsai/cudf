@@ -376,24 +376,26 @@ def test_scan_parquet_chunked(
     )
 
 
-def test_scan_hf_url_raises():
-    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
-def test_scan_include_file_paths(tmp_path):
+@pytest.mark.parametrize(
+    "file_ext, writer, scan",
+    [
+        ("parquet", "write_parquet", pl.scan_parquet),
+        ("csv", "write_csv", pl.scan_csv),
+        ("ndjson", "write_ndjson", pl.scan_ndjson),
+    ],
+)
+def test_scan_include_file_paths(tmp_path, file_ext, writer, scan):
     df1 = pl.DataFrame({"a": [1, 2, 3]})
-
-    df1.write_parquet(tmp_path / "df1.pq")
-
     df2 = pl.DataFrame({"a": [7, 6, 5]})
 
-    df2.write_parquet(tmp_path / "df2.pq")
+    file1 = tmp_path / f"df1.{file_ext}"
+    file2 = tmp_path / f"df2.{file_ext}"
+
+    getattr(df1, writer)(file1)
+    getattr(df2, writer)(file2)
 
     q = (
-        pl.scan_parquet(
-            [tmp_path / "df1.pq", tmp_path / "df2.pq"], include_file_paths="paths"
-        )
+        scan([file1, file2], include_file_paths="path")
         .with_row_index()
         .select(pl.col("a"))
     )

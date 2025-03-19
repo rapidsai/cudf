@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import itertools
 import json
-from functools import cache
+import operator
+from functools import cache, reduce
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -498,7 +499,7 @@ class Scan(IR):
             decimal = "," if parse_options["decimal_comma"] else "."
 
             # polars skips blank lines at the beginning of the file
-            pieces = []
+            pieces: list[Any | tuple[Any, list[str]]] = []
             read_partial = n_rows != -1
             for p in paths:
                 skiprows = reader_options["skip_rows"]
@@ -528,22 +529,35 @@ class Scan(IR):
                 if comment is not None:
                     options.set_comment(comment)
                 tbl_w_meta = plc.io.csv.read_csv(options)
-                pieces.append(tbl_w_meta)
+                num_rows = tbl_w_meta.tbl.num_rows()
+                if include_file_paths is not None:
+                    pieces.append((tbl_w_meta, [p] * num_rows))
+                else:
+                    pieces.append(tbl_w_meta)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
                     if n_rows <= 0:
                         break
             tables, colnames = zip(
-                *(
+                *[
                     (piece.tbl, piece.column_names(include_children=False))
+                    if not isinstance(piece, tuple)
+                    else (piece[0].tbl, piece[0].column_names(include_children=False))
                     for piece in pieces
-                ),
-                strict=True,
+                ],
+                strict=False,
             )
             df = DataFrame.from_table(
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
+            if include_file_paths is not None:
+                file_paths_col: list[str] = reduce(
+                    operator.add, (file_paths for _, file_paths in pieces), []
+                )
+                plc_col = plc.interop.from_arrow(pa.array(file_paths_col))
+                paths_col = Column(plc_col, name=include_file_paths)
+                df = df.with_columns([paths_col])
         elif typ == "parquet":
             if config_options.get("parquet_options.chunked", default=True):
                 options = plc.io.parquet.ParquetReaderOptions.builder(
@@ -653,6 +667,8 @@ class Scan(IR):
             if row_index is not None:
                 col_order.remove(row_index[0])
             df = df.select(col_order)
+            if include_file_paths is not None:
+                df = _include_file_paths_column(include_file_paths, df)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {typ}"
