@@ -58,7 +58,7 @@ class Node(Generic[T]):
         """
         return type(self)(*self._ctor_arguments(children))
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[Any, ...]:
         """Pickle a Node object."""
         return (
             type(self),

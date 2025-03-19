@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
 from . cimport (
@@ -15,6 +15,7 @@ from . cimport (
     groupby,
     hashing,
     interop,
+    jit,
     join,
     json,
     labeling,
@@ -66,6 +67,7 @@ __all__ = [
     "groupby",
     "hashing",
     "interop",
+    "jit",
     "join",
     "json",
     "lists",
