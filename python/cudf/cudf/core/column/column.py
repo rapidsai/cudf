@@ -2757,7 +2757,13 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
-        pa_scalar = pa.scalar(arbitrary)
+
+        if arbitrary is pd.NaT:
+            pa_scalar = pa.scalar(None, type=pa.timestamp("ns"))
+        elif arbitrary is pd.NA:
+            pa_scalar = pa.scalar(None)
+        else:
+            pa_scalar = pa.scalar(arbitrary)
         if length == 0:
             if dtype is None:
                 dtype = cudf_dtype_from_pa_type(pa_scalar.type)
