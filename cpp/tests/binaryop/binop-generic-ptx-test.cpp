@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,15 +19,17 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
-#include <tests/binaryop/util/runtime_support.h>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/jit/runtime_support.hpp>
 
 struct BinaryOperationGenericPTXTest : public BinaryOperationTest {
  protected:
   void SetUp() override
   {
-    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
   }
 };
 

@@ -52,7 +52,7 @@ def test_groupby_single_partitions(df, op, keys):
     )
 
 
-@pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
+@pytest.mark.parametrize("op", ["sum", "mean", "len", "count", "min", "max"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
@@ -87,3 +87,45 @@ def test_groupby_raises(df, engine):
         match="NotImplementedError",
     ):
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_agg_literal(df, engine):
+    q = df.group_by("y").agg(1)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        pl.max("x") - pl.min("x"),
+        pl.mean("x") * pl.sum("x"),
+        pl.max("x") + pl.max("z"),
+        pl.max("x") + 1,
+    ],
+)
+def test_groupby_agg_binop(df: pl.LazyFrame, engine: pl.GPUEngine, op: pl.Expr) -> None:
+    q = df.group_by("y").agg(op)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "op, column_name",
+    [
+        (pl.max("x") - pl.min("x"), "x__max_min"),
+        (pl.mean("x"), "x__mean_sum"),
+    ],
+)
+def test_groupby_agg_duplicate(
+    engine: pl.GPUEngine, op: pl.Expr, column_name: str
+) -> None:
+    # Ensure that the column names we create internally don't collide with
+    # the user's column names.
+    df = pl.LazyFrame(
+        {
+            "x": [0, 1, 2, 3] * 2,
+            column_name: [4, 5, 6, 7] * 2,
+            "y": [1, 2, 1, 2] * 2,
+        }
+    )
+    q = df.group_by("y").agg(op, pl.min(column_name))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
