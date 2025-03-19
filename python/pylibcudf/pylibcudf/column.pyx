@@ -323,7 +323,6 @@ cdef class Column:
             if mask_typestr != '|b1':
                 if cp is not None:
                     mask_obj = cp.asarray(mask_obj, dtype=cp.bool_)
-                    print(mask_obj)
                 else:
                     raise cp_error
 
