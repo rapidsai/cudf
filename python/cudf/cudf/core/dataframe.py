@@ -8245,8 +8245,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
         if child_names is not None:
             cudf_cols = (
-                _recursively_update_struct_names(col, child_names)  # type: ignore[arg-type]
-                for col in zip(cudf_cols, child_names.values(), strict=True)
+                _recursively_update_struct_names(col, child_names)
+                for col, child_names in zip(
+                    cudf_cols, child_names.values(), strict=True
+                )
             )
         col_accessor = ColumnAccessor(
             {
