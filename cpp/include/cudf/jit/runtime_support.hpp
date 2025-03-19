@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@
  */
 
 #pragma once
+#include <cudf/utilities/export.hpp>
 
-#include <cuda_runtime.h>
+namespace CUDF_EXPORT cudf {
 
-inline bool can_do_runtime_jit()
-{
-  // We require a CUDA NVRTC of 11.5+ to do runtime jit
-  // as we need support for __int128
+/**
+ * @brief Returns true/false depending on whether Runtime JIT operations are supported
+ *
+ * @return true if runtime JIT is supported, false otherwise.
+ */
+bool is_runtime_jit_supported();
 
-  int runtime      = 0;
-  auto error_value = cudaRuntimeGetVersion(&runtime);
-  return (error_value == cudaSuccess) && (runtime >= 11050);
-}
+}  // namespace CUDF_EXPORT cudf

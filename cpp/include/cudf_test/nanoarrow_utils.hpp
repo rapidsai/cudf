@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -416,3 +417,42 @@ get_decimal_precision()
   else
     return cudf::detail::max_precision<T>();
 }
+
+struct VectorOfArrays {
+  std::vector<nanoarrow::UniqueArray> arrays;
+  nanoarrow::UniqueSchema schema;
+  size_t index{0};
+
+  static int get_schema(ArrowArrayStream* stream, ArrowSchema* out_schema)
+  {
+    auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
+
+    NANOARROW_THROW_NOT_OK(ArrowSchemaDeepCopy(private_data->schema.get(), out_schema));
+    return 0;
+  }
+
+  static int get_next(ArrowArrayStream* stream, ArrowArray* out_array)
+  {
+    auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
+    if (private_data->index >= private_data->arrays.size()) {
+      out_array->release = nullptr;
+      return 0;
+    }
+    ArrowArrayMove(private_data->arrays[private_data->index++].get(), out_array);
+    return 0;
+  }
+
+  static const char* get_last_error(ArrowArrayStream* stream) { return nullptr; }
+
+  static void release(ArrowArrayStream* stream)
+  {
+    delete static_cast<VectorOfArrays*>(stream->private_data);
+  }
+};
+
+void makeStreamFromArrays(std::vector<nanoarrow::UniqueArray> arrays,
+                          nanoarrow::UniqueSchema schema,
+                          ArrowArrayStream* out);
+
+std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, ArrowArrayStream>
+get_nanoarrow_stream(int num_copies);

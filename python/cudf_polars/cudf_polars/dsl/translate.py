@@ -343,7 +343,15 @@ def _(
         "Semi",
         "Anti",
     }:
-        return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
+        return ir.Join(
+            schema,
+            left_on,
+            right_on,
+            node.options,
+            translator.config_options,
+            inp_left,
+            inp_right,
+        )
     else:
         how, op1, op2 = node.options[0]
         if how != "IEJoin":

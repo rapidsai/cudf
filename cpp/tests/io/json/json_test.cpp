@@ -3430,6 +3430,7 @@ INSTANTIATE_TEST_SUITE_P(JsonCompressedIOTest,
                          JsonCompressedIOTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
                                            cudf::io::compression_type::SNAPPY,
+                                           cudf::io::compression_type::ZSTD,
                                            cudf::io::compression_type::NONE));
 
 TEST_P(JsonCompressedIOTest, BasicJsonLines)

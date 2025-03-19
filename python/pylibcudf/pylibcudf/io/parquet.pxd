@@ -1,10 +1,14 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
-
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int64_t, uint8_t
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.expressions cimport Expression
+
 from pylibcudf.io.types cimport (
     compression_type,
     dictionary_policy,
@@ -14,6 +18,7 @@ from pylibcudf.io.types cimport (
     TableInputMetadata,
     TableWithMetadata,
 )
+
 from pylibcudf.libcudf.io.parquet cimport (
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_reader as cpp_chunked_parquet_reader,
@@ -24,8 +29,11 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
 )
+
 from pylibcudf.libcudf.types cimport size_type
+
 from pylibcudf.table cimport Table
+
 from pylibcudf.types cimport DataType
 
 
@@ -55,7 +63,7 @@ cdef class ChunkedParquetReader:
     cpdef TableWithMetadata read_chunk(self)
 
 
-cpdef read_parquet(ParquetReaderOptions options)
+cpdef read_parquet(ParquetReaderOptions options, Stream stream = *)
 
 
 cdef class ParquetChunkedWriter:
@@ -145,6 +153,6 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-cpdef memoryview write_parquet(ParquetWriterOptions options)
+cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
 
 cpdef memoryview merge_row_group_metadata(list metdata_list)
