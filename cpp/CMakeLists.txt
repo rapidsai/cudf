@@ -479,6 +479,7 @@ add_library(
   src/io/comp/brotli_dict.cpp
   src/io/comp/comp.cpp
   src/io/comp/comp.cu
+  src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
