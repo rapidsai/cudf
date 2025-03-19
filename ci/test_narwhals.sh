@@ -42,16 +42,11 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
 rapids-logger "Run narwhals tests for cuDF Pandas"
 
 # test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
-# test_sumh_transformations: Fixed by https://github.com/rapidsai/cudf/pull/18259
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
-# test_q1 & test_dask_order_dependent_ops: https://github.com/rapidsai/cudf/issues/18253
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
-test_sumh_transformations or \
-test_maybe_convert_dtypes_pandas or \
-test_q1 or \
-test_dask_order_dependent_ops \
+test_maybe_convert_dtypes_pandas \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
@@ -64,13 +59,19 @@ test_to_arrow_with_nulls or \
 test_pandas_object_series \
 "
 
+TEST_THAT_NEED_NARHWHALS_FIX=" \
+test_eager_only_sqlframe or \
+test_series_only_sqlframe \
+"
+
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
-        ${TESTS_TO_ALWAYS_SKIP} \
+        ${TESTS_TO_ALWAYS_SKIP} or \
+        ${TEST_THAT_NEED_NARHWHALS_FIX} \
     )" \
     --numprocesses=8 \
     --dist=worksteal
