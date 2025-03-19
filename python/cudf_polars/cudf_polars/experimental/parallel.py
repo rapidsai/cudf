@@ -24,6 +24,7 @@ from cudf_polars.experimental.dispatch import (
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import Any
 
     from distributed import Client
 
@@ -156,7 +157,10 @@ def task_graph(
         return graph, (key_name, 0)
 
 
-def get_client():
+# The true type signature for get_client() needs an overload. Not worth it.
+
+
+def get_client() -> Any:
     """Get appropriate Dask client or scheduler."""
     SerializerManager.register_serialize()
 

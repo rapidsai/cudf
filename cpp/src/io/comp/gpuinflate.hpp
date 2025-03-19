@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/comp.hpp"
+#include "common.hpp"
 
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -104,8 +104,6 @@ CUDF_EXPORT
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
                   device_span<compression_result> results,
-                  void* scratch,
-                  size_t scratch_size,
                   rmm::cuda_stream_view stream);
 
 /**
