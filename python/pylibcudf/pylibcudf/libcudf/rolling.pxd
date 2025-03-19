@@ -1,15 +1,16 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
-from pylibcudf.libcudf.aggregation cimport rolling_aggregation
+from pylibcudf.libcudf.aggregation cimport Kind, rolling_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport null_order, order, size_type
+from pylibcudf.libcudf.types cimport data_type, null_order, order, size_type
 
 
 cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
@@ -217,3 +218,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         size_type following_window,
         size_type min_periods,
         rolling_aggregation& agg) except +libcudf_exception_handler
+
+    bool is_valid_rolling_aggregation(
+        data_type source, Kind kind
+    ) noexcept

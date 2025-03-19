@@ -81,4 +81,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     input, preceding_window, following_window, min_periods, agg, stream, mr);
 }
 
+bool is_valid_rolling_aggregation(data_type source, aggregation::Kind kind)
+{
+  return detail::is_valid_rolling_aggregation(source, kind);
+}
 }  // namespace cudf
