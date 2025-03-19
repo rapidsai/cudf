@@ -159,18 +159,25 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
-      std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
-      source_tasks.reserve(info.filepaths().size());
-      for (auto const& path : info.filepaths()) {
-        source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-          [&] { return cudf::io::datasource::create(path, offset, max_size_estimate); }));
-      }
       std::vector<std::unique_ptr<cudf::io::datasource>> sources;
-      sources.reserve(source_tasks.size());
-      std::transform(
-        source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
-          return task.get();
-        });
+      sources.reserve(info.filepaths().size());
+      // Creating sources in a single thread is faster for a small number of sources
+      if (info.filepaths().size() >= 4) {
+        std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
+        source_tasks.reserve(info.filepaths().size());
+        for (auto const& path : info.filepaths()) {
+          source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+            [&] { return cudf::io::datasource::create(path, offset, max_size_estimate); }));
+        }
+        std::transform(
+          source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
+            return task.get();
+          });
+      } else {
+        for (auto const& filepath : info.filepaths()) {
+          sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
+        }
+      }
       return sources;
     }
     case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.host_buffers());
