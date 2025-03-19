@@ -362,9 +362,9 @@ cdef class Column:
 
         Notes
         -----
-        - If `obj` is a 2D CuPy array, the resulting column is a list column.
-        - NumPy conversion logic is not yet implemented.
-        - Multi-dimensional arrays (ndim > 2) are not supported.
+        If `obj` is a 2D CuPy array, the resulting column is a list
+        column. NumPy conversion logic is not yet implemented.
+        Multi-dimensional arrays (ndim > 2) are not supported.
         """
         if np_error is not None:
             raise np_error
