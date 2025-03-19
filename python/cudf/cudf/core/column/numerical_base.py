@@ -98,7 +98,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m4_numerator = ((self - miu) ** self.normalize_binop_value(4)).sum()
+        m4_numerator = ((self - miu) ** 4).sum()
         V = self.var()
 
         if V == 0:
@@ -123,7 +123,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m3 = (((self - miu) ** self.normalize_binop_value(3)).sum()) / n
+        m3 = (((self - miu) ** 3).sum()) / n
         m2 = self.var(ddof=0)
 
         if m2 == 0:
