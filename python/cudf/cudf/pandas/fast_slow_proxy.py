@@ -287,7 +287,6 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: str | None = None,
-    additional_attributes: Mapping[str, Any] | None = None,
 ) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -356,15 +355,6 @@ def make_intermediate_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
-
-    if additional_attributes is None:
-        additional_attributes = {}
-
-    for k, v in additional_attributes.items():
-        if v is _DELETE and k in cls_dict:
-            del cls_dict[k]
-        elif v is not _DELETE:
-            cls_dict[k] = v
 
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
