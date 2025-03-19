@@ -157,7 +157,7 @@ def replace(e: Expr, mapping: Mapping[Expr, Expr]) -> Expr:
     return mapper(e)
 
 
-def rename_agg(agg: Agg, new_name: str, *, new_options: Any = None):
+def rename_agg(agg: Expr, new_name: str, *, new_options: Any = None) -> Expr:
     """Modify the name of an aggregation expression."""
     return replace(agg, {agg: Agg(agg.dtype, new_name, new_options, *agg.children)})
 
@@ -200,7 +200,7 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
         return FusedExpr(expr.dtype, expr)
 
 
-def decompose_expr_graph(expr):
+def decompose_expr_graph(expr: Expr) -> Expr:
     """Transform an Expr into a graph of FusedExpr nodes."""
     mapper = CachingVisitor(_decompose)
     return mapper(expr)
