@@ -107,9 +107,9 @@ inner_join(cudf::table_view const& left_keys,
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(cudf::table_view const& left_keys,
-           cudf::table_view const& right_keys,
-           rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-           rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                      cudf::table_view const& right_keys,
+                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
