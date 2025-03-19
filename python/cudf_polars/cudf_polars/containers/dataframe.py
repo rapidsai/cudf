@@ -267,8 +267,6 @@ class DataFrame:
         appear in the same order as the original frame.
         """
         new = {c.name: c for c in columns}
-        print(new)
-        print(self.column_map)
         if replace_only and not self.column_names_set.issuperset(new.keys()):
             raise ValueError("Cannot replace with non-existing names")
         return type(self)((self.column_map | new).values())
