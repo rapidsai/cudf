@@ -28,6 +28,6 @@ def test_workflow():
     kmeans.fit(df[["Feature_2"]])  # Use only numerical data for clustering
 
     df["labels"] = kmeans.labels_
-    assert "ProxyEstimator" in str(type(kmeans))
+    assert any("cuml." in str(_) for _ in type(kmeans).mro())
     # confirm cupy array
     assert hasattr(df.labels.values, "__cuda_array_interface__")
