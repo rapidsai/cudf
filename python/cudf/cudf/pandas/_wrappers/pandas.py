@@ -1808,22 +1808,6 @@ ArrowExtensionArray = make_final_proxy_type(
 # not strictly part of the Pandas public API, but they do appear as
 # return types.
 
-# PlotAccessor = make_final_proxy_type(
-#     "PlotAccessor",
-#     _Unusable,
-#     pd.plotting._core.PlotAccessor,
-#     fast_to_slow=_Unusable(),
-#     slow_to_fast=_Unusable(),
-#     additional_attributes={
-#             "__array__": array_method,
-#             "__array_function__": array_function_method,
-#             "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-#             "__hash__": _FastSlowAttribute("__hash__"),
-#             "__call__":_FastSlowAttribute("__call__"),
-#         },
-
-# )
-
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.arrays.sparse.array.SparseArray,
     pd.core.indexes.frozen.FrozenList,
@@ -1841,15 +1825,6 @@ _PANDAS_OBJ_FINAL_TYPES = [
     pd.io.sql.SQLiteDatabase,
     pd.io.sql.PandasSQL,
 ]
-
-# GroupByPlot = make_intermediate_proxy_type(
-#     "GroupByPlot",
-#     _Unusable,
-#     pd.core.groupby.groupby.GroupByPlot,
-#     additional_attributes={
-#         "__call__":_FastSlowAttribute("__call__"),
-#     }
-# )
 
 _PANDAS_OBJ_INTERMEDIATE_TYPES = [
     pd.core.groupby.groupby.GroupByPlot,
