@@ -11,6 +11,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
+from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast
 from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
@@ -18,7 +19,7 @@ from cudf_polars.dsl.traversal import (
     reuse_if_unchanged,
     traversal,
 )
-from cudf_polars.experimental.base import get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.utils.config import ConfigOptions
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import ExprTransformer
 
 
@@ -126,7 +126,7 @@ def extract_partition_counts(
                     skip_fused_exprs=True,
                 )
                 expr_partition_counts[node] = expr_partition_counts[node.sub_expr]
-            elif isinstance(node, Agg):
+            elif isinstance(node, (Agg, Literal)):
                 # Assume all aggregations produce 1 partition
                 expr_partition_counts[node] = 1
             elif node.is_pointwise:
@@ -294,11 +294,13 @@ def shuffle_child(
     """
     graph: MutableMapping[Any, Any] = {}
 
-    if child_partition_info.partitioned_on == on:  # pragma: no cover
-        # TODO: Add test coverage for this.
+    if child_partition_info.partitioned_on == (
+        named_expr.reconstruct(on),
+    ):  # pragma: no cover
         # No shuffle necessary
         return child, graph
 
+    child_partition_info = PartitionInfo(count=child_partition_info.count)
     shuffle_on = (
         named_expr.reconstruct(
             FusedExpr(
@@ -466,12 +468,7 @@ def make_fusedexpr_graph(
             return make_agg_graph(
                 named_expr, expr_partition_counts, child, child_partition_info
             )
-        # elif isinstance(sub_expr, UnaryFunction) and sub_expr.name == "unique":
-        #     return make_unique_graph(
-        #         named_expr, expr_partition_counts, child, child_partition_info
-        #     )
         else:
-            # TODO: Implement "complex" aggs (e.g. var, std, etc)
             raise NotImplementedError(
                 f"{type(sub_expr)} not supported for multiple partitions."
             )
