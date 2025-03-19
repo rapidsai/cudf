@@ -2743,7 +2743,6 @@ def as_column(
         if isinstance(
             arbitrary, pd.Interval
         ) or cudf.api.types._is_categorical_dtype(dtype):
-            # No cudf.Scalar support yet
             return as_column(
                 pd.Series([arbitrary] * length),
                 nan_as_null=nan_as_null,
@@ -2758,22 +2757,20 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
-        if isinstance(arbitrary, pa.Scalar):
+        pa_scalar = pa.scalar(arbitrary)
+        if length == 0:
+            if dtype is None:
+                dtype = cudf_dtype_from_pa_type(pa_scalar.type)
+            return column_empty(length, dtype=dtype)
+        else:
             col = ColumnBase.from_pylibcudf(
                 plc.Column.from_scalar(
-                    pa_scalar_to_plc_scalar(arbitrary), length
+                    pa_scalar_to_plc_scalar(pa_scalar), length
                 )
             )
             if dtype is not None:
                 col = col.astype(dtype)
             return col
-        else:
-            arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-            if length == 0:
-                return column_empty(length, dtype=arbitrary.dtype)
-            else:
-                return ColumnBase.from_scalar(arbitrary, length)
-
     elif hasattr(arbitrary, "__array_interface__"):
         desc = arbitrary.__array_interface__
         check_invalid_array(desc["shape"], np.dtype(desc["typestr"]))
