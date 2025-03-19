@@ -42,12 +42,10 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
 rapids-logger "Run narwhals tests for cuDF Pandas"
 
 # test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
-# test_sumh_transformations: Fixed by https://github.com/rapidsai/cudf/pull/18259
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
-test_sumh_transformations or \
 test_maybe_convert_dtypes_pandas \
 "
 
