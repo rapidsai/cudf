@@ -36,6 +36,7 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 
@@ -43,14 +44,16 @@ namespace {
 struct row_comparator {
   row_comparator(table_device_view const lhs, table_device_view const rhs) : _lhs{lhs}, _rhs{rhs} {}
 
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
+  template <typename S, typename T>
+  __device__ bool operator()(S lhs_index, T rhs_index) const noexcept
   {
     table_device_view const* ptr_left_dview  = &_lhs;
     table_device_view const* ptr_right_dview = &_rhs;
     cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator(
       true, *ptr_left_dview, *ptr_right_dview);
 
-    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+    return comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index)) ==
+           weak_ordering::LESS;
   }
 
  private:
@@ -63,6 +66,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(table_view const& left,
                       table_view const& right,
+                      null_equality compare_nulls,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr)
 {
@@ -88,7 +92,7 @@ sort_merge_inner_join(table_view const& left,
   // naive: iterate through larger table and binary search on smaller table
   auto const larger_numrows  = larger.num_rows();
   auto const smaller_numrows = smaller.num_rows();
-  row_comparator comparator(*larger_dv_ptr, *smaller_dv_ptr);
+  row_comparator comp(*larger_dv_ptr, *smaller_dv_ptr);
   auto larger_it  = cudf::experimental::row::lhs_iterator(0);
   auto smaller_it = cudf::experimental::row::rhs_iterator(0);
 
@@ -99,7 +103,7 @@ sort_merge_inner_join(table_view const& left,
                       larger_it,
                       larger_it + larger_numrows,
                       match_counts.begin(),
-                      comparator);
+                      comp);
   auto match_counts_update_it = thrust::make_transform_output_iterator(
     match_counts.begin(), [] __device__(auto i) { return -i; });
   thrust::lower_bound(rmm::exec_policy(stream),
@@ -108,14 +112,25 @@ sort_merge_inner_join(table_view const& left,
                       larger_it,
                       larger_it + larger_numrows,
                       match_counts_update_it,
-                      comparator);
+                      comp);
 
   auto count_matches_it = thrust::make_transform_iterator(
-    match_counts.begin(), [] __device__(auto c) { return c ? 1 : 0; });
-  auto total_matches_it = match_counts.begin();
-  auto zip_matches_it   = thrust::make_zip_iterator(count_matches_it, total_matches_it);
+    match_counts.begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c ? 1 : 0; }));
+  auto zip_matches_it_begin =
+    thrust::make_zip_iterator(thrust::make_tuple(count_matches_it, match_counts.begin()));
+  auto zip_matches_it_end = thrust::make_zip_iterator(
+    thrust::make_tuple(count_matches_it + larger_numrows, match_counts.end()));
   auto const matches_tuple =
-    thrust::reduce(rmm::exec_policy(stream), zip_matches_it, zip_matches_it + larger_numrows);
+    thrust::reduce(rmm::exec_policy(stream),
+                   zip_matches_it_begin,
+                   zip_matches_it_end,
+                   thrust::make_tuple(0, 0),
+                   cuda::proclaim_return_type<thrust::tuple<size_type, size_type>>(
+                     [] __device__(auto const& a, auto const& b) {
+                       return thrust::make_tuple(thrust::get<0>(a) + thrust::get<0>(b),
+                                                 thrust::get<1>(a) + thrust::get<1>(b));
+                     }));
   auto const count_matches = thrust::get<0>(matches_tuple);
   auto const total_matches = thrust::get<1>(matches_tuple);
 
@@ -158,7 +173,7 @@ sort_merge_inner_join(table_view const& left,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       right_tabulate_it,
-                      comparator);
+                      comp);
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 left_indices.begin(),
                                 left_indices.end(),
