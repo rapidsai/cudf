@@ -1076,13 +1076,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def _wrap_binop_normalization(self, other):
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_na_like(other):
-            return cudf.Scalar(other, dtype=self.dtype)
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            # Return numpy scalar
-            other = other[()]
-        return self.normalize_binop_value(other)
+            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+        return NotImplemented
 
     def _scatter_by_slice(
         self,
@@ -1906,11 +1903,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def nans_to_nulls(self: Self) -> Self:
         """Convert NaN to NA."""
         return self
-
-    def normalize_binop_value(
-        self, other: ScalarLike
-    ) -> ColumnBase | cudf.Scalar:
-        raise NotImplementedError
 
     def _reduce(
         self,
@@ -2934,10 +2926,18 @@ def as_column(
                 type=cudf_dtype_to_pa_type(dtype),
                 from_pandas=from_pandas,
             )
-        except (pa.ArrowInvalid, pa.ArrowTypeError):
-            if not isinstance(dtype, np.dtype):
-                dtype = dtype.to_pandas()
-            arbitrary = pd.Series(arbitrary, dtype=dtype)
+        except (pa.ArrowInvalid, pa.ArrowTypeError) as err:
+            if err.args[0].startswith("Could not convert <NA>"):
+                # nan_as_null=False, but we want to allow pd.NA values
+                arbitrary = pa.array(
+                    arbitrary,
+                    type=cudf_dtype_to_pa_type(dtype),
+                    from_pandas=True,
+                )
+            else:
+                if not isinstance(dtype, np.dtype):
+                    dtype = dtype.to_pandas()
+                arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     else:
         for element in arbitrary:
