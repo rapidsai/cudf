@@ -1,6 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -13,6 +14,8 @@ from pylibcudf.libcudf.types cimport size_type
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .scalar cimport Scalar
+from .types cimport DataType
+
 
 __all__ = [
     "BoundedClosed",
@@ -445,3 +448,21 @@ cpdef Column rolling_window(
             )
 
     return Column.from_libcudf(move(result))
+
+
+cpdef bool is_valid_rolling_aggregation(DataType source, Aggregation agg):
+    """
+    Return if a rolling aggregation is supported for a given datatype.
+
+    Parameters
+    ----------
+    source
+        The type of the column the aggregation is being performed on.
+    agg
+        The aggregation.
+
+    Returns
+    -------
+    True if the aggregation is supported.
+    """
+    return cpp_rolling.is_valid_rolling_aggregation(source.c_obj, agg.kind())

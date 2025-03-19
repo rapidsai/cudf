@@ -646,5 +646,13 @@ std::unique_ptr<column> rolling_window(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Indicate if a rolling aggregation is supported for a source datatype.
+ *
+ * @param source Type of the column to perform the aggregation on.
+ * @param kind The kind of the aggregation.
+ * @returns true if the aggregation is supported.
+ */
+bool is_valid_rolling_aggregation(data_type source, aggregation::Kind kind);
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

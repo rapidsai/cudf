@@ -4,7 +4,7 @@ from pylibcudf.aggregation import Aggregation
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
-from pylibcudf.types import NullOrder, Order
+from pylibcudf.types import DataType, NullOrder, Order
 
 class Unbounded: ...
 class CurrentRow: ...
@@ -39,3 +39,6 @@ def rolling_window[WindowType: (Column, int)](
     min_periods: int,
     agg: Aggregation,
 ) -> Column: ...
+def is_valid_rolling_aggregation(
+    source: DataType, agg: Aggregation
+) -> bool: ...
