@@ -278,11 +278,9 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_nanos)
-
-        else:
-            return Column(
-                plc.datetime.extract_datetime_component(
-                    column.obj,
-                    self._COMPONENT_MAP[self.name],
-                )
+        return Column(
+            plc.datetime.extract_datetime_component(
+                column.obj,
+                self._COMPONENT_MAP[self.name],
             )
+        )
