@@ -8,7 +8,7 @@ import enum
 import math
 import random
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
@@ -19,10 +19,16 @@ from cudf_polars.experimental.dispatch import lower_ir_node
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    import numpy as np
+    import numpy.typing as npt
+
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
+
+    T = TypeVar("T", bound=npt.NBitBase)
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -97,7 +103,9 @@ class ScanPartitionPlan:
                 "executor_options.parquet_blocksize",
                 default=1024**3,
             )
-            stats = _sample_pq_statistics(ir)
+            # _sample_pq_statistics is generic over the bit-width of the array
+            # We don't care about that here, so we ignore it.
+            stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
             file_size = sum(float(stats[column]) for column in ir.schema)
             if file_size > 0:
                 if file_size > blocksize:
@@ -180,7 +188,7 @@ class SplitScan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: NamedExpr | None,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(f"Unhandled Scan type for file splitting: {typ}")
@@ -243,7 +251,7 @@ class SplitScan(IR):
         )
 
 
-def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
+def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     import numpy as np
     import pyarrow.dataset as pa_ds
 

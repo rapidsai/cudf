@@ -446,7 +446,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
 
         def _include_file_paths_column(include_file_paths: str | None, df: DataFrame):
@@ -588,7 +588,7 @@ class Scan(IR):
                 chk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
 
-                def slice_skip(tbl: plc.Table):
+                def slice_skip(tbl: plc.Table) -> plc.Table:
                     nonlocal rows_left_to_skip
                     if rows_left_to_skip > 0:
                         table_rows = tbl.num_rows()
@@ -888,7 +888,7 @@ class GroupBy(IR):
             self.agg_requests = tuple(agg_requests)
             self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle an AggInfos object."""
             return (type(self), (self.agg_requests,))
 
@@ -997,7 +997,7 @@ class GroupBy(IR):
         options: GroupbyOptions,
         agg_info_wrapper: AggInfos,
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         sorted = (
@@ -1096,7 +1096,7 @@ class ConditionalJoin(IR):
             self.predicate = predicate
             self.ast = to_ast(predicate)
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
             return (type(self), (self.predicate,))
 
@@ -1528,7 +1528,7 @@ class Distinct(IR):
         zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if subset is None:
             indices = list(range(df.num_columns))
