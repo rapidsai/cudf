@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 
-#include "detail/rolling.cuh"
+#include "detail/rolling.hpp"
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/rolling.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
