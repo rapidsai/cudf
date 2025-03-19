@@ -137,6 +137,8 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
+        Name.MonthStart,
+        Name.MonthEnd,
         *_ADDITIONAL_COMPONENTS,
     }
 
@@ -192,6 +194,29 @@ class TemporalFunction(Expr):
             )
             return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
 
+        if self.name is TemporalFunction.Name.MonthStart:
+            ends = plc.datetime.last_day_of_month(column.obj)
+            days_to_subtract = plc.datetime.days_in_month(column.obj)
+            # must subtract 1 to avoid rolling over to the previous month
+            days_to_subtract = plc.binaryop.binary_operation(
+                days_to_subtract,
+                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.binaryop.BinaryOperator.SUB,
+                plc.DataType(plc.TypeId.DURATION_DAYS),
+            )
+            result = plc.binaryop.binary_operation(
+                ends,
+                days_to_subtract,
+                plc.binaryop.BinaryOperator.SUB,
+                column.obj.type(),
+            )
+            return Column(result)
+        if self.name is TemporalFunction.Name.MonthEnd:
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.last_day_of_month(column.obj), column.obj.type()
+                )
+            )
         if self.name is TemporalFunction.Name.IsLeapYear:
             return Column(
                 plc.datetime.is_leap_year(column.obj),
@@ -218,7 +243,7 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_micros)
-        elif self.name is TemporalFunction.Name.Nanosecond:
+        if self.name is TemporalFunction.Name.Nanosecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )
@@ -255,62 +280,6 @@ class TemporalFunction(Expr):
             return Column(total_nanos)
 
         else:
-            if self.name is TemporalFunction.Name.Microsecond:
-                millis = plc.datetime.extract_datetime_component(
-                    column.obj, plc.datetime.DatetimeComponent.MILLISECOND
-                )
-                micros = plc.datetime.extract_datetime_component(
-                    column.obj, plc.datetime.DatetimeComponent.MICROSECOND
-                )
-                millis_as_micros = plc.binaryop.binary_operation(
-                    millis,
-                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
-                    plc.binaryop.BinaryOperator.MUL,
-                    plc.DataType(plc.TypeId.INT32),
-                )
-                total_micros = plc.binaryop.binary_operation(
-                    micros,
-                    millis_as_micros,
-                    plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT32),
-                )
-                return Column(total_micros)
-            elif self.name is TemporalFunction.Name.Nanosecond:
-                millis = plc.datetime.extract_datetime_component(
-                    column.obj, plc.datetime.DatetimeComponent.MILLISECOND
-                )
-                micros = plc.datetime.extract_datetime_component(
-                    column.obj, plc.datetime.DatetimeComponent.MICROSECOND
-                )
-                nanos = plc.datetime.extract_datetime_component(
-                    column.obj, plc.datetime.DatetimeComponent.NANOSECOND
-                )
-                millis_as_nanos = plc.binaryop.binary_operation(
-                    millis,
-                    plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
-                    plc.binaryop.BinaryOperator.MUL,
-                    plc.types.DataType(plc.types.TypeId.INT32),
-                )
-                micros_as_nanos = plc.binaryop.binary_operation(
-                    micros,
-                    plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
-                    plc.binaryop.BinaryOperator.MUL,
-                    plc.types.DataType(plc.types.TypeId.INT32),
-                )
-                total_nanos = plc.binaryop.binary_operation(
-                    nanos,
-                    millis_as_nanos,
-                    plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT32),
-                )
-                total_nanos = plc.binaryop.binary_operation(
-                    total_nanos,
-                    micros_as_nanos,
-                    plc.binaryop.BinaryOperator.ADD,
-                    plc.types.DataType(plc.types.TypeId.INT32),
-                )
-                return Column(total_nanos)
-
             return Column(
                 plc.datetime.extract_datetime_component(
                     column.obj,

@@ -1418,7 +1418,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                         device_span<parquet_column_device_view const> col_desc,
                         device_span<EncPage> pages,
-                        cudf::detail::hostdevice_vector<size_type>& comp_page_sizes,
+                        device_span<size_type const> comp_page_sizes,
                         statistics_chunk* page_stats,
                         statistics_chunk* frag_stats,
                         uint32_t num_columns,
@@ -1512,7 +1512,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   auto d_chunks = chunks.device_view();
   DecideCompression(d_chunks.flat_view(), stream);
   EncodePageHeaders(pages, comp_res, pages_stats, chunk_stats, stream);
-  GatherPages(d_chunks.flat_view(), pages, stream);
+  GatherPages(d_chunks.flat_view(), stream);
 
   // By now, the var_bytes has been calculated in InitPages, and the histograms in EncodePages.
   // EncodeColumnIndexes can encode the histograms in the ColumnIndex, and also sum up var_bytes
@@ -1965,14 +1965,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  cudf::detail::hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(chunks,
-                                                                               col_desc,
-                                                                               num_columns,
-                                                                               max_page_size_bytes,
-                                                                               max_page_size_rows,
-                                                                               write_v2_headers,
-                                                                               compression,
-                                                                               stream);
+  auto comp_page_sizes = init_page_sizes(chunks,
+                                         col_desc,
+                                         num_columns,
+                                         max_page_size_bytes,
+                                         max_page_size_rows,
+                                         write_v2_headers,
+                                         compression,
+                                         stream);
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
@@ -1981,47 +1981,34 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Initialize rowgroups to encode
-  size_type num_pages        = 0;
-  size_t max_uncomp_bfr_size = 0;
-  size_t max_comp_bfr_size   = 0;
-  size_t max_chunk_bfr_size  = 0;
-
+  size_type num_pages           = 0;
+  size_t max_uncomp_bfr_size    = 0;
+  size_t max_comp_bfr_size      = 0;
   size_t column_index_bfr_size  = 0;
   size_t def_histogram_bfr_size = 0;
   size_t rep_histogram_bfr_size = 0;
-  size_t rowgroup_size          = 0;
-  size_t comp_rowgroup_size     = 0;
-  for (size_type r = 0; r <= num_rowgroups; r++) {
-    if (r < num_rowgroups) {
-      for (int i = 0; i < num_columns; i++) {
-        EncColumnChunk* ck = &chunks[r][i];
-        ck->first_page     = num_pages;
-        num_pages += ck->num_pages;
-        rowgroup_size += ck->bfr_size;
-        comp_rowgroup_size += ck->compressed_size;
-        max_chunk_bfr_size =
-          std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
-        if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-          auto const& col = col_desc[ck->col_desc_id];
-          column_index_bfr_size += column_index_buffer_size(ck, col, column_index_truncate_length);
+  for (size_type r = 0; r < num_rowgroups; r++) {
+    for (int i = 0; i < num_columns; i++) {
+      EncColumnChunk* ck = &chunks[r][i];
+      ck->first_page     = num_pages;
+      num_pages += ck->num_pages;
+      max_uncomp_bfr_size += ck->bfr_size;
+      max_comp_bfr_size += ck->compressed_size;
+      if (stats_granularity == statistics_freq::STATISTICS_COLUMN) {
+        auto const& col = col_desc[ck->col_desc_id];
+        column_index_bfr_size += column_index_buffer_size(ck, col, column_index_truncate_length);
 
-          // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
-          // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
-          auto const num_histograms = ck->num_data_pages() + 1;
+        // SizeStatistics are on the ColumnIndex, so only need to allocate the histograms data
+        // if we're doing page-level indexes. add 1 to num_pages for per-chunk histograms.
+        auto const num_histograms = ck->num_data_pages() + 1;
 
-          if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
-            def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
-          }
-          if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
-            rep_histogram_bfr_size += (col.max_rep_level + 1) * num_histograms;
-          }
+        if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
+          def_histogram_bfr_size += (col.max_def_level + 1) * num_histograms;
+        }
+        if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
+          rep_histogram_bfr_size += (col.max_rep_level + 1) * num_histograms;
         }
       }
-    }
-    // write bfr sizes if this is the last rowgroup
-    if (r == num_rowgroups) {
-      max_uncomp_bfr_size = rowgroup_size;
-      max_comp_bfr_size   = comp_rowgroup_size;
     }
   }
 
