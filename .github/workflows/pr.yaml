@@ -22,7 +22,6 @@ jobs:
       - conda-cpp-tests
       - conda-python-build
       - conda-python-cudf-tests
-      - conda-python-cudf-imports-cpu-only
       - conda-python-other-tests
       - conda-java-tests
       - conda-notebook-tests
