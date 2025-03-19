@@ -16,12 +16,14 @@
 
 #include "comp.hpp"
 
+#include "common_internal.hpp"
 #include "gpuinflate.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "nvcomp_adapter.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -37,26 +39,6 @@
 namespace cudf::io::detail {
 
 namespace {
-
-auto& h_comp_pool()
-{
-  static const std::size_t default_pool_size = std::min(32u, std::thread::hardware_concurrency());
-  static const std::size_t pool_size =
-    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", default_pool_size);
-  static BS::thread_pool pool(pool_size);
-  return pool;
-}
-
-std::optional<nvcomp::compression_type> to_nvcomp_compression(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
-    case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
-    case compression_type::LZ4: return nvcomp::compression_type::LZ4;
-    case compression_type::ZLIB: return nvcomp::compression_type::DEFLATE;
-    default: return std::nullopt;
-  }
-}
 
 /**
  * @brief GZIP host compressor (includes header)
@@ -358,8 +340,9 @@ void host_compress(compression_type compression,
   });
 
   std::vector<std::future<size_t>> tasks;
-  auto const num_streams = std::min<std::size_t>(num_chunks, h_comp_pool().get_thread_count());
-  auto const streams     = cudf::detail::fork_streams(stream, num_streams);
+  auto const num_streams =
+    std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
+  auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
@@ -371,7 +354,7 @@ void host_compress(compression_type compression,
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
       return h_out.size();
     };
-    tasks.emplace_back(h_comp_pool().submit_task(std::move(task)));
+    tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
 
   for (auto i = 0ul; i < num_chunks; ++i) {
@@ -395,6 +378,7 @@ void host_compress(compression_type compression,
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
+    case compression_type::GZIP:
     case compression_type::LZ4:
     case compression_type::ZLIB:
     case compression_type::ZSTD: return not nvcomp::is_compression_disabled(nvcomp_type.value());
@@ -409,9 +393,8 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
-  CUDF_EXPECTS(
-    not host_compression_supported(compression) or device_compression_supported(compression),
-    "Unsupported compression type");
+  CUDF_EXPECTS(host_compression_supported(compression) or device_compression_supported(compression),
+               "Unsupported compression type: " + compression_type_name(compression));
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
   // If both host and device compression are supported, use the host if the env var is set
@@ -447,7 +430,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   if (auto nvcomp_type = to_nvcomp_compression(compression); nvcomp_type.has_value()) {
     return nvcomp::compress_max_output_chunk_size(*nvcomp_type, uncompressed_size);
   }
-  CUDF_FAIL("Unsupported compression type");
+  CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
 }
 
 std::vector<std::uint8_t> compress(compression_type compression,
@@ -459,7 +442,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return snappy::compress(src);
     case compression_type::ZSTD: return compress_zstd(src);
-    default: CUDF_FAIL("Unsupported compression type");
+    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
 
