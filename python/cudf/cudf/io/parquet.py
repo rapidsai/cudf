@@ -1266,17 +1266,8 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    tbl_w_meta.column_names(include_children=False),
-                    tbl_w_meta.columns,
-                    strict=True,
-                )
-            }
-
-            df = cudf.DataFrame._from_data(data)
-
+            df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
+            # TODO Don't need to pass column_names and child_names
             df = _process_metadata(
                 df,
                 tbl_w_meta.column_names(include_children=False),
