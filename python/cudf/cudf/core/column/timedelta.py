@@ -289,11 +289,10 @@ class TimeDeltaColumn(ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
-        elif is_scalar(other) or (
-            isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0
-        ):
-            if isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
-                other = other[()]
+        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+            other = other[()]
+
+        if is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
             elif isinstance(other, pd.Timedelta):

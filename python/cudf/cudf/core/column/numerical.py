@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, cast
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -287,7 +288,10 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, type(self)):
                 return NotImplemented
             return other
-        elif is_scalar(other):
+        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+            other = other[()]
+
+        if is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
             if not isinstance(other, (int, float, complex)):
