@@ -338,7 +338,6 @@ cdef class Column:
             []
         )
 
-    @singledispatchmethod
     @classmethod
     def from_ndarray(cls, obj):
         """
@@ -362,10 +361,15 @@ cdef class Column:
 
         Notes
         -----
-        If `obj` is a 2D CuPy array, the resulting column is a list
-        column. NumPy conversion logic is not yet implemented.
+        If `obj` is a 2D CuPy array, the resulting column is a list column.
+        NumPy conversion logic is not yet implemented.
         Multi-dimensional arrays (ndim > 2) are not supported.
         """
+        return cls._from_ndarray(obj)
+
+    @singledispatchmethod
+    @classmethod
+    def _from_ndarray(cls, obj):
         if np_error is not None:
             raise np_error
         if cp_error is not None:
@@ -381,7 +385,7 @@ cdef class Column:
                 "a numpy object is not yet implemented."
             )
 
-        @from_ndarray.register(np.ndarray)
+        @_from_ndarray.register(np.ndarray)
         @classmethod
         def _(cls, obj):
             return cls.from_numpy_array(obj)
@@ -427,7 +431,7 @@ cdef class Column:
                 children=[offsets_col, data_col],
             )
 
-        @from_ndarray.register(cp.ndarray)
+        @_from_ndarray.register(cp.ndarray)
         @classmethod
         def _(cls, obj):
             ndim = len(obj.shape)
