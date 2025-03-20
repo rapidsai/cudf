@@ -46,21 +46,13 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         string name
         vector[column_metadata] children_meta
 
-    cdef unique_ptr[table] from_arrow_stream(
-        ArrowArrayStream* input
-    ) except +libcudf_exception_handler
-    cdef unique_ptr[column] from_arrow_column(
-        const ArrowSchema* schema,
-        const ArrowArray* input
-    ) except +libcudf_exception_handler
-
 
 cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
         nogil:
     cdef cppclass arrow_column:
         arrow_column(
-            ArrowSchema* schema,
-            ArrowArray* array
+            ArrowSchema&& schema,
+            ArrowArray&& array
         ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
