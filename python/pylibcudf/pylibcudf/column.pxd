@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -35,7 +35,10 @@ cdef class Column:
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
 
     @staticmethod
-    cdef Column from_column_view(const column_view& libcudf_col, Column owner)
+    cdef Column from_column_view(const column_view& cv, Column owner)
+
+    @staticmethod
+    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
