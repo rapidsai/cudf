@@ -988,6 +988,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - dask-cuda==25.6.*,>=0.0.0a0
           - *numpy
   depends_on_libcudf:
     common:

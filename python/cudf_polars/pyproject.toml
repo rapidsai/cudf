@@ -35,6 +35,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
+    "dask-cuda==25.6.*,>=0.0.0a0",
     "numpy>=1.23,<3.0a0",
     "pytest-cov",
     "pytest-xdist",
