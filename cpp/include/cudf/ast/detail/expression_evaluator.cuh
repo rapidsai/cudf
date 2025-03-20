@@ -356,7 +356,7 @@ struct expression_evaluator {
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     auto const typed_input =
-      resolve_input<Input>(input, thread_intermediate_storage, input_row_index);
+      resolve_input<Input>(input, thread_intermediate_storage, input_row_index, input_row_index);
     ast_operator_dispatcher(op,
                             unary_expression_output_handler<Input>{},
                             output_object,

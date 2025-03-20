@@ -6,7 +6,7 @@ import itertools
 import re
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -6185,14 +6186,13 @@ class StringColumn(column.ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def normalize_binop_value(self, other) -> column.ColumnBase | cudf.Scalar:
-        if (
-            isinstance(other, (column.ColumnBase, cudf.Scalar))
-            and other.dtype == "object"
-        ):
-            return other
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_scalar(other):
-            return cudf.Scalar(other)
+            if is_na_like(other):
+                return super()._normalize_binop_operand(other)
+            return pa.scalar(other)
+        elif isinstance(other, type(self)):
+            return other
         return NotImplemented
 
     def _binaryop(
@@ -6222,35 +6222,29 @@ class StringColumn(column.ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
 
-        if isinstance(other, (StringColumn, cudf.Scalar)):
-            if isinstance(other, cudf.Scalar) and other.dtype != "O":
-                if op in {
-                    "__eq__",
-                    "__ne__",
-                }:
+        if isinstance(other, (StringColumn, pa.Scalar)):
+            if isinstance(other, pa.Scalar) and not pa.types.is_string(
+                other.type
+            ):
+                if op in {"__eq__", "__ne__"}:
                     return column.as_column(
-                        op == "__ne__", length=len(self), dtype="bool"
+                        op == "__ne__",
+                        length=len(self),
+                        dtype=np.dtype(np.bool_),
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
 
             if op == "__add__":
-                if isinstance(other, cudf.Scalar):
+                if isinstance(other, pa.Scalar):
                     other = cast(
                         StringColumn,
-                        column.as_column(
-                            other, length=len(self), dtype="object"
-                        ),
+                        column.as_column(other, length=len(self)),
                     )
-
-                # Explicit types are necessary because mypy infers ColumnBase
-                # rather than StringColumn and sometimes forgets Scalar.
-                lhs: cudf.Scalar | StringColumn
-                rhs: cudf.Scalar | StringColumn
                 lhs, rhs = (other, self) if reflect else (self, other)
 
                 with acquire_spill_lock():
@@ -6277,8 +6271,12 @@ class StringColumn(column.ColumnBase):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
+                if isinstance(other, pa.Scalar):
+                    other = pa_scalar_to_plc_scalar(other)
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype="bool")
+                return binaryop.binaryop(
+                    lhs=lhs, rhs=rhs, op=op, dtype=np.dtype(np.bool_)
+                )
         return NotImplemented
 
     @copy_docstring(ColumnBase.view)
