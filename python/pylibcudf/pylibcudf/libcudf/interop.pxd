@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -53,6 +53,22 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         const ArrowSchema* schema,
         const ArrowArray* input
     ) except +libcudf_exception_handler
+
+
+cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
+        nogil:
+    cdef cppclass arrow_column:
+        arrow_column(
+            ArrowSchema* schema,
+            ArrowArray* array
+        ) except +libcudf_exception_handler
+        column_view view() except +libcudf_exception_handler
+
+    cdef cppclass arrow_table:
+        arrow_table(
+            ArrowArrayStream&& stream,
+            ) except +libcudf_exception_handler
+        table_view view() except +libcudf_exception_handler
 
 
 cdef extern from *:

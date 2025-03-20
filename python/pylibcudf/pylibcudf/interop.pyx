@@ -1,4 +1,6 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+
+from cython.operator cimport dereference
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
@@ -7,7 +9,7 @@ from cpython.pycapsule cimport (
     PyCapsule_SetName,
 )
 from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -16,15 +18,14 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
-from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
     ArrowSchema,
     DLManagedTensor,
+    arrow_table,
+    arrow_column,
     column_metadata,
-    from_arrow_column as cpp_from_arrow_column,
-    from_arrow_stream as cpp_from_arrow_stream,
     from_dlpack as cpp_from_dlpack,
     to_arrow_host_raw,
     to_arrow_schema_raw,
@@ -135,6 +136,14 @@ def _from_arrow_datatype(pyarrow_object):
             raise TypeError(f"Unable to convert {pyarrow_object} to cudf datatype")
 
 
+cdef class _ArrowColumnHolder:
+    cdef unique_ptr[arrow_column] col
+
+
+cdef class _ArrowTableHolder:
+    cdef unique_ptr[arrow_table] tbl
+
+
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
@@ -144,12 +153,18 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
         <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
     )
 
-    cdef unique_ptr[table] c_result
-    with nogil:
-        # The libcudf function here will release the stream.
-        c_result = cpp_from_arrow_stream(c_stream)
+    cdef _ArrowTableHolder result = _ArrowTableHolder()
+    cdef unique_ptr[arrow_table] c_result
 
-    return Table.from_libcudf(move(c_result))
+    with nogil:
+        c_result = make_unique[arrow_table](move(dereference(c_stream)))
+        result.tbl.swap(c_result)
+
+    # The capsule destructor should release automatically for us, but we choose to do it
+    # explicitly here for clarity.
+    c_stream.release(c_stream)
+
+    return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
 
 
 @from_arrow.register(pa.Scalar)
@@ -180,16 +195,20 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
         <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
     )
 
-    cdef unique_ptr[column] c_result
+    cdef _ArrowColumnHolder result = _ArrowColumnHolder()
+    cdef unique_ptr[arrow_column] c_result
     with nogil:
-        c_result = cpp_from_arrow_column(c_schema, c_array)
+        c_result = make_unique[arrow_column](
+            move(dereference(c_schema)), move(dereference(c_array))
+        )
+        result.col.swap(c_result)
 
     # The capsule destructors should release automatically for us, but we
     # choose to do it explicitly here for clarity.
     c_schema.release(c_schema)
     c_array.release(c_array)
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
 
 
 @singledispatch
