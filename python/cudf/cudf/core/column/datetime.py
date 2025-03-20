@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import calendar
-import datetime
 import functools
 import locale
 import re
@@ -11,6 +10,7 @@ import warnings
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -19,6 +19,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop
 from cudf.core._internals.timezones import (
@@ -33,11 +34,13 @@ from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     _get_base_dtype,
+    cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
 )
 from cudf.utils.utils import (
     _all_bools_with_nulls,
     _datetime_timedelta_find_and_replace,
+    is_na_like,
 )
 
 if TYPE_CHECKING:
@@ -46,8 +49,6 @@ if TYPE_CHECKING:
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
-        DatetimeLikeScalar,
-        Dtype,
         DtypeObj,
         ScalarLike,
     )
@@ -179,29 +180,14 @@ def infer_format(element: str, **kwargs) -> str:
     return fmt
 
 
-def _get_time_unit(obj: ColumnBinaryOperand) -> str:
-    if isinstance(
-        obj,
-        (
-            cudf.core.column.datetime.DatetimeColumn,
-            cudf.core.column.timedelta.TimeDeltaColumn,
-        ),
-    ):
-        return obj.time_unit
-
-    time_unit, _ = np.datetime_data(obj.dtype)
-    return time_unit
-
-
-def _resolve_mixed_dtypes(
-    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
-) -> Dtype:
-    units = ["s", "ms", "us", "ns"]
-    lhs_time_unit = _get_time_unit(lhs)
-    lhs_unit = units.index(lhs_time_unit)
-    rhs_time_unit = _get_time_unit(rhs)
-    rhs_unit = units.index(rhs_time_unit)
-    return np.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+def _resolve_binop_resolution(
+    left_unit: Literal["s", "ms", "us", "ns"],
+    right_unit: Literal["s", "ms", "us", "ns"],
+) -> Literal["s", "ms", "us", "ns"]:
+    units: list[Literal["s", "ms", "us", "ns"]] = ["s", "ms", "us", "ns"]
+    left_idx = units.index(left_unit)
+    right_idx = units.index(right_unit)
+    return units[max(left_idx, right_idx)]
 
 
 class DatetimeColumn(column.ColumnBase):
@@ -540,65 +526,55 @@ class DatetimeColumn(column.ColumnBase):
             )
         }
 
-    def normalize_binop_value(  # type: ignore[override]
-        self, other: DatetimeLikeScalar
-    ) -> cudf.Scalar | cudf.DateOffset | ColumnBase:
-        if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
+        if isinstance(other, (ColumnBase, cudf.DateOffset)):
             return other
+        elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
+            other = other[()]
 
-        tz_error_msg = (
-            "Cannot perform binary operation on timezone-naive columns"
-            " and timezone-aware timestamps."
-        )
-        if isinstance(other, pd.Timestamp):
-            if other.tz is not None:
-                raise NotImplementedError(tz_error_msg)
-            other = other.to_datetime64()
-        elif isinstance(other, pd.Timedelta):
-            other = other.to_timedelta64()
-        elif isinstance(other, datetime.datetime):
-            if other.tzinfo is not None:
-                raise NotImplementedError(tz_error_msg)
-            other = np.datetime64(other)
-        elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-
-        if isinstance(other, np.datetime64):
-            other_time_unit = np.datetime_data(other.dtype)[0]
-            if np.isnat(other):
-                if other_time_unit not in {"s", "ms", "ns", "us"}:
-                    other_time_unit = "ns"
-
-                return cudf.Scalar(
-                    None, dtype=f"datetime64[{other_time_unit}]"
-                )
-            if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype(self.dtype)
-
-            return cudf.Scalar(other)
-        elif isinstance(other, np.timedelta64):
-            other_time_unit = np.datetime_data(other.dtype)[0]
-            if np.isnat(other):
-                return cudf.Scalar(
-                    None,
-                    dtype="timedelta64[ns]"
-                    if other_time_unit not in {"s", "ms", "ns", "us"}
-                    else other.dtype,
-                )
-
-            if other_time_unit not in {"s", "ms", "ns", "us"}:
-                other = other.astype(
-                    np.dtype(f"timedelta64[{self.time_unit}]")
-                )
-
-            return cudf.Scalar(other)
-        elif isinstance(other, str):
-            try:
-                return cudf.Scalar(other, dtype=self.dtype)
-            except ValueError:
-                pass
-
-        return NotImplemented
+        if is_scalar(other):
+            if is_na_like(other):
+                return super()._normalize_binop_operand(other)
+            elif isinstance(other, pd.Timestamp):
+                if other.tz is not None:
+                    raise NotImplementedError(
+                        "Binary operations with timezone aware operands is not supported."
+                    )
+                other = other.to_numpy()
+            elif isinstance(other, str):
+                try:
+                    other = pd.Timestamp(other)
+                except ValueError:
+                    return NotImplemented
+            elif isinstance(other, (np.datetime64, np.timedelta64)):
+                unit = np.datetime_data(other)[0]
+                if unit not in {"s", "ms", "us", "ns"}:
+                    if np.isnat(other):
+                        # TODO: Use self.time_unit to not modify the result resolution?
+                        to_unit = "ns"
+                    else:
+                        to_unit = self.time_unit
+                    if np.isnat(other):
+                        # Workaround for https://github.com/numpy/numpy/issues/28496
+                        # Once fixed, can always use the astype below
+                        other = type(other)("NaT", to_unit)
+                    else:
+                        other = other.astype(
+                            np.dtype(f"{other.dtype.kind}8[{to_unit}]")
+                        )
+            scalar = pa.scalar(other)
+            if pa.types.is_timestamp(scalar.type):
+                if scalar.type.tz is not None:
+                    raise NotImplementedError(
+                        "Binary operations with timezone aware operands is not supported."
+                    )
+                return scalar
+            elif pa.types.is_duration(scalar.type):
+                return scalar
+            else:
+                return NotImplemented
+        else:
+            return NotImplemented
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
@@ -780,17 +756,36 @@ class DatetimeColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
-        if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect)
+        elif isinstance(other, cudf.DateOffset):
+            return other._datetime_binop(self, op, reflect=reflect)  # type: ignore[attr-defined]
 
-        # We check this on `other` before reflection since we already know the
-        # dtype of `self`.
-        other_is_timedelta = other.dtype.kind == "m"
-        other_is_datetime64 = other.dtype.kind == "M"
-        lhs, rhs = (other, self) if reflect else (self, other)
+        if reflect:
+            lhs = other
+            rhs = self
+            if isinstance(lhs, pa.Scalar):
+                lhs_unit = lhs.type.unit
+                other_dtype = cudf_dtype_from_pa_type(lhs.type)
+            else:
+                lhs_unit = lhs.time_unit  # type: ignore[union-attr]
+                other_dtype = lhs.dtype
+            rhs_unit = rhs.time_unit
+        else:
+            lhs = self
+            rhs = other  # type: ignore[assignment]
+            if isinstance(rhs, pa.Scalar):
+                rhs_unit = rhs.type.unit
+                other_dtype = cudf_dtype_from_pa_type(rhs.type)
+            else:
+                rhs_unit = rhs.time_unit
+                other_dtype = rhs.dtype
+            lhs_unit = lhs.time_unit
+
+        other_is_timedelta = other_dtype.kind == "m"
+        other_is_datetime64 = other_dtype.kind == "M"
+
         out_dtype = None
 
         if (
@@ -809,16 +804,22 @@ class DatetimeColumn(column.ColumnBase):
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
             # `timedelta + datetime`. Both result in DatetimeColumns.
-            out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+            out_dtype = np.dtype(
+                f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+            )
         elif op == "__sub__":
             # Subtracting a datetime from a datetime results in a timedelta.
             if other_is_datetime64:
-                out_dtype = _resolve_mixed_dtypes(lhs, rhs, "timedelta64")
+                out_dtype = np.dtype(
+                    f"timedelta64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                )
             # We can subtract a timedelta from a datetime, but not vice versa.
             # Not only is subtraction antisymmetric (as is normal), it is only
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
-                out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+                out_dtype = np.dtype(
+                    f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                )
         elif op in {
             "__eq__",
             "__ne__",
@@ -839,6 +840,11 @@ class DatetimeColumn(column.ColumnBase):
 
         if out_dtype is None:
             return NotImplemented
+
+        if isinstance(lhs, pa.Scalar):
+            lhs = pa_scalar_to_plc_scalar(lhs)
+        elif isinstance(rhs, pa.Scalar):
+            rhs = pa_scalar_to_plc_scalar(rhs)
 
         result_col = binaryop.binaryop(lhs, rhs, op, out_dtype)
         if out_dtype.kind != "b" and op == "__add__":
