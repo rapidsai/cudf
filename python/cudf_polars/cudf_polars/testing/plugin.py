@@ -203,6 +203,10 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
+    # Duckdb is not installed as a dependency. TODO: Check if we can remove in polars 1.25.2
+    "tests/translate/from_native_test.py::test_series_only_sqlframe": "missing duckdb installation",
+    "tests/translate/from_native_test.py::test_eager_only_sqlframe[False-context0]": "missing duckdb installation",
+    "tests/translate/from_native_test.py::test_eager_only_sqlframe[True-context1]": "missing duckdb installation",
 }
 
 
