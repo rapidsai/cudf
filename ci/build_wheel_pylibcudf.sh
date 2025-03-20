@@ -5,6 +5,8 @@ set -euo pipefail
 
 package_dir="python/pylibcudf"
 
+wheel_dir=${RAPIDS_WHEEL_BLD_OUTPUT_DIR}
+
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Downloads libcudf wheel from this current build,
@@ -23,9 +25,9 @@ python -m auditwheel repair \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
-    -w ${package_dir}/final_dist \
+    -w "${wheel_dir}" \
     ${package_dir}/dist/*
 
-./ci/validate_wheel.sh ${package_dir} final_dist
+./ci/validate_wheel.sh "${package_dir}" "${wheel_dir}"
 
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python "${wheel_dir}"
