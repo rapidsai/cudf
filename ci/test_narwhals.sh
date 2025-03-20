@@ -43,7 +43,7 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -k "not ( \
-        ${TEST_THAT_NEED_NARHWHALS_FIX} \
+        ${TEST_THAT_NEED_NARWHALS_FIX} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
