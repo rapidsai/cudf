@@ -33,7 +33,7 @@ python -m pytest \
 
 # Narwhals needs to allow for tests to be run for any backend without needing the other
 # backends installed. See https://github.com/rapidsai/cudf/pull/18297#issuecomment-2730310885
-TEST_THAT_NEED_NARHWHALS_FIX=" \
+TEST_THAT_NEED_NARWHALS_FIX=" \
 test_eager_only_sqlframe or \
 test_series_only_sqlframe \
 "
