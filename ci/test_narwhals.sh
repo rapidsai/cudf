@@ -76,7 +76,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
-        ${TEST_THAT_NEED_NARHWHALS_FIX} \
+        ${TEST_THAT_NEED_NARWHALS_FIX} \
     )" \
     --numprocesses=8 \
     --dist=worksteal
