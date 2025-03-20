@@ -36,14 +36,18 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 from_cudf.__doc__ = textwrap.dedent(
     """
-        Create a :class:`.DataFrame` from a :class:`cudf.DataFrame`.
+        Create a :class:`dask.dataframe.DataFrame` from a :class:`cudf.DataFrame`.
 
         This function is a thin wrapper around
         :func:`dask.dataframe.from_pandas`, accepting the same
         arguments (described below) excepting that it operates on cuDF
         rather than pandas objects.\n
         """
-) + textwrap.dedent(dd.from_pandas.__doc__)
+) + (
+    textwrap.dedent(dd.from_pandas.__doc__)
+    .replace("from_array", "dask.dataframe.from_array")
+    .replace("read_csv", "dask.dataframe.read_csv")
+)
 
 
 def _deprecated_api(old_api, new_api=None, rec=None):

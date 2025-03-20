@@ -9,7 +9,6 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -21,12 +20,14 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    _BaseDtype,
 )
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
-    get_allowed_combinations_for_operator,
+    find_common_type,
     to_cudf_compatible_scalar,
 )
 
@@ -34,6 +35,158 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import Dtype, ScalarLike
+
+
+# Type dispatch loops similar to what are found in `np.add.types`
+# In NumPy, whether or not an op can be performed between two
+# operands is determined by checking to see if NumPy has a c/c++
+# loop specifically for adding those two operands built in. If
+# not it will search lists like these for a loop for types that
+# the operands can be safely cast to. These are those lookups,
+# modified slightly for cuDF's rules
+_ADD_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mMM",
+    "MmM",
+    "mmm",
+    "LMM",
+    "MLM",
+    "Lmm",
+    "mLm",
+]
+_SUB_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "MMm",
+    "mmm",
+    "MmM",
+    "MLM",
+    "mLm",
+    "Lmm",
+]
+_MUL_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mLm",
+    "Lmm",
+    "mlm",
+    "lmm",
+]
+_FLOORDIV_TYPES = [
+    "bbb",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mqm",
+    "mdm",
+    "mmq",
+]
+_TRUEDIV_TYPES = ["fff", "ddd", "mqm", "mmd", "mLm"]
+_MOD_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+    "mmm",
+]
+_POW_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+]
+
+
+def get_allowed_combinations_for_operator(
+    dtype_l: np.dtype, dtype_r: np.dtype, op: str
+) -> np.dtype:
+    error = TypeError(
+        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
+    )
+
+    to_numpy_ops = {
+        "__add__": _ADD_TYPES,
+        "__radd__": _ADD_TYPES,
+        "__sub__": _SUB_TYPES,
+        "__rsub__": _SUB_TYPES,
+        "__mul__": _MUL_TYPES,
+        "__rmul__": _MUL_TYPES,
+        "__floordiv__": _FLOORDIV_TYPES,
+        "__rfloordiv__": _FLOORDIV_TYPES,
+        "__truediv__": _TRUEDIV_TYPES,
+        "__rtruediv__": _TRUEDIV_TYPES,
+        "__mod__": _MOD_TYPES,
+        "__rmod__": _MOD_TYPES,
+        "__pow__": _POW_TYPES,
+        "__rpow__": _POW_TYPES,
+    }
+    allowed = to_numpy_ops.get(op, op)
+
+    # special rules for string
+    if dtype_l == "object" or dtype_r == "object":
+        if (dtype_l == dtype_r == "object") and op == "__add__":
+            return CUDF_STRING_DTYPE
+        else:
+            raise error
+
+    # Check if we can directly operate
+
+    for valid_combo in allowed:
+        ltype, rtype, outtype = valid_combo  # type: ignore[misc]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]  # noqa: TID251
+            dtype_r.char,
+            rtype,  # type: ignore[has-type]
+        ):
+            return np.dtype(outtype)  # type: ignore[has-type]
+
+    raise error
 
 
 def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
@@ -111,8 +264,10 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         else:
             dtype = value.dtype
 
-    if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+    if not isinstance(dtype, (np.dtype, _BaseDtype)):
         dtype = cudf.dtype(dtype)
+    elif dtype.kind == "U":
+        dtype = CUDF_STRING_DTYPE
 
     if not valid:
         value = NaT if dtype.kind in "mM" else NA
@@ -191,7 +346,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     if isinstance(dtype, cudf.core.dtypes._BaseDtype):
         pa_type = dtype.to_arrow()
-    elif pd.api.types.is_string_dtype(dtype):
+    elif dtype == CUDF_STRING_DTYPE:
         # Have to manually convert object types, which we use internally
         # for strings but pyarrow only supports as unicode 'U'
         pa_type = pa.string()
@@ -304,18 +459,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-    0    2
-    1    3
-    2    4
-    dtype: int64
-    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-    >>> slr = cudf.Scalar(10, dtype='uint8')
-    >>> df - slr
-       a    b
-    0 -9 -5.5
-    1 -8 -4.5
-    2 -7 -3.5
 
     Parameters
     ----------
@@ -505,7 +648,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
                     return np.dtype(f"m8[{res}]")
-                return np.result_type(self.dtype, other.dtype)
+                return find_common_type((self.dtype, other.dtype))
 
         return out_dtype
 

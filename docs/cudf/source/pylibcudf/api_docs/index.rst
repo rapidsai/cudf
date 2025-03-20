@@ -13,6 +13,7 @@ This page provides API documentation for pylibcudf.
     column
     column_factories
     concatenate
+    contiguous_split
     copying
     datetime
     expressions
