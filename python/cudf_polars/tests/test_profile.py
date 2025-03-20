@@ -2,10 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 from polars.testing import assert_frame_equal
 
+from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_125, reason="Profiling with GPU engine requires polars>=1.25"
+)
 def test_profile_basic():
     df = pl.LazyFrame(
         {

@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_ir_translation_raises
+from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_125, reason="This test is written for polars>=1.25"
+)
 def test_python_scan():
     df = pl.DataFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int8())})
 

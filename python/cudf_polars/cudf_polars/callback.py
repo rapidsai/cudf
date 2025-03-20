@@ -22,6 +22,7 @@ from rmm._cuda import gpu
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.timer import Timer
+from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -303,13 +304,30 @@ def execute_with_cudf(
             if raise_on_fail:
                 raise exception
         else:
-            nt.set_udf(
-                partial(
-                    _callback,
-                    ir,
-                    device=device,
-                    memory_resource=memory_resource,
-                    executor=executor,
-                    timer=timer,
+            if POLARS_VERSION_LT_125:  # pragma: no cover
+                nt.set_udf(
+                    partial(
+                        _callback,
+                        ir,
+                        should_time=False,
+                        device=device,
+                        memory_resource=memory_resource,
+                        executor=executor,
+                        timer=None,
+                    )
                 )
-            )
+            else:
+                nt.set_udf(
+                    partial(
+                        _callback,
+                        ir,
+                        device=device,
+                        memory_resource=memory_resource,
+                        executor=executor,
+                        timer=timer,
+                    )
+                )
+
+
+if POLARS_VERSION_LT_125:  # pragma: no cover
+    execute_with_cudf = partial(execute_with_cudf, duration_since_start=None)
