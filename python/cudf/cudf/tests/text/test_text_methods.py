@@ -1119,16 +1119,7 @@ def test_resolve_duplicates_pair(duplicate_input):
     text = duplicate_input
     text1 = text[0:3]
     text2 = text[3:]
-    # text1 = (
-    #     " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    "
-    #     "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   "
-    #     "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         "
-    # )
-    # text2 = (
-    #     "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur "
-    #     "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit "
-    #     "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  "
-    # )
+
     input1 = cudf.Series(text1)
     sa1 = input1.str.build_suffix_array(0)
     input2 = cudf.Series(text2)

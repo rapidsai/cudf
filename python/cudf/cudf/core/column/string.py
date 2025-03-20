@@ -5391,7 +5391,7 @@ class StringMethods(ColumnMethods):
         """
         Builds a suffix array for the input strings column
 
-        For details, see :cpp:func:`build_suffix_array`
+        For details, see :cpp:func:`resolve_duplicates`
 
         Parameters
         ----------
@@ -5419,7 +5419,7 @@ class StringMethods(ColumnMethods):
         """
         Builds a suffix array for the input strings column
 
-        For details, see :cpp:func:`build_suffix_array`
+        For details, see :cpp:func:`resolve_duplicates_pair`
 
         Parameters
         ----------
