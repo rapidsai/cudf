@@ -103,7 +103,7 @@ std::unique_ptr<column> distinct(
  * output list. The order of lists is preserved while the order of elements within each list is not
  * guaranteed.
  *
- * @deprecated Deprecated in 25.04, to be removed in 25.06
+ * @deprecated Deprecated in 25.06, to be removed in 25.08
  *
  * Example:
  * @code{.pseudo}
