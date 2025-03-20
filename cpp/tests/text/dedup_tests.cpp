@@ -27,7 +27,8 @@
 
 struct TextDedupTest : public cudf::test::BaseFixture {};
 
-TEST_F(TextDedupTest, StringDedup)
+namespace {
+cudf::test::strings_column_wrapper build_input()
 {
   // https://loremipsum.io/generator?n=25&t=p
   // clang-format off
@@ -45,8 +46,14 @@ TEST_F(TextDedupTest, StringDedup)
     "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  ", // 990
   });
   // clang-format on
+  return input;
+}
+}  // namespace
 
-  auto sv = cudf::strings_column_view(input);
+TEST_F(TextDedupTest, StringDedup)
+{
+  auto input = build_input();
+  auto sv    = cudf::strings_column_view(input);
 
   auto results  = nvtext::substring_duplicates(sv, 20);
   auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
@@ -93,28 +100,39 @@ TEST_F(TextDedupTest, SuffixArray)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results_bitonic->view());
 }
 
-TEST_F(TextDedupTest, StringDedupPair)
+TEST_F(TextDedupTest, ResolveDuplicates)
 {
-  // clang-format off
-  auto input = cudf::test::strings_column_wrapper({
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ", //  90
-    "01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation     ", // 180
-    "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   ", // 270
+  auto input = build_input();
+  auto sv    = cudf::strings_column_view(input);
 
-    "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         ", //  90
-    "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.    ", // 180
-    "Ea esse numquam et recusandae quia et voluptatem sint quo explicabo repudiandae. At nihil ", // 270
-    "sunt non architecto doloremque eos dolorem consequuntur. Vel adipisci quod et voluptatum  ", // 360
-    "quis est fuga tempore qui dignissimos aliquam et sint repellendus ut autem voluptas quo   ", // 450
-    "deleniti earum? Qui ipsam ipsum hic ratione mollitia aut nobis laboriosam. Eum aspernatur ", // 540
-    "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit ", // 180
-    "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  ", // 270
-  });
-  // clang-format on
-  auto const sv          = cudf::strings_column_view(input);
-  auto const split_input = cudf::split(input, {3});
-  auto const sv1         = split_input.front();
-  auto const sv2         = split_input.back();
+  auto sa       = nvtext::build_suffix_array(sv, 0);
+  auto results  = nvtext::resolve_duplicates(sv, *sa, 20);
+  auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  results  = nvtext::resolve_duplicates(sv, *sa, 15);
+  expected = cudf::test::strings_column_wrapper(
+    {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  // Test with sliced input
+  auto sliced = cudf::slice(input, {1, 10}).front();
+
+  sv       = cudf::strings_column_view(sliced);
+  sa       = nvtext::build_suffix_array(sv, 0);
+  results  = nvtext::resolve_duplicates(sv, *sa, 15);
+  expected = cudf::test::strings_column_wrapper({"01234567890123456789 ", " reprehenderit "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
+TEST_F(TextDedupTest, ResolvePair)
+{
+  auto const input = build_input();
+  auto const sv    = cudf::strings_column_view(input);
+  auto const split = cudf::split(input, {3});
+  auto const sv1   = split.front();
+  auto const sv2   = split.back();
+
   // clang-format off
   auto sa1 = nvtext::build_suffix_array(sv1, 0);
   // 270, 269, 268, 267, 175, 176, 177, 178,  89, 228, 124, 132,  39, 116, 195,  21, 233, 209,  27, 217,
