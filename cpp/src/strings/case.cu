@@ -38,6 +38,7 @@
 #include <cub/cub.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/merge.h>
 #include <thrust/transform.h>
@@ -46,6 +47,111 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
+// table of special characters whose case equivalents have a different number of bytes;
+// there are only 100 such special characters out of the 65536 possible Unicode characters
+constexpr size_type NUM_SPECIAL_CHARS = 100;
+
+const __constant__ uint32_t multi_byte_cross_table[NUM_SPECIAL_CHARS] = {
+  0x00c39f,  // (ß,2)->(S,1) 0x000053
+  0x00c4b0,  // (İ,2)->(i,1) 0x000069
+  0x00c4b1,  // (ı,2)->(I,1) 0x000049
+  0x00c5bf,  // (ſ,2)->(S,1) 0x000053
+  0x00c7b0,  // (ǰ,2)->(J,1) 0x00004a
+  0x00c8ba,  // (Ⱥ,2)->(ⱥ,3) 0xe2b1a5
+  0x00c8be,  // (Ⱦ,2)->(ⱦ,3) 0xe2b1a6
+  0x00c8bf,  // (ȿ,2)->(Ȿ,3) 0xe2b1be
+  0x00c980,  // (ɀ,2)->(Ɀ,3) 0xe2b1bf
+  0x00c990,  // (ɐ,2)->(Ɐ,3) 0xe2b1af
+  0x00c991,  // (ɑ,2)->(Ɑ,3) 0xe2b1ad
+  0x00c992,  // (ɒ,2)->(Ɒ,3) 0xe2b1b0
+  0x00c99c,  // (ɜ,2)->(Ɜ,3) 0xea9eab
+  0x00c9a1,  // (ɡ,2)->(Ɡ,3) 0xea9eac
+  0x00c9a5,  // (ɥ,2)->(Ɥ,3) 0xea9e8d
+  0x00c9a6,  // (ɦ,2)->(Ɦ,3) 0xea9eaa
+  0x00c9aa,  // (ɪ,2)->(Ɪ,3) 0xea9eae
+  0x00c9ab,  // (ɫ,2)->(Ɫ,3) 0xe2b1a2
+  0x00c9ac,  // (ɬ,2)->(Ɬ,3) 0xea9ead
+  0x00c9b1,  // (ɱ,2)->(Ɱ,3) 0xe2b1ae
+  0x00c9bd,  // (ɽ,2)->(Ɽ,3) 0xe2b1a4
+  0x00ca87,  // (ʇ,2)->(Ʇ,3) 0xea9eb1
+  0x00ca9d,  // (ʝ,2)->(Ʝ,3) 0xea9eb2
+  0x00ca9e,  // (ʞ,2)->(Ʞ,3) 0xea9eb0
+  0xe1b280,  // (ᲀ,3)->(В,2) 0x00d092
+  0xe1b281,  // (ᲁ,3)->(Д,2) 0x00d094
+  0xe1b282,  // (ᲂ,3)->(О,2) 0x00d09e
+  0xe1b283,  // (ᲃ,3)->(С,2) 0x00d0a1
+  0xe1b284,  // (ᲄ,3)->(Т,2) 0x00d0a2
+  0xe1b285,  // (ᲅ,3)->(Т,2) 0x00d0a2
+  0xe1b286,  // (ᲆ,3)->(Ъ,2) 0x00d0aa
+  0xe1b287,  // (ᲇ,3)->(Ѣ,2) 0x00d1a2
+  0xe1ba96,  // (ẖ,3)->(H,1) 0x000048
+  0xe1ba97,  // (ẗ,3)->(T,1) 0x000054
+  0xe1ba98,  // (ẘ,3)->(W,1) 0x000057
+  0xe1ba99,  // (ẙ,3)->(Y,1) 0x000059
+  0xe1ba9a,  // (ẚ,3)->(A,1) 0x000041
+  0xe1ba9e,  // (ẞ,3)->(ß,2) 0x00c39f
+  0xe1bd90,  // (ὐ,3)->(Υ,2) 0x00cea5
+  0xe1bd92,  // (ὒ,3)->(Υ,2) 0x00cea5
+  0xe1bd94,  // (ὔ,3)->(Υ,2) 0x00cea5
+  0xe1bd96,  // (ὖ,3)->(Υ,2) 0x00cea5
+  0xe1beb3,  // (ᾳ,3)->(Α,2) 0x00ce91
+  0xe1beb4,  // (ᾴ,3)->(Ά,2) 0x00ce86
+  0xe1beb6,  // (ᾶ,3)->(Α,2) 0x00ce91
+  0xe1beb7,  // (ᾷ,3)->(Α,2) 0x00ce91
+  0xe1bebe,  // (ι,3)->(Ι,2) 0x00ce99
+  0xe1bf83,  // (ῃ,3)->(Η,2) 0x00ce97
+  0xe1bf84,  // (ῄ,3)->(Ή,2) 0x00ce89
+  0xe1bf86,  // (ῆ,3)->(Η,2) 0x00ce97
+  0xe1bf87,  // (ῇ,3)->(Η,2) 0x00ce97
+  0xe1bf92,  // (ῒ,3)->(Ι,2) 0x00ce99
+  0xe1bf93,  // (ΐ,3)->(Ι,2) 0x00ce99
+  0xe1bf96,  // (ῖ,3)->(Ι,2) 0x00ce99
+  0xe1bf97,  // (ῗ,3)->(Ι,2) 0x00ce99
+  0xe1bfa2,  // (ῢ,3)->(Υ,2) 0x00cea5
+  0xe1bfa3,  // (ΰ,3)->(Υ,2) 0x00cea5
+  0xe1bfa4,  // (ῤ,3)->(Ρ,2) 0x00cea1
+  0xe1bfa6,  // (ῦ,3)->(Υ,2) 0x00cea5
+  0xe1bfa7,  // (ῧ,3)->(Υ,2) 0x00cea5
+  0xe1bfb3,  // (ῳ,3)->(Ω,2) 0x00cea9
+  0xe1bfb4,  // (ῴ,3)->(Ώ,2) 0x00ce8f
+  0xe1bfb6,  // (ῶ,3)->(Ω,2) 0x00cea9
+  0xe1bfb7,  // (ῷ,3)->(Ω,2) 0x00cea9
+  0xe284a6,  // (Ω,3)->(ω,2) 0x00cf89
+  0xe284aa,  // (K,3)->(k,1) 0x00006b
+  0xe284ab,  // (Å,3)->(å,2) 0x00c3a5
+  0xe2b1a2,  // (Ɫ,3)->(ɫ,2) 0x00c9ab
+  0xe2b1a4,  // (Ɽ,3)->(ɽ,2) 0x00c9bd
+  0xe2b1a5,  // (ⱥ,3)->(Ⱥ,2) 0x00c8ba
+  0xe2b1a6,  // (ⱦ,3)->(Ⱦ,2) 0x00c8be
+  0xe2b1ad,  // (Ɑ,3)->(ɑ,2) 0x00c991
+  0xe2b1ae,  // (Ɱ,3)->(ɱ,2) 0x00c9b1
+  0xe2b1af,  // (Ɐ,3)->(ɐ,2) 0x00c990
+  0xe2b1b0,  // (Ɒ,3)->(ɒ,2) 0x00c992
+  0xe2b1be,  // (Ȿ,3)->(ȿ,2) 0x00c8bf
+  0xe2b1bf,  // (Ɀ,3)->(ɀ,2) 0x00c980
+  0xea9e8d,  // (Ɥ,3)->(ɥ,2) 0x00c9a5
+  0xea9eaa,  // (Ɦ,3)->(ɦ,2) 0x00c9a6
+  0xea9eab,  // (Ɜ,3)->(ɜ,2) 0x00c99c
+  0xea9eac,  // (Ɡ,3)->(ɡ,2) 0x00c9a1
+  0xea9ead,  // (Ɬ,3)->(ɬ,2) 0x00c9ac
+  0xea9eae,  // (Ɪ,3)->(ɪ,2) 0x00c9aa
+  0xea9eb0,  // (Ʞ,3)->(ʞ,2) 0x00ca9e
+  0xea9eb1,  // (Ʇ,3)->(ʇ,2) 0x00ca87
+  0xea9eb2,  // (Ʝ,3)->(ʝ,2) 0x00ca9d
+  0xefac80,  // (ﬀ,3)->(F,1) 0x000046
+  0xefac81,  // (ﬁ,3)->(F,1) 0x000046
+  0xefac82,  // (ﬂ,3)->(F,1) 0x000046
+  0xefac83,  // (ﬃ,3)->(F,1) 0x000046
+  0xefac84,  // (ﬄ,3)->(F,1) 0x000046
+  0xefac85,  // (ﬅ,3)->(S,1) 0x000053
+  0xefac86,  // (ﬆ,3)->(S,1) 0x000053
+  0xefac93,  // (ﬓ,3)->(Մ,2) 0x00d584
+  0xefac94,  // (ﬔ,3)->(Մ,2) 0x00d584
+  0xefac95,  // (ﬕ,3)->(Մ,2) 0x00d584
+  0xefac96,  // (ﬖ,3)->(Վ,2) 0x00d58e
+  0xefac97,  // (ﬗ,3)->(Մ,2) 0x00d584
+};
 
 /**
  * @brief Threshold to decide on using string or warp parallel functions.
@@ -106,7 +212,7 @@ struct convert_char_fn {
   }
 
   // special function for converting ASCII-only characters
-  __device__ char process_ascii(char chr)
+  __device__ char process_ascii(char chr) const
   {
     return (case_flag & d_flags[chr]) ? static_cast<char>(d_case_table[chr]) : chr;
   }
@@ -216,11 +322,14 @@ struct upper_lower_ls_fn : public base_upper_lower_fn {
   }
 };
 
+constexpr int64_t block_size = 512;
+
 /**
  * @brief Count output bytes in warp-parallel threads
  *
  * This executes as one warp per string and just computes the output sizes.
  */
+template <int bytes_per_thread>
 CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
                                     column_device_view d_strings,
                                     size_type* d_sizes)
@@ -241,8 +350,9 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
 
   // each thread processes 4 bytes
   size_type size = 0;
-  for (auto i = lane_idx * 4; i < d_str.size_bytes(); i += cudf::detail::warp_size * 4) {
-    for (auto j = i; (j < (i + 4)) && (j < d_str.size_bytes()); j++) {
+  for (auto i = lane_idx * bytes_per_thread; i < d_str.size_bytes();
+       i += cudf::detail::warp_size * bytes_per_thread) {
+    for (auto j = i; (j < (i + bytes_per_thread)) && (j < d_str.size_bytes()); j++) {
       auto const chr = str_ptr[j];
       if (is_utf8_continuation_char(chr)) { continue; }
       char_utf8 u8 = 0;
@@ -258,45 +368,66 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
 }
 
 /**
- * @brief Special functor for processing ASCII-only data
- */
-struct ascii_converter_fn {
-  convert_char_fn converter;
-  __device__ char operator()(char chr) { return converter.process_ascii(chr); }
-};
-
-constexpr int64_t block_size       = 512;
-constexpr int64_t bytes_per_thread = 8;
-
-/**
- * @brief Checks the chars data for any multibyte characters
+ * @brief Counts the number of special multi-byte characters in the input
  *
- * The output count is not accurate but it is only checked for > 0.
+ * This is used to determine if the input contains special multi-byte characters
+ * that needs to be handled by the slower warp-parallel algorithm.
  */
-CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
-                                       int64_t first_offset,
-                                       int64_t last_offset,
-                                       int64_t* d_output)
+template <int bytes_per_thread>
+CUDF_KERNEL void mismatch_multibytes_kernel(char const* d_input_chars,
+                                            int64_t first_offset,
+                                            int64_t last_offset,
+                                            int64_t* d_output)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
-  // read only every 2nd byte; all bytes in a multibyte char have high bit set
-  auto const byte_idx = (static_cast<int64_t>(idx) * bytes_per_thread) + first_offset;
-  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
 
-  using block_reduce = cub::BlockReduce<int64_t, block_size>;
-  __shared__ typename block_reduce::TempStorage temp_storage;
+  __shared__ uint32_t mb_table[NUM_SPECIAL_CHARS];
+  auto const lane_idx = threadIdx.x;
+  if (lane_idx < NUM_SPECIAL_CHARS) { mb_table[lane_idx] = multi_byte_cross_table[lane_idx]; }
+  __syncthreads();
 
-  // each thread processes 8 bytes (only 4 need to be checked)
-  int64_t mb_count = 0;
-  for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < last_offset); i += 2) {
-    u_char const chr = static_cast<u_char>(d_input_chars[i]);
-    mb_count += ((chr & 0x80) > 0);
+  auto const byte_idx = (idx * bytes_per_thread) + first_offset;
+
+  auto count = 0;
+  for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < last_offset); i++) {
+    u_char const chr = d_input_chars[i];
+    if (chr < 0x080 || is_utf8_continuation_char(chr)) { continue; }
+    char_utf8 utf8 = 0;
+    to_char_utf8(d_input_chars + i, utf8);
+    count += (thrust::binary_search(thrust::seq, mb_table, mb_table + NUM_SPECIAL_CHARS, utf8));
   }
-  auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cuda::std::plus());
 
-  if ((lane_idx == 0) && (mb_total > 0)) {
+  if (count > 0) {
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
-    ref.fetch_add(mb_total, cuda::std::memory_order_relaxed);
+    ref.fetch_add(count, cuda::std::memory_order_relaxed);
+  }
+}
+
+/**
+ * @brief Special functor for processing UTF-8 characters whose
+ * byte counts match their case equivalent (including ASCII)
+ */
+template <int bytes_per_thread>
+CUDF_KERNEL void multibyte_converter_fn(convert_char_fn converter,
+                                        char const* d_input_chars,
+                                        int64_t chars_size,
+                                        char* d_output_chars)
+{
+  auto const idx      = cudf::detail::grid_1d::global_thread_id();
+  auto const char_idx = (idx * bytes_per_thread);
+  if (char_idx >= chars_size) { return; }
+
+  for (auto i = char_idx; i < (char_idx + bytes_per_thread) && i < chars_size; ++i) {
+    u_char const chr = d_input_chars[i];
+    auto d_buffer    = d_output_chars + i;
+    if (chr < 0x080) {
+      *d_buffer = converter.process_ascii(chr);
+      continue;
+    }
+    if (is_utf8_continuation_char(chr)) { continue; }
+    char_utf8 utf8 = 0;
+    to_char_utf8(d_input_chars + i, utf8);
+    converter.process_character(utf8, d_buffer);
   }
 }
 
@@ -345,22 +476,26 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                                cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
-  // Check if the input contains any multi-byte characters.
+  // Check if the input contains special multi-byte characters where the case equivalent
+  // has a different number of bytes. There are only 100 such special characters.
   // This check incurs ~20% performance hit for smaller strings and so we only use it
   // after the threshold check above. The check makes very little impact for long strings
-  // but results in a large performance gain when the input contains only single-byte characters.
+  // but results in a large performance gain when the input contains no special characters.
+  constexpr int64_t bytes_per_thread = 4;
   cudf::detail::device_scalar<int64_t> mb_count(0, stream);
-  // cudf::detail::grid_1d is limited to size_type elements
-  auto const num_blocks = util::div_rounding_up_safe(chars_size / bytes_per_thread, block_size);
-  // we only need to check every other byte since either will contain high bit
-  has_multibytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
-    input_chars, first_offset, last_offset, mb_count.data());
+  auto const grid = cudf::detail::grid_1d(chars_size, block_size, bytes_per_thread);
+  mismatch_multibytes_kernel<bytes_per_thread>
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      input_chars, first_offset, last_offset, mb_count.data());
   if (mb_count.value(stream) == 0) {
-    // optimization for ASCII-only case: copy the input column and inplace replace each character
+    // optimization for the non-special case;
+    // copying the input column automatically handles normalizing sliced inputs
+    // and nulls properly but also does incur a wasteful chars copy too
     auto result  = std::make_unique<column>(input.parent(), stream, mr);
     auto d_chars = result->mutable_view().head<char>();
-    thrust::transform(
-      rmm::exec_policy(stream), d_chars, d_chars + chars_size, d_chars, ascii_converter_fn{ccfn});
+    multibyte_converter_fn<bytes_per_thread>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        ccfn, input_chars + first_offset, chars_size, d_chars);
     result->set_null_count(input.null_count());
     return result;
   }
@@ -369,11 +504,10 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
   auto [offsets, bytes] = [&] {
     rmm::device_uvector<size_type> sizes(input.size(), stream);
-    // cudf::detail::grid_1d is limited to size_type threads
-    auto const num_blocks = util::div_rounding_up_safe(
-      static_cast<int64_t>(input.size()) * cudf::detail::warp_size, block_size);
-    count_bytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
-      ccfn, *d_strings, sizes.data());
+    auto grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+    count_bytes_kernel<bytes_per_thread>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        ccfn, *d_strings, sizes.data());
     // convert sizes to offsets
     return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
   }();
