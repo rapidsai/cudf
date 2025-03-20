@@ -57,7 +57,7 @@ struct hashed_vocabulary {
  * The object here can be used to call the subword_tokenize without
  * incurring the cost of loading the same file each time.
  *
- * @deprecated in 25.04 and to be removed in a future release
+ * @deprecated in 25.06 and to be removed in a future release
  *
  * @throw cudf::logic_error if the `filename_hashed_vocabulary` could not be opened.
  *
@@ -111,7 +111,7 @@ struct tokenizer_result {
  * @brief Creates a tokenizer that cleans the text, splits it into tokens and
  *        returns token-ids from an input vocabulary.
  *
- * @deprecated in 25.04 and to be removed in a future release
+ * @deprecated in 25.06 and to be removed in a future release
  * Use nvtext::wordpiece_tokenize instead
  *
  * The strings are first normalized by converting to lower-case, removing
