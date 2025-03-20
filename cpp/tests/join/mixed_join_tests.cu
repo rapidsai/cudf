@@ -478,6 +478,53 @@ TYPED_TEST(MixedInnerJoinTest, BasicInequality)
              {{3, 3}});
 }
 
+using MixedInnerJoinTest2 = MixedInnerJoinTest<int32_t>;
+TEST_F(MixedInnerJoinTest2, UnaryRightTableColumnReference)
+{
+  using TypeParam            = int32_t;
+  auto const col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto const right_double_1 =
+    cudf::ast::operation{cudf::ast::ast_operator::CAST_TO_FLOAT64, col_ref_right_1};
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, right_double_1, col_ref_left_1);
+
+  // Create column wrappers for left table
+  auto left_col0 =
+    cudf::test::fixed_width_column_wrapper<TypeParam>({2, 3, 9, 0, 1, 7, 4, 6, 5, 8});
+  auto left_col1 = cudf::test::fixed_width_column_wrapper<double>({1, 2, 3, 4, 5, 6, 7, 8, 9, 0});
+  std::vector<cudf::column_view> left_columns{left_col0, left_col1};
+
+  // Create column wrappers for right table
+  auto right_col0 = cudf::test::fixed_width_column_wrapper<TypeParam>({6, 5, 9, 8, 10, 32});
+  auto right_col1 = cudf::test::fixed_width_column_wrapper<TypeParam>({0, 1, 2, 3, 4, 5});
+  auto right_col2 = cudf::test::fixed_width_column_wrapper<TypeParam>({7, 8, 9, 0, 1, 2});
+  std::vector<cudf::column_view> right_columns{right_col0, right_col1, right_col2};
+
+  // Create table views
+  auto left  = cudf::table_view(left_columns);
+  auto right = cudf::table_view(right_columns);
+
+  // Select equality and conditional columns
+  auto left_equality     = left.select({0});
+  auto right_equality    = right.select({0});
+  auto left_conditional  = left.select({0, 1});
+  auto right_conditional = right.select({0, 1});
+
+  // Expected counts and outputs
+  std::vector<cudf::size_type> expected_counts{0, 0, 1, 0, 0, 0, 0, 1, 1, 0};
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{2, 2}, {7, 0}, {8, 1}};
+
+  // Perform the test
+  this->_test(left_equality,
+              right_equality,
+              left_conditional,
+              right_conditional,
+              predicate,
+              expected_counts,
+              expected_outputs);
+}
+
 /**
  * Tests of mixed left joins.
  */
