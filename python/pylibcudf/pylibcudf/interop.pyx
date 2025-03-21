@@ -160,10 +160,6 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
         c_result = make_unique[arrow_table](move(dereference(c_stream)))
         result.tbl.swap(c_result)
 
-    # The capsule destructor should release automatically for us, but we choose to do it
-    # explicitly here for clarity.
-    c_stream.release(c_stream)
-
     return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
 
 
@@ -202,11 +198,6 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
             move(dereference(c_schema)), move(dereference(c_array))
         )
         result.col.swap(c_result)
-
-    # The capsule destructors should release automatically for us, but we
-    # choose to do it explicitly here for clarity.
-    c_schema.release(c_schema)
-    c_array.release(c_array)
 
     return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
 
