@@ -66,6 +66,7 @@ target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
+target_link_libraries(pylibcudf_table PUBLIC nanoarrow)
 
 add_subdirectory(libcudf)
 add_subdirectory(strings)
