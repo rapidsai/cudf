@@ -11,7 +11,7 @@ from cudf.testing import assert_eq
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
-    return os.path.join(datadir, "subword_tokenizer_data")
+    return os.path.join(datadir, "")
 
 
 @pytest.mark.parametrize("max_words", [0, 200, 10])
@@ -27,7 +27,7 @@ def test_text_wordpiece_tokenize(max_words, datadir):
             "but ,  meanwhile ,  nobody cares .   Some of the deepest and most earnest minds vote the question ,  in general ,  a  ' sham and a snare ,  '  and whisper to each other",
         ]
     )
-    vocab_file = os.path.join(datadir, "bert_base_cased_sampled/vocab.txt")
+    vocab_file = os.path.join(datadir, "vocab.txt")
     vc = cudf.read_text(vocab_file, delimiter="\n", strip_delimiters=True)
     wpt = WordPieceVocabulary(vc)
     wpr = wpt.tokenize(s, max_words)
