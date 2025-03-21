@@ -177,7 +177,9 @@ __host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_
 compression_type from_parquet_compression(Compression compression)
 {
   auto const [type, supported] = parquet_compression_support(compression);
-  CUDF_EXPECTS(supported, "Unsupported compression type");
+  CUDF_EXPECTS(supported,
+               "Unsupported compression type: " +
+                 cudf::io::detail::compression_type_name(from_parquet_compression(compression)));
   return type;
 }
 
@@ -772,6 +774,33 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                                                       rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+
+  struct codec_stats {
+    Compression compression_type  = UNCOMPRESSED;
+    size_t num_pages              = 0;
+    int32_t max_decompressed_size = 0;
+    size_t total_decomp_size      = 0;
+  };
+
+  std::array codecs{codec_stats{BROTLI},
+                    codec_stats{GZIP},
+                    codec_stats{LZ4_RAW},
+                    codec_stats{SNAPPY},
+                    codec_stats{ZSTD}};
+
+  auto is_codec_supported = [&codecs](int8_t codec) {
+    if (codec == UNCOMPRESSED) return true;
+    return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
+             return codec == cstats.compression_type;
+           }) != codecs.end();
+  };
+
+  for (auto& chunk : chunks) {
+    CUDF_EXPECTS(is_codec_supported(chunk.codec),
+                 "Unsupported compression type: " +
+                   cudf::io::detail::compression_type_name(from_parquet_compression(chunk.codec)));
+  }
+
   auto for_each_codec_page = [&](Compression codec, std::function<void(PageInfo&)> const& f) {
     for (auto& page : pages) {
       if (chunks[page.chunk_idx].codec == codec &&
@@ -784,33 +813,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
-
-  struct codec_stats {
-    Compression compression_type  = UNCOMPRESSED;
-    size_t num_pages              = 0;
-    int32_t max_decompressed_size = 0;
-    size_t total_decomp_size      = 0;
-  };
-
-  std::array codecs{codec_stats{GZIP},
-                    codec_stats{SNAPPY},
-                    codec_stats{BROTLI},
-                    codec_stats{ZSTD},
-                    codec_stats{LZ4_RAW}};
-
-  auto is_codec_supported = [&codecs](int8_t codec) {
-    if (codec == UNCOMPRESSED) return true;
-    return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
-             return codec == cstats.compression_type;
-           }) != codecs.end();
-  };
-  CUDF_EXPECTS(std::all_of(chunks.begin(),
-                           chunks.end(),
-                           [&is_codec_supported](auto const& chunk) {
-                             return is_codec_supported(chunk.codec);
-                           }),
-               "Unsupported compression type");
-
   for (auto& codec : codecs) {
     for_each_codec_page(codec.compression_type, [&](PageInfo& page) {
       auto page_uncomp_size = page.uncompressed_page_size;
