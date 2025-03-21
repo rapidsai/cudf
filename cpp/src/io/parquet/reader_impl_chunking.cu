@@ -766,20 +766,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  *
  * @return Device buffer to decompressed page data
  */
-[[nodiscard]] rmm::device_buffer decompress_page_data(
-  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-  cudf::detail::hostdevice_span<PageInfo> pages,
-  bool dict_pages,
-  rmm::cuda_stream_view stream)
+[[nodiscard]] rmm::device_buffer decompress_page_data(host_span<ColumnChunkDesc const> chunks,
+                                                      host_span<PageInfo> pages,
+                                                      bool dict_pages,
+                                                      rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-
-  auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
-    for (size_t p = 0; p < pages.size(); p++) {
-      if (chunks[pages[p].chunk_idx].codec == codec &&
-          ((dict_pages && (pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)) ||
-           (!dict_pages && !(pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)))) {
-        f(p);
+  auto for_each_codec_page = [&](Compression codec, std::function<void(PageInfo&)> const& f) {
+    for (auto& page : pages) {
+      if (chunks[page.chunk_idx].codec == codec &&
+          dict_pages == (page.flags & PAGEINFO_FLAGS_DICTIONARY)) {
+        f(page);
       }
     }
   };
@@ -807,16 +804,16 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
              return codec == cstats.compression_type;
            }) != codecs.end();
   };
-  CUDF_EXPECTS(std::all_of(chunks.host_begin(),
-                           chunks.host_end(),
+  CUDF_EXPECTS(std::all_of(chunks.begin(),
+                           chunks.end(),
                            [&is_codec_supported](auto const& chunk) {
                              return is_codec_supported(chunk.codec);
                            }),
                "Unsupported compression type");
 
   for (auto& codec : codecs) {
-    for_each_codec_page(codec.compression_type, [&](size_t page) {
-      auto page_uncomp_size = pages[page].uncompressed_page_size;
+    for_each_codec_page(codec.compression_type, [&](PageInfo& page) {
+      auto page_uncomp_size = page.uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
       codec.total_decomp_size += page_uncomp_size;
       codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
@@ -851,10 +848,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t decomp_offset = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
-
-    for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
+    for_each_codec_page(codec.compression_type, [&](PageInfo& page) {
       auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
-      auto& page          = pages[page_idx];
       // offset will only be non-zero for V2 pages
       auto const offset =
         page.lvl_bytes[level_type::DEFINITION] + page.lvl_bytes[level_type::REPETITION];
@@ -914,12 +909,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       copy_out, stream, cudf::get_current_device_resource_ref());
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
-    stream.synchronize();
   }
 
-  pages.host_to_device_async(stream);
-
-  stream.synchronize();
   return decomp_pages;
 }
 
@@ -1209,6 +1200,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     // decompress dictionary data if applicable.
     if (pass.has_compressed_data) {
       pass.decomp_dict_data = decompress_page_data(pass.chunks, pass.pages, true, _stream);
+      pass.pages.host_to_device_async(_stream);
     }
 
     // store off how much memory we've used so far. This includes the compressed page data and the
@@ -1371,6 +1363,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   // decompress the data for the pages in this subpass.
   if (pass.has_compressed_data) {
     subpass.decomp_page_data = decompress_page_data(pass.chunks, subpass.pages, false, _stream);
+    subpass.pages.host_to_device_sync(_stream);
   }
 
   // buffers needed by the decode kernels
