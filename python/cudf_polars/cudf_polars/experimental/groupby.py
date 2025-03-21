@@ -27,8 +27,9 @@ from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
@@ -93,7 +94,7 @@ def decompose(
         unary_op = [expr.name, expr.options]
         expr = expr.children[0]
 
-    def _wrap_unary(select):
+    def _wrap_unary(select: Expr) -> Expr:
         # Helper function to wrap the final selection
         # in a UnaryFunction (when necessary)
         if unary_op:
@@ -253,11 +254,10 @@ def _(
                 "maintain_order not supported for multiple output partitions."
             )
 
-        shuffle_options: dict[str, Any] = {}
         gb_inter = Shuffle(
             pwise_schema,
             ir.keys,
-            shuffle_options,
+            ir.config_options,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
@@ -292,7 +292,9 @@ def _(
     return new_node, partition_info
 
 
-def _tree_node(do_evaluate, nbatch, *args):
+def _tree_node(
+    do_evaluate: Callable[..., DataFrame], nbatch: int, *args: DataFrame
+) -> DataFrame:
     return do_evaluate(*args[nbatch:], _concat(*args[:nbatch]))
 
 

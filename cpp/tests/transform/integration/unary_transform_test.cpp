@@ -25,10 +25,19 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
 template <class dtype, class Op, class Data>
 void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
@@ -221,9 +230,17 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
 }
 
-struct TenaryOperationTest : public cudf::test::BaseFixture {};
+struct TernaryOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
-TEST_F(TenaryOperationTest, TransformWithScalar)
+TEST_F(TernaryOperationTest, TransformWithScalar)
 {
   std::string const cuda =
     R"***(
@@ -337,7 +354,15 @@ __device__ inline void transform(
 }
 
 template <typename T>
-struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {};
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
 TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
 
