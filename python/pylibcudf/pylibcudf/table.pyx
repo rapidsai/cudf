@@ -8,9 +8,11 @@ from cpython.pycapsule cimport (
 )
 
 from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from functools import singledispatchmethod
 
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -18,7 +20,9 @@ from pylibcudf.libcudf.table.table cimport table
 
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
+    ArrowArrayStream,
     ArrowSchema,
+    arrow_table,
     column_metadata,
     to_arrow_host_raw,
     to_arrow_schema_raw,
@@ -68,6 +72,24 @@ cdef void _release_array(object array_capsule) noexcept:
     free(array)
 
 
+class _ArrowLikeMeta(type):
+    # Unfortunately we cannot separate stream and array via singledispatch because the
+    # dispatch will often be ambiguous when objects expose both protocols.
+    def __subclasscheck__(cls, other):
+        return (
+            hasattr(other, "__arrow_c_stream__")
+            or hasattr(other, "__arrow_c_array__")
+        )
+
+
+class _ArrowLike(metaclass=_ArrowLikeMeta):
+    pass
+
+
+cdef class _ArrowTableHolder:
+    cdef unique_ptr[arrow_table] tbl
+
+
 cdef class Table:
     """A list of columns of the same size.
 
@@ -76,12 +98,41 @@ cdef class Table:
     columns : list
         The columns in this table.
     """
-    def __init__(self, list columns):
+    def __init__(self, obj):
+        self._init(obj)
+
+    __hash__ = None
+
+    @singledispatchmethod
+    def _init(self, obj):
+        raise ValueError("Table should be constructed with a list of columns")
+
+    @_init.register(list)
+    def _(self, list columns):
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
-    __hash__ = None
+    @_init.register(_ArrowLike)
+    def _(self, arrow_like):
+        cdef ArrowArrayStream* c_stream
+        cdef _ArrowTableHolder result
+        cdef unique_ptr[arrow_table] c_result
+        if hasattr(arrow_like, "__arrow_c_stream__"):
+            stream = arrow_like.__arrow_c_stream__()
+            c_stream = (
+                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+            )
+
+            result = _ArrowTableHolder()
+            with nogil:
+                c_result = make_unique[arrow_table](move(dereference(c_stream)))
+            result.tbl.swap(c_result)
+
+            tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+            self._columns = tmp.columns()
+        elif hasattr(arrow_like, "__arrow_c_array__"):
+            raise NotImplementedError("arrays not yet supported")
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.

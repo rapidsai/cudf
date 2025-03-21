@@ -18,10 +18,8 @@ from pyarrow import lib as pa
 
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
-    ArrowArrayStream,
     ArrowSchema,
     DLManagedTensor,
-    arrow_table,
     arrow_column,
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
@@ -120,27 +118,11 @@ cdef class _ArrowColumnHolder:
     cdef unique_ptr[arrow_column] col
 
 
-cdef class _ArrowTableHolder:
-    cdef unique_ptr[arrow_table] tbl
-
-
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for tables")
-    stream = pyarrow_object.__arrow_c_stream__()
-    cdef ArrowArrayStream* c_stream = (
-        <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
-    )
-
-    cdef _ArrowTableHolder result = _ArrowTableHolder()
-    cdef unique_ptr[arrow_table] c_result
-
-    with nogil:
-        c_result = make_unique[arrow_table](move(dereference(c_stream)))
-        result.tbl.swap(c_result)
-
-    return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+    return Table(pyarrow_object)
 
 
 @from_arrow.register(pa.Scalar)
