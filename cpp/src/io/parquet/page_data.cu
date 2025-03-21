@@ -69,7 +69,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
 
+  // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
+  // page is invalid.
   if (!page_validity[page_idx]) {
+    // MH: What to do is has_repetition is true?
+
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
@@ -246,6 +250,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
   int out_thread0;
+
+  // MH: How to handle all types in this decoder?
+  if (not page_validity[page_idx]) {
+    // MH: What to do is has_repetition is true?
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    return;
+  }
+
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s,
