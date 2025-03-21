@@ -310,6 +310,7 @@ CUDF_KERNEL void __launch_bounds__(96)
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
                        size_t num_rows,
+                       cudf::device_span<bool const> page_validity,
                        kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -436,6 +437,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           size_t min_row,
                           size_t num_rows,
                           cudf::device_span<size_t> initial_str_offsets,
+                          cudf::device_span<bool const> page_validity,
                           kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -472,6 +474,48 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Update offsets for strings
+  if (not page_validity[page_idx]) {
+    auto page        = &pages[page_idx];
+    page->num_nulls  = page->num_rows;
+    page->num_valids = 0;
+
+    // MH: What else to do if this has repetition?
+    /*if (has_repetition) {
+    }*/
+
+    // Initial string offset
+    auto const initial_value = s->page.str_offset;
+    auto value_count         = s->page.num_input_values;
+
+    // Offsets pointer contains string sizes in case of large strings and actual offsets
+    // otherwise
+    auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
+    auto offptr = reinterpret_cast<size_type*>(ni.data_out);
+    // For large strings, update the initial string buffer offset to be used during large string
+    // column construction. Otherwise, convert string sizes to final offsets
+    if (s->col.is_large_string_col) {
+      // Write zero string sizes
+      for (int idx = t; idx < value_count; idx += blockDim.x) {
+        offptr[idx] = 0;
+      }
+      // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
+      auto const chunks_per_rowgroup = initial_str_offsets.size();
+      auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
+      compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
+    } else {
+      // if no repetition we haven't calculated start/end bounds and instead just skipped
+      // values until we reach first_row. account for that here.
+      if (not has_repetition) { value_count -= s->first_row; }
+
+      // Write the initial offset at all positions to indicate zero sized strings
+      for (int idx = t; idx < value_count; idx += blockDim.x) {
+        offptr[idx] = initial_value;
+      }
+    }
+    return;
+  }
 
   // choose a character parallel string copy when the average string is longer than a warp
   auto const use_char_ll = (s->page.str_bytes / s->page.num_valids) > warp_size;
@@ -603,6 +647,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                                 size_t min_row,
                                 size_t num_rows,
                                 cudf::device_span<size_t> initial_str_offsets,
+                                cudf::device_span<bool const> page_validity,
                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -640,6 +685,48 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Update offsets for strings
+  if (not page_validity[page_idx]) {
+    auto page        = &pages[page_idx];
+    page->num_nulls  = page->num_rows;
+    page->num_valids = 0;
+
+    // MH: What else to do if this has repetition?
+    /*if (has_repetition) {
+    }*/
+
+    // Initial string offset
+    auto const initial_value = s->page.str_offset;
+    auto value_count         = s->page.num_input_values;
+
+    // Offsets pointer contains string sizes in case of large strings and actual offsets
+    // otherwise
+    auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
+    auto offptr = reinterpret_cast<size_type*>(ni.data_out);
+    // For large strings, update the initial string buffer offset to be used during large string
+    // column construction. Otherwise, convert string sizes to final offsets
+    if (s->col.is_large_string_col) {
+      // Write zero string sizes
+      for (int idx = t; idx < value_count; idx += blockDim.x) {
+        offptr[idx] = 0;
+      }
+      // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
+      auto const chunks_per_rowgroup = initial_str_offsets.size();
+      auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
+      compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
+    } else {
+      // if no repetition we haven't calculated start/end bounds and instead just skipped
+      // values until we reach first_row. account for that here.
+      if (not has_repetition) { value_count -= s->first_row; }
+
+      // Write the initial offset at all positions to indicate zero sized strings
+      for (int idx = t; idx < value_count; idx += blockDim.x) {
+        offptr[idx] = initial_value;
+      }
+    }
+    return;
+  }
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -770,6 +857,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
+                       cudf::device_span<bool const> page_validity,
                        kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream)
 {
@@ -780,10 +868,10 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodeDeltaBinary<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   } else {
     gpuDecodeDeltaBinary<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   }
 }
 
@@ -796,6 +884,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t min_row,
                           int level_type_size,
                           cudf::device_span<size_t> initial_str_offsets,
+                          cudf::device_span<bool const> page_validity,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream)
 {
@@ -805,11 +894,23 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+    gpuDecodeDeltaByteArray<uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                   chunks,
+                                                   min_row,
+                                                   num_rows,
+                                                   initial_str_offsets,
+                                                   page_validity,
+                                                   error_code);
   } else {
-    gpuDecodeDeltaByteArray<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+    gpuDecodeDeltaByteArray<uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                   chunks,
+                                                   min_row,
+                                                   num_rows,
+                                                   initial_str_offsets,
+                                                   page_validity,
+                                                   error_code);
   }
 }
 
@@ -822,6 +923,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t min_row,
                                 int level_type_size,
                                 cudf::device_span<size_t> initial_str_offsets,
+                                cudf::device_span<bool const> page_validity,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
@@ -831,11 +933,23 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaLengthByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+    gpuDecodeDeltaLengthByteArray<uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                   chunks,
+                                                   min_row,
+                                                   num_rows,
+                                                   initial_str_offsets,
+                                                   page_validity,
+                                                   error_code);
   } else {
-    gpuDecodeDeltaLengthByteArray<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+    gpuDecodeDeltaLengthByteArray<uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                   chunks,
+                                                   min_row,
+                                                   num_rows,
+                                                   initial_str_offsets,
+                                                   page_validity,
+                                                   error_code);
   }
 }
 

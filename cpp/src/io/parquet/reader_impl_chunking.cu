@@ -46,6 +46,30 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
+#define PREPROCESS_DEBUG
+#if defined(PREPROCESS_DEBUG)
+[[maybe_unused]] void print_pages(cudf::detail::hostdevice_span<PageInfo> pages,
+                                  rmm::cuda_stream_view _stream)
+{
+  pages.device_to_host_sync(_stream);
+  for (size_t idx = 0; idx < pages.size(); idx++) {
+    auto const& p = pages[idx];
+    // skip dictionary pages
+    if (p.flags & PAGEINFO_FLAGS_DICTIONARY) { printf("DictPage: "); }
+    printf(
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
+      "str_bytes(%d)\n",
+      idx,
+      p.src_col_schema,
+      p.chunk_row,
+      p.num_rows,
+      p.skipped_values,
+      p.skipped_leaf_values,
+      p.str_bytes);
+  }
+}
+#endif  // PREPROCESS_DEBUG
+
 using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
 using cudf::io::detail::decompression_info;
@@ -1387,6 +1411,9 @@ void reader::impl::setup_next_subpass(read_mode mode)
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
   preprocess_subpass_pages(mode, _output_chunk_read_limit);
+
+  // Print pages after preprocess_subpass_pages
+  print_pages(subpass.pages, _stream);
 
 #if defined(PARQUET_CHUNK_LOGGING)
   printf("\tSubpass: skip_rows(%'lu), num_rows(%'lu), remaining read limit(%'lu)\n",

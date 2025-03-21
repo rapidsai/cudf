@@ -17,6 +17,7 @@
 #include "reader_impl.hpp"
 
 #include "error.hpp"
+#include "reader_impl_page_pruning.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
@@ -211,6 +212,35 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
+  // MH: Temporary code to test parquet decoders with page pruning
+  {
+    // For testfile.parquet
+    if (_file == testfile::FILE1) {
+      auto h_page_validity = std::vector<bool>(17, true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(17, _stream);
+      h_page_validity[1]   = false;
+      h_page_validity[8]   = false;
+      h_page_validity[17]  = false;
+      std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
+
+    }
+    // For testfile.parquet
+    else {
+      auto h_page_validity = std::vector<bool>(29, true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(29, _stream);
+      h_page_validity[5]   = false;
+      h_page_validity[11]  = false;
+      h_page_validity[16]  = false;
+      h_page_validity[20]  = false;
+      h_page_validity[25]  = false;
+      h_page_validity[26]  = false;
+      std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
+    }
+
+    pass.page_validity.host_to_device_async(_stream);
+    subpass.page_validity = pass.page_validity;
+  }
+
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
   auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
@@ -247,6 +277,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    level_type_size,
                    decoder_mask,
                    initial_str_offsets,
+                   subpass.page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -304,6 +335,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          skip_rows,
                          level_type_size,
                          initial_str_offsets,
+                         subpass.page_validity,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -316,6 +348,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                skip_rows,
                                level_type_size,
                                initial_str_offsets,
+                               subpass.page_validity,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -327,6 +360,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                       num_rows,
                       skip_rows,
                       level_type_size,
+                      subpass.page_validity,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -353,6 +387,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
+                        subpass.page_validity,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -409,6 +444,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    num_rows,
                    skip_rows,
                    level_type_size,
+                   subpass.page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   }
@@ -419,6 +455,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
+
+  // MH: Put nulls in the output buffers against pruned pages.
+  fix_holes();
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);

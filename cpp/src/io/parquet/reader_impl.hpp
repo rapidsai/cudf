@@ -172,6 +172,13 @@ class reader::impl {
   void setup_next_subpass(read_mode mode);
 
   /**
+   * @brief Fill nulls in the output buffers for invalid pages.
+   *
+   * This is only a temporary name for the function.
+   */
+  void fix_holes();
+
+  /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.

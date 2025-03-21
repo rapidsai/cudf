@@ -100,6 +100,8 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
+  cudf::device_span<bool> page_validity{};
+
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
@@ -145,6 +147,8 @@ struct pass_intermediate_data {
   // only includes the number of rows we have processed before starting the current
   // subpass. it does not get updated as a subpass iterates through output chunks.
   size_t processed_rows{0};
+
+  cudf::detail::hostdevice_vector<bool> page_validity{};
 
   // currently active subpass
   std::unique_ptr<subpass_intermediate_data> subpass{};
