@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 
 EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/frame/select_test.py::test_select_duplicates[cudf]": "cuDF doesn't support having multiple columns with same names",
+    "tests/translate/from_native_test.py::test_eager_only_sqlframe[False-context0]": "duckdb not installed",
+    "tests/translate/from_native_test.py::test_eager_only_sqlframe[True-context1]": "duckdb not installed",
+    "tests/translate/from_native_test.py::test_series_only_sqlframe": "duckdb not installed",
 }
 
 

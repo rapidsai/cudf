@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
@@ -201,7 +201,7 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner):
-        """Create a Column from a libcudf column_view.
+        """Create a Column from a libcudf column_view into a Column owner.
 
         This method accepts shared ownership of the underlying data from the
         owner and relies on the offset from the view.
@@ -210,23 +210,62 @@ cdef class Column:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
-        cdef DataType dtype = DataType.from_libcudf(cv.type())
-        cdef size_type size = cv.size()
-        cdef size_type null_count = cv.null_count()
+        children = []
+        cdef size_type i
+        if cv.num_children() != 0:
+            for i in range(cv.num_children()):
+                children.append(Column.from_column_view(cv.child(i), owner.child(i)))
+
+        return Column(
+            DataType.from_libcudf(cv.type()),
+            cv.size(),
+            owner._data,
+            owner._mask,
+            cv.null_count(),
+            cv.offset(),
+            children,
+        )
+
+    # Ideally this function would simply be handled via a fused type in
+    # from_column_view, but this does not work due to
+    # https://github.com/cython/cython/issues/6740
+    @staticmethod
+    cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner):
+        """Create a Column from a libcudf column_view into an arbitrary owner.
+
+        This method accepts shared ownership of the underlying data from the owner.
+        Since the owner may be any arbitrary object, every child Column also shares
+        ownership of the same buffer since they do not have the information available to
+        choose to only own subsets of it.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        # For efficiency, prohibit calling this overload with a Column owner.
+        assert not isinstance(owner, Column)
 
         children = []
+        cdef size_type i
         if cv.num_children() != 0:
             for i in range(cv.num_children()):
                 children.append(
-                    Column.from_column_view(cv.child(i), owner.child(i))
+                    Column.from_column_view_of_arbitrary(cv.child(i), owner)
                 )
 
+        cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
+            <Py_ssize_t> cv.head[char](), owner
+        )
+        cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
+            <Py_ssize_t> cv.null_mask(), owner
+        )
+
         return Column(
-            dtype,
-            size,
-            owner._data,
-            owner._mask,
-            null_count,
+            DataType.from_libcudf(cv.type()),
+            cv.size(),
+            owning_data,
+            owning_mask,
+            cv.null_count(),
             cv.offset(),
             children,
         )
@@ -436,7 +475,7 @@ def _datatype_from_dtype_desc(desc):
 
 
 def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
+    shape: Sequence[int], strides: None | Sequence[int], itemsize: int
 ) -> bool:
     """Determine if shape and strides are C-contiguous
 
@@ -444,8 +483,9 @@ def is_c_contiguous(
     ----------
     shape : Sequence[int]
         Number of elements in each dimension.
-    strides : Sequence[int]
+    strides : None | Sequence[int]
         The stride of each dimension in bytes.
+        If None, the memory layout is C-contiguous.
     itemsize : int
         Size of an element in bytes.
 
@@ -455,6 +495,8 @@ def is_c_contiguous(
         The boolean answer.
     """
 
+    if strides is None:
+        return True
     if any(dim == 0 for dim in shape):
         return True
     cumulative_stride = itemsize

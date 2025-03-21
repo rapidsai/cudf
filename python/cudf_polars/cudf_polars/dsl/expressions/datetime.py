@@ -137,6 +137,8 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
+        Name.Week,
+        Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
         *_ADDITIONAL_COMPONENTS,
@@ -170,6 +172,7 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+<<<<<<< HEAD
         if self.name in self._ADDITIONAL_COMPONENTS:
             # inspired by cuDF algorithm
             if self.name == TemporalFunction.Name.TotalSeconds:
@@ -194,6 +197,32 @@ class TemporalFunction(Expr):
             )
             return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
 
+=======
+        if self.name is TemporalFunction.Name.Week:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%V",
+                    input_strings_names=plc.interop.from_arrow(
+                        pa.array([], type=pa.string())
+                    ),
+                ),
+                plc.types.DataType(plc.types.TypeId.INT8),
+            )
+            return Column(result)
+        if self.name is TemporalFunction.Name.IsoYear:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%G",
+                    input_strings_names=plc.interop.from_arrow(
+                        pa.array([], type=pa.string())
+                    ),
+                ),
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(result)
+>>>>>>> branch-25.06
         if self.name is TemporalFunction.Name.MonthStart:
             ends = plc.datetime.last_day_of_month(column.obj)
             days_to_subtract = plc.datetime.days_in_month(column.obj)
