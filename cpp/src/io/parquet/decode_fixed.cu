@@ -981,9 +981,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
 
-  // must come after the kernel mask check
-  [[maybe_unused]] null_count_back_copier _{s, t};
-
+  // Simple types, simply return.
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_validity[page_idx]) {
       pp->num_nulls  = pp->num_rows;
@@ -1051,6 +1049,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       return;
     }
   }
+
+  // must come after the kernel mask check
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
