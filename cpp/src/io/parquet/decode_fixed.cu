@@ -571,6 +571,36 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
   return valid_count;
 }
 
+template <int decode_block_size, typename state_buf>
+static __device__ void gpuUpdateInvalidPagesLists(page_state_s* s, state_buf* sb)
+{
+  int const start_depth       = 0;
+  int const max_depth         = s->col.max_nesting_depth - 1;
+  int const in_nesting_bounds = (0 >= start_depth && 0 <= max_depth);
+  auto const t                = threadIdx.x;
+
+  // iterate by depth
+
+  for (int d_idx = t; d_idx <= max_depth; d_idx += decode_block_size) {
+    auto& ni = s->nesting_info[d_idx];
+
+    // STORE OFFSET TO THE LIST LOCATION
+    // if we're -not- at a leaf column and we're within nesting/row bounds
+    // and we have a valid data_out pointer, it implies this is a list column, so
+    // emit an offset.
+    if (in_nesting_bounds && ni.data_out != nullptr) {
+      const auto& next_ni       = s->nesting_info[d_idx + 1];
+      int const idx             = ni.value_count;
+      cudf::size_type const ofs = next_ni.value_count + next_ni.page_start_value;
+      (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = ofs;
+    }
+  }  // END OF DEPTH LOOP
+
+  __syncthreads();  // sync modification of ni.value_count
+
+  if (!t) { s->input_row_count = s->page.num_input_values; }
+}
+
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
 static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_count,
                                                           page_state_s* s,
@@ -981,7 +1011,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
 
-  // Simple types, simply return.
+  // Exit super early for simple types if the page is invalid.
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_validity[page_idx]) {
       pp->num_nulls  = pp->num_rows;
@@ -1000,23 +1030,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     return;
   }
 
-  // MH: We need something done for lists
-  /*
-  if constexpr (has_lists_t) {
-    if (not page_validity[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
-      pp->num_valids = 0;
-      // What else?
+  // Exit early if the page is invalid
+  if (not page_validity[page_idx]) {
+    pp->num_nulls  = pp->num_rows;
+    pp->num_valids = 0;
+    // Update offsets for all list depth levels
+    if constexpr (has_lists_t) {
+      gpuUpdateInvalidPagesLists<decode_block_size_t, state_buf_t>(s, sb);
     }
-  }
-  */
 
-  // Update offsets for strings
-  if constexpr (has_strings_t) {
-    if (not page_validity[page_idx]) {
-      pp->num_nulls  = pp->num_rows;
-      pp->num_valids = 0;
-
+    // Update offsets for strings
+    if constexpr (has_strings_t) {
       // Initial string offset
       auto const initial_value = s->page.str_offset;
       auto value_count         = s->page.num_input_values;
@@ -1046,8 +1070,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
           offptr[idx] = initial_value;
         }
       }
-      return;
     }
+    return;
   }
 
   // must come after the kernel mask check
@@ -1125,7 +1149,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   int valid_count             = 0;
   size_t string_output_offset = 0;
 
-  // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
+  // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for
+  // non-lists)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
   if constexpr (has_lists_t) {
     if (skipped_leaf_values > 0) {
