@@ -535,8 +535,14 @@ unique_device_array_t to_arrow_device(cudf::table&& table,
   for (size_t i = 0; i < cols.size(); ++i) {
     auto child = tmp->children[i];
     auto col   = cols[i].get();
-    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    if (col->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_THROW_NOT_OK(initialize_array(child, NANOARROW_TYPE_NA, col->view()));
+      auto contents = col->release();
+      NANOARROW_THROW_NOT_OK(set_contents(contents, child));
+    } else {
+      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+        col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    }
   }
 
   return create_device_array(std::move(tmp), stream);
