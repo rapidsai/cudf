@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,16 +27,6 @@ constexpr bool is_supported_range_type()
 {
   return cudf::is_duration<RangeType>() || cudf::is_fixed_point<RangeType>() ||
          (cudf::is_numeric<RangeType>() && !cudf::is_boolean<RangeType>());
-}
-
-/// Checks if the specified type is a supported target type,
-/// as an order-by column, for comparisons with a range_window_bounds scalar.
-template <typename ColumnType>
-constexpr bool is_supported_order_by_column_type()
-{
-  return cudf::is_timestamp<ColumnType>() || cudf::is_fixed_point<ColumnType>() ||
-         (cudf::is_numeric<ColumnType>() && !cudf::is_boolean<ColumnType>()) ||
-         std::is_same_v<ColumnType, cudf::string_view>;
 }
 
 /// Range-comparable representation type for an orderby column type.

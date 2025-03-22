@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
@@ -23,7 +24,7 @@ import pylibcudf as plc
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -41,13 +42,13 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
-    config
+    engine
         GPU engine configuration.
     """
 
-    def __init__(self, visitor: NodeTraverser, config: GPUEngine):
+    def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config = config
+        self.config_options = config.ConfigOptions(copy.deepcopy(engine.config))
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -227,13 +228,15 @@ def _(
         # TODO: with versioning, rename on the rust side
         skip_rows, n_rows = n_rows
 
+    if file_options.include_file_paths is not None:
+        raise NotImplementedError("No support for including file path in scan")
     row_index = file_options.row_index
     return ir.Scan(
         schema,
         typ,
         reader_options,
         cloud_options,
-        translator.config.config.copy(),
+        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -260,7 +263,7 @@ def _(
         schema,
         node.df,
         node.projection,
-        translator.config.config.copy(),
+        translator.config_options,
     )
 
 
@@ -288,6 +291,7 @@ def _(
         aggs,
         node.maintain_order,
         node.options,
+        translator.config_options,
         inp,
     )
 
@@ -299,38 +303,12 @@ def _(
     # Join key dtypes are dependent on the schema of the left and
     # right inputs, so these must be translated with the relevant
     # input active.
-    def adjust_literal_dtype(literal: expr.Literal) -> expr.Literal:  # pragma: no cover
-        if literal.dtype.id() == plc.types.TypeId.INT32:
-            plc_int64 = plc.types.DataType(plc.types.TypeId.INT64)
-            return expr.Literal(
-                plc_int64,
-                pa.scalar(literal.value.as_py(), type=plc.interop.to_arrow(plc_int64)),
-            )
-        return literal
-
-    def maybe_adjust_binop(e) -> expr.Expr:  # pragma: no cover
-        if isinstance(e.value, expr.BinOp):
-            left, right = e.value.children
-            if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
-                e.value.children = (left, adjust_literal_dtype(right))
-            elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
-                e.value.children = (adjust_literal_dtype(left), right)
-        return e
-
-    def translate_expr_and_maybe_fix_binop_args(translator, exprs):
-        return [
-            maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
-        ]
-
     with set_node(translator.visitor, node.input_left):
-        # TODO: There's bug in the polars type coercion phase.
-        # Use translate_named_expr directly once our minimum
-        # supported polars version is 1.22
         inp_left = translator.translate_ir(n=None)
-        left_on = translate_expr_and_maybe_fix_binop_args(translator, node.left_on)
+        left_on = [translate_named_expr(translator, n=e) for e in node.left_on]
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
-        right_on = translate_expr_and_maybe_fix_binop_args(translator, node.right_on)
+        right_on = [translate_named_expr(translator, n=e) for e in node.right_on]
 
     if (how := node.options[0]) in {
         "Inner",
@@ -341,7 +319,15 @@ def _(
         "Semi",
         "Anti",
     }:
-        return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
+        return ir.Join(
+            schema,
+            left_on,
+            right_on,
+            node.options,
+            translator.config_options,
+            inp_left,
+            inp_right,
+        )
     else:
         how, op1, op2 = node.options[0]
         if how != "IEJoin":
@@ -467,14 +453,14 @@ def _(
 def _(
     node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    key = node.key
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
-    key = node.key
     return ir.MergeSorted(
         schema,
+        key,
         inp_left,
         inp_right,
-        key,
     )
 
 
@@ -637,6 +623,17 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif name in "top_k":
+            (col, k) = children
+            assert isinstance(k, expr.Literal)
+            (descending,) = options
+            return expr.Slice(
+                dtype,
+                0,
+                k.value.as_py(),
+                expr.Sort(dtype, (False, True, not descending), col),
+            )
+
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"

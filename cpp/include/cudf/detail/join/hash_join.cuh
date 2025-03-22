@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -34,16 +35,11 @@
 
 // Forward declaration
 namespace cudf::experimental::row::equality {
-class CUDF_EXPORT preprocessed_table;
+class preprocessed_table;
 }
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
-
-constexpr int DEFAULT_JOIN_CG_SIZE = 2;
-
-enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
-
 /**
  * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
  * member functions.

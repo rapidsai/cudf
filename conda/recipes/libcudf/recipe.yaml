@@ -95,10 +95,19 @@ outputs:
       version: ${{ version }}
     build:
       script:
-        - cmake --install cpp/build
+        content: |
+          cmake --install cpp/build
+          # Check that no hidden symbols are present in the shared library
+          LIB="$PREFIX/lib/libcudf.so"
+          test -f "$LIB"
+          ./ci/check_symbols.sh "$LIB"
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
+      prefix_detection:
+        ignore:
+          # See https://github.com/rapidsai/build-planning/issues/160
+          - lib/libcudf.so
     requirements:
       build:
         - cmake ${{ cmake_version }}
@@ -139,6 +148,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -149,7 +159,6 @@ outputs:
               - cudatoolkit
     tests:
       - script:
-        - test -f $PREFIX/lib/libcudf.so
         - test -f $PREFIX/include/cudf/column/column.hpp
     about:
       homepage: ${{ load_from_file("python/libcudf/pyproject.toml").project.urls.Homepage }}
@@ -182,6 +191,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -261,6 +271,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka
@@ -294,7 +305,6 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
-        - fmt >=11.0.2,<12
         - if: cuda_major == "11"
           then:
             - libcurand ${{ cuda11_libcurand_run_version }}
@@ -322,6 +332,7 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcufile
           - libcurand
           - libkvikio
           - librdkafka

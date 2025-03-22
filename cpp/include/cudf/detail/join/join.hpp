@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cuda_runtime.h>
+#include <cudf/types.hpp>
 
-inline bool can_do_runtime_jit()
-{
-  // We require a CUDA NVRTC of 11.5+ to do runtime jit
-  // as we need support for __int128
+#include <limits>
 
-  int runtime      = 0;
-  auto error_value = cudaRuntimeGetVersion(&runtime);
-  return (error_value == cudaSuccess) && (runtime >= 11050);
-}
+namespace CUDF_EXPORT cudf {
+namespace detail {
+
+constexpr int DEFAULT_JOIN_CG_SIZE = 2;
+
+constexpr size_type JoinNoneValue = std::numeric_limits<size_type>::min();
+
+enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
+
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf
