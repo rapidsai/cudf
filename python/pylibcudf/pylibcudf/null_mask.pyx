@@ -5,6 +5,7 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
 from pylibcudf.libcudf.types cimport mask_state, size_type
+from pylibcudf.gpumemoryview cimport gpumemoryview
 from pylibcudf.utils cimport int_to_bitmask_ptr
 
 from rmm.librmm.device_buffer cimport device_buffer
@@ -152,7 +153,7 @@ cpdef tuple bitmask_or(list columns):
     return buffer_to_python(move(c_result.first)), c_result.second
 
 
-cpdef size_type null_count(Py_ssize_t bitmask, size_type start, size_type stop):
+cpdef size_type null_count(gpumemoryview bitmask, size_type start, size_type stop):
     """Given a validity bitmask, counts the number of null elements.
 
     For details, see :cpp:func:`null_count`.
@@ -172,4 +173,4 @@ cpdef size_type null_count(Py_ssize_t bitmask, size_type start, size_type stop):
         The number of null elements in the specified range.
     """
     with nogil:
-        return cpp_null_mask.null_count(int_to_bitmask_ptr(bitmask), start, stop)
+        return cpp_null_mask.null_count(int_to_bitmask_ptr(bitmask.ptr), start, stop)
