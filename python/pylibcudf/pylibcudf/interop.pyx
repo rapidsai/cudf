@@ -198,9 +198,21 @@ def _to_arrow_datatype(cudf_object, **kwargs):
             )
 
 
+class _TableWithArrowMetadata:
+    def __init__(self, tbl, metadata=None):
+        self.tbl = tbl
+        self.metadata = metadata
+
+    def __arrow_c_array__(self, requested_schema=None):
+        return self.tbl._to_schema(self.metadata), self.tbl._to_host_array()
+
+
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
-    return pa.table(cudf_object)
+    # TODO: See if we can stop supporting configuration of struct field names when
+    # exporting to arrow data. That would allow us to get rid of the
+    # _TableWithArrowMetadata struct and just use the underlying Table directly.
+    return pa.table(_TableWithArrowMetadata(cudf_object, metadata))
 
 
 @to_arrow.register(Column)
