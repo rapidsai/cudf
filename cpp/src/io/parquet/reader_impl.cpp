@@ -226,14 +226,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
     // For testfile.parquet
     else {
-      auto h_page_validity = std::vector<bool>(29, true);
-      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(29, _stream);
+      auto h_page_validity = std::vector<bool>(30, true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(30, _stream);
       h_page_validity[5]   = false;
       h_page_validity[11]  = false;
       h_page_validity[16]  = false;
       h_page_validity[20]  = false;
-      h_page_validity[25]  = false;
       h_page_validity[26]  = false;
+      h_page_validity[28]  = false;
       std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
     }
 

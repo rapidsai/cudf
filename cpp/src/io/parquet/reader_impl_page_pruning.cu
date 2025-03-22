@@ -153,10 +153,10 @@ void reader::impl::fix_holes()
         cols          = &out_buf.children;
         if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
         thrust::for_each(rmm::exec_policy(_stream),
-                         thrust::counting_iterator(0),
-                         thrust::counting_iterator(2000),
+                         thrust::counting_iterator(1024),
+                         thrust::counting_iterator(3072),
                          clear_bit_functor{out_buf.null_mask()});
-        out_buf.null_count() += 2000;
+        out_buf.null_count() += 2048;
       }
     }
   }

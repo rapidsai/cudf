@@ -26,6 +26,6 @@ enum class testfile : int8_t {
 };
 
 // Set this to testfile::FILE1 or testfile::FILE2 to test the two files
-static constexpr testfile _file = testfile::FILE1;
+static constexpr testfile _file = testfile::FILE2;
 
 }  // namespace cudf::io::parquet::detail
