@@ -213,21 +213,21 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   }
 
   // MH: Temporary code to test parquet decoders with page pruning
-  {
+  switch (_file) {
     // For testfile.parquet
-    if (_file == testfile::FILE1) {
-      auto h_page_validity = std::vector<bool>(17, true);
-      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(17, _stream);
+    case testfile::FILE1: {
+      auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
       h_page_validity[1]   = false;
       h_page_validity[8]   = false;
       h_page_validity[17]  = false;
       std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
-
+      break;
     }
-    // For testfile.parquet
-    else {
-      auto h_page_validity = std::vector<bool>(30, true);
-      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(30, _stream);
+    // For testfile2.parquet
+    case testfile::FILE2: {
+      auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
       h_page_validity[5]   = false;
       h_page_validity[11]  = false;
       h_page_validity[16]  = false;
@@ -235,11 +235,39 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       h_page_validity[26]  = false;
       h_page_validity[28]  = false;
       std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
+      break;
     }
-
-    pass.page_validity.host_to_device_async(_stream);
-    subpass.page_validity = pass.page_validity;
+    // For testfile3.parquet
+    case testfile::FILE3: {
+      auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
+      h_page_validity[2]   = false;
+      h_page_validity[14]  = false;
+      h_page_validity[16]  = false;
+      h_page_validity[20]  = false;
+      h_page_validity[22]  = false;
+      h_page_validity[25]  = false;
+      std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
+      break;
+    }
+    case testfile::FILE4: {
+      auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
+      pass.page_validity   = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
+      h_page_validity[1]   = false;
+      h_page_validity[2]   = false;
+      h_page_validity[5]   = false;
+      std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
+      break;
+    }
+    // default case
+    default: {
+      pass.page_validity = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
+      std::fill(pass.page_validity.begin(), pass.page_validity.end(), true);
+    }
   }
+
+  pass.page_validity.host_to_device_async(_stream);
+  subpass.page_validity = pass.page_validity;
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
@@ -455,6 +483,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
+
+  _stream.synchronize();
 
   // MH: Put nulls in the output buffers against pruned pages.
   fix_holes();

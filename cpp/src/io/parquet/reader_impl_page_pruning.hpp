@@ -21,11 +21,23 @@
 namespace cudf::io::parquet::detail {
 
 enum class testfile : int8_t {
-  FILE1 = 1,
-  FILE2 = 2,
+  NONE   = 0,
+  FILE1  = 1,  // list<str>, int, float, str (plain encoding)
+  FILE2  = 2,  // list<str>, list<list<str>>, list<list<list<int64>>> (plain encoding)
+  FILE3  = 3,  // structs (plain encoding)
+  FILE4  = 4,  // FLBA flat (byte stream split encoding)
+  FILE5  = 5,
+  FILE6  = 6,
+  FILE7  = 7,
+  FILE8  = 8,
+  FILE9  = 9,
+  FILE10 = 10,
+  FILE11 = 11,
+  FILE12 = 12,
+  FILE13 = 13,
+  FILE14 = 14,
 };
 
-// Set this to testfile::FILE1 or testfile::FILE2 to test the two files
-static constexpr testfile _file = testfile::FILE2;
+static constexpr testfile _file = testfile::NONE;
 
 }  // namespace cudf::io::parquet::detail
