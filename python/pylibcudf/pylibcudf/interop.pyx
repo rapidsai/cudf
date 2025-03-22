@@ -1,14 +1,12 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cython.operator cimport dereference
-
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
     PyCapsule_IsValid,
     PyCapsule_New,
     PyCapsule_SetName,
 )
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from dataclasses import dataclass, field
@@ -17,10 +15,7 @@ from functools import singledispatch
 from pyarrow import lib as pa
 
 from pylibcudf.libcudf.interop cimport (
-    ArrowArray,
-    ArrowSchema,
     DLManagedTensor,
-    arrow_column,
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
 )
@@ -114,10 +109,6 @@ def _from_arrow_datatype(pyarrow_object):
             raise TypeError(f"Unable to convert {pyarrow_object} to cudf datatype")
 
 
-cdef class _ArrowColumnHolder:
-    cdef unique_ptr[arrow_column] col
-
-
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
@@ -145,23 +136,7 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for arrays")
 
-    schema, array = pyarrow_object.__arrow_c_array__()
-    cdef ArrowSchema* c_schema = (
-        <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-    )
-    cdef ArrowArray* c_array = (
-        <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
-    )
-
-    cdef _ArrowColumnHolder result = _ArrowColumnHolder()
-    cdef unique_ptr[arrow_column] c_result
-    with nogil:
-        c_result = make_unique[arrow_column](
-            move(dereference(c_schema)), move(dereference(c_array))
-        )
-        result.col.swap(c_result)
-
-    return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+    return Column(pyarrow_object)
 
 
 @singledispatch

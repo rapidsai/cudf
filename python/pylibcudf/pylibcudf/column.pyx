@@ -1,14 +1,26 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+
+from cpython.pycapsule cimport (
+    PyCapsule_GetPointer,
+)
+
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+
+from pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowSchema,
+    arrow_column,
+)
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -18,6 +30,20 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 import functools
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+
+
+class _ArrowLikeMeta(type):
+    def __subclasscheck__(cls, other):
+        return hasattr(other, "__arrow_c_array__")
+
+
+class _ArrowLike(metaclass=_ArrowLikeMeta):
+    pass
+
+
+cdef class _ArrowColumnHolder:
+    cdef unique_ptr[arrow_column] col
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -46,7 +72,17 @@ cdef class Column:
     children : list
         The children of this column if it is a compound column type.
     """
-    def __init__(
+    def __init__(self, obj, *args, **kwargs):
+        self._init(obj, *args, **kwargs)
+
+    __hash__ = None
+
+    @functools.singledispatchmethod
+    def _init(self, obj, *args, **kwargs):
+        raise ValueError(f"Invalid input type {type(obj)}")
+
+    @_init.register(DataType)
+    def _(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, size_type offset,
         list children
@@ -62,7 +98,34 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
-    __hash__ = None
+    @_init.register(_ArrowLike)
+    def _(self, arrow_like):
+        schema, array = arrow_like.__arrow_c_array__()
+        cdef ArrowSchema* c_schema = (
+            <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+        )
+        cdef ArrowArray* c_array = (
+            <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+        )
+
+        cdef _ArrowColumnHolder result = _ArrowColumnHolder()
+        cdef unique_ptr[arrow_column] c_result
+        with nogil:
+            c_result = make_unique[arrow_column](
+                move(dereference(c_schema)), move(dereference(c_array))
+            )
+            result.col.swap(c_result)
+
+        tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+        self._init(
+            tmp.type(),
+            tmp.size(),
+            tmp.data(),
+            tmp.null_mask(),
+            tmp.null_count(),
+            tmp.offset(),
+            tmp.children(),
+        )
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.

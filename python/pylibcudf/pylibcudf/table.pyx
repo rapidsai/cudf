@@ -105,7 +105,7 @@ cdef class Table:
 
     @singledispatchmethod
     def _init(self, obj):
-        raise ValueError("Table should be constructed with a list of columns")
+        raise ValueError(f"Invalid input type {type(obj)}")
 
     @_init.register(list)
     def _(self, list columns):
