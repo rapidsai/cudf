@@ -91,6 +91,21 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
   return NANOARROW_OK;
 }
 
+int set_null_mask(column::contents& contents, ArrowArray* out)
+{
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
+  }
+  return NANOARROW_OK;
+}
+
+int set_contents(column::contents& contents, ArrowArray* out)
+{
+  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
+  return NANOARROW_OK;
+}
+
 struct dispatch_to_arrow_device {
   template <typename T,
             CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
@@ -115,21 +130,6 @@ struct dispatch_to_arrow_device {
     NANOARROW_RETURN_NOT_OK(set_contents(contents, tmp.get()));
 
     ArrowArrayMove(tmp.get(), out);
-    return NANOARROW_OK;
-  }
-
-  int set_null_mask(column::contents& contents, ArrowArray* out)
-  {
-    if (contents.null_mask) {
-      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
-    }
-    return NANOARROW_OK;
-  }
-
-  int set_contents(column::contents& contents, ArrowArray* out)
-  {
-    NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
     return NANOARROW_OK;
   }
 };
@@ -548,8 +548,14 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-    col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  if (col.type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_THROW_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_NA, col));
+    auto contents = col.release();
+    NANOARROW_THROW_NOT_OK(set_contents(contents, tmp.get()));
+  } else {
+    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+      col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  }
 
   return create_device_array(std::move(tmp), stream);
 }
