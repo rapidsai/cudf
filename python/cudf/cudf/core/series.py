@@ -251,7 +251,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
             # larger data type mimicking pandas
-            to_dtype = np.result_type(value.dtype, self._frame.dtype)
+            to_dtype = find_common_type((value.dtype, self._frame.dtype))
             value = value.astype(to_dtype)
             if to_dtype != self._frame.dtype:
                 # Do not remove until pandas-3.0 support is added.
@@ -3798,15 +3798,31 @@ class Series(SingleColumnFrame, IndexedFrame):
         return change
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+    def where(
+        self, cond, other=None, inplace: bool = False, axis=None, level=None
+    ) -> Self | None:
         if axis is not None:
             raise NotImplementedError("axis is not supported.")
         elif level is not None:
             raise NotImplementedError("level is not supported.")
-        result_col = super().where(cond, other, inplace)
+        if getattr(other, "ndim", 1) > 1:
+            raise NotImplementedError(
+                "Only 1 dimensional other is currently supported"
+            )
+        cond = as_column(cond)
+        if len(cond) != len(self):
+            raise ValueError(
+                f"cond must be the same length as self ({len(self)})"
+            )
+
+        if not is_scalar(other):
+            other = as_column(other)
+
         return self._mimic_inplace(
-            self._from_data_like_self(
-                self._data._from_columns_like_self([result_col])
+            self._from_column(
+                self._column.where(cond, other, inplace),
+                index=self.index,
+                name=self.name,
             ),
             inplace=inplace,
         )

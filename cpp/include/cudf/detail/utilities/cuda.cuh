@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,24 +186,6 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
   // kernel.
   __syncthreads();
   return result;
-}
-
-/**
- * @brief Finds the smallest value not less than `number_to_round` and modulo `modulus` is
- * zero. Expects modulus to be a power of 2.
- *
- * @note Does not throw or otherwise verify the user has passed in a modulus that is a
- * power of 2.
- *
- * @param[in] number_to_round The value to be rounded up
- * @param[in] modulus The modulus to be rounded up to.  Must be a power of 2.
- *
- * @return cudf::size_type Elements per thread that can be processed for given specification.
- */
-template <typename T>
-__device__ inline T round_up_pow2(T number_to_round, T modulus)
-{
-  return (number_to_round + (modulus - 1)) & -modulus;
 }
 
 template <class F>

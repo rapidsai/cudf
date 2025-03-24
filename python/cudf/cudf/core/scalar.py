@@ -27,6 +27,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
+    find_common_type,
     to_cudf_compatible_scalar,
 )
 
@@ -179,7 +180,7 @@ def get_allowed_combinations_for_operator(
 
     for valid_combo in allowed:
         ltype, rtype, outtype = valid_combo  # type: ignore[misc]
-        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]  # noqa: TID251
             dtype_r.char,
             rtype,  # type: ignore[has-type]
         ):
@@ -458,18 +459,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-    0    2
-    1    3
-    2    4
-    dtype: int64
-    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-    >>> slr = cudf.Scalar(10, dtype='uint8')
-    >>> df - slr
-       a    b
-    0 -9 -5.5
-    1 -8 -4.5
-    2 -7 -3.5
 
     Parameters
     ----------
@@ -659,7 +648,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
                     return np.dtype(f"m8[{res}]")
-                return np.result_type(self.dtype, other.dtype)
+                return find_common_type((self.dtype, other.dtype))
 
         return out_dtype
 

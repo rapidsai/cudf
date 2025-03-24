@@ -1,6 +1,7 @@
 # Usage
 
-There are three ways to enable `cudf.pandas`. Here is a summary:
+To use `cudf.pandas`, enable it *before importing or using pandas* using one of
+these methods:
 
 1. With Jupyter/IPython magics: `%load_ext cudf.pandas`
 2. When executing a Python script from the command line: `python -m cudf.pandas script.py`

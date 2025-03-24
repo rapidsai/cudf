@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import time
 import types
+from collections.abc import Callable
 from io import BytesIO, StringIO
 
 import cupy as cp
@@ -440,26 +441,26 @@ def test_is_sparse():
     psa = pd.arrays.SparseArray([0, 0, 1, 0])
     xsa = xpd.arrays.SparseArray([0, 0, 1, 0])
 
-    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)
+    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)  # noqa: TID251
 
 
 def test_is_file_like():
-    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")
-    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(
+    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")  # noqa: TID251
+    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(  # noqa: TID251
         BytesIO()
     )
     assert pd.api.types.is_file_like(
         StringIO("abc")
-    ) == xpd.api.types.is_file_like(StringIO("abc"))
+    ) == xpd.api.types.is_file_like(StringIO("abc"))  # noqa: TID251
 
 
 def test_is_re_compilable():
     assert pd.api.types.is_re_compilable(
         ".^"
-    ) == xpd.api.types.is_re_compilable(".^")
+    ) == xpd.api.types.is_re_compilable(".^")  # noqa: TID251
     assert pd.api.types.is_re_compilable(
         ".*"
-    ) == xpd.api.types.is_re_compilable(".*")
+    ) == xpd.api.types.is_re_compilable(".*")  # noqa: TID251
 
 
 def test_module_attribute_types():
@@ -497,7 +498,7 @@ def test_options_mode():
 # Codecov and Profiler interfere with each-other,
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
-def test_profiler():
+def test_cudf_pandas_profiler():
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
@@ -1918,7 +1919,6 @@ def assert_functions_called(profiler, functions):
 
     # Get all called functions as (filename, lineno, func_name)
     called_functions = {func[2] for func in stats.stats.keys()}
-    print(called_functions)
     for func_str in functions:
         assert func_str in called_functions
 
@@ -2080,3 +2080,19 @@ def test_pickle_round_trip_proxy_numpy_array(array):
     np.testing.assert_equal(
         pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
     )
+
+
+def test_pandas_objects_not_callable():
+    series = xpd.Series([1, 2, 3])
+    dataframe = xpd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    index = xpd.Index([1, 2, 3])
+    range_index = xpd.RangeIndex(start=0, stop=10, step=1)
+    assert not isinstance(series, Callable)
+    assert not isinstance(dataframe, Callable)
+    assert not isinstance(index, Callable)
+    assert not isinstance(range_index, Callable)
+
+    assert isinstance(xpd.Series, Callable)
+    assert isinstance(xpd.DataFrame, Callable)
+    assert isinstance(xpd.Index, Callable)
+    assert isinstance(xpd.RangeIndex, Callable)

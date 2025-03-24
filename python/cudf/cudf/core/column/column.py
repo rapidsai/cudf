@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -70,7 +71,12 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
+from cudf.utils.utils import (
+    _array_ufunc,
+    _is_null_host_scalar,
+    is_na_like,
+    mask_dtype,
+)
 
 if TYPE_CHECKING:
     import builtins
@@ -1037,40 +1043,43 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             return self.take(gather_map)
 
-    def __setitem__(self, key: Any, value: Any):
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if is_scalar(value):
+            if _is_null_host_scalar(value):
+                value = None
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
+            )
+        else:
+            return as_column(value, dtype=self.dtype)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
         """
         Set the value of ``self[key]`` to ``value``.
 
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
-
-        # Normalize value to scalar/column
-        value_normalized: plc.Scalar | ColumnBase = (
-            cudf.Scalar(value, dtype=self.dtype).device_value
-            if is_scalar(value)
-            else as_column(value, dtype=self.dtype)
-        )
-
-        out: ColumnBase | None  # If None, no need to perform mimic inplace.
+        value_normalized = self._cast_setitem_value(value)
         if isinstance(key, slice):
-            out = self._scatter_by_slice(key, value_normalized)
+            out: ColumnBase | None = self._scatter_by_slice(
+                key, value_normalized
+            )
         else:
             key = as_column(key)
-            if not isinstance(key, cudf.core.column.NumericalColumn):
+            if len(key) == 0:
+                key = key.astype(SIZE_TYPE_DTYPE)
+            if not is_dtype_obj_numeric(key.dtype):
                 raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, value_normalized)
 
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def _wrap_binop_normalization(self, other):
-        if cudf.utils.utils.is_na_like(other):
-            return cudf.Scalar(other, dtype=self.dtype)
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            # Return numpy scalar
-            other = other[()]
-        return self.normalize_binop_value(other)
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
+        if is_na_like(other):
+            return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+        return NotImplemented
 
     def _scatter_by_slice(
         self,
@@ -1895,11 +1904,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """Convert NaN to NA."""
         return self
 
-    def normalize_binop_value(
-        self, other: ScalarLike
-    ) -> ColumnBase | cudf.Scalar:
-        raise NotImplementedError
-
     def _reduce(
         self,
         op: str,
@@ -2146,6 +2150,98 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             type(self)
             .from_pylibcudf(plc.Column.from_scalar(max_val, 1))
             .element_indexing(0),
+        )
+
+    def _cast_self_and_other_for_where(
+        self, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+        other_is_scalar = is_scalar(other)
+
+        if other_is_scalar:
+            if isinstance(other, (float, np.floating)) and not np.isnan(other):
+                try:
+                    is_safe = self.dtype.type(other) == other
+                except OverflowError:
+                    is_safe = False
+
+                if not is_safe:
+                    raise TypeError(
+                        f"Cannot safely cast non-equivalent "
+                        f"{type(other).__name__} to {self.dtype}"
+                    )
+
+            if is_na_like(other):
+                return self, pa_scalar_to_plc_scalar(
+                    pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+                )
+
+        mixed_err = (
+            "cudf does not support mixed types, please type-cast the column of "
+            "dataframe/series and other to same dtypes."
+        )
+
+        if inplace:
+            other_col = as_column(other)
+            if is_mixed_with_object_dtype(other_col, self):
+                raise TypeError(mixed_err)
+
+            if other_col.dtype != self.dtype:
+                try:
+                    warn = (
+                        find_common_type((other_col.dtype, self.dtype))
+                        == CUDF_STRING_DTYPE
+                    )
+                except NotImplementedError:
+                    warn = True
+                if warn:
+                    warnings.warn(
+                        f"Type-casting from {other_col.dtype} "
+                        f"to {self.dtype}, there could be potential data loss"
+                    )
+            if other_is_scalar:
+                other_out = pa_scalar_to_plc_scalar(
+                    pa.scalar(other, type=cudf_dtype_to_pa_type(self.dtype))
+                )
+            else:
+                other_out = other_col.astype(self.dtype)
+            return self, other_out
+
+        if is_dtype_obj_numeric(
+            self.dtype, include_decimal=False
+        ) and as_column(other).can_cast_safely(self.dtype):
+            common_dtype = self.dtype
+        else:
+            common_dtype = find_common_type(
+                [
+                    self.dtype,
+                    np.min_scalar_type(other)
+                    if other_is_scalar
+                    else other.dtype,
+                ]
+            )
+
+        if is_mixed_with_object_dtype(as_column(other), self) or (
+            self.dtype.kind == "b" and common_dtype.kind != "b"
+        ):
+            raise TypeError(mixed_err)
+
+        if other_is_scalar:
+            other_out = pa_scalar_to_plc_scalar(
+                pa.scalar(other, type=cudf_dtype_to_pa_type(common_dtype))
+            )
+        else:
+            other_out = other.astype(common_dtype)
+
+        return self.astype(common_dtype), other_out
+
+    def where(
+        self, cond: ColumnBase, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> ColumnBase:
+        casted_col, casted_other = self._cast_self_and_other_for_where(
+            other, inplace
+        )
+        return casted_col.copy_if_else(casted_other, cond)._with_type_metadata(  # type: ignore[arg-type]
+            self.dtype
         )
 
 
@@ -2830,10 +2926,18 @@ def as_column(
                 type=cudf_dtype_to_pa_type(dtype),
                 from_pandas=from_pandas,
             )
-        except (pa.ArrowInvalid, pa.ArrowTypeError):
-            if not isinstance(dtype, np.dtype):
-                dtype = dtype.to_pandas()
-            arbitrary = pd.Series(arbitrary, dtype=dtype)
+        except (pa.ArrowInvalid, pa.ArrowTypeError) as err:
+            if err.args[0].startswith("Could not convert <NA>"):
+                # nan_as_null=False, but we want to allow pd.NA values
+                arbitrary = pa.array(
+                    arbitrary,
+                    type=cudf_dtype_to_pa_type(dtype),
+                    from_pandas=True,
+                )
+            else:
+                if not isinstance(dtype, np.dtype):
+                    dtype = dtype.to_pandas()
+                arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     else:
         for element in arbitrary:

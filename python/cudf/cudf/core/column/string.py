@@ -6,7 +6,7 @@ import itertools
 import re
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -5432,29 +5433,34 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
-        self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int
+        self, seed: int, a: ColumnLike, b: ColumnLike, width: int
     ) -> SeriesOrIndex:
         """
-        Compute the minhash of a strings column.
+        Compute the minhash of a strings column or a list strings column
+        of terms.
 
-        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function
+        if a or b are of type np.uint32 or MurmurHash3_x86_128 if a and b
+        are of type np.uint64.
 
         Calculation uses the formula (hv * a + b) % mersenne_prime
-        where hv is the hash of a substring of width characters,
+        where hv is the hash of a substring of width characters
+        or ngrams of strings if a list column,
         a and b are provided values and mersenne_prime is 2^61-1.
 
         Parameters
         ----------
-        seed : uint32
+        seed : int
             The seed used for the hash algorithm.
         a : ColumnLike
             Values for minhash calculation.
-            Must be of type uint32.
+            Must be of type uint32 or uint64.
         b : ColumnLike
             Values for minhash calculation.
-            Must be of type uint32.
+            Must be of type uint32 or uint64.
         width : int
             The width of the substring to hash.
+            Or the ngram number of strings to hash.
 
         Examples
         --------
@@ -5467,20 +5473,65 @@ class StringMethods(ColumnMethods):
         0    [1305480171, 462824409, 74608232]
         1       [32665388, 65330773, 97996158]
         dtype: list
+        >>> sl = cudf.Series([['this', 'is', 'my'], ['favorite', 'book']])
+        >>> sl.str.minhash(width=2, seed=0, a=a, b=b)
+        0      [416367551, 832735099, 1249102647]
+        1    [1906668704, 3813337405, 1425038810]
+        dtype: list
         """
         a_column = column.as_column(a)
-        if a_column.dtype != np.uint32:
-            raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(a)}"
-            )
         b_column = column.as_column(b)
-        if b_column.dtype != np.uint32:
+        if a_column.dtype != np.uint32 and a_column.dtype != np.uint64:
             raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(b)}"
+                f"Expecting a and b Series as uint32 or unint64, got {type(a)}"
             )
-        return self._return_or_inplace(
-            self._column.minhash(seed, a_column, b_column, width)  # type: ignore[arg-type]
-        )
+        if a_column.dtype != b_column.dtype:
+            raise ValueError(
+                f"Expecting a and b Series dtype to match, got {type(a)}"
+            )
+        seed = a.dtype.type(seed)
+        if a_column.dtype == np.uint32:
+            if isinstance(self._parent.dtype, cudf.ListDtype):
+                plc_column = plc.nvtext.minhash.minhash_ngrams(
+                    self._column.to_pylibcudf(mode="read"),
+                    width,
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+            else:
+                plc_column = plc.nvtext.minhash.minhash(
+                    self._column.to_pylibcudf(mode="read"),
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                    width,
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+        else:
+            if isinstance(self._parent.dtype, cudf.ListDtype):
+                plc_column = plc.nvtext.minhash.minhash64_ngrams(
+                    self._column.to_pylibcudf(mode="read"),
+                    width,
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
+            else:
+                plc_column = plc.nvtext.minhash.minhash64(
+                    self._column.to_pylibcudf(mode="read"),
+                    seed,
+                    a_column.to_pylibcudf(mode="read"),
+                    b_column.to_pylibcudf(mode="read"),
+                    width,
+                )
+                result = ColumnBase.from_pylibcudf(plc_column)
+                return self._return_or_inplace(result)
 
     def minhash64(
         self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
@@ -6135,14 +6186,13 @@ class StringColumn(column.ColumnBase):
             res = self
         return res.replace(df._data["old"], df._data["new"])
 
-    def normalize_binop_value(self, other) -> column.ColumnBase | cudf.Scalar:
-        if (
-            isinstance(other, (column.ColumnBase, cudf.Scalar))
-            and other.dtype == "object"
-        ):
-            return other
+    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if is_scalar(other):
-            return cudf.Scalar(other)
+            if is_na_like(other):
+                return super()._normalize_binop_operand(other)
+            return pa.scalar(other)
+        elif isinstance(other, type(self)):
+            return other
         return NotImplemented
 
     def _binaryop(
@@ -6172,35 +6222,29 @@ class StringColumn(column.ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
 
-        if isinstance(other, (StringColumn, cudf.Scalar)):
-            if isinstance(other, cudf.Scalar) and other.dtype != "O":
-                if op in {
-                    "__eq__",
-                    "__ne__",
-                }:
+        if isinstance(other, (StringColumn, pa.Scalar)):
+            if isinstance(other, pa.Scalar) and not pa.types.is_string(
+                other.type
+            ):
+                if op in {"__eq__", "__ne__"}:
                     return column.as_column(
-                        op == "__ne__", length=len(self), dtype="bool"
+                        op == "__ne__",
+                        length=len(self),
+                        dtype=np.dtype(np.bool_),
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
 
             if op == "__add__":
-                if isinstance(other, cudf.Scalar):
+                if isinstance(other, pa.Scalar):
                     other = cast(
                         StringColumn,
-                        column.as_column(
-                            other, length=len(self), dtype="object"
-                        ),
+                        column.as_column(other, length=len(self)),
                     )
-
-                # Explicit types are necessary because mypy infers ColumnBase
-                # rather than StringColumn and sometimes forgets Scalar.
-                lhs: cudf.Scalar | StringColumn
-                rhs: cudf.Scalar | StringColumn
                 lhs, rhs = (other, self) if reflect else (self, other)
 
                 with acquire_spill_lock():
@@ -6227,8 +6271,12 @@ class StringColumn(column.ColumnBase):
                 "NULL_EQUALS",
                 "NULL_NOT_EQUALS",
             }:
+                if isinstance(other, pa.Scalar):
+                    other = pa_scalar_to_plc_scalar(other)
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype="bool")
+                return binaryop.binaryop(
+                    lhs=lhs, rhs=rhs, op=op, dtype=np.dtype(np.bool_)
+                )
         return NotImplemented
 
     @copy_docstring(ColumnBase.view)
