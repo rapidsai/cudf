@@ -154,9 +154,10 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
 
     if (col.type().id() == cudf::type_id::EMPTY) {
       NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA));
+    } else {
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+        col.type(), detail::dispatch_to_arrow_type{}, col, metadata.children_meta[i], child));
     }
-    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      col.type(), detail::dispatch_to_arrow_type{}, col, metadata.children_meta[i], child));
   }
 
   return NANOARROW_OK;
