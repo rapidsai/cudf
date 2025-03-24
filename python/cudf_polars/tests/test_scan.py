@@ -409,3 +409,8 @@ def test_scan_parquet_chunked(
             },
         ),
     )
+
+
+def test_scan_hf_url_raises():
+    q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
+    assert_ir_translation_raises(q, NotImplementedError)
