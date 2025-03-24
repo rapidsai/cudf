@@ -657,7 +657,7 @@ def _(
         # TODO: ensure prefix is long enough
         name_generator = unique_names("____")
         aggs, post, _ = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), agg), name_generator
+            expr.NamedExpr(next(name_generator), agg), name_generator, is_top=True
         )
         agg_names = [agg.name for agg in aggs]
         options = node.options

@@ -9,6 +9,8 @@ import itertools
 from functools import partial
 from typing import TYPE_CHECKING
 
+import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
@@ -26,7 +28,10 @@ __all__ = [
 
 
 def decompose_single_agg(
-    named_expr: expr.NamedExpr, name_generator: Generator[str, None, None]
+    named_expr: expr.NamedExpr,
+    name_generator: Generator[str, None, None],
+    *,
+    is_top: bool,
 ) -> tuple[list[expr.NamedExpr], expr.NamedExpr, bool]:
     """
     Decompose a single named aggregation.
@@ -37,6 +42,8 @@ def decompose_single_agg(
         The named aggregation to decompose
     name_generator
         Generator of unique names for temporaries introduced during decomposition.
+    is_top
+        Is this the top of an aggregation expression?
 
     Returns
     -------
@@ -70,7 +77,7 @@ def decompose_single_agg(
             # pl.col("a").nan_max or nan_min
             raise NotImplementedError("Nan propagation in groupby for min/max")
         _, _, has_agg = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), child), name_generator
+            expr.NamedExpr(next(name_generator), child), name_generator, is_top=False
         )
         if has_agg:
             raise NotImplementedError("Nested aggs in groupby not supported")
@@ -84,12 +91,29 @@ def decompose_single_agg(
                 expr.NamedExpr(name, expr.Col(agg.dtype, name)),
                 True,
             )
+        elif agg.name == "sum" and is_top:
+            # In polars sum(empty_group) => 0, but in libcudf sum(empty_group) => null
+            # So must post-process by replacing nulls, but only if we're a "top-level" agg.
+            rep = expr.Literal(
+                agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
+            )
+            return (
+                [named_expr],
+                expr.NamedExpr(
+                    name,
+                    expr.UnaryFunction(
+                        agg.dtype, "fill_null", (), expr.Col(agg.dtype, name), rep
+                    ),
+                ),
+                True,
+            )
         else:
             return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), True
     if agg.is_pointwise:
         aggs, posts, has_aggs = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),
             name_generator,
+            is_top=False,
         )
         if any(has_aggs):
             # Any pointwise expression can be handled either by
@@ -106,10 +130,14 @@ def decompose_single_agg(
 
 
 def _decompose_aggs(
-    aggs: Iterable[expr.NamedExpr], name_generator: Generator[str, None, None]
+    aggs: Iterable[expr.NamedExpr],
+    name_generator: Generator[str, None, None],
+    *,
+    is_top: bool,
 ) -> tuple[list[expr.NamedExpr], Sequence[expr.NamedExpr], Sequence[bool]]:
     new_aggs, post, has_aggs = zip(
-        *(decompose_single_agg(agg, name_generator) for agg in aggs), strict=True
+        *(decompose_single_agg(agg, name_generator, is_top=is_top) for agg in aggs),
+        strict=True,
     )
     return (
         list(itertools.chain.from_iterable(new_aggs)),
@@ -144,7 +172,7 @@ def decompose_aggs(
     NotImplementedError
         For unsupported aggregation combinations.
     """
-    new_aggs, post, _ = _decompose_aggs(aggs, name_generator)
+    new_aggs, post, _ = _decompose_aggs(aggs, name_generator, is_top=True)
     return new_aggs, post
 
 
