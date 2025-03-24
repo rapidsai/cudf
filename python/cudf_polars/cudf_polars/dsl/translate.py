@@ -228,8 +228,6 @@ def _(
         # TODO: with versioning, rename on the rust side
         skip_rows, n_rows = n_rows
 
-    if file_options.include_file_paths is not None:
-        raise NotImplementedError("No support for including file path in scan")
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
     return ir.Scan(

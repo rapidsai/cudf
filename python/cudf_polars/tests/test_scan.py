@@ -332,12 +332,23 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_include_file_path(tmp_path, format, scan_fn, df):
+def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=format == "chunked_parquet",
+            reason="Including file paths in a chunked parquet read",
+        )
+    )
     make_source(df, tmp_path / "file", format)
 
     q = scan_fn(tmp_path / "file", include_file_paths="files")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    if format == "ndjson":
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif format == "parquet":
+        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
+    else:
+        assert_gpu_result_equal(q)
 
 
 @pytest.fixture(
@@ -398,30 +409,3 @@ def test_scan_parquet_chunked(
             },
         ),
     )
-
-
-@pytest.mark.parametrize(
-    "file_ext, writer, scan",
-    [
-        ("parquet", "write_parquet", pl.scan_parquet),
-        ("csv", "write_csv", pl.scan_csv),
-        ("ndjson", "write_ndjson", pl.scan_ndjson),
-    ],
-)
-def test_scan_include_file_paths(tmp_path, file_ext, writer, scan):
-    df1 = pl.DataFrame({"a": [1, 2, 3]})
-    df2 = pl.DataFrame({"a": [7, 6, 5]})
-
-    file1 = tmp_path / f"df1.{file_ext}"
-    file2 = tmp_path / f"df2.{file_ext}"
-
-    getattr(df1, writer)(file1)
-    getattr(df2, writer)(file2)
-
-    q = (
-        scan([file1, file2], include_file_paths="path")
-        .with_row_index()
-        .select(pl.col("a"))
-    )
-
-    assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
