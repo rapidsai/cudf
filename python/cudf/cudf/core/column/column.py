@@ -329,7 +329,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 with acquire_spill_lock():
                     self._null_count = plc.null_mask.null_count(
-                        self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+                        plc.gpumemoryview(self.base_mask),  # type: ignore[union-attr]
                         self.offset,
                         self.offset + self.size,
                     )
