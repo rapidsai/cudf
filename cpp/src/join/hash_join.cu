@@ -371,10 +371,20 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
+  : hash_join{build, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+{
+}
+
+template <typename Hasher>
+hash_join<Hasher>::hash_join(cudf::table_view const& build,
+                             bool has_nulls,
+                             cudf::null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{compute_hash_table_size(build.num_rows()),
+    _hash_table{compute_hash_table_size(build.num_rows(), load_factor * 100),
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),

@@ -295,6 +295,9 @@ enum class nullable_join : bool { YES, NO };
  *
  * This class enables the hash join scheme that builds hash table once, and probes as many times as
  * needed (possibly in parallel).
+ *
+ * @note Unless explicitly specified, the hash table occupancy for `hash_join` is set to 0.5 (50%).
+ * This value determines the load factor of the hash table during the join operation.
  */
 class hash_join {
  public:
@@ -331,6 +334,18 @@ class hash_join {
   hash_join(cudf::table_view const& build,
             nullable_join has_nulls,
             null_equality compare_nulls,
+            rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @copydoc hash_join(cudf::table_view const&, nullable_join, null_equality,
+   * rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  hash_join(cudf::table_view const& build,
+            nullable_join has_nulls,
+            null_equality compare_nulls,
+            double load_factor,
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
@@ -473,6 +488,8 @@ class hash_join {
  *
  * @note Behavior is undefined if the build table contains duplicates.
  * @note All NaNs are considered as equal
+ * @note Unless explicitly specified, the hash table occupancy for `distinct_hash_join` is set to
+ * 0.5 (50%). This value determines the load factor of the hash table during the join operation.
  */
 class distinct_hash_join {
  public:
@@ -492,6 +509,16 @@ class distinct_hash_join {
    */
   distinct_hash_join(cudf::table_view const& build,
                      null_equality compare_nulls  = null_equality::EQUAL,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  distinct_hash_join(cudf::table_view const& build,
+                     null_equality compare_nulls,
+                     double load_factor,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**

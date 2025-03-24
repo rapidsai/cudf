@@ -86,13 +86,21 @@ struct output_fn {
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                                        cudf::null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
+  : distinct_hash_join{build, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+{
+}
+
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       cudf::null_equality compare_nulls,
+                                       double load_factor,
+                                       rmm::cuda_stream_view stream)
   : _has_nested_columns{cudf::has_nested_columns(build)},
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
     _hash_table{build.num_rows(),
-                CUCO_DESIRED_LOAD_FACTOR,
+                load_factor,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            rhs_index_type{JoinNoneValue}}},
                 always_not_equal{},
