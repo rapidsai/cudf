@@ -333,20 +333,12 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
 
 
 def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=format == "chunked_parquet",
-            reason="Including file paths in a chunked parquet read",
-        )
-    )
     make_source(df, tmp_path / "file", format)
 
     q = scan_fn(tmp_path / "file", include_file_paths="files")
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)
-    elif format == "parquet":
-        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
     else:
         assert_gpu_result_equal(q)
 

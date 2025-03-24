@@ -574,11 +574,6 @@ class Scan(IR):
             if filters is not None:
                 options.set_filter(filters)
             if config_options.get("parquet_options.chunked", default=True):
-                if include_file_paths is not None:
-                    # TODO: Track chunk-to-file mapping
-                    raise NotImplementedError(
-                        "Including file paths in a chunked parquet read."
-                    )
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -619,7 +614,8 @@ class Scan(IR):
                 names = chk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    tbl = slice_skip(reader.read_chunk().tbl)
+                    chk = reader.read_chunk()
+                    tbl = slice_skip(chk.tbl)
 
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
@@ -632,6 +628,10 @@ class Scan(IR):
                     plc.Table(concatenated_columns),
                     names=names,
                 )
+                if include_file_paths is not None:
+                    df = _include_file_paths_column(
+                        include_file_paths, paths, chk.num_rows_per_source, df
+                    )
             else:
                 if n_rows != -1:
                     options.set_num_rows(n_rows)
