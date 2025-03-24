@@ -38,7 +38,6 @@ rapids-telemetry-record build-pylibcudf.log \
   rattler-build build --recipe conda/recipes/pylibcudf \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
@@ -51,7 +50,6 @@ rapids-telemetry-record build-cudf.log \
    rattler-build build --recipe conda/recipes/cudf \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
@@ -64,7 +62,6 @@ rapids-telemetry-record build-dask-cudf.log \
     rattler-build build --recipe conda/recipes/dask-cudf \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
@@ -77,7 +74,6 @@ rapids-telemetry-record build-cudf_kafka.log \
     rattler-build build --recipe conda/recipes/cudf_kafka \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
@@ -90,7 +86,6 @@ rapids-telemetry-record build-custreamz.log \
     rattler-build build --recipe conda/recipes/custreamz \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
@@ -103,7 +98,6 @@ rapids-telemetry-record build-cudf-polars.log \
     rattler-build build --recipe conda/recipes/cudf-polars \
                     --experimental \
                     --no-build-id \
-                    --channel-priority disabled \
                     --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
                     "${RATTLER_CHANNELS[@]}"
 
