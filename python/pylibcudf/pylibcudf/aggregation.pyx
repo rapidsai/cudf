@@ -1,6 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp cimport bool
 from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -10,6 +11,7 @@ from pylibcudf.libcudf.aggregation cimport (
     ewm_history,
     groupby_aggregation,
     groupby_scan_aggregation,
+    is_valid_aggregation as cpp_is_valid_aggregation,
     make_all_aggregation,
     make_any_aggregation,
     make_argmax_aggregation,
@@ -813,3 +815,20 @@ cpdef Aggregation tdigest(int max_centroids):
     return Aggregation.from_libcudf(
         move(make_tdigest_aggregation[aggregation](max_centroids))
     )
+
+cpdef bool is_valid_aggregation(DataType source, Aggregation agg):
+    """
+    Return if an aggregation is supported for a given datatype.
+
+    Parameters
+    ----------
+    source
+        The type of the column the aggregation is being performed on.
+    agg
+        The aggregation.
+
+    Returns
+    -------
+    True if the aggregation is supported.
+    """
+    return cpp_is_valid_aggregation(source.c_obj, agg.kind())
