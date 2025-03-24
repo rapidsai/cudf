@@ -448,7 +448,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
                  "Reading compressed data using `byte range` is unsupported");
   }
 
-  CUDF_EXPECTS(range_offset <= source->size(), "Invalid byte range offset");
+  CUDF_EXPECTS(range_offset <= source->size(), "Invalid byte range offset", std::invalid_argument);
 
   // TODO: Allow parsing the header outside the mapped range
   CUDF_EXPECTS((range_offset == 0 || reader_opts.get_header() < 0),
