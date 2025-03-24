@@ -14,7 +14,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api import types as pd_types
+from pandas.api import types as pd_types  # noqa: TID251
 
 import pylibcudf as plc
 
@@ -73,19 +73,6 @@ def is_numeric_dtype(obj):
     return pd_types.is_numeric_dtype(obj)
 
 
-# A version of numerical type check that does not include cudf decimals for
-# places where we need to distinguish fixed and floating point numbers.
-def _is_non_decimal_numeric_dtype(obj):
-    if isinstance(obj, _BaseDtype) or isinstance(
-        getattr(obj, "dtype", None), _BaseDtype
-    ):
-        return False
-    try:
-        return pd_types.is_numeric_dtype(obj)
-    except TypeError:
-        return False
-
-
 def is_integer(obj):
     """Return True if given object is integer.
 
@@ -95,7 +82,7 @@ def is_integer(obj):
     """
     if isinstance(obj, cudf.Scalar):
         return obj.dtype.kind in "iu"
-    return pd.api.types.is_integer(obj)
+    return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
 def is_string_dtype(obj):
@@ -118,7 +105,7 @@ def is_string_dtype(obj):
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
-            pd.api.types.is_string_dtype(obj)
+            pd.api.types.is_string_dtype(obj)  # noqa: TID251
             # Reject all cudf extension types.
             and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
@@ -564,4 +551,4 @@ is_dtype_equal = pd_types.is_dtype_equal
 
 
 # Aliases of numpy dtype functionality.
-issubdtype = np.issubdtype
+issubdtype = np.issubdtype  # noqa: TID251
