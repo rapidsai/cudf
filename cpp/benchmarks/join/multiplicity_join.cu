@@ -22,7 +22,7 @@ void nvbench_inner_join(nvbench::state& state)
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
-    return cudf::inner_join(left_input, right_input, compare_nulls);
+    return cudf::sort_merge_inner_join(left_input, right_input, compare_nulls);
   };
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
