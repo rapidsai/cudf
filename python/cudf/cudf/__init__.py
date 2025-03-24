@@ -19,6 +19,9 @@ from cudf.utils.gpu_utils import validate_setup
 _setup_numba()
 validate_setup()
 
+# Random import to trigger Python test jobs
+import sys
+
 import cupy
 from numba import config as numba_config, cuda
 
