@@ -31,7 +31,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_HashJoin_create(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     auto tview         = reinterpret_cast<cudf::table_view const*>(j_table);
     auto nulleq        = j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto hash_join_ptr = new cudf::hash_join(*tview, nullable_join::YES, nulleq, load_factor);
+    auto hash_join_ptr = new cudf::hash_join(*tview, cudf::nullable_join::YES, nulleq, load_factor);
     return reinterpret_cast<jlong>(hash_join_ptr);
   }
   CATCH_STD(env, 0);
