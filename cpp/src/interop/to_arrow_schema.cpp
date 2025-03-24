@@ -152,6 +152,9 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
 
     child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
+    if (col.type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA));
+    }
     NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
       col.type(), detail::dispatch_to_arrow_type{}, col, metadata.children_meta[i], child));
   }
@@ -174,6 +177,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
   out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
   out->children[0]->flags = child.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  if (child.type().id() == cudf::type_id::EMPTY) {
+    return ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA);
+  }
   return cudf::type_dispatcher(
     child.type(), detail::dispatch_to_arrow_type{}, child, child_meta, out->children[0]);
 }
