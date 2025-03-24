@@ -593,9 +593,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __mul__(self, other):
         # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
-            other = other.value
-        elif (
+        if (
             isinstance(other, (np.ndarray, cupy.ndarray))
             and other.ndim == 0
             and other.dtype.kind in "iu"
@@ -928,7 +926,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return cupy.arange(len(self))
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         return self._as_int_index().where(cond, other, inplace)
 
     @_performance_tracking
@@ -1644,14 +1642,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @_performance_tracking
-    def where(self, cond, other=None, inplace=False) -> Index:
-        result_col = super().where(cond, other, inplace)
-        return self._mimic_inplace(
-            _index_from_data({self.name: result_col}),
-            inplace=inplace,
-        )
-
     @property
     def values(self) -> cupy.ndarray:
         return self._column.values
@@ -1762,6 +1752,28 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 to_concat = [this, other]
 
         return self._concat(to_concat)
+
+    @_performance_tracking
+    def where(self, cond, other=None, inplace: bool = False) -> Self:
+        if getattr(other, "ndim", 1) > 1:
+            raise NotImplementedError(
+                "Only 1 dimensional other is currently supported"
+            )
+        cond = as_column(cond)
+        if len(cond) != len(self):
+            raise ValueError(
+                f"cond must be the same length as self ({len(self)})"
+            )
+
+        if not is_scalar(other):
+            other = as_column(other)
+
+        return self._mimic_inplace(
+            self._from_column(
+                self._column.where(cond, other, inplace), name=self.name
+            ),
+            inplace=inplace,
+        )
 
     def unique(self, level: int | None = None) -> Self:
         if level is not None and level > 0:

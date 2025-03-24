@@ -4,8 +4,13 @@ from libcpp.map cimport map
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.concatenate cimport concatenate
+
 from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
+
 from pylibcudf.libcudf.io.json cimport (
     json_reader_options,
     json_recovery_mode_t,
@@ -14,12 +19,18 @@ from pylibcudf.libcudf.io.json cimport (
     schema_element,
     write_json as cpp_write_json,
 )
+
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     table_with_metadata,
 )
+
 from pylibcudf.libcudf.types cimport data_type, size_type
+
 from pylibcudf.types cimport DataType
+
+from pylibcudf.utils cimport _get_stream
+
 
 __all__ = [
     "chunked_read_json",
@@ -659,6 +670,7 @@ cdef class JsonReaderOptionsBuilder:
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
+    Stream stream = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -670,6 +682,8 @@ cpdef tuple chunked_read_json(
     chunk_size : int, default 100_000_000 bytes.
         The number of bytes to be read in chunks.
         The chunk_size should be set to at least row_size.
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -685,6 +699,7 @@ cpdef tuple chunked_read_json(
     meta_names = None
     child_names = None
     i = 0
+    cdef Stream s = _get_stream(stream)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -692,7 +707,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj))
+                c_result = move(cpp_read_json(options.c_obj, s.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -720,7 +735,8 @@ cpdef tuple chunked_read_json(
 
 
 cpdef TableWithMetadata read_json(
-    JsonReaderOptions options
+    JsonReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from JSON format.
@@ -734,6 +750,8 @@ cpdef TableWithMetadata read_json(
     ----------
     options: JsonReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -741,9 +759,9 @@ cpdef TableWithMetadata read_json(
         The Table and its corresponding metadata (column names) that were read in.
     """
     cdef table_with_metadata c_result
-
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj))
+        c_result = move(cpp_read_json(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -931,7 +949,7 @@ cdef class JsonWriterOptionsBuilder:
         return json_options
 
 
-cpdef void write_json(JsonWriterOptions options):
+cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     """
     Writes a set of columns to JSON format.
 
@@ -939,10 +957,13 @@ cpdef void write_json(JsonWriterOptions options):
     ----------
     options : JsonWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
     None
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        cpp_write_json(options.c_obj)
+        cpp_write_json(options.c_obj, s.view())

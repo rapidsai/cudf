@@ -4,6 +4,8 @@ from collections.abc import Mapping
 
 from typing_extensions import Self
 
+from rmm.pylibrmm.stream import Stream
+
 from pylibcudf.expressions import Expression
 from pylibcudf.io.types import (
     CompressionType,
@@ -38,33 +40,17 @@ class ParquetReaderOptionsBuilder:
 class ChunkedParquetReader:
     def __init__(
         self,
-        source_info: SourceInfo,
-        columns: list[str] | None = None,
-        row_groups: list[list[int]] | None = None,
-        use_pandas_metadata: bool = True,
-        convert_strings_to_categories: bool = False,
-        skip_rows: int = 0,
-        nrows: int = 0,
+        options: ParquetReaderOptions,
+        stream: Stream = None,
         chunk_read_limit: int = 0,
         pass_read_limit: int = 1024000000,
-        allow_mismatched_pq_schemas: bool = False,
     ) -> None: ...
     def has_next(self) -> bool: ...
     def read_chunk(self) -> TableWithMetadata: ...
 
 def read_parquet(
-    source_info: SourceInfo,
-    columns: list[str] | None = None,
-    row_groups: list[list[int]] | None = None,
-    filters: Expression | None = None,
-    convert_strings_to_categories: bool = False,
-    use_pandas_metadata: bool = True,
-    skip_rows: int = 0,
-    nrows: int = -1,
-    allow_mismatched_pq_schemas: bool = False,
-    # disabled see comment in parquet.pyx for more
-    # reader_column_schema: ReaderColumnSchema = *,
-    # timestamp_type: DataType = *
+    options: ParquetReaderOptions,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
 
 class ParquetWriterOptions:
@@ -96,14 +82,18 @@ class ParquetWriterOptionsBuilder:
     def write_arrow_schema(self, enabled: bool) -> Self: ...
     def build(self) -> ParquetWriterOptions: ...
 
-def write_parquet(options: ParquetWriterOptions) -> memoryview: ...
+def write_parquet(
+    options: ParquetWriterOptions, stream: Stream = None
+) -> memoryview: ...
 
 class ParquetChunkedWriter:
     def __init__(self): ...
     def close(self, metadata_file_path: list) -> memoryview: ...
     def write(self, table: Table) -> None: ...
     @staticmethod
-    def from_options(options: ChunkedParquetWriterOptions) -> Self: ...
+    def from_options(
+        options: ChunkedParquetWriterOptions, stream: Stream = None
+    ) -> Self: ...
 
 class ChunkedParquetWriterOptions:
     def __init__(self): ...
