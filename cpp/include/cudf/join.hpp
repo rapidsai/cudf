@@ -339,9 +339,10 @@ class hash_join {
             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @copydoc hash_join(cudf::table_view const&, nullable_join, null_equality,
-   * rmm::cuda_stream_view)
+   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
+   *        any `probe` table that will be used later for join
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
    */
   hash_join(cudf::table_view const& build,
