@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -62,10 +62,9 @@ cdef class Table:
 
     @staticmethod
     cdef Table from_table_view(const table_view& tv, Table owner):
-        """Create a Table from a libcudf table.
+        """Create a Table from a libcudf table_view into a Table owner.
 
-        This method accepts shared ownership of the underlying data from the
-        owner and relies on the offset from the view.
+        This method accepts shared ownership of the underlying data from the owner.
 
         This method is for pylibcudf's functions to use to ingest outputs of
         calling libcudf algorithms, and should generally not be needed by users
@@ -74,6 +73,31 @@ cdef class Table:
         cdef int i
         return Table([
             Column.from_column_view(tv.column(i), owner.columns()[i])
+            for i in range(tv.num_columns())
+        ])
+
+    # Ideally this function would simply be handled via a fused type in
+    # from_table_view, but this does not work due to
+    # https://github.com/cython/cython/issues/6740
+    @staticmethod
+    cdef Table from_table_view_of_arbitrary(const table_view& tv, object owner):
+        """Create a Table from a libcudf table_view into an arbitrary owner.
+
+        This method accepts shared ownership of the underlying data from the owner.
+        Since the owner may be any arbitrary object, every buffer view that is part of
+        the table (each column and all of their children) share ownership of the same
+        buffer since they do not have the information available to choose to only own
+        subsets of it.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        # For efficiency, prohibit calling this overload with a Table owner.
+        assert not isinstance(owner, Table)
+        cdef int i
+        return Table([
+            Column.from_column_view_of_arbitrary(tv.column(i), owner)
             for i in range(tv.num_columns())
         ])
 
