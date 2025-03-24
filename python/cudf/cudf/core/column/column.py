@@ -508,12 +508,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(  # type: ignore[return-value]
-            data=as_buffer(col.data().obj, exposed=data_ptr_exposed)
+            data=as_buffer(col.data(), exposed=data_ptr_exposed)
             if col.data() is not None
             else None,
             dtype=dtype,
             size=col.size(),
-            mask=as_buffer(col.null_mask().obj, exposed=data_ptr_exposed)
+            mask=as_buffer(col.null_mask(), exposed=data_ptr_exposed)
             if col.null_mask() is not None
             else None,
             offset=col.offset(),
