@@ -330,6 +330,8 @@ class hash_join {
    *
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
+   *
+   * @deprecated Deprecated constructor. Use the new load factor overload instead.
    */
   hash_join(cudf::table_view const& build,
             nullable_join has_nulls,
@@ -502,6 +504,8 @@ class distinct_hash_join {
 
   /**
    * @brief Constructs a distinct hash join object for subsequent probe calls
+   *
+   * @deprecated Deprecated constructor. Use the new load factor overload instead.
    *
    * @param build The build table that contains distinct elements
    * @param compare_nulls Controls whether null join-key values should match or not
