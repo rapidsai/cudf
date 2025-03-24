@@ -946,7 +946,6 @@ dependencies:
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
-          - &transformers transformers==4.39.3
           - tzdata
           - xxhash
     specific:
@@ -965,7 +964,6 @@ dependencies:
             packages:
               - pytorch>=2.4.0
               - *tokenizers
-              - *transformers
           - matrix:
             packages:
   test_python_dask_cudf:
