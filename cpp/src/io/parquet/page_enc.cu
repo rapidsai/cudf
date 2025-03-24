@@ -598,7 +598,7 @@ CUDF_KERNEL void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<EncPage> pages,
                device_span<size_type> page_sizes,
-               device_span<size_type> comp_page_sizes,
+               device_span<size_type const> comp_page_sizes,
                device_span<parquet_column_device_view const> col_desc,
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
@@ -2972,103 +2972,94 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   return end;
 }
 
-// blockDim(128, 1, 1)
-CUDF_KERNEL void __launch_bounds__(128)
+// blockDim(encode_block_size, 1, 1)
+CUDF_KERNEL void __launch_bounds__(encode_block_size)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        statistics_chunk const* chunk_stats)
 {
-  // When this whole kernel becomes single thread, the following variables need not be __shared__
-  __shared__ __align__(8) parquet_column_device_view col_g;
-  __shared__ __align__(8) EncColumnChunk ck_g;
-  __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
+  __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
-  auto const t = threadIdx.x;
+  auto const page_idx = cudf::detail::grid_1d::global_thread_id();
+  if (page_idx >= pages.size()) { return; }
 
-  if (t == 0) {
-    uint8_t *hdr_start, *hdr_end;
-    uint32_t compressed_page_size, uncompressed_page_size;
+  auto page             = pages[page_idx];
+  auto const chunk      = *page.chunk;
+  auto const stats_type = chunk.col_desc->stats_dtype;
 
-    page_g = pages[blockIdx.x];
-    ck_g   = *page_g.chunk;
-    col_g  = *ck_g.col_desc;
-
-    if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
-      hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
-      hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, scratch);
-      page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
-    }
-    uncompressed_page_size = page_g.data_size;
-    if (ck_g.is_compressed) {
-      auto const lvl_bytes = page_g.is_v2() ? page_g.level_bytes() : 0;
-      hdr_start            = page_g.compressed_data;
-      compressed_page_size =
-        static_cast<uint32_t>(comp_results[blockIdx.x].bytes_written) + lvl_bytes;
-      page_g.comp_data_size = compressed_page_size;
-    } else {
-      hdr_start            = page_g.page_data;
-      compressed_page_size = uncompressed_page_size;
-    }
-    header_encoder encoder(hdr_start);
-    PageType page_type = page_g.page_type;
-
-    encoder.field_int32(1, page_type);
-    encoder.field_int32(2, uncompressed_page_size);
-    encoder.field_int32(3, compressed_page_size);
-
-    if (page_type == PageType::DATA_PAGE) {
-      // DataPageHeader
-      encoder.field_struct_begin(5);
-      encoder.field_int32(1, page_g.num_values);  // NOTE: num_values != num_rows for list types
-      encoder.field_int32(2, page_g.encoding);    // encoding
-      encoder.field_int32(3, Encoding::RLE);      // definition_level_encoding
-      encoder.field_int32(4, Encoding::RLE);      // repetition_level_encoding
-      // Optionally encode page-level statistics
-      if (not page_stats.empty()) {
-        encoder.field_struct_begin(5);
-        encoder.set_ptr(
-          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
-        encoder.field_struct_end(5);
-      }
-      encoder.field_struct_end(5);
-    } else if (page_type == PageType::DATA_PAGE_V2) {
-      // DataPageHeaderV2
-      encoder.field_struct_begin(8);
-      encoder.field_int32(1, page_g.num_values);
-      encoder.field_int32(2, page_g.num_nulls);
-      encoder.field_int32(3, page_g.num_rows);
-      encoder.field_int32(4, page_g.encoding);
-      encoder.field_int32(5, page_g.def_lvl_bytes);
-      encoder.field_int32(6, page_g.rep_lvl_bytes);
-      encoder.field_bool(7, ck_g.is_compressed);  // TODO can compress at page level now
-      // Optionally encode page-level statistics
-      if (not page_stats.empty()) {
-        encoder.field_struct_begin(8);
-        encoder.set_ptr(
-          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
-        encoder.field_struct_end(8);
-      }
-      encoder.field_struct_end(8);
-    } else {
-      // DictionaryPageHeader
-      encoder.field_struct_begin(7);
-      encoder.field_int32(1, ck_g.num_dict_entries);  // number of values in dictionary
-      encoder.field_int32(2, page_g.encoding);
-      encoder.field_struct_end(7);
-    }
-    encoder.end(&hdr_end, false);
-    page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
+  uint8_t* hdr_start{};
+  uint8_t* hdr_end{};
+  if (chunk_stats && &pages[page_idx] == chunk.pages) {  // Is this the first page in a chunk?
+    hdr_start = (chunk.is_compressed) ? chunk.compressed_bfr : chunk.uncompressed_bfr;
+    hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page.chunk_id], stats_type, scratch);
+    page.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
   }
-  __syncthreads();
-  if (t == 0) pages[blockIdx.x] = page_g;
+  auto const uncompressed_page_size = page.data_size;
+  uint32_t compressed_page_size{};
+  if (chunk.is_compressed) {
+    auto const lvl_bytes = page.is_v2() ? page.level_bytes() : 0;
+    hdr_start            = page.compressed_data;
+    compressed_page_size = static_cast<uint32_t>(comp_results[page_idx].bytes_written) + lvl_bytes;
+    page.comp_data_size  = compressed_page_size;
+  } else {
+    hdr_start            = page.page_data;
+    compressed_page_size = uncompressed_page_size;
+  }
+  header_encoder encoder(hdr_start);
+
+  encoder.field_int32(1, page.page_type);
+  encoder.field_int32(2, uncompressed_page_size);
+  encoder.field_int32(3, compressed_page_size);
+
+  if (page.page_type == PageType::DATA_PAGE) {
+    // DataPageHeader
+    encoder.field_struct_begin(5);
+    encoder.field_int32(1, page.num_values);  // NOTE: num_values != num_rows for list types
+    encoder.field_int32(2, page.encoding);    // encoding
+    encoder.field_int32(3, Encoding::RLE);    // definition_level_encoding
+    encoder.field_int32(4, Encoding::RLE);    // repetition_level_encoding
+    // Optionally encode page-level statistics
+    if (not page_stats.empty()) {
+      encoder.field_struct_begin(5);
+      encoder.set_ptr(
+        EncodeStatistics(encoder.get_ptr(), &page_stats[page_idx], stats_type, scratch));
+      encoder.field_struct_end(5);
+    }
+    encoder.field_struct_end(5);
+  } else if (page.page_type == PageType::DATA_PAGE_V2) {
+    // DataPageHeaderV2
+    encoder.field_struct_begin(8);
+    encoder.field_int32(1, page.num_values);
+    encoder.field_int32(2, page.num_nulls);
+    encoder.field_int32(3, page.num_rows);
+    encoder.field_int32(4, page.encoding);
+    encoder.field_int32(5, page.def_lvl_bytes);
+    encoder.field_int32(6, page.rep_lvl_bytes);
+    encoder.field_bool(7, chunk.is_compressed);  // TODO can compress at page level now
+    // Optionally encode page-level statistics
+    if (not page_stats.empty()) {
+      encoder.field_struct_begin(8);
+      encoder.set_ptr(
+        EncodeStatistics(encoder.get_ptr(), &page_stats[page_idx], stats_type, scratch));
+      encoder.field_struct_end(8);
+    }
+    encoder.field_struct_end(8);
+  } else {
+    // DictionaryPageHeader
+    encoder.field_struct_begin(7);
+    encoder.field_int32(1, chunk.num_dict_entries);  // number of values in dictionary
+    encoder.field_int32(2, page.encoding);
+    encoder.field_struct_end(7);
+  }
+  encoder.end(&hdr_end, false);
+  page.hdr_size = static_cast<uint32_t>(hdr_end - hdr_start);
+
+  pages[page_idx] = page;
 }
 
 // blockDim(1024, 1, 1)
-CUDF_KERNEL void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<EncPage const> pages)
+CUDF_KERNEL void __launch_bounds__(1024) gpuGatherPages(device_span<EncColumnChunk> chunks)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -3400,7 +3391,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
-                      device_span<size_type> comp_page_sizes,
+                      device_span<size_type const> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
@@ -3508,17 +3499,14 @@ void EncodePageHeaders(device_span<EncPage> pages,
                        statistics_chunk const* chunk_stats,
                        rmm::cuda_stream_view stream)
 {
-  // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
-  // threads to coop load structs
-  gpuEncodePageHeaders<<<pages.size(), encode_block_size, 0, stream.value()>>>(
+  auto const num_blocks = util::div_rounding_up_safe<int>(pages.size(), encode_block_size);
+  gpuEncodePageHeaders<<<num_blocks, encode_block_size, 0, stream.value()>>>(
     pages, comp_results, page_stats, chunk_stats);
 }
 
-void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<EncPage const> pages,
-                 rmm::cuda_stream_view stream)
+void GatherPages(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks);
 }
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,

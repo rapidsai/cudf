@@ -485,30 +485,4 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               mr);
 }
 
-std::unique_ptr<table> grouped_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& orderby,
-  order order,
-  null_order null_order,
-  range_window_type preceding,
-  range_window_type following,
-  size_type min_periods,
-  std::vector<std::pair<column_view const&, rolling_aggregation const&>> requests,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(min_periods > 0, "min_periods must be positive");
-  return detail::grouped_range_rolling_window(group_keys,
-                                              orderby,
-                                              order,
-                                              null_order,
-                                              preceding,
-                                              following,
-                                              min_periods,
-                                              requests,
-                                              stream,
-                                              mr);
-}
-
 }  // namespace cudf

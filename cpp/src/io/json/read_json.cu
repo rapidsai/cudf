@@ -70,10 +70,8 @@ class compressed_host_buffer_source final : public datasource {
   {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
-    if (_comptype == compression_type::GZIP || _comptype == compression_type::ZIP ||
-        _comptype == compression_type::SNAPPY) {
-      _decompressed_ch_buffer_size = cudf::io::detail::get_uncompressed_size(_comptype, ch_buffer);
-    } else {
+    _decompressed_ch_buffer_size = cudf::io::detail::get_uncompressed_size(_comptype, ch_buffer);
+    if (_decompressed_ch_buffer_size == 0) {
       _decompressed_buffer         = cudf::io::detail::decompress(_comptype, ch_buffer);
       _decompressed_ch_buffer_size = _decompressed_buffer.size();
     }
@@ -675,9 +673,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
 
   std::size_t const num_streams =
-    std::min<std::size_t>({sources.size() - start_source + 1,
-                           cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
-                           pools::tpool().get_thread_count()});
+    std::min<std::size_t>(sources.size() - start_source + 1, pools::tpool().get_thread_count());
   auto stream_pool = cudf::detail::fork_streams(stream, num_streams);
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;

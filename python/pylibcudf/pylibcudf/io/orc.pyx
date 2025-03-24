@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -6,12 +6,16 @@ from libcpp.vector cimport vector
 
 import datetime
 
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
+
 from pylibcudf.libcudf.io.orc cimport (
     orc_reader_options,
     read_orc as cpp_read_orc,
     write_orc as cpp_write_orc,
 )
+
 from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
@@ -26,19 +30,27 @@ from pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-from pylibcudf.libcudf.io.types cimport table_with_metadata
-from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.types cimport DataType
-from pylibcudf.variant cimport get_if, holds_alternative
+
 from pylibcudf.libcudf.io.types cimport (
+    table_with_metadata,
     compression_type,
     statistics_freq,
 )
+
 from pylibcudf.libcudf.io.orc cimport (
     orc_chunked_writer,
     orc_writer_options,
     chunked_orc_writer_options,
 )
+
+from pylibcudf.libcudf.types cimport size_type
+
+from pylibcudf.types cimport DataType
+
+from pylibcudf.variant cimport get_if, holds_alternative
+
+from pylibcudf.utils cimport _get_stream
+
 
 __all__ = [
     "OrcColumnStatistics",
@@ -405,7 +417,7 @@ cdef class OrcReaderOptionsBuilder:
         return orc_options
 
 
-cpdef TableWithMetadata read_orc(OrcReaderOptions options):
+cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None):
     """
     Read from ORC format.
 
@@ -418,11 +430,14 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options):
     ----------
     options: OrcReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
     """
     cdef table_with_metadata c_result
+    cdef Stream s = _get_stream(stream)
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj))
+        c_result = move(cpp_read_orc(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -604,7 +619,7 @@ cdef class OrcWriterOptionsBuilder:
         return orc_options
 
 
-cpdef void write_orc(OrcWriterOptions options):
+cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     """
     Write to ORC format.
 
@@ -617,13 +632,16 @@ cpdef void write_orc(OrcWriterOptions options):
     ----------
     options: OrcWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
     None
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        cpp_write_orc(move(options.c_obj))
+        cpp_write_orc(move(options.c_obj), s.view())
 
 
 cdef class OrcChunkedWriter:
@@ -655,7 +673,7 @@ cdef class OrcChunkedWriter:
             self.c_obj.get()[0].write(table.view())
 
     @staticmethod
-    def from_options(ChunkedOrcWriterOptions options):
+    def from_options(ChunkedOrcWriterOptions options, Stream stream = None):
         """
         Creates a chunked ORC writer from options
 
@@ -663,6 +681,8 @@ cdef class OrcChunkedWriter:
         ----------
         options: ChunkedOrcWriterOptions
             Settings for controlling writing behavior
+        stream: Stream
+            CUDA stream used for device memory operations and kernel launches
 
         Returns
         -------
@@ -671,7 +691,8 @@ cdef class OrcChunkedWriter:
         cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
             OrcChunkedWriter
         )
-        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj))
+        cdef Stream s = _get_stream(stream)
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, s.view()))
         return orc_writer
 
 
