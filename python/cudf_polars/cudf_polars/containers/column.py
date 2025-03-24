@@ -309,6 +309,39 @@ class Column:
         self.null_order = null_order
         return self
 
+    def check_sorted(
+        self,
+        *,
+        order: plc.types.Order,
+        null_order: plc.types.NullOrder,
+    ) -> bool:
+        """
+        Check if the column is sorted.
+
+        Parameters
+        ----------
+        order
+            The requested sort order.
+        null_order
+            Where nulls sort to.
+
+        Returns
+        -------
+        True if the column is sorted, false otherwise.
+
+        Notes
+        -----
+        If the sortedness flag is not set, this launches a kernel to
+        check sortedness.
+        """
+        if self.obj.size() <= 1 or self.obj.size() == self.obj.null_count():
+            return True
+        if self.is_sorted == plc.types.Sorted.YES:
+            return self.order == order and (
+                self.obj.null_count() == 0 or self.null_order == null_order
+            )
+        return plc.sorting.is_sorted(plc.Table([self.obj]), [order], [null_order])
+
     def copy(self) -> Self:
         """
         A shallow copy of the column.

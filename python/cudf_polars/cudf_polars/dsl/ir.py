@@ -948,13 +948,15 @@ class Rolling(IR):
         preceding_window, following_window = range_window_bounds(
             preceding, following, closed_window
         )
-        if orderby.is_sorted == plc.types.Sorted.NO:
-            raise RuntimeError(
-                f"Index column '{index.name}' in rolling is not sorted, please sort first"
-            )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
                 f"Index column '{index.name}' in rolling may not contain nulls"
+            )
+        if not orderby.check_sorted(
+            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+        ):
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling is not sorted, please sort first"
             )
         values = plc.rolling.grouped_range_rolling_window(
             plc.Table([k.obj for k in keys]),
