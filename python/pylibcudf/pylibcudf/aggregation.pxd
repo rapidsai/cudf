@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.aggregation cimport (
     Kind as kind_t,
@@ -104,3 +105,5 @@ cpdef Aggregation rank(
     null_order null_precedence = *,
     rank_percentage percentage = *,
 )
+
+cpdef bool is_valid_aggregation(DataType source, Aggregation agg)
