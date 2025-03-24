@@ -110,7 +110,7 @@ class StringFunction(Expr):
         self.is_pointwise = True
         self._validate_input()
 
-    def _validate_input(self):
+    def _validate_input(self) -> None:
         if self.name not in (
             StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
@@ -155,7 +155,9 @@ class StringFunction(Expr):
             if not all(isinstance(expr, Literal) for expr in self.children[1:]):
                 raise NotImplementedError("replace only supports scalar target")
             target = self.children[1]
-            if target.value == pa.scalar("", type=pa.string()):
+            # Above, we raise NotImplementedError if the target is not a Literal,
+            # so we can safely access .value here.
+            if target.value == pa.scalar("", type=pa.string()):  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -170,7 +172,9 @@ class StringFunction(Expr):
             ):
                 raise NotImplementedError("replace_many only supports literal inputs")
             target = self.children[1]
-            if pc.any(pc.equal(target.value, "")).as_py():
+            # Above, we raise NotImplementedError if the target is not a Literal,
+            # so we can safely access .value here.
+            if pc.any(pc.equal(target.value, "")).as_py():  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
