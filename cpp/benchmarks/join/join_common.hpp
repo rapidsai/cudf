@@ -154,7 +154,7 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
     }
     return bytes;
   };
-  auto const data_size = table_bytes(right_table) + table_bytes(left_table);
+  auto const join_input_size = table_bytes(right_table) + table_bytes(left_table);
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
@@ -185,8 +185,8 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
     });
   }
   if constexpr (join_type == join_t::HASH) {
-    state.add_element_count(data_size, "data_size");  // number of bytes
-    state.template add_global_memory_reads<nvbench::int8_t>(data_size);
+    state.add_element_count(join_input_size, "join_input_size");  // number of bytes
+    state.template add_global_memory_reads<nvbench::int8_t>(join_input_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = JoinFunc(left_table.select(columns_to_join),
                              right_table.select(columns_to_join),
