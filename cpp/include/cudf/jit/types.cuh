@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/detail/offsets_iterator.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -200,9 +202,6 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return data<T>()[element_index];
   }
 
-  /**
-   * @copydoc cudf::column_device_view::element
-   */
   template <typename T, CUDF_ENABLE_IF(is_fixed_point<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
@@ -210,6 +209,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     using rep        = typename T::rep;
     auto const scale = scale_type{_type.scale()};
     return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
+  }
+
+  /**
+   * @copydoc cudf::column_device_view::element
+   */
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    static constexpr size_type string_data_index = 0;
+    size_type index       = element_index + offset();  // account for this view's _offset
+    char const* d_strings = static_cast<char const*>(_data);
+    auto const offsets    = d_children[string_data_index];
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const offset     = itr[index];
+    return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
   }
 
   /**

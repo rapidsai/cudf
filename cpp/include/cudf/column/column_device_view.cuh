@@ -15,31 +15,38 @@
  */
 #pragma once
 
+#ifndef CUDF_JIT_UDF
+
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.hpp>
-#include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/std/optional>
-#include <cuda/std/type_traits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-#include <algorithm>
 #include <functional>
+
+#endif
+
+#include <cudf/detail/offsets_iterator.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <cuda/std/optional>
+#include <cuda/std/type_traits>
+
+#include <algorithm>
 #include <type_traits>
 
 /**
@@ -463,7 +470,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_signed_v<IndexType>)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and cuda::std::is_signed_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -471,7 +478,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_signed_v<IndexType>))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and cuda::std::is_signed_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
       CUDF_UNREACHABLE("dictionary indices must be a signed integral type");
@@ -503,7 +510,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return dictionary32 instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, dictionary32>)>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
@@ -541,6 +548,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   {
     return has_element_accessor_impl<column_device_view, T>::value;
   }
+
+#ifndef CUDF_JIT_UDF
 
   /// Counting iterator
   using count_it = thrust::counting_iterator<size_type>;
@@ -843,6 +852,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   static std::size_t extent(column_view const& source_view);
 
+#endif
+
   /**
    * @brief Returns the specified child
    *
@@ -854,6 +865,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return d_children[child_index];
   }
 
+#ifndef CUDF_JIT_UDF
+
   /**
    * @brief Returns a span containing the children of this column
    *
@@ -863,6 +876,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   {
     return {d_children, static_cast<std::size_t>(_num_children)};
   }
+
+#endif
 
   /**
    * @brief Returns the number of child columns
@@ -945,6 +960,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   mutable_column_device_view& operator=(mutable_column_device_view&&) = default;
 
+#ifndef CUDF_JIT_UDF
+
   /**
    * @brief Creates an instance of this class using the specified host memory
    * pointer (h_ptr) to store child objects and the device memory pointer
@@ -978,6 +995,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
                          std::function<void(mutable_column_device_view*)>>
   create(mutable_column_view source_view,
          rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+#endif
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
@@ -1041,6 +1060,36 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   }
 
   /**
+   * @brief Assigns `value` to the element at `element_index`
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   * @param value The value to assign
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  __device__ void assign(size_type element_index, T value) const noexcept
+  {
+    data<T>()[element_index] = value;
+  }
+
+  /**
+   * @brief Assigns `value` to the element at `element_index`.
+   * @warning Expects that `value` has been scaled to the column's scale
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   * @param value The value to assign
+   */
+  template <typename T, CUDF_ENABLE_IF(is_fixed_point<T>())>
+  __device__ void assign(size_type element_index, T value) const noexcept
+  {
+    // consider asserting that the scale matches
+    using namespace numeric;
+    using rep                  = typename T::rep;
+    data<rep>()[element_index] = value.value();
+  }
+
+  /**
    * @brief For a given `T`, indicates if `mutable_column_device_view::element<T>()` has a valid
    * overload.
    *
@@ -1064,6 +1113,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
+
+#ifndef CUDF_JIT_UDF
 
   /// Counting iterator
   using count_it = thrust::counting_iterator<size_type>;
@@ -1104,6 +1155,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   {
     return iterator<T>{count_it{size()}, detail::mutable_value_accessor<T>{*this}};
   }
+
+#endif
 
   /**
    * @brief Returns the specified child
@@ -1171,6 +1224,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
     null_mask()[word_index] = new_word;
   }
 
+#ifndef CUDF_JIT_UDF
+
   /**
    * @brief Return the size in bytes of the amount of memory needed to hold a
    * device view of the specified column and it's children.
@@ -1188,6 +1243,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * allocated to hold the child views.
    */
   void destroy();
+
+#endif
 
  private:
   mutable_column_device_view* d_children{};  ///< Array of `mutable_column_device_view`
@@ -1208,6 +1265,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
 };
 
 namespace detail {
+
+#ifndef CUDF_JIT_UDF
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
 
@@ -1528,6 +1587,8 @@ ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
   }
   return d_children;
 }
+
+#endif
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

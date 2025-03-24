@@ -408,4 +408,32 @@ TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
 }
 
+struct TernaryStringOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
+
+TEST_F(TernaryStringOperationTest, StringComparison)
+{
+  auto a = cudf::test::strings_column_wrapper({"a", "b", "ccc", "dddd", "eee"});
+  auto b = cudf::test::strings_column_wrapper({"a", "b", "d", "dddddd", "e"});
+  auto c = cudf::test::strings_column_wrapper({"a", "b", "e", "ddd", "e"});
+
+  std::string cuda = R"***(
+  __device__ void compare(bool * out, cudf::string_view a, cudf::string_view b, cudf::string_view c){
+    *out = (a == b) || (b == c);
+  }
+  )***";
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, true};
+  auto result   = cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 }  // namespace transformation
