@@ -29,7 +29,6 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
-from cudf_polars.dsl._hashing import hash_polars_dataframe
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
@@ -712,7 +711,7 @@ class DataFrameScan(IR):
     __slots__ = ("config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars internal PyDataFrame object."""
+    """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     config_options: ConfigOptions
@@ -747,7 +746,7 @@ class DataFrameScan(IR):
         return (
             type(self),
             schema_hash,
-            hash_polars_dataframe(self.df),
+            id(self.df),
             self.projection,
             self.config_options,
         )
