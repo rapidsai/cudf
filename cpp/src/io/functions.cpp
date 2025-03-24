@@ -164,7 +164,7 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       sources.reserve(info.filepaths().size());
       // Creating sources in a single thread is faster for a small number of sources
       auto const pool_use_threshold =
-        getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8);
+        getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8ul);
       if (info.filepaths().size() >= pool_use_threshold) {
         std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
         source_tasks.reserve(info.filepaths().size());
