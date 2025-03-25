@@ -38,6 +38,6 @@ enum class testfile : int8_t {
   FILE14 = 14,
 };
 
-static constexpr testfile _file = testfile::NONE;
+static constexpr testfile _file = testfile::FILE6;
 
 }  // namespace cudf::io::parquet::detail
