@@ -483,13 +483,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
+  // Exit early if the page is invalid
   // MH: What to do if `has_repetition` is true?
-
-  // Update string offsets or write string sizes for small and large strings respectively
   if (not page_validity[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
+
+    // Update string offsets or write string sizes for small and large strings respectively
     update_string_offsets_for_pruned_pages<decode_block_size>(
       s, initial_str_offsets, pages[page_idx], has_repetition);
 
@@ -665,12 +666,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
+  // Exit early if the page is invalid
   // MH: What to do if `has_repetition` is true?
-
   if (not page_validity[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
+
     // Update string offsets or write string sizes for small and large strings respectively
     update_string_offsets_for_pruned_pages<decode_block_size>(
       s, initial_str_offsets, pages[page_idx], has_repetition);
