@@ -580,7 +580,6 @@ static __device__ void gpuUpdateInvalidPagesLists(page_state_s* s, state_buf* sb
   auto const t                = threadIdx.x;
 
   // iterate by depth
-
   for (int d_idx = t; d_idx <= max_depth; d_idx += decode_block_size) {
     auto& ni = s->nesting_info[d_idx];
 
@@ -596,9 +595,7 @@ static __device__ void gpuUpdateInvalidPagesLists(page_state_s* s, state_buf* sb
     }
   }  // END OF DEPTH LOOP
 
-  __syncthreads();  // sync modification of ni.value_count
-
-  if (!t) { s->input_row_count = s->page.num_input_values; }
+  __syncthreads();  // sync
 }
 
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
