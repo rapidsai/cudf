@@ -52,7 +52,7 @@ namespace {
 // there are only 100 such special characters out of the 65536 possible Unicode characters
 constexpr size_type NUM_SPECIAL_CHARS = 100;
 
-const __constant__ uint32_t multi_byte_cross_table[NUM_SPECIAL_CHARS] = {
+__constant__ cuda::std::array<uint32_t, NUM_SPECIAL_CHARS> multi_byte_cross_table = {
   0x00c39f, /* (ß,2)->(S,1) 0x000053 */ 0x00c4b0, /* (İ,2)->(i,1) 0x000069 */
   0x00c4b1, /* (ı,2)->(I,1) 0x000049 */ 0x00c5bf, /* (ſ,2)->(S,1) 0x000053 */
   0x00c7b0, /* (ǰ,2)->(J,1) 0x00004a */ 0x00c8ba, /* (Ⱥ,2)->(ⱥ,3) 0xe2b1a5 */
@@ -355,14 +355,14 @@ CUDF_KERNEL void mismatch_multibytes_kernel(char const* d_input_chars,
 }
 
 /**
- * @brief Special functor for processing UTF-8 characters whose
+ * @brief Special kernel for processing UTF-8 characters whose
  * byte counts match their case equivalent (including ASCII)
  */
 template <int bytes_per_thread>
-CUDF_KERNEL void multibyte_converter_fn(convert_char_fn converter,
-                                        char const* d_input_chars,
-                                        int64_t chars_size,
-                                        char* d_output_chars)
+CUDF_KERNEL void multibyte_converter_kernel(convert_char_fn converter,
+                                            char const* d_input_chars,
+                                            int64_t chars_size,
+                                            char* d_output_chars)
 {
   auto const idx      = cudf::detail::grid_1d::global_thread_id();
   auto const char_idx = (idx * bytes_per_thread);
@@ -444,7 +444,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
     // and nulls properly but also does incur a wasteful chars copy too
     auto result  = std::make_unique<column>(input.parent(), stream, mr);
     auto d_chars = result->mutable_view().head<char>();
-    multibyte_converter_fn<bytes_per_thread>
+    multibyte_converter_kernel<bytes_per_thread>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         ccfn, input_chars + first_offset, chars_size, d_chars);
     result->set_null_count(input.null_count());
