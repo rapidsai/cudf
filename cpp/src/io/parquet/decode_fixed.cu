@@ -594,8 +594,6 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s, sta
       (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = offset;
     }
   }
-
-  __syncthreads();
 }
 
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
