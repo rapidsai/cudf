@@ -754,19 +754,24 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   return splits;
 }
 
+/**
+ * @brief Stores basic information about pages compressed with a specific codec.
+ */
 struct codec_stats {
   Compression compression_type  = UNCOMPRESSED;
   size_t num_pages              = 0;
   int32_t max_decompressed_size = 0;
   size_t total_decomp_size      = 0;
 
+  enum class page_selection { DICT_PAGES, NON_DICT_PAGES };
+
   void add_pages(host_span<ColumnChunkDesc const> chunks,
                  host_span<PageInfo> pages,
-                 bool select_dict_pages)
+                 page_selection selection)
   {
     for (auto& page : pages) {
       if (chunks[page.chunk_idx].codec == compression_type &&
-          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages) {
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == (selection == page_selection::DICT_PAGES)) {
         ++num_pages;
         total_decomp_size += page.uncompressed_page_size;
         max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
@@ -810,7 +815,7 @@ struct codec_stats {
            }) != codecs.end();
   };
 
-  for (auto& chunk : chunks) {
+  for (auto const& chunk : chunks) {
     CUDF_EXPECTS(is_codec_supported(chunk.codec),
                  "Unsupported compression type: " +
                    cudf::io::detail::compression_type_name(from_parquet_compression(chunk.codec)));
@@ -818,7 +823,7 @@ struct codec_stats {
 
   size_t total_pass_decomp_size = 0;
   for (auto& codec : codecs) {
-    codec.add_pages(chunks, pass_pages, true);
+    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES);
     total_pass_decomp_size += codec.total_decomp_size;
   }
 
@@ -826,8 +831,8 @@ struct codec_stats {
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
   for (auto& codec : codecs) {
-    codec.add_pages(chunks, subpass_pages, false);
-    // at this point, the codec contains info for both pass and subpass pages
+    codec.add_pages(chunks, subpass_pages, codec_stats::page_selection::NON_DICT_PAGES);
+    // at this point, the codec contains info for both dictionary pass pages and data subpass pages
     total_decomp_size += codec.total_decomp_size;
     num_comp_pages += codec.num_pages;
   }
@@ -933,9 +938,9 @@ struct codec_stats {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               comp_res.begin(),
                               comp_res.end(),
-                              cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
+                              [] __device__(auto const& res) {
                                 return res.status == compression_status::SUCCESS;
-                              })),
+                              }),
                "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
@@ -1389,7 +1394,8 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
   auto const is_first_subpass = pass.processed_rows == 0;
 
-  // decompress the data for the pages in this subpass.
+  // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
+  // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
     auto [pass_data, subpass_data] = decompress_page_data(
       pass.chunks, is_first_subpass ? pass.pages : host_span<PageInfo>{}, subpass.pages, _stream);
