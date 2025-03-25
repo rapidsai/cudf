@@ -792,7 +792,8 @@ struct codec_stats {
  * @param subpass_pages List of page information for the subpass
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @return Device buffer to decompressed page data
+ * @return A pair of device buffers containing the decompressed data for dictionary and
+ * non-dictionary pages, respectively.
  */
 [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(
   host_span<ColumnChunkDesc const> chunks,
