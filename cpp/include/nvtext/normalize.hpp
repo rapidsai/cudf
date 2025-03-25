@@ -60,7 +60,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
 /**
  * @brief Normalizes strings characters for tokenizing.
  *
- * @deprecated in branch-25.04 and to be removed in a future release;
+ * @deprecated in branch-25.06 and to be removed in a future release;
  * Use nvtext::character_normalizer instead
  *
  * This uses the normalizer that is built into the nvtext::subword_tokenize function
