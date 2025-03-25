@@ -1,0 +1,33 @@
+From a1275f53674abb224e2cf8d30c9556fa6bbd1ed0 Mon Sep 17 00:00:00 2001
+From: Kyle Edwards <kyedwards@nvidia.com>
+Date: Tue, 25 Mar 2025 15:38:31 -0400
+Subject: [PATCH] Remove uninstall target
+
+This target interferes with other projects that also have an
+uninstall target.
+---
+ build/cmake/lib/CMakeLists.txt | 11 -----------
+ 1 file changed, 11 deletions(-)
+
+diff --git a/build/cmake/lib/CMakeLists.txt b/build/cmake/lib/CMakeLists.txt
+index 4e902a1f..0beda3c3 100644
+--- a/build/cmake/lib/CMakeLists.txt
++++ b/build/cmake/lib/CMakeLists.txt
+@@ -282,14 +282,3 @@ install(TARGETS ${library_targets}
+     FRAMEWORK DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT runtime OPTIONAL
+     PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+     )
+-
+-# uninstall target
+-if (NOT TARGET uninstall)
+-    configure_file(
+-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+-            "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+-            IMMEDIATE @ONLY)
+-
+-    add_custom_target(uninstall
+-            COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+-endif ()
+-- 
+2.34.1
+

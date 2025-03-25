@@ -14,15 +14,23 @@
 
 # Use CPM to find or clone libzstd
 function(find_and_configure_zstd)
+  include("${rapids-cmake-dir}/cpm/package_override.cmake")
+  rapids_cpm_package_override("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/zstd_override.json")
+
+  include("${rapids-cmake-dir}/cpm/detail/package_details.cmake")
+  rapids_cpm_package_details(zstd version repository tag shallow exclude)
+
+  include("${rapids-cmake-dir}/cpm/detail/generate_patch_command.cmake")
+  rapids_cpm_generate_patch_command(zstd ${version} patch_command build_patch_only)
 
   set(CPM_DOWNLOAD_zstd ON)
   rapids_cpm_find(
-    zstd 1.5.7
+    zstd ${version} ${build_patch_only}
     GLOBAL_TARGETS zstd
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v1.5.7
-    GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
+    GIT_REPOSITORY ${repository}
+    GIT_TAG ${tag}
+    GIT_SHALLOW ${shallow} SOURCE_SUBDIR build/cmake
     OPTIONS "ZSTD_BUILD_STATIC ON" "ZSTD_BUILD_SHARED OFF" "ZSTD_BUILD_TESTS OFF"
             "ZSTD_BUILD_PROGRAMS OFF"
   )

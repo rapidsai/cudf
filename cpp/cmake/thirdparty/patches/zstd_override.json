@@ -1,0 +1,17 @@
+{
+  "packages": {
+    "zstd": {
+      "version": "1.5.7",
+      "git_repo": "https://github.com/facebook/zstd.git",
+      "git_tag": "v${version}",
+      "patches": [
+        {
+          "file": "${current_json_dir}/zstd_remove_uninstall_target.patch",
+          "issue": "Remove uninstall target, which interferes with other projects",
+          "fixed_in": "",
+          "build": true
+        }
+      ]
+    }
+  }
+}
