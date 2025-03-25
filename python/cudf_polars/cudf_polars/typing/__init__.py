@@ -91,7 +91,7 @@ class NodeTraverser(Protocol):
         """Convert current plan node to python rep."""
         ...
 
-    def get_schema(self) -> dict[str, pl.DataType]:
+    def get_schema(self) -> Schema:
         """Get the schema of the current plan node."""
         ...
 
