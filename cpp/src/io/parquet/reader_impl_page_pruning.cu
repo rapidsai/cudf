@@ -19,6 +19,7 @@
 
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/null_mask.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -26,20 +27,13 @@
 #include <thrust/transform.h>
 
 namespace cudf::io::parquet::detail {
-namespace {
-
-struct clear_bit_functor {
-  cudf::bitmask_type* null_mask;
-  __device__ void operator()(cudf::size_type idx) { cudf::clear_bit(null_mask, idx); }
-};
-}  // namespace
 
 void reader::impl::update_output_bitmasks_for_pruned_pages()
 {
   using byte_range_info = cudf::io::text::byte_range_info;
 
-  auto const update_null_count = [&](input_column_info& input_col,
-                                     std::vector<byte_range_info> const& row_ranges) {
+  auto const update_null_mask = [&](input_column_info& input_col,
+                                    std::vector<byte_range_info> const& row_ranges) {
     size_t max_depth = input_col.nesting_depth();
     auto* cols       = &_output_buffers;
     for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
@@ -47,76 +41,78 @@ void reader::impl::update_output_bitmasks_for_pruned_pages()
       cols          = &out_buf.children;
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
       for (auto const& row_range : row_ranges) {
-        thrust::for_each(rmm::exec_policy(_stream),
-                         thrust::counting_iterator(row_range.offset()),
-                         thrust::counting_iterator(row_range.offset() + row_range.size()),
-                         clear_bit_functor{out_buf.null_mask()});
+        cudf::set_null_mask(out_buf.null_mask(),
+                            row_range.offset(),
+                            row_range.offset() + row_range.size(),
+                            false,
+                            _stream);
         out_buf.null_count() += row_range.size();
       }
     }
   };
 
+  // MH: Dummy code. Remove this.
   switch (_file) {
     case testfile::FILE1: {
       // col: "a" null: 0-1024
-      update_null_count(_input_columns[0], {byte_range_info(0, 1024)});
+      update_null_mask(_input_columns[0], {byte_range_info(0, 1024)});
       // col: "b" null: 1024-2000
-      update_null_count(_input_columns[1], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[1], {byte_range_info(1024, 976)});
       // col: "c" null: 3072-4000
-      update_null_count(_input_columns[2], {byte_range_info(3072, 928)});
+      update_null_mask(_input_columns[2], {byte_range_info(3072, 928)});
       break;
     }
     case testfile::FILE2: {
       // col: "a" null: 3072-4000
-      update_null_count(_input_columns[0], {byte_range_info(3072, 928)});
+      update_null_mask(_input_columns[0], {byte_range_info(3072, 928)});
       // col: "b" null: 3072-4000
-      update_null_count(_input_columns[1], {byte_range_info(3072, 928)});
+      update_null_mask(_input_columns[1], {byte_range_info(3072, 928)});
       // col: "c" null: 2000-3072
-      update_null_count(_input_columns[2], {byte_range_info(2000, 1072)});
+      update_null_mask(_input_columns[2], {byte_range_info(2000, 1072)});
       // col: "d" null: 1024-2000
-      update_null_count(_input_columns[3], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[3], {byte_range_info(1024, 976)});
       // col: "e" null: 0-1024 and 1024-2000
-      update_null_count(_input_columns[4], {byte_range_info(0, 1024), byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[4], {byte_range_info(0, 1024), byte_range_info(1024, 976)});
       break;
     }
     case testfile::FILE3: {
       // col: "a" null: 1024-2000
-      update_null_count(_input_columns[0], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[0], {byte_range_info(1024, 976)});
       // col: "b" null: 3072-5120
-      update_null_count(_input_columns[1], {byte_range_info(3072, 2048)});
+      update_null_mask(_input_columns[1], {byte_range_info(3072, 2048)});
       // col: "c" null: 1024-3072, 4000-5120
-      update_null_count(_input_columns[2],
-                        {byte_range_info(1024, 2048), byte_range_info(4000, 1120)});
+      update_null_mask(_input_columns[2],
+                       {byte_range_info(1024, 2048), byte_range_info(4000, 1120)});
       break;
     }
     case testfile::FILE4: {
       // col: "a" null: 1024-2000
-      update_null_count(_input_columns[0], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[0], {byte_range_info(1024, 976)});
       // col: "b" null: 0-1024
-      update_null_count(_input_columns[1], {byte_range_info(0, 1024)});
+      update_null_mask(_input_columns[1], {byte_range_info(0, 1024)});
       // col: "c" null: 1024-2000
-      update_null_count(_input_columns[2], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[2], {byte_range_info(1024, 976)});
 
       break;
     }
     case testfile::FILE5: {
       // col: "a" null: 1024-2048
-      update_null_count(_input_columns[0], {byte_range_info(1024, 1024)});
+      update_null_mask(_input_columns[0], {byte_range_info(1024, 1024)});
       // col: "b" null: 2048-4000
-      update_null_count(_input_columns[1], {byte_range_info(2048, 1952)});
+      update_null_mask(_input_columns[1], {byte_range_info(2048, 1952)});
       // col: "c" null: 0-4000
-      update_null_count(_input_columns[2], {byte_range_info(0, 4000)});
+      update_null_mask(_input_columns[2], {byte_range_info(0, 4000)});
       // col: "d" null: 3072-4000
-      update_null_count(_input_columns[3], {byte_range_info(3072, 928)});
+      update_null_mask(_input_columns[3], {byte_range_info(3072, 928)});
       // col: "e" null: 2048-4000
-      update_null_count(_input_columns[4], {byte_range_info(2048, 1952)});
+      update_null_mask(_input_columns[4], {byte_range_info(2048, 1952)});
       // col: "f" null: 0-256, 1536-1792, 3999-4000
-      update_null_count(
+      update_null_mask(
         _input_columns[5],
         {byte_range_info(0, 256), byte_range_info(1536, 256), byte_range_info(3999, 1)});
 
       // col: "g" null: 512-1024, 3072-3584, 3999-4000
-      update_null_count(
+      update_null_mask(
         _input_columns[6],
         {byte_range_info(512, 512), byte_range_info(3072, 512), byte_range_info(3999, 1)});
 
@@ -124,19 +120,19 @@ void reader::impl::update_output_bitmasks_for_pruned_pages()
     }
     case testfile::FILE6: {
       // col: "a" null: 1024-2000
-      update_null_count(_input_columns[0], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[0], {byte_range_info(1024, 976)});
       // col: "b" null: 0-1024
-      update_null_count(_input_columns[1], {byte_range_info(0, 1024)});
+      update_null_mask(_input_columns[1], {byte_range_info(0, 1024)});
       // col: "c" null: 0-512, 1024-1536, 1999-2000
-      update_null_count(
+      update_null_mask(
         _input_columns[2],
         {byte_range_info(0, 512), byte_range_info(1024, 512), byte_range_info(1999, 1)});
       // col: "d" null: 1024-1536, 1999-2000
-      update_null_count(_input_columns[3], {byte_range_info(1024, 512), byte_range_info(1999, 1)});
+      update_null_mask(_input_columns[3], {byte_range_info(1024, 512), byte_range_info(1999, 1)});
       // col: "e" null: 0-2000
-      update_null_count(_input_columns[4], {byte_range_info(0, 2000)});
+      update_null_mask(_input_columns[4], {byte_range_info(0, 2000)});
       // col: "f" null: 1024-2000
-      update_null_count(_input_columns[5], {byte_range_info(1024, 976)});
+      update_null_mask(_input_columns[5], {byte_range_info(1024, 976)});
       break;
     }
     default: {
