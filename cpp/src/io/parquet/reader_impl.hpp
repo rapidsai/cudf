@@ -172,11 +172,9 @@ class reader::impl {
   void setup_next_subpass(read_mode mode);
 
   /**
-   * @brief Fill nulls in the output buffers for invalid pages.
-   *
-   * This is only a temporary name for the function.
+   * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
    */
-  void fix_holes();
+  void update_output_bitmasks_for_pruned_pages();
 
   /**
    * @brief Read a chunk of data and return an output table.

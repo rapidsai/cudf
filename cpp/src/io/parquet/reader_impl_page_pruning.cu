@@ -34,7 +34,7 @@ struct clear_bit_functor {
 };
 }  // namespace
 
-void reader::impl::fix_holes()
+void reader::impl::update_output_bitmasks_for_pruned_pages()
 {
   using byte_range_info = cudf::io::text::byte_range_info;
 

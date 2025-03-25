@@ -473,10 +473,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  _stream.synchronize();
-
-  // MH: Put nulls in the output buffers against pruned pages.
-  fix_holes();
+  // Invalidate output buffer bitmasks at row indices spanned by pruned pages
+  update_output_bitmasks_for_pruned_pages();
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
