@@ -20,6 +20,7 @@ rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 pip install uv
 uv pip install \
   -v \
+  --system \
   --constraint ./constraints.txt \
   "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
   "$(echo ./dist/dask_cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \

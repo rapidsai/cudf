@@ -21,6 +21,7 @@ rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 pip install uv
 uv pip install \
     -v \
+    --system \
     --constraint ./constraints.txt \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
     "$(echo ./dist/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
