@@ -2,7 +2,7 @@
   "packages": {
     "zstd": {
       "version": "1.5.7",
-      "git_repo": "https://github.com/facebook/zstd.git",
+      "git_url": "https://github.com/facebook/zstd.git",
       "git_tag": "v${version}",
       "patches": [
         {
