@@ -214,7 +214,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // MH: Temporary code to test parquet decoders with page pruning
   {
-    auto update_page_validity = [&](std::vector<size_t> invalid_page_indices) {
+    auto invalidate_pages = [&](std::vector<size_t> invalid_page_indices) {
       auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
       for (auto idx : invalid_page_indices) {
         h_page_validity[idx] = false;
@@ -225,27 +225,27 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
     switch (_file) {
       case testfile::FILE1: {
-        update_page_validity({1, 8, 17});
+        invalidate_pages({1, 8, 17});
         break;
       }
       case testfile::FILE2: {
-        update_page_validity({5, 11, 16, 20, 26, 28});
+        invalidate_pages({5, 11, 16, 20, 26, 28});
         break;
       }
       case testfile::FILE3: {
-        update_page_validity({2, 14, 16, 20, 22, 25});
+        invalidate_pages({2, 14, 16, 20, 22, 25});
         break;
       }
       case testfile::FILE4: {
-        update_page_validity({1, 2, 5});
+        invalidate_pages({1, 2, 5});
         break;
       }
       case testfile::FILE5: {
-        update_page_validity({1, 6, 7, 8, 9, 12, 14, 15, 21, 31, 33, 38, 40});
+        invalidate_pages({1, 6, 7, 8, 9, 12, 14, 15, 21, 31, 33, 38, 40});
         break;
       }
       case testfile::FILE6: {
-        update_page_validity({1, 2, 4, 6, 8, 11, 13, 14, 16});
+        invalidate_pages({1, 2, 4, 6, 8, 11, 13, 14, 16});
         break;
       }
       default: {
