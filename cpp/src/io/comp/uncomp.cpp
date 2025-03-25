@@ -730,20 +730,41 @@ void host_decompress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool use_host_decompression(compression_type compression)
+[[nodiscard]] bool use_host_decompression(compression_type compression, size_t num_buffers)
 {
   CUDF_EXPECTS(
     host_decompression_supported(compression) or device_decompression_supported(compression),
     "Unsupported compression type: " + compression_type_name(compression));
   if (not host_decompression_supported(compression)) { return false; }
   if (not device_decompression_supported(compression)) { return true; }
-  // If both host and device compression are supported, use the host if the env var is set
-  return getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"}) == "ON";
+  // If both host and device compression are supported, dispatch based on the environment variable
+
+  auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
+  if (env_var == "AUTO") {
+    auto const best_guess_threshold = [&] {
+      constexpr auto kernel_single_block_throughput = 50;   // MBps
+      constexpr auto host_single_thread_throughput  = 600;  // MBps
+      // Below this number of buffers submitted to each host thread, the host threads will have
+      // lower latency, even when assuming a single buffer per kernel block
+      auto const per_host_thread_threshold =
+        host_single_thread_throughput / kernel_single_block_throughput;
+
+      auto const num_threads = cudf::detail::host_worker_pool().get_thread_count();
+      return per_host_thread_threshold * num_threads;
+    }();
+    auto const threshold = getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", best_guess_threshold);
+    return num_buffers < threshold;
+  }
+
+  return env_var == "ON";
 }
 
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di)
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
+                                                    size_t num_buffers)
 {
-  if (di.type == compression_type::NONE or use_host_decompression(di.type)) { return 0; }
+  if (di.type == compression_type::NONE or use_host_decompression(di.type, num_buffers)) {
+    return 0;
+  }
 
   auto const nvcomp_type = to_nvcomp_compression(di.type);
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
@@ -768,7 +789,7 @@ void decompress(compression_type compression,
 {
   CUDF_FUNC_RANGE();
   if (inputs.empty()) { return; }
-  if (use_host_decompression(compression)) {
+  if (use_host_decompression(compression, inputs.size())) {
     return host_decompress(compression, inputs, outputs, results, stream);
   } else {
     return device_decompress(
