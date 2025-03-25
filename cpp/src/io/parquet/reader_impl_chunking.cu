@@ -1074,7 +1074,9 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
   std::transform(h_decomp_info.begin(),
                  h_decomp_info.end(),
                  temp_cost.begin(),
-                 cudf::io::detail::get_decompression_scratch_size);
+                 [num_pages = pages.size()](auto const& d) {
+                   return cudf::io::detail::get_decompression_scratch_size(d, num_pages);
+                 });
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
