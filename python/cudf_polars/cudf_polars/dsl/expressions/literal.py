@@ -48,7 +48,9 @@ class Literal(Expr):
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102
-        raise NotImplementedError("Not expecting to require agg request of literal")
+        raise NotImplementedError(
+            "Not expecting to require agg request of literal"
+        )  # pragma: no cover
 
 
 class LiteralColumn(Expr):
@@ -82,4 +84,6 @@ class LiteralColumn(Expr):
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102
-        raise NotImplementedError("Not expecting to require agg request of literal")
+        raise NotImplementedError(
+            "Not expecting to require agg request of literal"
+        )  # pragma: no cover

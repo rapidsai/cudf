@@ -65,6 +65,7 @@ def keys(request):
         [pl.col("float").max() - pl.col("int").min()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
+        [pl.lit(10).alias("literal_value")],
         [pl.col("float").sum().round(decimals=1)],
         [pl.col("float").round(decimals=1).sum()],
         [pl.col("int").first(), pl.col("float").last()],

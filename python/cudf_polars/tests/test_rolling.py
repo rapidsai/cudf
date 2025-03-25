@@ -39,8 +39,8 @@ def df():
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
 @pytest.mark.parametrize("period", ["1w4d", "48h", "180s"])
-def test_datetime_rolling(df, closed):
-    q = df.rolling("dt", period="48h", closed=closed).agg(
+def test_datetime_rolling(df, closed, period):
+    q = df.rolling("dt", period=period, closed=closed).agg(
         sum_a=pl.sum("values"),
         min_a=pl.min("values"),
         max_a=pl.max("values"),
