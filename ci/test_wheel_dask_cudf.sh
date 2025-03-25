@@ -21,6 +21,7 @@ pip install uv
 uv pip install \
   -v \
   --system \
+  --index-strategy unsafe-best-match \
   --constraint ./constraints.txt \
   "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
   "$(echo ./dist/dask_cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
