@@ -1036,39 +1036,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     if constexpr (has_lists_t) {
       update_list_offsets_for_pruned_pages<decode_block_size_t, state_buf_t>(s, sb);
     }
-
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
-      // Initial string offset
-      auto const initial_value = s->page.str_offset;
-      auto value_count         = s->page.num_input_values;
-
-      // Offsets pointer contains string sizes in case of large strings and actual offsets
-      // otherwise
-      auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
-      auto offptr = reinterpret_cast<size_type*>(ni.data_out);
-      // For large strings, update the initial string buffer offset to be used during large string
-      // column construction. Otherwise, convert string sizes to final offsets
-      if (s->col.is_large_string_col) {
-        // Write zero string sizes
-        for (int idx = t; idx < value_count; idx += blockDim.x) {
-          offptr[idx] = 0;
-        }
-        // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
-        auto const chunks_per_rowgroup = initial_str_offsets.size();
-        auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-        compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_lists_t);
-      } else {
-        // if no repetition we haven't calculated start/end bounds and instead just skipped
-        // values until we reach first_row. account for that here.
-        if (not has_lists_t) { value_count -= s->first_row; }
-
-        // Write the initial offset at all positions to indicate zero sized strings
-        for (int idx = t; idx < value_count; idx += blockDim.x) {
-          offptr[idx] = initial_value;
-        }
-      }
+      update_string_offsets_for_pruned_pages<decode_block_size_t>(
+        s, initial_str_offsets, pages[page_idx], has_lists_t);
     }
+
     return;
   }
 
