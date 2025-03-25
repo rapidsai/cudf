@@ -572,18 +572,18 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
 }
 
 template <int decode_block_size, typename state_buf>
-static __device__ void gpuUpdateInvalidPagesLists(page_state_s* s, state_buf* sb)
+static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s, state_buf* sb)
 {
-  int const start_depth       = 0;
+  namespace cg = cooperative_groups;
+
+  int constexpr start_depth   = 0;
   int const max_depth         = s->col.max_nesting_depth - 1;
   int const in_nesting_bounds = (0 >= start_depth && 0 <= max_depth);
-  auto const t                = threadIdx.x;
+  auto const t                = cg::this_thread_block().thread_rank();
 
-  // iterate by depth
+  // iterate by depth and store offset to the list location
   for (int d_idx = t; d_idx <= max_depth; d_idx += decode_block_size) {
     auto& ni = s->nesting_info[d_idx];
-
-    // STORE OFFSET TO THE LIST LOCATION
     // if we're -not- at a leaf column and we're within nesting/row bounds
     // and we have a valid data_out pointer, it implies this is a list column, so
     // emit an offset.
@@ -1031,12 +1031,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   if (not page_validity[page_idx]) {
     pp->num_nulls  = pp->num_rows;
     pp->num_valids = 0;
+
     // Update offsets for all list depth levels
     if constexpr (has_lists_t) {
-      gpuUpdateInvalidPagesLists<decode_block_size_t, state_buf_t>(s, sb);
+      update_list_offsets_for_pruned_pages<decode_block_size_t, state_buf_t>(s, sb);
     }
 
-    // Update offsets for strings
+    // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       // Initial string offset
       auto const initial_value = s->page.str_offset;
