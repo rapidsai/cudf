@@ -397,8 +397,26 @@ void host_compress(compression_type compression,
                "Unsupported compression type: " + compression_type_name(compression));
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
-  // If both host and device compression are supported, use the host if the env var is set
-  return getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"}) == "ON";
+  // If both host and device compression are supported, dispatch based on the environment variable
+
+  auto const env_var = getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"});
+  if (env_var == "AUTO") {
+    auto const best_guess_threshold = [&] {
+      constexpr auto kernel_single_block_throughput = 50;   // MBps
+      constexpr auto host_single_thread_throughput  = 600;  // MBps
+      // Below this number of buffers submitted to each host thread, the host threads will have
+      // lower latency, even when assuming a single buffer per kernel block
+      auto const per_host_thread_threshold =
+        host_single_thread_throughput / kernel_single_block_throughput;
+
+      auto const num_threads = cudf::detail::host_worker_pool().get_thread_count();
+      return per_host_thread_threshold * num_threads;
+    }();
+    auto const threshold = getenv_or("LIBCUDF_HOST_COMPRESSION_THRESHOLD", best_guess_threshold);
+    return inputs.size() < threshold;
+  }
+
+  return env_var == "ON";
 }
 
 }  // namespace
