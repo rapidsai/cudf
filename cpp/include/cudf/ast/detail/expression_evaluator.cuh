@@ -29,13 +29,15 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 namespace cudf {
 
 namespace ast {
 
 namespace detail {
 
-constexpr bool is_complex_type(cudf::type_id type)
+CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
 {
   // TODO: only decimals? impact of dictionary types, strings?
   return type == cudf::type_id::STRUCT || type == cudf::type_id::LIST ||
@@ -65,67 +67,67 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) primitive_type_dispatc
   switch (dtype.id()) {
     case type_id::INT8:
       return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::INT16:
       return f.template operator()<typename IdTypeMap<type_id::INT16>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::INT32:
       return f.template operator()<typename IdTypeMap<type_id::INT32>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::INT64:
       return f.template operator()<typename IdTypeMap<type_id::INT64>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::UINT8:
       return f.template operator()<typename IdTypeMap<type_id::UINT8>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::UINT16:
       return f.template operator()<typename IdTypeMap<type_id::UINT16>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::UINT32:
       return f.template operator()<typename IdTypeMap<type_id::UINT32>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::UINT64:
       return f.template operator()<typename IdTypeMap<type_id::UINT64>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::FLOAT32:
       return f.template operator()<typename IdTypeMap<type_id::FLOAT32>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::FLOAT64:
       return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::BOOL8:
       return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_DAYS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_SECONDS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_SECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_MILLISECONDS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_MICROSECONDS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::DURATION_DAYS:
       return f.template operator()<typename IdTypeMap<type_id::DURATION_DAYS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::DURATION_SECONDS:
       return f.template operator()<typename IdTypeMap<type_id::DURATION_SECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::DURATION_MILLISECONDS:
       return f.template operator()<typename IdTypeMap<type_id::DURATION_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::DURATION_MICROSECONDS:
       return f.template operator()<typename IdTypeMap<type_id::DURATION_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     case type_id::DURATION_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<type_id::DURATION_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
+        cuda::std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid type_id.");
@@ -198,7 +200,7 @@ struct value_expression_result
   __device__ inline void set_value(cudf::size_type index,
                                    possibly_null_value_t<Element, has_nulls> const& result)
   {
-    if constexpr (std::is_same_v<Element, T>) {
+    if constexpr (cuda::std::is_same_v<Element, T>) {
       _obj = result;
     } else {
       CUDF_UNREACHABLE("Output type does not match container type.");
@@ -315,7 +317,7 @@ struct single_dispatch_binary_operator {
   template <typename LHS, typename F, typename... Ts>
   __device__ inline auto operator()(F&& f, Ts&&... args)
   {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
+    f.template operator()<LHS, LHS>(cuda::std::forward<Ts>(args)...);
   }
 };
 
@@ -450,7 +452,7 @@ struct expression_evaluator {
             typename ResultSubclass,
             typename T,
             bool result_has_nulls,
-            CUDF_ENABLE_IF(!std::is_void_v<Input>)>
+            CUDF_ENABLE_IF(!cuda::std::is_void_v<Input>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const input_row_index,
@@ -475,7 +477,7 @@ struct expression_evaluator {
             typename ResultSubclass,
             typename T,
             bool result_has_nulls,
-            CUDF_ENABLE_IF(std::is_void_v<Input>)>
+            CUDF_ENABLE_IF(cuda::std::is_void_v<Input>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const input_row_index,
@@ -509,7 +511,7 @@ struct expression_evaluator {
             typename ResultSubclass,
             typename T,
             bool result_has_nulls,
-            CUDF_ENABLE_IF(!std::is_void_v<LHS> && !std::is_void_v<RHS>)>
+            CUDF_ENABLE_IF(!cuda::std::is_void_v<LHS> && !cuda::std::is_void_v<RHS>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
@@ -540,7 +542,7 @@ struct expression_evaluator {
             typename ResultSubclass,
             typename T,
             bool result_has_nulls,
-            CUDF_ENABLE_IF(std::is_void_v<LHS> || std::is_void_v<RHS>)>
+            CUDF_ENABLE_IF(cuda::std::is_void_v<LHS> || cuda::std::is_void_v<RHS>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
@@ -763,9 +765,8 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                          possibly_null_value_t<Input, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                       possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -787,9 +788,9 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                       possibly_null_value_t<Input, has_nulls>>)>
+    __device__ inline void operator()(
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -827,10 +828,9 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                                          possibly_null_value_t<LHS, has_nulls>,
-                                                          possibly_null_value_t<RHS, has_nulls>>>* =
-                nullptr>
+              CUDF_ENABLE_IF(detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                        possibly_null_value_t<LHS, has_nulls>,
+                                                        possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -853,10 +853,9 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                            possibly_null_value_t<LHS, has_nulls>,
-                                            possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(!detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                         possibly_null_value_t<LHS, has_nulls>,
+                                                         possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
