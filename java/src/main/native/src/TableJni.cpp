@@ -2911,7 +2911,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
       cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.left_join(left);
     });
@@ -3122,7 +3123,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMa
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
       cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.inner_join(left);
     });
