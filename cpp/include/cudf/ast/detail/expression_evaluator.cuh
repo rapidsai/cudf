@@ -53,90 +53,108 @@ CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
 //   id_to_type<t>>;
 // };
 
-// This pragma disables a compiler warning that complains about the valid usage
-// of calling a __host__ functor from this function which is __host__ __device__
-#ifdef __CUDACC__
-#pragma nv_exec_check_disable
-#endif
-template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
-          typename Functor,
-          typename... Ts>
-CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) primitive_type_dispatcher(
-  cudf::data_type dtype, Functor f, Ts&&... args)
-{
-  switch (dtype.id()) {
-    case type_id::INT8:
-      return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::INT16:
-      return f.template operator()<typename IdTypeMap<type_id::INT16>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::INT32:
-      return f.template operator()<typename IdTypeMap<type_id::INT32>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::INT64:
-      return f.template operator()<typename IdTypeMap<type_id::INT64>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::UINT8:
-      return f.template operator()<typename IdTypeMap<type_id::UINT8>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::UINT16:
-      return f.template operator()<typename IdTypeMap<type_id::UINT16>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::UINT32:
-      return f.template operator()<typename IdTypeMap<type_id::UINT32>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::UINT64:
-      return f.template operator()<typename IdTypeMap<type_id::UINT64>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::FLOAT32:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT32>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::FLOAT64:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::BOOL8:
-      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_SECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MILLISECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MICROSECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_NANOSECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::DURATION_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_DAYS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::DURATION_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_SECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::DURATION_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MILLISECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::DURATION_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MICROSECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    case type_id::DURATION_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_NANOSECONDS>::type>(
-        cuda::std::forward<Ts>(args)...);
-    default: {
-#ifndef __CUDA_ARCH__
-      CUDF_FAIL("Invalid type_id.");
-#else
-      CUDF_UNREACHABLE("Invalid type_id.");
-#endif
-    }
-  }
-}
+/**
+ * @brief Maps primitive types to their corresponding C++ types
+ *
+ * This template provides a mapping from cudf::type_id to concrete C++ types for
+ * common numeric types (integers, floating point, boolean) and temporal types
+ * (timestamps, durations).
+ *
+ * @tparam t The cudf::type_id to map to a C++ type
+ */
+template <cudf::type_id t>
+struct primitive_mapping {
+  using type = void;
+};
+// Integers
+template <>
+struct primitive_mapping<type_id::INT8> {
+  using type = int8_t;
+};
+template <>
+struct primitive_mapping<type_id::INT16> {
+  using type = int16_t;
+};
+template <>
+struct primitive_mapping<type_id::INT32> {
+  using type = int32_t;
+};
+template <>
+struct primitive_mapping<type_id::INT64> {
+  using type = int64_t;
+};
+template <>
+struct primitive_mapping<type_id::UINT8> {
+  using type = uint8_t;
+};
+template <>
+struct primitive_mapping<type_id::UINT16> {
+  using type = uint16_t;
+};
+template <>
+struct primitive_mapping<type_id::UINT32> {
+  using type = uint32_t;
+};
+template <>
+struct primitive_mapping<type_id::UINT64> {
+  using type = uint64_t;
+};
+// Floats
+template <>
+struct primitive_mapping<type_id::FLOAT32> {
+  using type = float;
+};
+template <>
+struct primitive_mapping<type_id::FLOAT64> {
+  using type = double;
+};
+// Bool
+template <>
+struct primitive_mapping<type_id::BOOL8> {
+  using type = bool;
+};
+// Timestamps
+template <>
+struct primitive_mapping<type_id::TIMESTAMP_DAYS> {
+  using type = timestamp_D;
+};
+template <>
+struct primitive_mapping<type_id::TIMESTAMP_SECONDS> {
+  using type = timestamp_s;
+};
+template <>
+struct primitive_mapping<type_id::TIMESTAMP_MILLISECONDS> {
+  using type = timestamp_ms;
+};
+template <>
+struct primitive_mapping<type_id::TIMESTAMP_MICROSECONDS> {
+  using type = timestamp_us;
+};
+template <>
+struct primitive_mapping<type_id::TIMESTAMP_NANOSECONDS> {
+  using type = timestamp_ns;
+};
+// Durations
+template <>
+struct primitive_mapping<type_id::DURATION_DAYS> {
+  using type = duration_D;
+};
+template <>
+struct primitive_mapping<type_id::DURATION_SECONDS> {
+  using type = duration_s;
+};
+template <>
+struct primitive_mapping<type_id::DURATION_MILLISECONDS> {
+  using type = duration_ms;
+};
+template <>
+struct primitive_mapping<type_id::DURATION_MICROSECONDS> {
+  using type = duration_us;
+};
+template <>
+struct primitive_mapping<type_id::DURATION_NANOSECONDS> {
+  using type = duration_ns;
+};
 
 /**
  * @brief A container for capturing the output of an evaluated expression.
@@ -621,15 +639,15 @@ struct expression_evaluator {
                           op,
                           thread_intermediate_storage);
         } else {
-          primitive_type_dispatcher(input.data_type,
-                                    *this,
-                                    output_object,
-                                    input_row_index,
-                                    input,
-                                    output,
-                                    output_row_index,
-                                    op,
-                                    thread_intermediate_storage);
+          type_dispatcher<primitive_mapping>(input.data_type,
+                                             *this,
+                                             output_object,
+                                             input_row_index,
+                                             input,
+                                             output,
+                                             output_row_index,
+                                             op,
+                                             thread_intermediate_storage);
         }
       } else if (arity == 2) {
         // Binary operator
@@ -653,18 +671,18 @@ struct expression_evaluator {
                           op,
                           thread_intermediate_storage);
         } else {
-          primitive_type_dispatcher(lhs.data_type,
-                                    detail::single_dispatch_binary_operator{},
-                                    *this,
-                                    output_object,
-                                    left_row_index,
-                                    right_row_index,
-                                    lhs,
-                                    rhs,
-                                    output,
-                                    output_row_index,
-                                    op,
-                                    thread_intermediate_storage);
+          type_dispatcher<primitive_mapping>(lhs.data_type,
+                                             detail::single_dispatch_binary_operator{},
+                                             *this,
+                                             output_object,
+                                             left_row_index,
+                                             right_row_index,
+                                             lhs,
+                                             rhs,
+                                             output,
+                                             output_row_index,
+                                             op,
+                                             thread_intermediate_storage);
         }
       } else {
         CUDF_UNREACHABLE("Invalid operator arity.");
