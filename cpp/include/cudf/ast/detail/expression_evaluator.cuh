@@ -789,8 +789,7 @@ struct expression_evaluator {
               typename T,
               bool result_has_nulls,
               CUDF_ENABLE_IF(!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                                       possibly_null_value_t<Input, has_nulls>>)>
-    __device__ inline void operator()(
+                                                        possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
