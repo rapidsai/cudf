@@ -18,7 +18,8 @@ rapids-logger "Installing cudf_polars and its dependencies"
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
 # echo to expand wildcard before adding `[test,experimental]` requires for pip
-rapids-pip-retry install \
+pip install uv
+uv pip install \
     -v \
     --constraint ./constraints.txt \
     "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \

@@ -16,7 +16,8 @@ rapids-logger "Install cudf, pylibcudf, and test requirements"
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
 
 # echo to expand wildcard before adding `[extra]` requires for pip
-rapids-pip-retry install \
+pip install uv
+uv pip install \
     -v \
     --constraint ./constraints.txt \
   "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
