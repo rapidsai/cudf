@@ -555,10 +555,9 @@ class Scan(IR):
                 colnames[0],
             )
             if include_file_paths is not None:
-                repeats = plc.interop.from_arrow(pa.array(t.num_rows() for t in tables))
                 (file_paths,) = plc.filling.repeat(
                     plc.Table([plc.interop.from_arrow(pa.array(seen_paths))]),
-                    repeats,
+                    plc.interop.from_arrow(pa.array(t.num_rows() for t in tables)),
                 ).columns()
                 df = df.with_columns([Column(file_paths, name=include_file_paths)])
         elif typ == "parquet":
