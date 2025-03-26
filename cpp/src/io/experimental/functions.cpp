@@ -90,17 +90,19 @@ std::vector<size_type> filter_row_groups_with_bloom_filters(
 }
 
 // API # 7
-std::vector<std::vector<bool>> filter_data_pages_with_stats(
-  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-  cudf::host_span<size_type const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                             cudf::host_span<size_type const> row_group_indices,
+                             cudf::io::parquet_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
-  return reader->filter_data_pages_with_stats(input_row_group_indices, options, stream);
+  return reader->filter_data_pages_with_stats(input_row_group_indices, options, stream, mr);
 }
 
+// API # 8
 std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
 get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
                              cudf::host_span<size_type const> row_group_indices,
@@ -111,19 +113,24 @@ get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const&
   return reader->get_column_chunk_byte_ranges(input_row_group_indices, options);
 }
 
-// API # 8
+// API # 9
 cudf::io::table_with_metadata materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<std::vector<bool> const> filtered_data_pages,
   cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
-  return reader->materialize_filter_columns(
-    filtered_data_pages, input_row_group_indices, std::move(column_chunk_buffers), options, stream);
+  return reader->materialize_filter_columns(filtered_data_pages,
+                                            input_row_group_indices,
+                                            std::move(column_chunk_buffers),
+                                            predicate,
+                                            options,
+                                            stream);
 }
 
 }  // namespace cudf::experimental::io

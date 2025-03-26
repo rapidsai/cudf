@@ -18,14 +18,19 @@
 #include "hybrid_scan_impl.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -465,30 +470,6 @@ struct page_offset_output_iter {
 
   __device__ reference operator[](int i) { return p[i].str_offset; }
   __device__ reference operator*() { return p->str_offset; }
-};
-
-// update chunk_row field in subpass page from pass page
-struct update_subpass_chunk_row {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
-
-  __device__ void operator()(size_t i)
-  {
-    subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
-  }
-};
-
-// update num_rows field from pass page to subpass page
-struct update_pass_num_rows {
-  device_span<PageInfo> pass_pages;
-  device_span<PageInfo> subpass_pages;
-  device_span<size_t> page_src_index;
-
-  __device__ void operator()(size_t i)
-  {
-    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
-  }
 };
 
 /**
@@ -1122,17 +1103,6 @@ void impl::preprocess_subpass_pages(size_t chunk_read_limit)
                      _stream);
   }
 
-  auto iter = thrust::make_counting_iterator(0);
-
-  // copy our now-correct row counts  back to the base pages stored in the pass.
-  // only need to do this if we are not processing the whole pass in one subpass
-  if (!subpass.single_subpass) {
-    thrust::for_each(rmm::exec_policy_nosync(_stream),
-                     iter,
-                     iter + subpass.pages.size(),
-                     update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
-  }
-
   // computes:
   // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
   // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
@@ -1146,18 +1116,8 @@ void impl::preprocess_subpass_pages(size_t chunk_read_limit)
                                 page_input,
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
-  // copy chunk_row into the subpass pages
-  // only need to do this if we are not processing the whole pass in one subpass
-  if (!subpass.single_subpass) {
-    thrust::for_each(rmm::exec_policy_nosync(_stream),
-                     iter,
-                     iter + subpass.pages.size(),
-                     update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
-  }
-
   // retrieve pages back
   pass.pages.device_to_host_async(_stream);
-  if (!subpass.single_subpass) { subpass.pages.device_to_host_async(_stream); }
   _stream.synchronize();
 
   // at this point we have an accurate row count so we can compute how many rows we will actually be
@@ -1431,6 +1391,37 @@ cudf::detail::host_vector<size_t> impl::calculate_page_string_offsets()
                         d_col_sizes.begin());
 
   return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
+}
+
+void impl::update_predicate(cudf::column_view in_predicate,
+                            cudf::mutable_column_view out_predicate,
+                            rmm::cuda_stream_view stream)
+{
+  auto const total_rows = static_cast<cudf::size_type>(in_predicate.size());
+  CUDF_EXPECTS(total_rows == out_predicate.size(),
+               "Input and output predicates must have the same number of rows");
+  CUDF_EXPECTS(out_predicate.type().id() == type_id::BOOL8,
+               "Output predicate must be a boolean column");
+
+  // Update the output predicate with the input predicate
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::make_counting_iterator(total_rows),
+                    out_predicate.begin<bool>(),
+                    [is_nullable  = in_predicate.nullable(),
+                     in_predicate = in_predicate.begin<bool>(),
+                     in_bitmask   = in_predicate.null_mask()] __device__(auto row_idx) {
+                      auto const is_valid = not is_nullable or bit_is_set(in_bitmask, row_idx);
+                      auto const is_true  = in_predicate[row_idx];
+                      if (is_nullable) {
+                        return is_valid and is_true;
+                      } else {
+                        return is_true;
+                      }
+                    });
+
+  // Make sure the null mask of the output predicate is all valid after the update
+  cudf::set_null_mask(out_predicate.null_mask(), 0, total_rows, true, stream);
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

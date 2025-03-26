@@ -86,13 +86,15 @@ std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_b
     bloom_filter_data, row_group_indices, options, stream);
 }
 
-std::vector<std::vector<bool>> hybrid_scan_reader::filter_data_pages_with_stats(
+std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+hybrid_scan_reader::filter_data_pages_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  return _impl->filter_data_pages_with_stats(row_group_indices, options, stream);
+  return _impl->filter_data_pages_with_stats(row_group_indices, options, stream, mr);
 }
 
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
@@ -105,16 +107,21 @@ hybrid_scan_reader::get_column_chunk_byte_ranges(
 }
 
 cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> filtered_data_pages,
+  cudf::host_span<std::vector<bool> const> data_page_validity,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
   // TODO: Implement this
-  return _impl->materialize_filter_columns(
-    filtered_data_pages, row_group_indices, std::move(column_chunk_buffers), options, stream);
+  return _impl->materialize_filter_columns(data_page_validity,
+                                           row_group_indices,
+                                           std::move(column_chunk_buffers),
+                                           predicate,
+                                           options,
+                                           stream);
 }
 
 }  // namespace cudf::experimental::io::parquet

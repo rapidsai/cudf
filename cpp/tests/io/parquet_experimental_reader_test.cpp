@@ -91,7 +91,7 @@ auto create_parquet_with_stats(bool is_concatenated = false)
   auto expected = table_view{{col0, col1, col2}};
   auto table    = std::unique_ptr<cudf::table>();
   if (is_concatenated) {
-    table    = cudf::concatenate(std::vector<table_view>(5, expected));
+    table    = cudf::concatenate(std::vector<table_view>(2, expected));
     expected = table->view();
   }
 
@@ -205,17 +205,12 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
     std::cout << "Num row groups after filter = " << filtered_row_groups.size() << " out of "
               << input_row_groups.size() << std::endl;
 
-    auto filtered_data_pages = cudf::experimental::io::filter_data_pages_with_stats(
-      reader, stats_filtered_row_groups, options, stream);
+    auto mr = cudf::get_current_device_resource_ref();
 
-    EXPECT_EQ(filtered_data_pages.size(), table.num_columns());
-    if (is_testing_pages) {
-      EXPECT_EQ(thrust::count_if(thrust::host,
-                                 filtered_data_pages.front().cbegin(),
-                                 filtered_data_pages.front().cend(),
-                                 thrust::identity<bool>{}),
-                10);
-    }
+    auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
+      reader, stats_filtered_row_groups, options, stream, mr);
+
+    EXPECT_EQ(data_page_validity.size(), table.num_columns() * filtered_row_groups.size());
 
     auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
@@ -225,9 +220,10 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
 
     [[maybe_unused]] auto [tbl, meta] =
       cudf::experimental::io::materialize_filter_columns(reader,
-                                                         filtered_data_pages,
+                                                         data_page_validity,
                                                          stats_filtered_row_groups,
                                                          std::move(column_chunk_buffers),
+                                                         predicate->mutable_view(),
                                                          options,
                                                          stream);
   };

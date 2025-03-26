@@ -635,15 +635,12 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
                                                          stream);
 }
 
-std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream)
+std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   cudf::io::parquet_reader_options const& options,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr) const
 {
-  if (not _file_preprocessed) { prepare_row_groups(row_group_indices, options); }
-
-  auto mr = cudf::get_current_device_resource_ref();
-
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
@@ -663,8 +660,10 @@ std::vector<std::vector<bool>> impl::filter_data_pages_with_stats(
                                                            stream,
                                                            mr);
 
-  return _metadata->compute_data_page_validity(
+  auto data_page_validity = _metadata->compute_data_page_validity(
     predicate->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+
+  return {std::move(predicate), std::move(data_page_validity)};
 }
 
 std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
@@ -715,22 +714,23 @@ impl::get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const>
 }
 
 cudf::io::table_with_metadata impl::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> filtered_data_pages,
+  cudf::host_span<std::vector<bool> const> data_page_validity,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  initialize_options(row_group_indices, filtered_data_pages, options, stream);
+  initialize_options(row_group_indices, data_page_validity, options, stream);
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
-  return read_chunk_internal();
+  return read_chunk_internal(read_mode::FILTER_COLUMNS, predicate);
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              cudf::host_span<std::vector<bool> const> filtered_data_pages,
+                              cudf::host_span<std::vector<bool> const> data_page_validity,
                               cudf::io::parquet_reader_options const& options,
                               rmm::cuda_stream_view stream)
 {
@@ -740,7 +740,7 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   populate_metadata(metadata);
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 
-  _data_page_validity = filtered_data_pages;
+  _data_page_validity = data_page_validity;
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
 
@@ -758,7 +758,8 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   _stream = stream;
 }
 
-cudf::io::table_with_metadata impl::read_chunk_internal()
+cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
+                                                        cudf::mutable_column_view out_predicate)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -783,7 +784,7 @@ cudf::io::table_with_metadata impl::read_chunk_internal()
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
     // Finalize output
-    return finalize_output(out_metadata, out_columns);
+    return finalize_output(read_mode, out_metadata, out_columns, out_predicate);
   }
 
   auto& pass            = *_pass_itm_data;
@@ -823,11 +824,14 @@ cudf::io::table_with_metadata impl::read_chunk_internal()
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
-  return finalize_output(out_metadata, out_columns);
+  return finalize_output(read_mode, out_metadata, out_columns, out_predicate);
 }
 
 cudf::io::table_with_metadata impl::finalize_output(
-  table_metadata& out_metadata, std::vector<std::unique_ptr<column>>& out_columns)
+  read_mode read_mode,
+  table_metadata& out_metadata,
+  std::vector<std::unique_ptr<column>>& out_columns,
+  cudf::mutable_column_view out_predicate)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
@@ -873,6 +877,10 @@ cudf::io::table_with_metadata impl::finalize_output(
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
     auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
+    if (read_mode == read_mode::FILTER_COLUMNS) {
+      auto predicate_view = predicate->view();
+      update_predicate(predicate->view(), out_predicate, _stream);
+    }
     return {std::move(output_table), std::move(out_metadata)};
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};

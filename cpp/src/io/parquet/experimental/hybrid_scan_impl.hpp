@@ -82,10 +82,11 @@ class impl {
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
-  [[nodiscard]] std::vector<std::vector<bool>> filter_data_pages_with_stats(
-    cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream);
+  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+  filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                               cudf::io::parquet_reader_options const& options,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr) const;
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
@@ -93,11 +94,16 @@ class impl {
                                cudf::io::parquet_reader_options const& options) const;
 
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> filtered_data_pages,
+    cudf::host_span<std::vector<bool> const> data_page_validity,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
+    cudf::mutable_column_view predicate,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
+
+  static void update_predicate(cudf::column_view in_predicate,
+                               cudf::mutable_column_view out_predicate,
+                               rmm::cuda_stream_view stream);
 
  private:
   using table_metadata = cudf::io::table_metadata;
@@ -110,7 +116,7 @@ class impl {
    * @brief Initialize the necessary options related internal variables for use later on.
    */
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                          cudf::host_span<std::vector<bool> const> filtered_data_pages,
+                          cudf::host_span<std::vector<bool> const> data_page_validity,
                           cudf::io::parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
 
@@ -245,8 +251,10 @@ class impl {
    * @param out_columns The columns for building the output table
    * @return The output table along with columns' metadata
    */
-  cudf::io::table_with_metadata finalize_output(table_metadata& out_metadata,
-                                                std::vector<std::unique_ptr<column>>& out_columns);
+  cudf::io::table_with_metadata finalize_output(read_mode read_mode,
+                                                table_metadata& out_metadata,
+                                                std::vector<std::unique_ptr<column>>& out_columns,
+                                                cudf::mutable_column_view out_predicate);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -305,7 +313,8 @@ class impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return The output table along with columns' metadata
    */
-  cudf::io::table_with_metadata read_chunk_internal();
+  cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode,
+                                                    cudf::mutable_column_view out_predicate = {});
 
  private:
   /**
