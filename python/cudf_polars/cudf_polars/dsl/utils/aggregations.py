@@ -164,10 +164,14 @@ def decompose_aggs(
     Returns
     -------
     tuple
-        Three-tuple of expressions to evaluate before the aggregation
-        (as a ``Select`), aggregation expressions for the ``GroupBy``
-        node, and expressions to evaluate after the aggregation (as a
-        ``Select``).
+        Of aggregation expressions for the ``GroupBy`` node, and
+        expressions to evaluate after the aggregation (as a ``Select``).
+
+    Notes
+    -----
+    The aggregation expressions are guaranteed to either be
+    expressions that can be pointwise evaluated before the groupby
+    operation, or aggregations of such expressions.
 
     Raises
     ------
