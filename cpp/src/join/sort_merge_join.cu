@@ -43,7 +43,7 @@
 
 namespace cudf {
 
-#define SORT_MERGE_JOIN_DEBUG 0
+#define SORT_MERGE_JOIN_DEBUG 1
 
 namespace {
 
@@ -64,9 +64,8 @@ enum class bound_type { UPPER, LOWER };
 struct row_comparator {
   row_comparator(table_device_view const lhs,
                  table_device_view const rhs,
-                 column_device_view const rhs_order,
                  bound_type* d_ptr)
-    : _lhs{lhs}, _rhs{rhs}, _rhs_order{rhs_order}, _d_ptr{d_ptr}
+    : _lhs{lhs}, _rhs{rhs}, _d_ptr{d_ptr}
   {
   }
 
@@ -75,77 +74,47 @@ struct row_comparator {
     if (*_d_ptr == bound_type::UPPER) {
       cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator(
         true, _lhs, _rhs);
-      return comparator(lhs_index, _rhs_order.data<size_type>()[rhs_index]) == weak_ordering::LESS;
+      return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
     }
     cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator(
       true, _rhs, _lhs);
-    return comparator(_rhs_order.data<size_type>()[lhs_index], rhs_index) == weak_ordering::LESS;
+    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
   }
 
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  column_device_view _rhs_order;
   bound_type* _d_ptr;
 };
 
-}  // anonymous namespace
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_inner_join(table_view const& left,
-                      table_view const& right,
-                      null_equality compare_nulls,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr)
-{
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> sort(table_view const& left, table_view const& right, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
   CUDF_FUNC_RANGE();
-
-  // Sanity checks
-  CUDF_EXPECTS(left.num_columns() == right.num_columns(),
-               "Number of columns must match for a join");
-  CUDF_EXPECTS(!cudf::has_nested_columns(left) && !cudf::has_nested_columns(right),
-               "Don't have sorting logic for nested columns yet");
-
   std::vector<cudf::order> column_order(left.num_columns(), cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_precedence(left.num_columns(), cudf::null_order::BEFORE);
-  nvtxRangePushA("sorting");
   auto sorted_left_order_col = cudf::sorted_order(left, column_order, null_precedence, stream, mr);
+
+  column_order.resize(right.num_columns(), cudf::order::ASCENDING);
+  null_precedence.resize(right.num_columns(), cudf::null_order::BEFORE);
   auto sorted_right_order_col =
     cudf::sorted_order(right, column_order, null_precedence, stream, mr);
-  nvtxRangePop();
+  return {std::move(sorted_left_order_col), std::move(sorted_right_order_col)};
+}
 
-  bool is_left_smaller           = left.num_rows() < right.num_rows();
-  auto& smaller                  = is_left_smaller ? left : right;
-  auto& sorted_smaller_order_col = is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
-
-  auto& larger                  = !is_left_smaller ? left : right;
-  auto& sorted_larger_order_col = !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
-
-#if SORT_MERGE_JOIN_DEBUG
-  std::vector<size_type> host_data(sorted_larger_order_col->size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_data.data(),
-                                sorted_larger_order_col->view().head<size_type>(),
-                                sorted_larger_order_col->size() * sizeof(size_type),
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-  stream.synchronize();
-  debug_print<size_type>("h_sorted_larger_order_col", host_data);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_data.data(),
-                                sorted_smaller_order_col->view().head<size_type>(),
-                                sorted_smaller_order_col->size() * sizeof(size_type),
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-  stream.synchronize();
-  debug_print<size_type>("h_sorted_smaller_order_col", host_data);
-#endif
+template<typename SmallerIt, typename LargerIt>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+merge(table_view const& smaller,
+                      SmallerIt sorted_smaller_order_begin,
+                      SmallerIt sorted_smaller_order_end,
+                      table_view const& larger,
+                      LargerIt sorted_larger_order_begin,
+                      LargerIt sorted_larger_order_end,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr) {
 
   auto smaller_dv_ptr = cudf::table_device_view::create(smaller, stream);
   auto larger_dv_ptr  = cudf::table_device_view::create(larger, stream);
-  auto sorted_smaller_order_dv_ptr =
-    cudf::column_device_view::create(*sorted_smaller_order_col, stream);
-  auto sorted_larger_order_dv_ptr =
-    cudf::column_device_view::create(*sorted_larger_order_col, stream);
 
   // naive: iterate through larger table and binary search on smaller table
   auto const larger_numrows  = larger.num_rows();
@@ -159,10 +128,10 @@ sort_merge_inner_join(table_view const& left,
 #if SORT_MERGE_JOIN_DEBUG
   rmm::device_uvector<size_type> lb1(larger_numrows, stream, mr);
   row_comparator comp_lb_1(
-    *larger_dv_ptr, *smaller_dv_ptr, *sorted_smaller_order_dv_ptr, d_lb_type.data());
+    *larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
   thrust::lower_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       lb1.begin(),
@@ -171,10 +140,10 @@ sort_merge_inner_join(table_view const& left,
 
   rmm::device_uvector<size_type> ub1(larger_numrows, stream, mr);
   row_comparator comp_ub_1(
-    *larger_dv_ptr, *smaller_dv_ptr, *sorted_smaller_order_dv_ptr, d_ub_type.data());
+    *larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
   thrust::upper_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       ub1.begin(),
@@ -183,12 +152,12 @@ sort_merge_inner_join(table_view const& left,
 #endif
 
   row_comparator comp_ub(
-    *larger_dv_ptr, *smaller_dv_ptr, *sorted_smaller_order_dv_ptr, d_ub_type.data());
+    *larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
   auto match_counts_it = match_counts.begin();
   nvtxRangePushA("upper bound");
   thrust::upper_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_it,
@@ -201,15 +170,15 @@ sort_merge_inner_join(table_view const& left,
 #endif
 
   row_comparator comp_lb(
-    *larger_dv_ptr, *smaller_dv_ptr, *sorted_smaller_order_dv_ptr, d_lb_type.data());
+    *larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
   auto match_counts_update_it = thrust::make_tabulate_output_iterator(
     [match_counts = match_counts.begin()] __device__(size_type idx, size_type val) {
       match_counts[idx] -= val;
     });
   nvtxRangePushA("lower bound");
   thrust::lower_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_update_it,
@@ -265,8 +234,8 @@ sort_merge_inner_join(table_view const& left,
                          cudf::detail::make_host_vector_sync(match_counts, stream));
   rmm::device_uvector<size_type> dlb(nonzero_matches.size(), stream, mr);
   thrust::lower_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       dlb.begin(),
@@ -287,8 +256,264 @@ sort_merge_inner_join(table_view const& left,
       smaller_indices[pos] = lb;
     });
   thrust::lower_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
+                      nonzero_matches.begin(),
+                      nonzero_matches.end(),
+                      smaller_tabulate_it,
+                      comp_lb);
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                larger_indices.begin(),
+                                larger_indices.end(),
+                                smaller_indices.begin(),
+                                smaller_indices.begin());
+  thrust::transform(
+    rmm::exec_policy(stream),
+    smaller_indices.begin(),
+    smaller_indices.end(),
+    smaller_indices.begin(),
+    [sorted_smaller_order = sorted_smaller_order_begin] __device__(
+      auto idx) { return sorted_smaller_order[idx]; });
+  nvtxRangePop();
+
+#if SORT_MERGE_JOIN_DEBUG
+  debug_print<size_type>("h_larger_indices",
+                         cudf::detail::make_host_vector_sync(larger_indices, stream));
+  debug_print<size_type>("h_smaller_indices",
+                         cudf::detail::make_host_vector_sync(smaller_indices, stream));
+#endif
+
+  return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
+            std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
+}
+
+}  // anonymous namespace
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_inner_join(table_view const& left,
+                      table_view const& right,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Sanity checks
+  CUDF_EXPECTS(left.num_columns() == right.num_columns(),
+               "Number of columns must match for a join");
+  CUDF_EXPECTS(!cudf::has_nested_columns(left) && !cudf::has_nested_columns(right),
+               "Don't have sorting logic for nested columns yet");
+
+  auto [sorted_left_order_col, sorted_right_order_col] = sort(left, right, stream, mr);
+
+  bool is_left_smaller           = left.num_rows() < right.num_rows();
+  auto& smaller                  = is_left_smaller ? left : right;
+  auto& sorted_smaller_order_col = is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
+
+  auto& larger                  = !is_left_smaller ? left : right;
+  auto& sorted_larger_order_col = !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
+
+  auto [smaller_indices, larger_indices] = merge(smaller, sorted_smaller_order_col->view().begin<size_type>(), sorted_smaller_order_col->view().end<size_type>(), larger, sorted_larger_order_col->view().begin<size_type>(), sorted_larger_order_col->view().end<size_type>(), compare_nulls, stream, mr);
+
+  if (is_left_smaller) {
+    return {std::move(smaller_indices), std::move(larger_indices)};
+  }
+  return {std::move(larger_indices), std::move(smaller_indices)};
+}
+/*
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_inner_join(table_view const& left,
+                      table_view const& right,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Sanity checks
+  CUDF_EXPECTS(left.num_columns() == right.num_columns(),
+               "Number of columns must match for a join");
+  CUDF_EXPECTS(!cudf::has_nested_columns(left) && !cudf::has_nested_columns(right),
+               "Don't have sorting logic for nested columns yet");
+
+  auto [sorted_left_order_col, sorted_right_order_col] = sort(left, right, stream, mr);
+
+  bool is_left_smaller           = left.num_rows() < right.num_rows();
+  auto& smaller                  = is_left_smaller ? left : right;
+  auto& sorted_smaller_order_col = is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
+
+  auto& larger                  = !is_left_smaller ? left : right;
+  auto& sorted_larger_order_col = !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
+
+#if SORT_MERGE_JOIN_DEBUG
+  std::vector<size_type> host_data(sorted_larger_order_col->size());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_data.data(),
+                                sorted_larger_order_col->view().head<size_type>(),
+                                sorted_larger_order_col->size() * sizeof(size_type),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  stream.synchronize();
+  debug_print<size_type>("h_sorted_larger_order_col", host_data);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_data.data(),
+                                sorted_smaller_order_col->view().head<size_type>(),
+                                sorted_smaller_order_col->size() * sizeof(size_type),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  stream.synchronize();
+  debug_print<size_type>("h_sorted_smaller_order_col", host_data);
+#endif
+
+  auto smaller_dv_ptr = cudf::table_device_view::create(smaller, stream);
+  auto larger_dv_ptr  = cudf::table_device_view::create(larger, stream);
+  auto sorted_smaller_order_dv_ptr =
+    cudf::column_device_view::create(*sorted_smaller_order_col, stream);
+  auto sorted_larger_order_dv_ptr =
+    cudf::column_device_view::create(*sorted_larger_order_col, stream);
+
+  // naive: iterate through larger table and binary search on smaller table
+  auto const larger_numrows  = larger.num_rows();
+  auto const smaller_numrows = smaller.num_rows();
+  rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, mr);
+  rmm::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, mr);
+
+  auto match_counts =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, mr);
+
+#if SORT_MERGE_JOIN_DEBUG
+  rmm::device_uvector<size_type> lb1(larger_numrows, stream, mr);
+  row_comparator comp_lb_1(
+    *larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
                       thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
+                      thrust::make_counting_iterator(0) + larger_numrows,
+                      lb1.begin(),
+                      comp_lb_1);
+  debug_print<size_type>("h_lb1", cudf::detail::make_host_vector_sync(lb1, stream));
+
+  rmm::device_uvector<size_type> ub1(larger_numrows, stream, mr);
+  row_comparator comp_ub_1(
+    *larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
+  thrust::upper_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(0) + larger_numrows,
+                      ub1.begin(),
+                      comp_ub_1);
+  debug_print<size_type>("h_ub1", cudf::detail::make_host_vector_sync(ub1, stream));
+#endif
+
+  row_comparator comp_ub(
+    *larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
+  auto match_counts_it = match_counts.begin();
+  nvtxRangePushA("upper bound");
+  thrust::upper_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(0) + larger_numrows,
+                      match_counts_it,
+                      comp_ub);
+  nvtxRangePop();
+
+#if SORT_MERGE_JOIN_DEBUG
+  debug_print<size_type>("h_match_counts",
+                         cudf::detail::make_host_vector_sync(match_counts, stream));
+#endif
+
+  row_comparator comp_lb(
+    *larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
+  auto match_counts_update_it = thrust::make_tabulate_output_iterator(
+    [match_counts = match_counts.begin()] __device__(size_type idx, size_type val) {
+      match_counts[idx] -= val;
+    });
+  nvtxRangePushA("lower bound");
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(0) + larger_numrows,
+                      match_counts_update_it,
+                      comp_lb);
+  nvtxRangePop();
+
+#if SORT_MERGE_JOIN_DEBUG
+  debug_print<size_type>("h_match_counts",
+                         cudf::detail::make_host_vector_sync(match_counts, stream));
+#endif
+
+  auto count_matches_it = thrust::make_transform_iterator(
+    match_counts.begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c ? 1 : 0; }));
+  auto const count_matches =
+    thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
+  rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, mr);
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(0) + larger_numrows,
+    nonzero_matches.begin(),
+    [match_counts = match_counts.begin()] __device__(auto idx) { return match_counts[idx]; });
+
+#if SORT_MERGE_JOIN_DEBUG
+  std::printf("count_matches = %d\n", count_matches);
+  debug_print<size_type>("h_nonzero_matches",
+                         cudf::detail::make_host_vector_sync(nonzero_matches, stream));
+#endif
+
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), match_counts.begin(), match_counts.end(), match_counts.begin());
+  auto const total_matches = match_counts.back_element(stream);
+
+  // populate larger indices
+  auto larger_indices =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
+  nvtxRangePushA("larger indices");
+  thrust::scatter(rmm::exec_policy(stream),
+                  nonzero_matches.begin(),
+                  nonzero_matches.end(),
+                  thrust::make_permutation_iterator(match_counts.begin(), nonzero_matches.begin()),
+                  larger_indices.begin());
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         larger_indices.begin(),
+                         larger_indices.end(),
+                         larger_indices.begin(),
+                         thrust::maximum<size_type>{});
+  nvtxRangePop();
+
+#if SORT_MERGE_JOIN_DEBUG
+  debug_print<size_type>("h_match_counts",
+                         cudf::detail::make_host_vector_sync(match_counts, stream));
+  rmm::device_uvector<size_type> dlb(nonzero_matches.size(), stream, mr);
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
+                      nonzero_matches.begin(),
+                      nonzero_matches.end(),
+                      dlb.begin(),
+                      comp_lb);
+  debug_print<size_type>("h_dlb", cudf::detail::make_host_vector_sync(dlb, stream));
+#endif
+
+  // populate smaller indices
+  rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
+  nvtxRangePushA("smaller indices");
+  thrust::fill(rmm::exec_policy(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+  auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
+    [nonzero_matches = nonzero_matches.begin(),
+     match_counts    = match_counts.begin(),
+     smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
+      auto lhsidx          = nonzero_matches[idx];
+      auto pos             = match_counts[lhsidx];
+      smaller_indices[pos] = lb;
+    });
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      sorted_smaller_order_col->view().begin<size_type>(),
+                      sorted_smaller_order_col->view().begin<size_type>() + smaller_numrows,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       smaller_tabulate_it,
@@ -321,5 +546,6 @@ sort_merge_inner_join(table_view const& left,
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices))};
 }
+*/
 
 }  // namespace cudf
