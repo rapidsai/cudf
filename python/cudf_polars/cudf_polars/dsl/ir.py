@@ -547,7 +547,7 @@ class Scan(IR):
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
-                ],
+                ),
                 strict=True,
             )
             df = DataFrame.from_table(
