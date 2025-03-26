@@ -38,23 +38,18 @@ void impl::set_page_validity(cudf::host_span<std::vector<bool> const> data_page_
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "Invalid pass");
 
   auto const& chunks = _pass_itm_data->chunks;
-  _page_validity     = cudf::detail::make_host_vector<bool>(_pass_itm_data->pages.size(), _stream);
+  _page_validity.reserve(_pass_itm_data->pages.size());
 
-  auto page_idx = 0;
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(chunks.size()),
                 [&](auto chunk_idx) {
-                  if (chunks[chunk_idx].num_dict_pages > 0) {
-                    _page_validity[page_idx] = true;
-                    page_idx++;
-                  }
-                  CUDF_EXPECTS(
-                    data_page_validity[chunk_idx].size() == chunks[chunk_idx].num_data_pages,
-                    "Mismatched data page validity size");
-                  std::copy(data_page_validity[chunk_idx].begin(),
-                            data_page_validity[chunk_idx].end(),
-                            _page_validity.begin() + page_idx);
-                  page_idx += data_page_validity[chunk_idx].size();
+                  if (chunks[chunk_idx].num_dict_pages > 0) { _page_validity.emplace_back(true); }
+                  CUDF_EXPECTS(data_page_validity[chunk_idx].size() ==
+                                 static_cast<size_t>(chunks[chunk_idx].num_data_pages),
+                               "Mismatched data page validity size");
+                  _page_validity.insert(_page_validity.end(),
+                                        data_page_validity[chunk_idx].begin(),
+                                        data_page_validity[chunk_idx].end());
                 });
 }
 
@@ -81,14 +76,14 @@ void impl::update_output_bitmasks_for_pruned_pages()
   auto const& chunks     = _pass_itm_data->chunks;
   auto const num_columns = _input_columns.size();
 
-  auto page_idx = 0;
-  for (page_idx = 0; page_idx < pages.size(); page_idx++) {
+  CUDF_EXPECTS(pages.size() == _page_validity.size(), "Page validity size mismatch");
+
+  for (size_t page_idx = 0; page_idx < pages.size(); page_idx++) {
     if (_page_validity[page_idx]) { continue; }
     auto const chunk_idx = pages[page_idx].chunk_idx;
-    auto const& chunk    = chunks[chunk_idx];
     auto& input_col      = _input_columns[chunk_idx % num_columns];
 
-    auto const start_row = chunk.start_row + pages[page_idx].chunk_row;
+    auto const start_row = chunks[chunk_idx].start_row + pages[page_idx].chunk_row;
     auto const end_row   = start_row + pages[page_idx].num_rows;
     update_null_mask(input_col, start_row, end_row);
   }

@@ -16,8 +16,8 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
-#include "io/comp/comp.hpp"
 #include "io/comp/gpuinflate.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/reader_impl_chunking.hpp"
@@ -50,6 +50,10 @@ namespace {
 namespace nvcomp = cudf::io::detail::nvcomp;
 using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
+using compression_type = cudf::io::compression_type;
+using Compression      = cudf::io::parquet::detail::Compression;
+using ColumnChunkDesc  = cudf::io::parquet::detail::ColumnChunkDesc;
+using PageInfo         = cudf::io::parquet::detail::PageInfo;
 
 struct cumulative_page_info {
   size_t end_row_index;  // end row index (start_row + num_rows for the corresponding page)
@@ -66,6 +70,32 @@ struct get_chunk_compressed_size {
     return chunk.compressed_size;
   }
 };
+
+/**
+ * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
+ */
+__host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_support(
+  Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return {compression_type::BROTLI, true};
+    case Compression::GZIP: return {compression_type::GZIP, true};
+    case Compression::LZ4_RAW: return {compression_type::LZ4, true};
+    case Compression::LZO: return {compression_type::LZO, false};
+    case Compression::SNAPPY: return {compression_type::SNAPPY, true};
+    case Compression::ZSTD: return {compression_type::ZSTD, true};
+    case Compression::UNCOMPRESSED: return {compression_type::NONE, true};
+    default: break;
+  }
+  return {compression_type::NONE, false};
+}
+
+compression_type from_parquet_compression(Compression compression)
+{
+  auto const [type, supported] = parquet_compression_support(compression);
+  CUDF_EXPECTS(supported, "Unsupported compression type");
+  return type;
+}
 
 /**
  * @brief Converts cuDF units to Parquet units.
@@ -145,15 +175,14 @@ struct get_span_size {
  * @return Device buffer to decompressed page data
  */
 [[nodiscard]] rmm::device_buffer decompress_page_data(
-  cudf::detail::hostdevice_span<cudf::io::parquet::detail::ColumnChunkDesc const> chunks,
-  cudf::detail::hostdevice_span<cudf::io::parquet::detail::PageInfo> pages,
+  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+  cudf::detail::hostdevice_span<PageInfo> pages,
   bool dict_pages,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
-  auto for_each_codec_page = [&](cudf::io::parquet::detail::Compression codec,
-                                 std::function<void(size_t)> const& f) {
+  auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
     for (size_t p = 0; p < pages.size(); p++) {
       if (chunks[pages[p].chunk_idx].codec == codec &&
           ((dict_pages &&
@@ -165,16 +194,12 @@ struct get_span_size {
     }
   };
 
-  // Brotli scratch memory for decompressing
-  rmm::device_buffer debrotli_scratch;
-
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
 
   struct codec_stats {
-    cudf::io::parquet::detail::Compression compression_type =
-      cudf::io::parquet::detail::UNCOMPRESSED;
+    Compression compression_type  = cudf::io::parquet::detail::UNCOMPRESSED;
     size_t num_pages              = 0;
     int32_t max_decompressed_size = 0;
     size_t total_decomp_size      = 0;
@@ -208,10 +233,6 @@ struct get_span_size {
       codec.num_pages++;
       num_comp_pages++;
     });
-    if (codec.compression_type == cudf::io::parquet::detail::BROTLI && codec.num_pages > 0) {
-      debrotli_scratch.resize(cudf::io::detail::get_gpu_debrotli_scratch_size(codec.num_pages),
-                              stream);
-    }
   }
 
   // Dispatch batches of pages to decompress for each codec.
@@ -273,71 +294,17 @@ struct get_span_size {
 
     device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
                                                                  codec.num_pages};
-
     device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
                                                             codec.num_pages);
-
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
+    cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
+                                 d_comp_in_view,
+                                 d_comp_out_view,
+                                 d_comp_res_view,
+                                 codec.max_decompressed_size,
+                                 codec.total_decomp_size,
+                                 stream);
 
-    switch (codec.compression_type) {
-      case cudf::io::parquet::detail::GZIP:
-        if (cudf::io::nvcomp_integration::is_all_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpuinflate(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     cudf::io::detail::gzip_header_included::YES,
-                     stream);
-        }
-        break;
-      case cudf::io::parquet::detail::SNAPPY:
-        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpu_unsnap(d_comp_in_view, d_comp_out, d_comp_res_view, stream);
-        }
-        break;
-      case cudf::io::parquet::detail::ZSTD:
-        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      case cudf::io::parquet::detail::BROTLI:
-        gpu_debrotli(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     debrotli_scratch.data(),
-                     debrotli_scratch.size(),
-                     stream);
-        break;
-      case cudf::io::parquet::detail::LZ4_RAW:
-        nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
-    }
     start_pos += codec.num_pages;
   }
 

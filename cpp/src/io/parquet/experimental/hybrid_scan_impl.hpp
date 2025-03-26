@@ -382,7 +382,7 @@ class impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  cudf::detail::host_vector<bool> _page_validity;
+  std::vector<bool> _page_validity;
 
   cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

@@ -335,6 +335,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                       num_rows,
                       skip_rows,
                       level_type_size,
+                      page_validity,
                       error_code.data(),
                       streams[s_idx++]);
   }

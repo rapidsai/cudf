@@ -126,9 +126,6 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
     }
   }
 
-  auto d_page_validity = cudf::detail::make_device_uvector_async<bool>(
-    _page_validity, _stream, cudf::get_current_device_resource_ref());
-
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
@@ -209,6 +206,11 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
       cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
   }
+
+  auto h_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::copy(h_page_validity.cbegin(), h_page_validity.cend(), h_page_validity.begin());
+  auto d_page_validity = cudf::detail::make_device_uvector_async<bool>(
+    h_page_validity, _stream, cudf::get_current_device_resource_ref());
 
   // create this before we fork streams
   cudf::io::parquet::kernel_error error_code(_stream);

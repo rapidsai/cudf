@@ -27,7 +27,6 @@
 #include <cudf/utilities/export.hpp>
 
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
