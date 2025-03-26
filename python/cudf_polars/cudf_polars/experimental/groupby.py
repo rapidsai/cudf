@@ -166,11 +166,11 @@ def _(
             1,
         )
 
-    temporary_names = unique_names("_" * max(map(len, ir.schema)))
+    name_generator = unique_names(ir.schema.keys())
     # Decompose the aggregation requests into three distinct phases
     selection_exprs, piecewise_exprs, reduction_exprs = combine(
         *(
-            decompose(agg.name, agg.value, names=temporary_names)
+            decompose(agg.name, agg.value, names=name_generator)
             for agg in ir.agg_requests
         )
     )

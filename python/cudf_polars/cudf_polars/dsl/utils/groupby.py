@@ -81,9 +81,8 @@ def rewrite_groupby(
             config_options,
             inp,
         )
-    temp_prefix = "_" * max(map(len, schema))
     inp, aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, inp, keys, aggs, unique_names(temp_prefix)
+        schema, inp, keys, aggs, unique_names(schema.keys())
     )
     # TODO: use Distinct when the partitioned executor supports it if
     # the requested aggregations are empty
