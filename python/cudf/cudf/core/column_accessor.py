@@ -601,19 +601,14 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_slice(self, key: slice) -> Self:
         start, stop = key.start, key.stop
-        if key.step is not None:
-            raise TypeError("Label slicing with step is not supported")
 
         if len(self.names) == 0:
-            # OK to slice empty columns
             # https://github.com/rapidsai/cudf/issues/18376
-            return type(self)(
-                {},
-                multiindex=self.multiindex,
-                level_names=self.level_names,
-                label_dtype=self.label_dtype,
-                verify=False,
-            )
+            # Any slice is valid when we have no columns
+            return self._from_columns_like_self([], verify=False)
+
+        if key.step is not None:
+            raise TypeError("Label slicing with step is not supported")
 
         if start is None:
             start = self.names[0]

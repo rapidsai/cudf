@@ -2407,7 +2407,7 @@ def test_loc_iloc_setitem_col_slice_non_cupy_types(indexer, dtype):
 )
 def test_slice_empty_columns(indexer, column_slice):
     df_pd = pd.DataFrame(index=[0, 1, 2])
-    df_cudf = pd.DataFrame(index=[0, 1, 2])
+    df_cudf = cudf.from_pandas(df_pd)
     result = getattr(df_cudf, indexer)[:, column_slice]
     expected = getattr(df_pd, indexer)[:, column_slice]
     assert_eq(result, expected)
