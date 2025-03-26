@@ -29,18 +29,9 @@ def pytest_addoption(parser):
         help="Executor to use for GPUEngine.",
     )
 
-    parser.addoption(
-        "--rapidsmp",
-        action="store_true",
-        help="Use LocalRMPCluster.",
-    )
-
 
 def pytest_configure(config):
     import cudf_polars.testing.asserts
-
-    if config.getoption("--rapidsmp") and not config.getoption("--dask-cluster"):
-        raise pytest.UsageError("--rapidsmp requires --dask-cluster'")
 
     if (
         config.getoption("--dask-cluster")
@@ -69,11 +60,6 @@ def pytest_sessionstart(session):
         n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
         cluster = LocalCUDACluster(n_workers=n_workers)
         client = Client(cluster)
-        client.wait_for_workers(n_workers)
-        if session.config.getoption("--rapidsmp"):
-            from rapidsmp.integrations.dask import bootstrap_dask_cluster
-
-            bootstrap_dask_cluster(client, enable_statistics=False)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
 
 
