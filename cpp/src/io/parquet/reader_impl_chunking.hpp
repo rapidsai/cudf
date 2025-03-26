@@ -100,7 +100,7 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
-  cudf::device_span<bool> page_validity{};
+  cudf::detail::hostdevice_span<bool> page_validity{};
 
   // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
