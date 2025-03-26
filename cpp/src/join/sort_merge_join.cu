@@ -277,27 +277,6 @@ sort_merge_inner_join(table_view const& left,
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
   nvtxRangePushA("smaller indices");
-  /*
-  auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
-    [nonzero_matches     = nonzero_matches.begin(),
-     match_counts        = match_counts.begin(),
-     smaller_indices       = smaller_indices.begin(),
-     sorted_smaller_order =
-       sorted_smaller_order_col->view().begin<size_type>()] __device__(auto idx, auto lb) {
-      auto lhsidx = nonzero_matches[idx];
-      // iterate between match counts positions and update everything
-      for (auto a = match_counts[lhsidx]; a < match_counts[lhsidx + 1]; a++, lb++) {
-        smaller_indices[a] = sorted_smaller_order[lb];
-      }
-    });
-  thrust::lower_bound(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + smaller_numrows,
-                      nonzero_matches.begin(),
-                      nonzero_matches.end(),
-                      smaller_tabulate_it,
-                      comp_lb);
-  */
   thrust::fill(rmm::exec_policy(stream), smaller_indices.begin(), smaller_indices.end(), 1);
   auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
