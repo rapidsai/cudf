@@ -72,7 +72,7 @@ class Filter(Expr):
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
         self.dtype = dtype
         self.children = (values, indices)
-        self.is_pointwise = True
+        self.is_pointwise = False
 
     def do_evaluate(
         self,
