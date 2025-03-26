@@ -37,20 +37,31 @@ void impl::set_page_validity(cudf::host_span<std::vector<bool> const> data_page_
 {
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "Invalid pass");
 
-  auto const& chunks = _pass_itm_data->chunks;
-  _page_validity.reserve(_pass_itm_data->pages.size());
+  auto const& pass   = _pass_itm_data;
+  auto const& chunks = pass->chunks;
+  _page_validity.reserve(pass->pages.size());
+  auto const num_columns = _input_columns.size();
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(chunks.size()),
-                [&](auto chunk_idx) {
-                  if (chunks[chunk_idx].num_dict_pages > 0) { _page_validity.emplace_back(true); }
-                  CUDF_EXPECTS(data_page_validity[chunk_idx].size() ==
-                                 static_cast<size_t>(chunks[chunk_idx].num_data_pages),
-                               "Mismatched data page validity size");
-                  _page_validity.insert(_page_validity.end(),
-                                        data_page_validity[chunk_idx].begin(),
-                                        data_page_validity[chunk_idx].end());
-                });
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(_input_columns.size()),
+    [&](auto col_idx) {
+      auto const& col_page_validity = data_page_validity[col_idx];
+      size_t num_inserted_pages     = 0;
+      for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
+        if (chunks[chunk_idx].num_dict_pages > 0) { _page_validity.emplace_back(true); }
+        CUDF_EXPECTS(
+          col_page_validity.size() >= num_inserted_pages + chunks[chunk_idx].num_data_pages,
+          "Encountered unavailable validity for data pages");
+        _page_validity.insert(
+          _page_validity.end(),
+          col_page_validity.begin() + num_inserted_pages,
+          col_page_validity.begin() + num_inserted_pages + chunks[chunk_idx].num_data_pages);
+        num_inserted_pages += chunks[chunk_idx].num_data_pages;
+      }
+      CUDF_EXPECTS(num_inserted_pages == col_page_validity.size(),
+                   "Encountered mismatch in data pages and validity sizes");
+    });
 }
 
 void impl::update_output_bitmasks_for_pruned_pages()

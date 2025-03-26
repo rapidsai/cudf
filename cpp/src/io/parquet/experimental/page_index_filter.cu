@@ -598,26 +598,14 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
         });
     });
 
-  // Total number of column chunks (or row groups) across all sources
-  auto const total_chunks = num_columns * (col_chunk_page_offsets.front().size() - 1);
-
   // Lambda to make a vector with all pages required
   auto const all_valid_data_pages = [&]() {
-    size_t col_idx   = 0;
-    size_t chunk_idx = 0;
-    std::vector<std::vector<bool>> all_valid_data_pages(total_chunks);
-    std::transform(thrust::counting_iterator<size_t>(0),
-                   thrust::counting_iterator(total_chunks),
-                   all_valid_data_pages.begin(),
-                   [&](auto _) {
-                     auto const chunk_num_pages = col_chunk_page_offsets[col_idx][chunk_idx + 1] -
-                                                  col_chunk_page_offsets[col_idx][chunk_idx];
-                     if (++col_idx == num_columns) {
-                       col_idx = 0;
-                       chunk_idx++;
-                     }
-                     return std::vector<bool>(chunk_num_pages, true);
-                   });
+    std::vector<std::vector<bool>> all_valid_data_pages;
+    all_valid_data_pages.reserve(num_columns);
+    std::for_each(
+      page_row_counts.cbegin(), page_row_counts.cend(), [&](auto const& col_page_counts) {
+        all_valid_data_pages.emplace_back(col_page_counts.size(), true);
+      });
     return all_valid_data_pages;
   };
 
@@ -688,7 +676,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
       cudf::device_span<cudf::size_type const>{d_select_page_indices.data(), num_filtered_pages},
       stream);
 
-    // Vector to hold byte ranges of filtered pages for the this column
+    // Vector to hold validity of data pages for the this column
     auto valid_pages = std::vector<bool>(total_pages_in_this_column, false);
     std::for_each(h_select_page_indices.begin(),
                   h_select_page_indices.end(),
@@ -700,37 +688,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
   CUDF_EXPECTS(total_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
-  // TODO: MH: Temp logging. Remove later.
-  std::cout << "Num pages after filter = " << total_filtered_pages << " out of " << total_pages
-            << std::endl;
-
-  // Lambda to make a vector of per column chunk page validity vectors
-  auto valid_data_pages = [&]() {
-    size_t col_idx   = 0;
-    size_t chunk_idx = 0;
-    std::vector<std::vector<bool>> valid_data_pages(total_chunks);
-    std::transform(thrust::counting_iterator<size_t>(0),
-                   thrust::counting_iterator(total_chunks),
-                   valid_data_pages.begin(),
-                   [&](auto _) {
-                     auto const chunk_page_offset = col_chunk_page_offsets[col_idx][chunk_idx];
-                     auto const chunk_num_pages   = col_chunk_page_offsets[col_idx][chunk_idx + 1] -
-                                                  col_chunk_page_offsets[col_idx][chunk_idx];
-                     auto const pages = std::vector<bool>(
-                       data_page_validity[col_idx].begin() + chunk_page_offset,
-                       data_page_validity[col_idx].begin() + chunk_page_offset + chunk_num_pages);
-                     if (++col_idx == num_columns) {
-                       col_idx = 0;
-                       chunk_idx++;
-                     }
-                     return pages;
-                   });
-
-    return valid_data_pages;
-  }();
-
-  // Return the final lists of data page requirements for all columns
-  return valid_data_pages;
+  return data_page_validity;
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

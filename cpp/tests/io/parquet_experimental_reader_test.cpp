@@ -159,16 +159,16 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
   srand(31337);
 
   auto const hybrid_scan = [&](bool is_testing_pages) {
-    auto [table, buffer] = create_parquet_with_stats(is_testing_pages);
+    auto [written_table, buffer] = create_parquet_with_stats(is_testing_pages);
 
-    // Filtering AST - table[0] < 150
+    // Filtering AST - table[0] < 100
     auto literal_value = cudf::numeric_scalar<uint32_t>(100);
     auto literal       = cudf::ast::literal(literal_value);
     auto col_ref_0     = cudf::ast::column_name_reference("col_uint32");
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-    cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
 
@@ -202,15 +202,12 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
       filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
     }
 
-    std::cout << "Num row groups after filter = " << filtered_row_groups.size() << " out of "
-              << input_row_groups.size() << std::endl;
-
     auto mr = cudf::get_current_device_resource_ref();
 
-    auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
+    auto [row_validity, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
       reader, stats_filtered_row_groups, options, stream, mr);
 
-    EXPECT_EQ(data_page_validity.size(), table.num_columns() * filtered_row_groups.size());
+    EXPECT_EQ(data_page_validity.size(), written_table.num_columns());
 
     auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
@@ -218,14 +215,34 @@ TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
     auto column_chunk_buffers =
       fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
 
-    [[maybe_unused]] auto [tbl, meta] =
+    auto const [read_table, read_meta] =
       cudf::experimental::io::materialize_filter_columns(reader,
                                                          data_page_validity,
                                                          stats_filtered_row_groups,
                                                          std::move(column_chunk_buffers),
-                                                         predicate->mutable_view(),
+                                                         row_validity->mutable_view(),
                                                          options,
                                                          stream);
+
+    // Check equality with the parquet file read with the original reader
+    {
+      auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), read_table->view());
+    }
+
+    // Check equivalence with the original table with the applied boolean mask
+    {
+      auto col_ref_0 = cudf::ast::column_reference(0);
+      auto filter_expression =
+        cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+      auto predicate = cudf::compute_column(written_table, filter_expression);
+      EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+        << "Predicate filter should return a boolean";
+      auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+      // Check equivalence as the nullability between columns may be different
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_table->view());
+    }
   };
 
   // Only test filtering row groups

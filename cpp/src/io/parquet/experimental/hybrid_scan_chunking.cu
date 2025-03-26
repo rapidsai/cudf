@@ -55,6 +55,28 @@ using Compression      = cudf::io::parquet::detail::Compression;
 using ColumnChunkDesc  = cudf::io::parquet::detail::ColumnChunkDesc;
 using PageInfo         = cudf::io::parquet::detail::PageInfo;
 
+#if defined(PAGE_PRUNING_DEBUG)
+void print_pages(cudf::detail::hostdevice_span<PageInfo>& pages, rmm::cuda_stream_view _stream)
+{
+  pages.device_to_host_sync(_stream);
+  for (size_t idx = 0; idx < pages.size(); idx++) {
+    auto const& p = pages[idx];
+    // skip dictionary pages
+    if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) { printf("Dict"); }
+    printf(
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
+      "str_bytes(%d)\n",
+      idx,
+      p.src_col_schema,
+      p.chunk_row,
+      p.num_rows,
+      p.skipped_values,
+      p.skipped_leaf_values,
+      p.str_bytes);
+  }
+}
+#endif  // PAGE_PRUNING_DEBUG
+
 struct cumulative_page_info {
   size_t end_row_index;  // end row index (start_row + num_rows for the corresponding page)
   size_t size_bytes;     // cumulative size in bytes
@@ -841,6 +863,10 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
 
   // in the single pass case, no page copying is necessary - just use what's in the pass itself
   subpass.pages = pass.pages;
+
+#if defined(PAGE_PRUNING_DEBUG)
+  print_pages(subpass.pages, _stream);
+#endif  // PAGE_PRUNING_DEBUG
 
   auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);

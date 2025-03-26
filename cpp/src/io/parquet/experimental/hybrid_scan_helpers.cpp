@@ -99,6 +99,12 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   num_rows        = calc_num_rows();
   num_row_groups  = calc_num_row_groups();
 
+  // Force all columns to be nullable
+  auto& schema = per_file_metadata.front().schema;
+  std::for_each(schema.begin(), schema.end(), [](auto& col) {
+    col.repetition_type = cudf::io::parquet::detail::OPTIONAL;
+  });
+
   // Collect and apply arrow:schema from Parquet's key value metadata section
   if (use_arrow_schema) {
     apply_arrow_schema();
