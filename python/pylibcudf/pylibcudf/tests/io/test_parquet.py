@@ -56,6 +56,43 @@ def test_read_parquet_basic(
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
+    # No filtering done
+    assert res.num_row_groups_after_stats_filter is None
+    assert res.num_row_groups_after_bloom_filter is None
+
+
+@pytest.mark.parametrize("if_prune_rowgroup,result", [(True, 0), (False, 1)])
+def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
+    col_list = list(range(1, 10))
+    min_element = min(col_list)
+    max_element = max(col_list)
+    tbl1 = pa.Table.from_pydict({"a": col_list})
+    path1 = tmp_path / "tbl1.parquet"
+    pa.parquet.write_table(tbl1, path1)
+    source = plc.io.SourceInfo([path1])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+
+    if if_prune_rowgroup:
+        # Prune the only row group since the filter aims to find elements larger than the max
+        filter = Operation(
+            ASTOperator.GREATER,
+            ColumnNameReference("a"),
+            Literal(plc.interop.from_arrow(pa.scalar(max_element))),
+        )
+    else:
+        # No real pruning
+        filter = Operation(
+            ASTOperator.GREATER,
+            ColumnNameReference("a"),
+            Literal(plc.interop.from_arrow(pa.scalar(min_element))),
+        )
+    options.set_filter(filter)
+    plc_table_w_meta = plc.io.parquet.read_parquet(options)
+    assert (
+        plc_table_w_meta.num_input_row_groups == 1
+    )  # Input has only one rowgroup
+    assert plc_table_w_meta.num_row_groups_after_stats_filter == result
+
 
 @pytest.mark.parametrize(
     "pa_filters,plc_filters",

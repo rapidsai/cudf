@@ -31,9 +31,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
     no_fallback = config.getoption("--cudf-polars-no-fallback")
-    collect = polars.LazyFrame.collect
-    engine = polars.GPUEngine(raise_on_fail=no_fallback)
-    polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+    if no_fallback:
+        collect = polars.LazyFrame.collect
+        engine = polars.GPUEngine(raise_on_fail=no_fallback)
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+    else:
+        polars.Config.set_engine_affinity("gpu")
     config.addinivalue_line(
         "filterwarnings",
         "ignore:.*GPU engine does not support streaming or background collection",
@@ -52,21 +55,11 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_delta.py::test_read_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
-    "tests/unit/io/test_lazy_parquet.py::test_dsl2ir_cached_metadata[False]": "cudf-polars doesn't use metadata read by rust preprocessing",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_different_schema[False]": "Needs cudf#16394",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-columns]": "Correctly raises but different error",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-row_groups]": "Correctly raises but different error",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-prefiltered]": "Correctly raises but different error",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "Correctly raises but different error",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_mismatch_panic_17067[False]": "Needs cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[False-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[True-False]": "Needs some variant of cudf#16394",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_slice_pushdown_non_zero_offset[False]": "Thrift data not handled correctly/slice pushdown wrong?",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read[False]": "Incomplete handling of projected reads with mismatching schemas, cudf#16394",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read_dtype_mismatch[False]": "Different exception raised, but correctly raises an exception",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read_missing_cols_from_first[False]": "Different exception raised, but correctly raises an exception",
     "tests/unit/io/test_parquet.py::test_read_parquet_only_loads_selected_columns_15098": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection0-False-none]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-False-none]": "Mismatching column read cudf#16394",
@@ -121,12 +114,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_limit_and_filter[single-parquet-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_filter_and_limit[single-parquet-async]": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_parquet-write_parquet]": "Need to add include_file_path to IR",
-    "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_csv-write_csv]": "Need to add include_file_path to IR",
-    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_parquet-write_parquet]": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_csv-write_csv]": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_include_file_paths[False-scan_ndjson-write_ndjson]": "Debug output on stderr doesn't match",
-    "tests/unit/io/test_scan.py::test_scan_include_file_name[False-scan_ndjson-write_ndjson]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[read_parquet-write_parquet]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[<lambda>-write_csv]": "Need to add include_file_path to IR",
     "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]": "Need to add include_file_path to IR",
@@ -190,19 +177,16 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
     "tests/unit/sql/test_wildcard_opts.py::test_select_wildcard_errors": "Raises correctly but with different exception",
-    "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics": "Debug output on stderr doesn't match",
     "tests/unit/test_cse.py::test_cse_predicate_self_join": "Debug output on stderr doesn't match",
     "tests/unit/test_empty.py::test_empty_9137": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
-    "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_parquet-write_parquet]": "Need to expose include_file_paths xref: cudf#18012",
-    "tests/unit/io/test_multiscan.py::test_include_file_paths[scan_csv-write_csv]": "Need to expose include_file_paths xref: cudf#18012",
-    "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics[False]": "Debug output on stderr doesn't match",
     # Maybe flaky, order-dependent?
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
 }
 
 
 TESTS_TO_SKIP: Mapping[str, str] = {
+    "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
     # On Ubuntu 20.04, the tzdata package contains a bunch of symlinks
     # for obsolete timezone names. However, the chrono_tz package that
     # polars uses doesn't read /usr/share/zoneinfo, instead packaging
@@ -212,18 +196,13 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # polars that the requested timezone is unknown.
     # Since this is random, just skip it, rather than xfailing.
     "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
-    # TODO: Remove once we once we depend once we depend on
-    # polars version with pola-rs/polars/pull/21721
-    "tests/unit/io/test_parquet.py::test_general_prefiltering": "Due to unknown timezones in polars rust layer",
+    # Tests performance difference of CPU engine
+    "tests/unit/operations/test_join.py::test_join_where_eager_perf_21145": "Tests performance bug in CPU engine",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
-    # TODO: Remove once when we support polars 1.23
-    "tests/unit/io/database/test_read.py::test_read_database[uri: connectorx]": "ValueError: arrow2",
-    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://123:456@account/database/schema?warehouse=warehouse&role=role]": "ValueError: arrow2",
-    "tests/unit/io/database/test_read.py::test_read_database_cx_credentials[fakedb://my#%us3r:p433w0rd@not_a_real_host:9999/database]": "ValueError: arrow2",
 }
 
 
@@ -235,18 +214,17 @@ def pytest_collection_modifyitems(
         # Don't xfail tests if running without fallback
         return
     for item in items:
-        if item.nodeid in TESTS_TO_SKIP:
-            item.add_marker(pytest.mark.skip(reason=TESTS_TO_SKIP[item.nodeid]))
-        elif item.nodeid in EXPECTED_FAILURES:
-            if isinstance(EXPECTED_FAILURES[item.nodeid], tuple):
+        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
+            item.add_marker(pytest.mark.skip(reason=reason))
+        elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
+            if isinstance(entry, tuple):
                 # the second entry in the tuple is the condition to xfail on
+                reason, condition = entry
                 item.add_marker(
                     pytest.mark.xfail(
-                        condition=EXPECTED_FAILURES[item.nodeid][1],
-                        reason=EXPECTED_FAILURES[item.nodeid][0],
+                        condition=condition,
+                        reason=reason,
                     ),
                 )
             else:
-                item.add_marker(
-                    pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid])
-                )
+                item.add_marker(pytest.mark.xfail(reason=entry))
