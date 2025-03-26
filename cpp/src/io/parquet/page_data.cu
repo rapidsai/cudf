@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                          device_span<ColumnChunkDesc const> chunks,
                          size_t min_row,
                          size_t num_rows,
+                         cudf::device_span<bool const> page_validity,
                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -67,6 +68,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto* const sb        = &state_buffers;
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
+
+  // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
+  // page is invalid.
+  // MH: What to do if `has_repetition` is true?
+  if (!page_validity[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    return;
+  }
+
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s,
@@ -224,6 +236,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
                     size_t num_rows,
+                    cudf::device_span<bool const> page_validity,
                     kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -236,6 +249,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
   int out_thread0;
+
+  // Exit early if the page is invalid
+  // MH: How to handle all types in this decoder? Also what to do if `has_repetition` is true?
+  if (not page_validity[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    return;
+  }
+
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s,
@@ -427,6 +450,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
+                             cudf::device_span<bool const> page_validity,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
@@ -437,10 +461,10 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodePageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   } else {
     gpuDecodePageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   }
 }
 
@@ -452,6 +476,7 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
+                                  cudf::device_span<bool const> page_validity,
                                   kernel_error::pointer error_code,
                                   rmm::cuda_stream_view stream)
 {
@@ -462,10 +487,10 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodeSplitPageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   } else {
     gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
   }
 }
 

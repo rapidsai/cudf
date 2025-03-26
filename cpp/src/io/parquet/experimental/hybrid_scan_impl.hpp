@@ -116,9 +116,15 @@ class impl {
    * @brief Initialize the necessary options related internal variables for use later on.
    */
   void initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                          cudf::host_span<std::vector<bool> const> data_page_validity,
                           cudf::io::parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
+
+  void set_page_validity(cudf::host_span<std::vector<bool> const> data_page_validity);
+
+  /**
+   * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
+   */
+  void update_output_bitmasks_for_pruned_pages();
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -376,7 +382,7 @@ class impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  cudf::host_span<std::vector<bool> const> _data_page_validity;
+  cudf::detail::host_vector<bool> _page_validity;
 
   cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

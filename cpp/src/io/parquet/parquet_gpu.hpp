@@ -806,6 +806,7 @@ void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                     size_t num_rows,
                     size_t min_row,
                     int level_type_size,
+                    cudf::device_span<bool const> page_validity,
                     kernel_error::pointer error_code,
                     rmm::cuda_stream_view stream);
 
@@ -828,6 +829,7 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                          size_t num_rows,
                          size_t min_row,
                          int level_type_size,
+                         cudf::device_span<bool const> page_validity,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
 
@@ -854,6 +856,7 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] page_validity Vector of booleans indicating the validity of each page
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -862,6 +865,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
+                       cudf::device_span<bool const> page_validity,
                        kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream);
 
@@ -877,6 +881,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[out] page_validity Vector of booleans indicating the validity of each page
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -886,6 +891,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t min_row,
                           int level_type_size,
                           cudf::device_span<size_t> initial_str_offsets,
+                          cudf::device_span<bool const> page_validity,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -901,6 +907,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[out] page_validity Vector of booleans indicating the validity of each page
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -910,6 +917,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t min_row,
                                 int level_type_size,
                                 cudf::device_span<size_t> initial_str_offsets,
+                                cudf::device_span<bool const> page_validity,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream);
 
@@ -926,6 +934,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[out] initial_str_offsets Vector to store the initial offsets for large nested string cols
+ * @param[out] page_validity Vector of booleans indicating the validity of each page
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -936,6 +945,7 @@ void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                     int level_type_size,
                     decode_kernel_mask kernel_mask,
                     cudf::device_span<size_t> initial_str_offsets,
+                    cudf::device_span<bool const> page_validity,
                     kernel_error::pointer error_code,
                     rmm::cuda_stream_view stream);
 
@@ -1005,7 +1015,7 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<EncPage> pages,
                       device_span<size_type> page_sizes,
-                      device_span<size_type> comp_page_sizes,
+                      device_span<size_type const> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
@@ -1065,12 +1075,9 @@ void EncodePageHeaders(device_span<EncPage> pages,
  * @brief Launches kernel to gather pages to a single contiguous block per chunk
  *
  * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages
  * @param[in] stream CUDA stream to use
  */
-void GatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<EncPage const> pages,
-                 rmm::cuda_stream_view stream);
+void GatherPages(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to calculate ColumnIndex information per chunk

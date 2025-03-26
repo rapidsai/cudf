@@ -101,8 +101,7 @@ __device__ inline void block_excl_sum(size_type* arr, size_type length, size_typ
 }
 
 /**
- * @brief Converts string sizes to offsets if this is not a large string column. Otherwise,
- * atomically update the initial string offset to be used during large string column construction
+ * @brief Converts string sizes to offsets if this is not a large string column.
  */
 template <int block_size>
 __device__ void convert_small_string_lengths_to_offsets(page_state_s const* const state,
@@ -147,6 +146,49 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
     cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
       initial_str_offset};
     initial_str_offsets_ref.fetch_min(initial_value, cuda::std::memory_order_relaxed);
+  }
+}
+
+/**
+ * @brief Write `initial_value` to offsets if this is not a large string column. Otherwise, fill
+ * zeros at offsets and atomically update the initial string offset to build large string column
+ */
+template <int block_size>
+__device__ void update_string_offsets_for_pruned_pages(
+  page_state_s* state,
+  cudf::device_span<size_t> initial_str_offsets,
+  PageInfo const& page,
+  bool has_lists)
+{
+  // Initial string offset
+  auto const initial_value = state->page.str_offset;
+  auto value_count         = state->page.num_input_values;
+  int const t              = threadIdx.x;
+
+  // Offsets pointer contains string sizes in case of large strings and actual offsets
+  // otherwise
+  auto& ni    = state->nesting_info[state->col.max_nesting_depth - 1];
+  auto offptr = reinterpret_cast<size_type*>(ni.data_out);
+  // For large strings, update the initial string buffer offset to be used during large string
+  // column construction. Otherwise, convert string sizes to final offsets
+  if (state->col.is_large_string_col) {
+    // Write zero string sizes
+    for (int idx = t; idx < value_count; idx += blockDim.x) {
+      offptr[idx] = 0;
+    }
+    // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
+    auto const chunks_per_rowgroup = initial_str_offsets.size();
+    auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
+    compute_initial_large_strings_offset(state, initial_str_offsets[input_col_idx], has_lists);
+  } else {
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (not has_lists) { value_count -= state->first_row; }
+
+    // Write the initial offset at all positions to indicate zero sized strings
+    for (int idx = t; idx < value_count; idx += blockDim.x) {
+      offptr[idx] = initial_value;
+    }
   }
 }
 

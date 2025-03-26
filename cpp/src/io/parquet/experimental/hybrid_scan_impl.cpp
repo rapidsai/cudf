@@ -126,6 +126,9 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
     }
   }
 
+  auto d_page_validity = cudf::detail::make_device_uvector_async<bool>(
+    _page_validity, _stream, cudf::get_current_device_resource_ref());
+
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
@@ -224,6 +227,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    level_type_size,
                    decoder_mask,
                    initial_str_offsets,
+                   d_page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -283,6 +287,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                          skip_rows,
                          level_type_size,
                          initial_str_offsets,
+                         d_page_validity,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -295,6 +300,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                                skip_rows,
                                level_type_size,
                                initial_str_offsets,
+                               d_page_validity,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -306,6 +312,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                       num_rows,
                       skip_rows,
                       level_type_size,
+                      d_page_validity,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -332,6 +339,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                         num_rows,
                         skip_rows,
                         level_type_size,
+                        d_page_validity,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -388,6 +396,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    num_rows,
                    skip_rows,
                    level_type_size,
+                   d_page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   }
@@ -398,6 +407,9 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
+
+  // Invalidate output buffer bitmasks at row indices spanned by pruned pages
+  update_output_bitmasks_for_pruned_pages();
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -721,8 +733,9 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  initialize_options(row_group_indices, data_page_validity, options, stream);
+  initialize_options(row_group_indices, options, stream);
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
+  set_page_validity(data_page_validity);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
@@ -730,7 +743,6 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              cudf::host_span<std::vector<bool> const> data_page_validity,
                               cudf::io::parquet_reader_options const& options,
                               rmm::cuda_stream_view stream)
 {
@@ -739,8 +751,6 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   table_metadata metadata;
   populate_metadata(metadata);
   _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  _data_page_validity = data_page_validity;
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
 

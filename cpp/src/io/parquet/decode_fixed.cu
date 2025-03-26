@@ -571,6 +571,31 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
   return valid_count;
 }
 
+template <int decode_block_size, typename state_buf>
+static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s, state_buf* sb)
+{
+  namespace cg = cooperative_groups;
+
+  int constexpr start_depth   = 0;
+  int const max_depth         = s->col.max_nesting_depth - 1;
+  int const in_nesting_bounds = (0 >= start_depth && 0 <= max_depth);
+  auto const t                = cg::this_thread_block().thread_rank();
+
+  // iterate by depth and store offset to the list location
+  for (int d_idx = t; d_idx <= max_depth; d_idx += decode_block_size) {
+    auto& ni = s->nesting_info[d_idx];
+    // if we're -not- at a leaf column and we're within nesting/row bounds
+    // and we have a valid data_out pointer, it implies this is a list column, so
+    // emit an offset.
+    if (in_nesting_bounds && ni.data_out != nullptr) {
+      auto const& next_ni          = s->nesting_info[d_idx + 1];
+      int const idx                = ni.value_count;
+      cudf::size_type const offset = next_ni.value_count + next_ni.page_start_value;
+      (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = offset;
+    }
+  }
+}
+
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
 static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_count,
                                                           page_state_s* s,
@@ -952,6 +977,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            size_t min_row,
                            size_t num_rows,
                            cudf::device_span<size_t> initial_str_offsets,
+                           cudf::device_span<bool const> page_validity,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -980,8 +1006,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
 
-  // must come after the kernel mask check
-  [[maybe_unused]] null_count_back_copier _{s, t};
+  // Exit super early for simple types if the page is invalid.
+  if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
+    if (not page_validity[page_idx]) {
+      pp->num_nulls  = pp->num_rows;
+      pp->num_valids = 0;
+      return;
+    }
+  }
 
   if (!setupLocalPageInfo(s,
                           pp,
@@ -992,6 +1024,27 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                           page_processing_stage::DECODE)) {
     return;
   }
+
+  // Exit early if the page is invalid
+  if (not page_validity[page_idx]) {
+    pp->num_nulls  = pp->num_rows;
+    pp->num_valids = 0;
+
+    // Update offsets for all list depth levels
+    if constexpr (has_lists_t) {
+      update_list_offsets_for_pruned_pages<decode_block_size_t, state_buf_t>(s, sb);
+    }
+    // Update string offsets or write string sizes for small and large strings respectively
+    if constexpr (has_strings_t) {
+      update_string_offsets_for_pruned_pages<decode_block_size_t>(
+        s, initial_str_offsets, pages[page_idx], has_lists_t);
+    }
+
+    return;
+  }
+
+  // must come after the kernel mask check
+  [[maybe_unused]] null_count_back_copier _{s, t};
 
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
@@ -1193,6 +1246,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              int level_type_size,
                              decode_kernel_mask kernel_mask,
                              cudf::device_span<size_t> initial_str_offsets,
+                             cudf::device_span<bool const> page_validity,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
@@ -1206,12 +1260,22 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
     if (level_type_size == 1) {
       gpuDecodePageDataGeneric<uint8_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     initial_str_offsets,
+                                                     page_validity,
+                                                     error_code);
     } else {
       gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     initial_str_offsets,
+                                                     page_validity,
+                                                     error_code);
     }
   };
 

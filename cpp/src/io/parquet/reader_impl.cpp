@@ -237,6 +237,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
+  // Host vector to initialize the initial string offsets
+  auto host_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::fill(host_page_validity.begin(), host_page_validity.end(), true);
+  auto page_validity = cudf::detail::make_device_uvector_async(host_page_validity, _stream, _mr);
+
   int s_idx = 0;
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
@@ -247,6 +252,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    level_type_size,
                    decoder_mask,
                    initial_str_offsets,
+                   page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -304,6 +310,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          skip_rows,
                          level_type_size,
                          initial_str_offsets,
+                         page_validity,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -316,6 +323,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                skip_rows,
                                level_type_size,
                                initial_str_offsets,
+                               page_validity,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -353,6 +361,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
+                        page_validity,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -409,6 +418,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    num_rows,
                    skip_rows,
                    level_type_size,
+                   page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   }
