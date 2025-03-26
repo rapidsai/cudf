@@ -11,8 +11,10 @@ from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
+from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of
+from pylibcudf.libcudf.utilities.traits cimport is_fixed_width, is_fixed_point
+from pylibcudf.libcudf.copying cimport get_element
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
@@ -26,6 +28,7 @@ from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+from .null_mask cimport bitmask_allocation_size_bytes
 
 import functools
 
@@ -43,6 +46,71 @@ class _ArrowLike(metaclass=_ArrowLikeMeta):
 
 cdef class _ArrowColumnHolder:
     cdef unique_ptr[arrow_column] col
+
+
+cdef class OwnerWithCAI:
+    @staticmethod
+    cdef create(column_view cv, object owner):
+        obj = OwnerWithCAI()
+        obj.owner = owner
+        cdef int size
+        cdef column_view offsets_column
+        cdef unique_ptr[scalar] last_offset
+        if cv.type().id() == type_id.EMPTY:
+            size = cv.size()
+        elif is_fixed_width(cv.type()) or is_fixed_point(cv.type()):
+            size = cv.size() * cpp_size_of(cv.type())
+        elif cv.type().id() == type_id.STRING:
+            # The size of the character array in the parent is the offsets size
+            num_children = cv.num_children()
+            size = 0
+            # A strings column with no children is created for empty/all null
+            if num_children:
+                offsets_column = cv.child(0)
+                last_offset = get_element(offsets_column, offsets_column.size() - 1)
+                size = (<numeric_scalar[size_type] *> last_offset.get()).value()
+        else:
+            # All other types store data in the children, so the parent size is 0
+            size = 0
+
+        obj.cai = {
+            "shape": (size,),
+            "strides": None,
+            # For the purposes in this function, just treat all of the types as byte
+            # streams of the appropriate size. This matches what we currently get from
+            # rmm.DeviceBuffer
+            "typestr": "|u1",
+            "data": (<Py_ssize_t> cv.head[char](), False),
+            "version": 3,
+        }
+        return obj
+
+    @property
+    def __cuda_array_interface__(self):
+        return self.cai
+
+
+cdef class OwnerMaskWithCAI:
+    @staticmethod
+    cdef create(column_view cv, object owner):
+        obj = OwnerMaskWithCAI()
+        obj.owner = owner
+
+        obj.cai = {
+            "shape": (bitmask_allocation_size_bytes(cv.size()),),
+            "strides": None,
+            # For the purposes in this function, just treat all of the types as byte
+            # streams of the appropriate size. This matches what we currently get from
+            # rmm.DeviceBuffer
+            "typestr": "|u1",
+            "data": (<Py_ssize_t> cv.null_mask(), False),
+            "version": 3,
+        }
+        return obj
+
+    @property
+    def __cuda_array_interface__(self):
+        return self.cai
 
 
 cdef class Column:
@@ -316,12 +384,10 @@ cdef class Column:
                     Column.from_column_view_of_arbitrary(cv.child(i), owner)
                 )
 
-        cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.head[char](), owner
-        )
-        cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.null_mask(), owner
-        )
+        cdef gpumemoryview owning_data = gpumemoryview(OwnerWithCAI.create(cv, owner))
+        cdef gpumemoryview owning_mask = None
+        if cv.null_count() > 0:
+            owning_mask = gpumemoryview(OwnerMaskWithCAI.create(cv, owner))
 
         return Column(
             DataType.from_libcudf(cv.type()),

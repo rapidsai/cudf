@@ -6,6 +6,4 @@ cdef class gpumemoryview:
     # to treat this object as something like a POD struct
     cdef readonly Py_ssize_t ptr
     cdef readonly object obj
-
-    @staticmethod
-    cdef gpumemoryview from_pointer(Py_ssize_t ptr, object owner)
+    cdef readonly dict cai

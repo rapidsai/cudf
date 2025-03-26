@@ -14,6 +14,22 @@ from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 
 
+cdef class OwnerWithCAI:
+    cdef object owner
+    cdef dict cai
+
+    @staticmethod
+    cdef create(column_view cv, object owner)
+
+
+cdef class OwnerMaskWithCAI:
+    cdef object owner
+    cdef dict cai
+
+    @staticmethod
+    cdef create(column_view cv, object owner)
+
+
 cdef class Column:
     # TODO: Should we document these attributes? Should we mark them readonly?
     cdef:
