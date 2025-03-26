@@ -44,7 +44,7 @@ _SUPPORTED_PREFETCHES = {
 }
 
 
-def _env_get_int(name, default):
+def _env_get_int(name: str, default: int) -> int:
     try:
         return int(os.getenv(name, default))
     except (ValueError, TypeError):  # pragma: no cover
@@ -217,7 +217,7 @@ def _callback(
     memory_resource: int | None,
     executor: Literal["pylibcudf", "dask-experimental"] | None,
     timer: Timer | None,
-):
+) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None

@@ -23,7 +23,7 @@ class Timer:
         self.query_start = query_start
         self.timings: list[tuple[int, int, str]] = []
 
-    def store(self, start: int, end: int, name: str):
+    def store(self, start: int, end: int, name: str) -> None:
         """
         Store timing for a node.
 
