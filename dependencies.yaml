@@ -829,13 +829,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=2.8.0,<2.9.0a0
+          - python-confluent-kafka>=2.5.0,<2.6.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=2.8.0,<2.9.0a0
+          - confluent-kafka>=2.5.0,<2.6.0a0
   test_cpp:
     common:
       - output_types: conda
