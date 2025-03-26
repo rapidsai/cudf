@@ -50,6 +50,12 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
+using stats_caster_base = cudf::io::parquet::detail::stats_caster_base;
+using string_index_pair = cudf::io::parquet::detail::string_index_pair;
+using Type              = cudf::io::parquet::detail::Type;
+using metadata_base     = cudf::io::parquet::detail::metadata;
+using ColumnChunk       = cudf::io::parquet::detail::ColumnChunk;
+
 namespace {
 
 rmm::device_uvector<size_type> make_page_indices(
@@ -83,20 +89,18 @@ rmm::device_uvector<size_type> make_page_indices(
   return page_indices;
 }
 
-using Type = cudf::io::parquet::detail::Type;
-
 /**
  * @brief Converts page-level statistics to 2 device columns - min, max values. Each column has
  *        number of rows equal to the total rows in all row groups.
  *
  */
-struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
+struct page_stats_caster : public stats_caster_base {
   size_type total_rows;
-  std::vector<cudf::io::parquet::detail::metadata> const& per_file_metadata;
+  std::vector<metadata_base> const& per_file_metadata;
   host_span<std::vector<size_type> const> row_group_indices;
 
   page_stats_caster(size_type total_rows,
-                    std::vector<cudf::io::parquet::detail::metadata> const& per_file_metadata,
+                    std::vector<metadata_base> const& per_file_metadata,
                     host_span<std::vector<size_type> const> row_group_indices)
     : total_rows{total_rows},
       per_file_metadata{per_file_metadata},
@@ -131,12 +135,10 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
             // For all row groups in this source
             std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
               auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-              auto col =
-                std::find_if(row_group.columns.begin(),
-                             row_group.columns.end(),
-                             [schema_idx](cudf::io::parquet::detail::ColumnChunk const& col) {
-                               return col.schema_idx == schema_idx;
-                             });
+              auto col              = std::find_if(
+                row_group.columns.begin(),
+                row_group.columns.end(),
+                [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
 
               if (col != std::end(row_group.columns) and col->offset_index.has_value()) {
                 CUDF_EXPECTS(col->column_index.has_value(),
@@ -197,12 +199,10 @@ struct page_stats_caster : public cudf::io::parquet::detail::stats_caster_base {
           auto const& rg_indices = row_group_indices[src_idx];
           std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
             auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-            auto col =
-              std::find_if(row_group.columns.begin(),
-                           row_group.columns.end(),
-                           [schema_idx](cudf::io::parquet::detail::ColumnChunk const& col) {
-                             return col.schema_idx == schema_idx;
-                           });
+            auto col              = std::find_if(
+              row_group.columns.begin(),
+              row_group.columns.end(),
+              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
 
             // No need to check column_index and offset_index again
             if (col != std::end(row_group.columns)) {
@@ -463,12 +463,10 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
           auto const& rg_indices = row_group_indices[src_index];
           return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
             auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
-            auto col =
-              std::find_if(row_group.columns.begin(),
-                           row_group.columns.end(),
-                           [schema_idx](cudf::io::parquet::detail::ColumnChunk const& col) {
-                             return col.schema_idx == schema_idx;
-                           });
+            auto col              = std::find_if(
+              row_group.columns.begin(),
+              row_group.columns.end(),
+              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
             return col != per_file_metadata[src_index].row_groups[rg_index].columns.end() and
                    col->offset_index.has_value() and col->column_index.has_value();
           });
@@ -572,12 +570,10 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
           // For all row groups in the source file
           std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
             auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
-            auto col =
-              std::find_if(row_group.columns.begin(),
-                           row_group.columns.end(),
-                           [schema_idx](cudf::io::parquet::detail::ColumnChunk const& col) {
-                             return col.schema_idx == schema_idx;
-                           });
+            auto col              = std::find_if(
+              row_group.columns.begin(),
+              row_group.columns.end(),
+              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
             if (col != std::end(row_group.columns) and col->offset_index.has_value()) {
               auto const& offset_index = col->offset_index.value();
               col_chunk_page_offsets[col_idx].emplace_back(col_chunk_page_offsets[col_idx].back() +

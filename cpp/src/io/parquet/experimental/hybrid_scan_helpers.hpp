@@ -33,17 +33,24 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
+using metadata_base                  = cudf::io::parquet::detail::metadata;
+using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
+using row_group_info                 = cudf::io::parquet::detail::row_group_info;
+using input_column_info              = cudf::io::parquet::detail::input_column_info;
+using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
+using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+
 /**
  * @brief Class for parsing dataset metadata
  */
-struct metadata : private cudf::io::parquet::detail::metadata {
+struct metadata : private metadata_base {
   explicit metadata(cudf::host_span<uint8_t const> footer_bytes,
                     cudf::host_span<uint8_t const> page_index_bytes);
 
-  cudf::io::parquet::detail::metadata get_file_metadata() && { return std::move(*this); }
+  metadata_base get_file_metadata() && { return std::move(*this); }
 };
 
-class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_reader_metadata {
+class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  private:
   /**
    * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
@@ -107,19 +114,17 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] std::tuple<std::vector<cudf::io::parquet::detail::input_column_info>,
-                           std::vector<cudf::io::detail::inline_column_buffer>,
-                           std::vector<size_type>>
-  select_filter_columns(std::optional<std::vector<std::string>> const& filter_columns_names,
-                        bool include_index,
-                        bool strings_to_categorical,
-                        type_id timestamp_type_id);
-
   [[nodiscard]] std::
-    tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
-    add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
-                   int64_t row_start,
-                   std::optional<size_type> const& row_count);
+    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+    select_filter_columns(std::optional<std::vector<std::string>> const& filter_columns_names,
+                          bool include_index,
+                          bool strings_to_categorical,
+                          type_id timestamp_type_id);
+
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> add_row_groups(
+    host_span<std::vector<size_type> const> row_group_indices,
+    int64_t row_start,
+    std::optional<size_type> const& row_count);
 
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     host_span<std::vector<size_type> const> row_group_indices,
@@ -176,8 +181,7 @@ class aggregate_reader_metadata : public cudf::io::parquet::detail::aggregate_re
  * @brief Collects lists of equal and not-equal predicate literals in the AST expression, one list
  * per input table column. This is used in row group filtering based on dictionary pages.
  */
-class dictionary_literals_and_operators_collector
-  : public cudf::io::parquet::detail::equality_literals_collector {
+class dictionary_literals_and_operators_collector : public equality_literals_collector {
  public:
   dictionary_literals_and_operators_collector();
 

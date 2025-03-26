@@ -346,6 +346,8 @@ class impl {
   using input_column_info            = cudf::io::parquet::detail::input_column_info;
   using inline_column_buffer         = cudf::io::detail::inline_column_buffer;
   using reader_column_schema         = cudf::io::reader_column_schema;
+  using file_intermediate_data       = cudf::io::parquet::detail::file_intermediate_data;
+  using pass_intermediate_data       = cudf::io::parquet::detail::pass_intermediate_data;
 
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
@@ -384,11 +386,11 @@ class impl {
 
   std::vector<bool> _page_validity;
 
-  cudf::io::parquet::detail::file_intermediate_data _file_itm_data;
+  file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
   bool _uses_custom_row_bounds{false};
 
-  std::unique_ptr<cudf::io::parquet::detail::pass_intermediate_data> _pass_itm_data;
+  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 };
 
 }  // namespace cudf::experimental::io::parquet::detail

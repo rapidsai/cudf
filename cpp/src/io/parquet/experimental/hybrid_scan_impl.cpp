@@ -35,16 +35,24 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
+using LogicalType           = cudf::io::parquet::detail::LogicalType;
+using Type                  = cudf::io::parquet::detail::Type;
+using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
+using PageInfo              = cudf::io::parquet::detail::PageInfo;
+using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
+using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
+using byte_range_info       = cudf::io::text::byte_range_info;
+
 namespace {
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
 [[maybe_unused]] inline bool is_treat_fixed_length_as_string(
-  std::optional<cudf::io::parquet::detail::LogicalType> const& logical_type)
+  std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
-  return logical_type->type != cudf::io::parquet::detail::LogicalType::DECIMAL;
+  return logical_type->type != LogicalType::DECIMAL;
 }
 
 }  // namespace
@@ -66,13 +74,10 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages to decode");
 
-  size_t const sum_max_depths =
-    std::accumulate(pass.chunks.begin(),
-                    pass.chunks.end(),
-                    0,
-                    [&](size_t cursum, cudf::io::parquet::detail::ColumnChunkDesc const& chunk) {
-                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
-                    });
+  size_t const sum_max_depths = std::accumulate(
+    pass.chunks.begin(), pass.chunks.end(), 0, [&](size_t cursum, ColumnChunkDesc const& chunk) {
+      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+    });
 
   // figure out which kernels to run
   auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);
@@ -222,7 +227,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   int s_idx = 0;
 
-  auto decode_data = [&](cudf::io::parquet::detail::decode_kernel_mask decoder_mask) {
+  auto decode_data = [&](decode_kernel_mask decoder_mask) {
     DecodePageData(subpass.pages,
                    pass.chunks,
                    num_rows,
@@ -234,8 +239,6 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    error_code.data(),
                    streams[s_idx++]);
   };
-
-  using decode_kernel_mask = cudf::io::parquet::detail::decode_kernel_mask;
 
   // launch string decoder for plain encoded flat columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
@@ -471,13 +474,13 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
-    cudf::io::parquet::detail::PageInfo* pi = &subpass.pages[idx];
+    PageInfo* pi = &subpass.pages[idx];
     if (pi->flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) { continue; }
-    cudf::io::parquet::detail::ColumnChunkDesc* col = &pass.chunks[pi->chunk_idx];
-    input_column_info const& input_col              = _input_columns[col->src_col_index];
+    ColumnChunkDesc* col               = &pass.chunks[pi->chunk_idx];
+    input_column_info const& input_col = _input_columns[col->src_col_index];
 
-    int const index = pi->nesting_decode - page_nesting_decode.device_ptr();
-    cudf::io::parquet::detail::PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
+    int const index             = pi->nesting_decode - page_nesting_decode.device_ptr();
+    PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
 
     auto* cols = &_output_buffers;
     for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
@@ -534,8 +537,7 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
 
     // Save the states of the output buffers for reuse.
     for (auto const& buff : _output_buffers) {
-      _output_buffers_template.emplace_back(
-        cudf::io::detail::inline_column_buffer::empty_like(buff));
+      _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
     }
   }
 }
@@ -573,10 +575,9 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
                                                  stream);
 }
 
-std::pair<std::vector<cudf::io::text::byte_range_info>,
-          std::vector<cudf::io::text::byte_range_info>>
-impl::get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                            cudf::io::parquet_reader_options const& options) const
+std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options) const
 {
   table_metadata metadata;
   populate_metadata(metadata);
@@ -681,7 +682,7 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
   return {std::move(predicate), std::move(data_page_validity)};
 }
 
-std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 impl::get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                    cudf::io::parquet_reader_options const& options) const
 {
@@ -698,7 +699,7 @@ impl::get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const>
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Keep track of column chunk byte ranges
-  std::vector<cudf::io::text::byte_range_info> column_chunk_byte_ranges(num_chunks);
+  std::vector<byte_range_info> column_chunk_byte_ranges(num_chunks);
 
   size_type chunk_count = 0;
   for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
@@ -812,17 +813,15 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto metadata      = _reader_column_schema.has_value()
-                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                           : std::nullopt;
-    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-    auto const logical_type =
-      schema.logical_type.value_or(cudf::io::parquet::detail::LogicalType{});
+    auto metadata           = _reader_column_schema.has_value()
+                                ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                : std::nullopt;
+    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const logical_type = schema.logical_type.value_or(LogicalType{});
     // FIXED_LEN_BYTE_ARRAY never read as string.
     // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY
     // as binary and not strings, this test needs to change.
-    if (schema.type == cudf::io::parquet::detail::FIXED_LEN_BYTE_ARRAY and
-        logical_type.type != cudf::io::parquet::detail::LogicalType::DECIMAL) {
+    if (schema.type == Type::FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
       metadata->set_type_length(schema.type_length);

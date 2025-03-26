@@ -50,10 +50,13 @@ namespace {
 namespace nvcomp = cudf::io::detail::nvcomp;
 using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
-using compression_type = cudf::io::compression_type;
-using Compression      = cudf::io::parquet::detail::Compression;
-using ColumnChunkDesc  = cudf::io::parquet::detail::ColumnChunkDesc;
-using PageInfo         = cudf::io::parquet::detail::PageInfo;
+using compression_type      = cudf::io::compression_type;
+using Compression           = cudf::io::parquet::detail::Compression;
+using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
+using PageInfo              = cudf::io::parquet::detail::PageInfo;
+using LogicalType           = cudf::io::parquet::detail::LogicalType;
+using Type                  = cudf::io::parquet::detail::Type;
+using CompactProtocolReader = cudf::io::parquet::detail::CompactProtocolReader;
 
 #if defined(PAGE_PRUNING_DEBUG)
 void print_pages(cudf::detail::hostdevice_span<PageInfo>& pages, rmm::cuda_stream_view _stream)
@@ -124,19 +127,18 @@ compression_type from_parquet_compression(Compression compression)
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, std::optional<cudf::io::parquet::detail::LogicalType>>
-conversion_info(type_id column_type_id,
-                type_id timestamp_type_id,
-                cudf::io::parquet::detail::Type physical,
-                std::optional<cudf::io::parquet::detail::LogicalType> logical_type)
+[[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
+  type_id column_type_id,
+  type_id timestamp_type_id,
+  Type physical,
+  std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? cudf::io::to_clockrate(timestamp_type_id) : 0;
 
   // TODO(ets): this is leftover from the original code, but will we ever output decimal as
   // anything but fixed point?
-  if (logical_type.has_value() and
-      logical_type->type == cudf::io::parquet::detail::LogicalType::DECIMAL) {
+  if (logical_type.has_value() and logical_type->type == LogicalType::DECIMAL) {
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
@@ -153,8 +155,7 @@ conversion_info(type_id column_type_id,
 template <typename T = uint8_t>
 [[nodiscard]] T required_bits(uint32_t max_level)
 {
-  return static_cast<T>(
-    cudf::io::parquet::detail::CompactProtocolReader::NumRequiredBits(max_level));
+  return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
 struct page_span {
@@ -444,7 +445,7 @@ void detect_malformed_pages(device_span<cudf::io::parquet::detail::PageInfo cons
 }
 
 struct decompression_info {
-  cudf::io::parquet::detail::Compression codec;
+  Compression codec;
   size_t num_pages;
   size_t max_page_decompressed_size;
   size_t total_decompressed_size;
@@ -455,11 +456,11 @@ struct decompression_info {
  *
  */
 struct get_decomp_info {
-  device_span<cudf::io::parquet::detail::ColumnChunkDesc const> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
-  __device__ decompression_info operator()(cudf::io::parquet::detail::PageInfo const& p) const
+  __device__ decompression_info operator()(PageInfo const& p) const
   {
-    return {static_cast<cudf::io::parquet::detail::Compression>(chunks[p.chunk_idx].codec),
+    return {static_cast<Compression>(chunks[p.chunk_idx].codec),
             1,
             static_cast<size_t>(p.uncompressed_page_size),
             static_cast<size_t>(p.uncompressed_page_size)};
@@ -528,11 +529,10 @@ struct get_decomp_scratch {
  * size information.
  *
  */
-[[maybe_unused]] void include_decompression_scratch_size(
-  device_span<cudf::io::parquet::detail::ColumnChunkDesc const> chunks,
-  device_span<cudf::io::parquet::detail::PageInfo const> pages,
-  device_span<cumulative_page_info> c_info,
-  rmm::cuda_stream_view stream)
+[[maybe_unused]] void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunks,
+                                                         device_span<PageInfo const> pages,
+                                                         device_span<cumulative_page_info> c_info,
+                                                         rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() == c_info.size(),
                "Encountered page/cumulative_page_info size mismatch");
@@ -645,29 +645,28 @@ void impl::create_global_chunk_info(cudf::io::parquet_reader_options const& opti
       cudf::io::parquet::detail::column_chunk_info const* const chunk_info =
         _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
-      chunks.push_back(cudf::io::parquet::detail::ColumnChunkDesc(
-        col_meta.total_compressed_size,
-        nullptr,
-        col_meta.num_values,
-        schema.type,
-        schema.type_length,
-        row_group_start,
-        row_group_rows,
-        schema.max_definition_level,
-        schema.max_repetition_level,
-        _metadata->get_output_nesting_depth(col.schema_idx),
-        required_bits(schema.max_definition_level),
-        required_bits(schema.max_repetition_level),
-        col_meta.codec,
-        logical_type,
-        clock_rate,
-        i,
-        col.schema_idx,
-        chunk_info,
-        list_bytes_per_row_est,
-        schema.type == cudf::io::parquet::detail::BYTE_ARRAY and
-          options.is_enabled_convert_strings_to_categories(),
-        rg.source_index));
+      chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
+                                       nullptr,
+                                       col_meta.num_values,
+                                       schema.type,
+                                       schema.type_length,
+                                       row_group_start,
+                                       row_group_rows,
+                                       schema.max_definition_level,
+                                       schema.max_repetition_level,
+                                       _metadata->get_output_nesting_depth(col.schema_idx),
+                                       required_bits(schema.max_definition_level),
+                                       required_bits(schema.max_repetition_level),
+                                       col_meta.codec,
+                                       logical_type,
+                                       clock_rate,
+                                       i,
+                                       col.schema_idx,
+                                       chunk_info,
+                                       list_bytes_per_row_est,
+                                       schema.type == cudf::io::parquet::detail::BYTE_ARRAY and
+                                         options.is_enabled_convert_strings_to_categories(),
+                                       rg.source_index));
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
     remaining_rows -=
@@ -864,10 +863,6 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
   // in the single pass case, no page copying is necessary - just use what's in the pass itself
   subpass.pages = pass.pages;
 
-#if defined(PAGE_PRUNING_DEBUG)
-  print_pages(subpass.pages, _stream);
-#endif  // PAGE_PRUNING_DEBUG
-
   auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
 
@@ -897,6 +892,10 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
   preprocess_subpass_pages(0);
+
+#if defined(PAGE_PRUNING_DEBUG)
+  print_pages(subpass.pages, _stream);
+#endif  // PAGE_PRUNING_DEBUG
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

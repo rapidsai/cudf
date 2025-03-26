@@ -59,8 +59,21 @@ namespace cudf::experimental::io::parquet::detail {
 
 namespace {
 
-using PageInfo        = cudf::io::parquet::detail::PageInfo;
-using ColumnChunkDesc = cudf::io::parquet::detail::ColumnChunkDesc;
+using PageInfo               = cudf::io::parquet::detail::PageInfo;
+using ColumnChunkDesc        = cudf::io::parquet::detail::ColumnChunkDesc;
+using SchemaElement          = cudf::io::parquet::detail::SchemaElement;
+using LogicalType            = cudf::io::parquet::detail::LogicalType;
+using Type                   = cudf::io::parquet::detail::Type;
+using Compression            = cudf::io::parquet::detail::Compression;
+using string_index_pair      = cudf::io::parquet::detail::string_index_pair;
+using decode_error           = cudf::io::parquet::detail::decode_error;
+using kernel_error           = cudf::io::parquet::kernel_error;
+using level_type             = cudf::io::parquet::detail::level_type;
+using PageNestingInfo        = cudf::io::parquet::detail::PageNestingInfo;
+using PageNestingDecodeInfo  = cudf::io::parquet::detail::PageNestingDecodeInfo;
+using Encoding               = cudf::io::parquet::detail::Encoding;
+using pass_intermediate_data = cudf::io::parquet::detail::pass_intermediate_data;
+using chunk_page_info        = cudf::io::parquet::detail::chunk_page_info;
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
@@ -84,10 +97,9 @@ struct input_col_info {
 __device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 {
   auto const is_decimal =
-    chunk.logical_type.has_value() and
-    chunk.logical_type->type == cudf::io::parquet::detail::LogicalType::DECIMAL;
-  auto const is_binary = chunk.physical_type == cudf::io::parquet::detail::BYTE_ARRAY or
-                         chunk.physical_type == cudf::io::parquet::detail::FIXED_LEN_BYTE_ARRAY;
+    chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
+  auto const is_binary =
+    chunk.physical_type == Type::BYTE_ARRAY or chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return is_binary and not is_decimal;
 }
 
@@ -107,7 +119,7 @@ struct set_str_dict_index_count {
 };
 
 struct set_str_dict_index_ptr {
-  cudf::io::parquet::detail::string_index_pair* const base;
+  string_index_pair* const base;
   device_span<size_t const> str_dict_index_offsets;
   device_span<ColumnChunkDesc> chunks;
 
@@ -254,12 +266,11 @@ void generate_depth_remappings(
   // compute "Y" from above
   for (int s_idx = schema.max_definition_level; s_idx >= 0; s_idx--) {
     auto find_deepest = [&](int d) {
-      cudf::io::parquet::detail::SchemaElement prev_schema;
+      SchemaElement prev_schema;
       int schema_idx = mapped_src_col_schema;
       int r1         = 0;
       while (schema_idx > 0) {
-        cudf::io::parquet::detail::SchemaElement cur_schema =
-          md.get_schema(schema_idx, src_file_idx);
+        SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_definition_level == d) {
           // if this is a repeated field, map it one level deeper
           r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
@@ -275,8 +286,7 @@ void generate_depth_remappings(
       schema_idx = mapped_src_col_schema;
       int depth  = max_depth - 1;
       while (schema_idx > 0) {
-        cudf::io::parquet::detail::SchemaElement cur_schema =
-          md.get_schema(schema_idx, src_file_idx);
+        SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_repetition_level == r1) {
           // if this is a repeated field, map it one level deeper
           depth = cur_schema.is_stub() ? depth + 1 : depth;
@@ -305,7 +315,7 @@ void generate_depth_remappings(
 {
   size_t total_pages = 0;
 
-  cudf::io::parquet::kernel_error error_code(stream);
+  kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
   chunks.device_to_host_sync(stream);
@@ -315,10 +325,9 @@ void generate_depth_remappings(
   // in the pages. That cannot be done here since we do not have the pages vector here.
   // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
   if (auto const error = error_code.value_sync(stream);
-      error != 0 and error != static_cast<uint32_t>(
-                                cudf::io::parquet::detail::decode_error::UNSUPPORTED_ENCODING)) {
+      error != 0 and error != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
     CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
-              cudf::io::parquet::kernel_error::to_string(error));
+              kernel_error::to_string(error));
   }
 
   for (auto& chunk : chunks) {
@@ -516,9 +525,8 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
  * @param encoding Given encoding
  * @return String representation of encoding
  */
-std::string encoding_to_string(cudf::io::parquet::detail::Encoding encoding)
+std::string encoding_to_string(Encoding encoding)
 {
-  using Encoding = cudf::io::parquet::detail::Encoding;
   switch (encoding) {
     case Encoding::PLAIN: return "PLAIN";
     case Encoding::GROUP_VAR_INT: return "GROUP_VAR_INT";
@@ -548,7 +556,7 @@ std::string encoding_to_string(cudf::io::parquet::detail::Encoding encoding)
 
   for (size_t i = 0; i < bits.size(); ++i) {
     if (bits.test(i)) {
-      auto const current = static_cast<cudf::io::parquet::detail::Encoding>(i);
+      auto const current = static_cast<Encoding>(i);
       if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
     }
   }
@@ -624,7 +632,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
  *
  * @param pass_intermediate_data The struct containing pass information
  */
-void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass,
+void decode_page_headers(pass_intermediate_data& pass,
                          device_span<PageInfo> unsorted_pages,
                          bool has_page_index,
                          rmm::cuda_stream_view stream)
@@ -645,8 +653,7 @@ void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass
       }),
     size_t{0},
     thrust::plus<size_t>{});
-  rmm::device_uvector<cudf::io::parquet::detail::chunk_page_info> d_chunk_page_info(
-    pass.chunks.size(), stream);
+  rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
                    iter + pass.chunks.size(),
@@ -664,7 +671,7 @@ void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass
                     stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
-    if (BitAnd(error, cudf::io::parquet::detail::decode_error::UNSUPPORTED_ENCODING) != 0) {
+    if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto const unsupported_str =
         ". With unsupported encodings found: " + list_unsupported_encodings(pass.pages, stream);
       CUDF_FAIL("Parquet header parsing failed with code(s) " +
@@ -681,8 +688,8 @@ void decode_page_headers(cudf::io::parquet::detail::pass_intermediate_data& pass
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
-      return static_cast<int>(max(c.level_bits[cudf::io::parquet::detail::level_type::REPETITION],
-                                  c.level_bits[cudf::io::parquet::detail::level_type::DEFINITION]));
+      return static_cast<int>(
+        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
   // max level data bit size.
   int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
@@ -777,9 +784,9 @@ void impl::allocate_level_decode_space()
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto& p = pages[idx];
 
-    p.lvl_decode_buf[cudf::io::parquet::detail::level_type::DEFINITION] = buf;
+    p.lvl_decode_buf[level_type::DEFINITION] = buf;
     buf += (cudf::io::parquet::detail::LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
-    p.lvl_decode_buf[cudf::io::parquet::detail::level_type::REPETITION] = buf;
+    p.lvl_decode_buf[level_type::REPETITION] = buf;
     buf += (cudf::io::parquet::detail::LEVEL_DECODE_BUF_SIZE * pass.level_type_size);
   }
 }
@@ -812,9 +819,8 @@ void impl::build_string_dict_indices()
                          0);
 
   // allocate and distribute pointers
-  pass.str_dict_index =
-    cudf::detail::make_zeroed_device_uvector_async<cudf::io::parquet::detail::string_index_pair>(
-      total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
+  pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+    total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
@@ -866,11 +872,10 @@ void impl::allocate_nesting_info()
       return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
     });
 
-  page_nesting_info = cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageNestingInfo>{
-    total_page_nesting_infos, _stream};
+  page_nesting_info =
+    cudf::detail::hostdevice_vector<PageNestingInfo>{total_page_nesting_infos, _stream};
   page_nesting_decode_info =
-    cudf::detail::hostdevice_vector<cudf::io::parquet::detail::PageNestingDecodeInfo>{
-      total_page_nesting_infos, _stream};
+    cudf::detail::hostdevice_vector<PageNestingDecodeInfo>{total_page_nesting_infos, _stream};
 
   // update pointers in the PageInfos
   int target_page_index = 0;
@@ -935,10 +940,10 @@ void impl::allocate_nesting_info()
           // Source file index for the current page.
           auto const src_file_idx =
             pass.chunks[pages[target_page_index + p_idx].chunk_idx].src_file_idx;
-          cudf::io::parquet::detail::PageNestingInfo* pni =
+          PageNestingInfo* pni =
             &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size[idx])];
 
-          cudf::io::parquet::detail::PageNestingDecodeInfo* nesting_info =
+          PageNestingDecodeInfo* nesting_info =
             &page_nesting_decode_info[nesting_info_index +
                                       (p_idx * per_page_nesting_info_size[idx])];
 
@@ -1011,7 +1016,7 @@ bool impl::read_column_chunks()
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
 
-      if (col_meta.codec != cudf::io::parquet::detail::Compression::UNCOMPRESSED) {
+      if (col_meta.codec != Compression::UNCOMPRESSED) {
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
 
@@ -1141,8 +1146,7 @@ void impl::preprocess_subpass_pages(size_t chunk_read_limit)
     // here because we have not yet decoded the pages. the very last row starting in the page may
     // not terminate in the page. to handle this, only decode up to the second to last row in the
     // subpass since we know that will safely completed.
-    bool const is_list =
-      last_chunk.max_level[cudf::io::parquet::detail::level_type::REPETITION] > 0;
+    bool const is_list = last_chunk.max_level[level_type::REPETITION] > 0;
     // corner case: only decode up to the second-to-last row, except if this is the last page in the
     // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
     // just 1 row.

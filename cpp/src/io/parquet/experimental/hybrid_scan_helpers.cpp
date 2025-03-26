@@ -32,10 +32,20 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
+using CompactProtocolReader          = cudf::io::parquet::detail::CompactProtocolReader;
+using ColumnIndex                    = cudf::io::parquet::detail::ColumnIndex;
+using OffsetIndex                    = cudf::io::parquet::detail::OffsetIndex;
+using row_group_info                 = cudf::io::parquet::detail::row_group_info;
+using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
+using metadata_base                  = cudf::io::parquet::detail::metadata;
+using input_column_info              = cudf::io::parquet::detail::input_column_info;
+using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
+using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
                    cudf::host_span<uint8_t const> page_index_bytes)
 {
-  cudf::io::parquet::detail::CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
+  CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
@@ -65,7 +75,7 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
         if (col.column_index_length > 0 && col.column_index_offset > 0) {
           int64_t const offset = col.column_index_offset;  // - min_offset;
           cp.init(page_index_bytes.data() + offset, col.column_index_length);
-          cudf::io::parquet::detail::ColumnIndex ci;
+          ColumnIndex ci;
           cp.read(&ci);
           col.column_index = std::move(ci);
         }
@@ -73,7 +83,7 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
         if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
           int64_t const offset = col.offset_index_offset;  // - min_offset;
           cp.init(page_index_bytes.data() + offset, col.offset_index_length);
-          cudf::io::parquet::detail::OffsetIndex oi;
+          OffsetIndex oi;
           cp.read(&oi);
           col.offset_index = std::move(oi);
         }
@@ -89,11 +99,11 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   cudf::host_span<uint8_t const> page_index_bytes,
   bool use_arrow_schema,
   bool has_cols_from_mismatched_srcs)
-  : cudf::io::parquet::detail::aggregate_reader_metadata({}, false, false)
+  : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata = std::vector<cudf::io::parquet::detail::metadata>{
-    metadata{footer_bytes, page_index_bytes}.get_file_metadata()};
+  per_file_metadata =
+    std::vector<metadata_base>{metadata{footer_bytes, page_index_bytes}.get_file_metadata()};
   keyval_maps     = collect_keyval_metadata();
   schema_idx_maps = init_schema_idx_maps(has_cols_from_mismatched_srcs);
   num_rows        = calc_num_rows();
@@ -116,20 +126,22 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   }
 }
 
-std::tuple<std::vector<cudf::io::parquet::detail::input_column_info>,
-           std::vector<cudf::io::detail::inline_column_buffer>,
-           std::vector<size_type>>
-aggregate_reader_metadata::select_filter_columns(
-  std::optional<std::vector<std::string>> const& filter_columns_names,
-  bool include_index,
-  bool strings_to_categorical,
-  type_id timestamp_type_id)
+std::
+  tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+  aggregate_reader_metadata::select_filter_columns(
+    std::optional<std::vector<std::string>> const& filter_columns_names,
+    bool include_index,
+    bool strings_to_categorical,
+    type_id timestamp_type_id)
 {
   // Only extract filter columns
-  return select_columns(
-    std::nullopt, filter_columns_names, include_index, strings_to_categorical, timestamp_type_id);
+  return select_columns(filter_columns_names,
+                        std::vector<std::string>{},
+                        include_index,
+                        strings_to_categorical,
+                        timestamp_type_id);
 }
-std::tuple<int64_t, size_type, std::vector<cudf::io::parquet::detail::row_group_info>>
+std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
                                           int64_t row_start,
                                           std::optional<size_type> const& row_count)
@@ -146,7 +158,7 @@ aggregate_reader_metadata::add_row_groups(host_span<std::vector<size_type> const
   }();
 
   // Vector to hold the `row_group_info` of selected row groups
-  std::vector<cudf::io::parquet::detail::row_group_info> selection;
+  std::vector<row_group_info> selection;
   // Number of rows in each data source
   std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
 
@@ -254,8 +266,8 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
 
   // Collect equality literals for each input table column
   auto const equality_literals =
-    cudf::io::parquet::detail::equality_literals_collector{
-      filter.value().get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{filter.value().get(),
+                                static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
@@ -492,8 +504,8 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups
 
   // Collect equality literals for each input table column
   auto const equality_literals =
-    cudf::io::parquet::detail::equality_literals_collector{
-      filter.value().get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{filter.value().get(),
+                                static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
