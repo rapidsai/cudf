@@ -107,7 +107,7 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        self.is_pointwise = True
+        self.is_pointwise = self.name != StringFunction.Name.ConcatVertical
         self._validate_input()
 
     def _validate_input(self) -> None:
