@@ -544,7 +544,7 @@ class Scan(IR):
                     if n_rows <= 0:
                         break
             tables, colnames = zip(
-                *[
+                *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
                 ],
