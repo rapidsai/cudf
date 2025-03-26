@@ -108,6 +108,7 @@ namespace detail {
  */
 class alignas(16) column_device_view_base {
  public:
+  // TODO: merge this offsets column index with `strings_column_view::offsets_column_index`
   static constexpr size_type string_offsets_column_index{0};  ///< Child index of the offsets column
 
   column_device_view_base()                               = delete;
