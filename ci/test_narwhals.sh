@@ -17,7 +17,7 @@ set +e
 rapids-logger "pytest narwhals"
 git clone https://github.com/narwhals-dev/narwhals --depth=1 -b stable
 pushd narwhals || exit 1
-rapids-pip-retry install -U -e ".[dev]"
+rapids-pip-retry install -U -e . pytest-env hypothesis
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
