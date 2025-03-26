@@ -60,27 +60,20 @@ def pytest_sessionstart(session):
     ):
         from dask import config
         from dask.distributed import Client
+        from dask_cuda import LocalCUDACluster
 
         # Avoid "Sending large graph of size ..." warnings
         # (We expect these for tests using literal/random arrays)
         config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
 
         n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
+        cluster = LocalCUDACluster(n_workers=n_workers)
+        client = Client(cluster)
+        client.wait_for_workers(n_workers)
         if session.config.getoption("--rapidsmp"):
-            from rapidsmp.integrations.dask import (
-                LocalRMPCluster,
-                bootstrap_dask_cluster,
-            )
+            from rapidsmp.integrations.dask import bootstrap_dask_cluster
 
-            cluster = LocalRMPCluster(n_workers=n_workers)
-            client = Client(cluster)
-            client.wait_for_workers(n_workers)
             bootstrap_dask_cluster(client, enable_statistics=False)
-        else:
-            from dask_cuda import LocalCUDACluster
-
-            cluster = LocalCUDACluster(n_workers=n_workers)
-            client = Client(cluster)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
 
 
