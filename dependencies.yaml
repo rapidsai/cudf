@@ -458,7 +458,7 @@ dependencies:
       - output_types: conda
         packages:
           - flatbuffers==24.3.25
-          - librdkafka>=2.8.0,<2.9.0a0
+          - librdkafka>=2.5.0,<2.6.0a0
   depends_on_nvcomp:
     common:
       - output_types: conda
