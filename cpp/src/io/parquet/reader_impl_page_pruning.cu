@@ -48,16 +48,21 @@ void reader::impl::update_output_bitmasks_for_pruned_pages()
   auto const& chunks        = _pass_itm_data->chunks;
   auto const num_columns    = _input_columns.size();
 
-  for (size_t page_idx = 0; page_idx < pages.size(); page_idx++) {
-    if (page_validity[page_idx]) { continue; }
-    auto const chunk_idx = pages[page_idx].chunk_idx;
-    auto const& chunk    = chunks[chunk_idx];
-    auto& input_col      = _input_columns[chunk_idx % num_columns];
+  CUDF_EXPECTS(pages.size() == page_validity.size(), "Page validity size mismatch");
 
-    auto const start_row = chunk.start_row + pages[page_idx].chunk_row;
-    auto const end_row   = start_row + pages[page_idx].num_rows;
-    update_null_mask(input_col, start_row, end_row);
-  }
+  std::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_validity.host_begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_end(), page_validity.host_end())),
+    [&](auto const& page_validity_pair) {
+      if (thrust::get<1>(page_validity_pair)) { return; }
+      auto const& page     = thrust::get<0>(page_validity_pair);
+      auto const chunk_idx = page.chunk_idx;
+      auto& input_col      = _input_columns[chunk_idx % num_columns];
+
+      auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const end_row   = start_row + page.num_rows;
+      update_null_mask(input_col, start_row, end_row);
+    });
 }
 
 }  // namespace cudf::io::parquet::detail
