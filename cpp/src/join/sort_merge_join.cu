@@ -43,7 +43,7 @@
 
 namespace cudf {
 
-#define SORT_MERGE_JOIN_DEBUG 1
+#define SORT_MERGE_JOIN_DEBUG 0
 
 namespace {
 

@@ -46,7 +46,7 @@ using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
-enum class algorithm { HASH, SORT };
+enum class algorithm { HASH, SORT_MERGE, MERGE };
 
 // This function is a wrapper around cudf's join APIs that takes the gather map
 // from join APIs and materializes the table that would be created by gathering
@@ -101,9 +101,13 @@ std::unique_ptr<cudf::table> inner_join(
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
   algorithm algo                    = algorithm::HASH)
 {
-  if (algo == algorithm::SORT)
+  if (algo == algorithm::SORT_MERGE) {
     return join_and_gather<cudf::sort_merge_inner_join>(
       left_input, right_input, left_on, right_on, compare_nulls);
+  } else if (algo == algorithm::MERGE) {
+    return join_and_gather<cudf::merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
+  }
   return join_and_gather<cudf::inner_join>(
     left_input, right_input, left_on, right_on, compare_nulls);
 }
@@ -162,11 +166,63 @@ struct JoinTest : public cudf::test::BaseFixture {
 };
 
 struct JoinParameterizedTest : public JoinTest, public testing::WithParamInterface<algorithm> {};
+struct JoinParameterizedTestSortedInput : public JoinTest,
+                                          public testing::WithParamInterface<algorithm> {};
 
 // Parametrize qualifying join tests for supported algorithms
 INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTest,
                         JoinParameterizedTest,
-                        ::testing::Values(algorithm::HASH, algorithm::SORT));
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestSortedInput,
+                        JoinParameterizedTestSortedInput,
+                        ::testing::Values(algorithm::HASH, algorithm::MERGE));
+
+TEST_P(JoinParameterizedTestSortedInput, SortedKeys)
+{
+  auto algo = GetParam();
+  column_wrapper<int32_t> col0_0{{0, 1, 2, 2, 3}};
+  strcol_wrapper col0_1({"s4", "s1", "s0", "s0", "s1"});
+  column_wrapper<int32_t> col0_2{{4, 1, 2, 1, 0}};
+
+  column_wrapper<int32_t> col1_0{{0, 2, 2, 3, 4}};
+  strcol_wrapper col1_1({"s1", "s1", "s0", "s1", "s2"});
+  column_wrapper<int32_t> col1_2{{1, 1, 0, 1, 2}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+  column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+  column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+  column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
 
 TEST_P(JoinParameterizedTest, EmptySentinelRepro)
 {
