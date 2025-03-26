@@ -106,7 +106,7 @@ class ScanPartitionPlan:
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
-            file_size = sum(float(stats[column]) for column in ir.schema)
+            file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files

@@ -339,6 +339,8 @@ def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
 
     if format == "ndjson":
         assert_ir_translation_raises(q, NotImplementedError)
+    elif format == "parquet":
+        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
     else:
         assert_gpu_result_equal(q)
 
