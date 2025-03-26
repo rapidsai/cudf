@@ -27,16 +27,20 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set(one_value GPUS PERCENT STREAM_MODE)
   set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
     set(_CUDF_TEST_PERCENT 15)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_GPUS)
     set(_CUDF_TEST_GPUS 1)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
@@ -742,7 +746,6 @@ ConfigureTest(
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
-  streams/text/subword_tokenize_test.cpp
   streams/text/tokenize_test.cpp
   STREAM_MODE
   testing

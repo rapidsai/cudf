@@ -593,9 +593,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __mul__(self, other):
         # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
-            other = other.value
-        elif (
+        if (
             isinstance(other, (np.ndarray, cupy.ndarray))
             and other.ndim == 0
             and other.dtype.kind in "iu"
