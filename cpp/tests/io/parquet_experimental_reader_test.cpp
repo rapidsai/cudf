@@ -19,7 +19,6 @@
 #include "cudf/utilities/memory_resource.hpp"
 #include "cudf/utilities/span.hpp"
 #include "parquet_common.hpp"
-#include "rmm/device_uvector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -82,18 +81,18 @@ auto get_footer_bytes(cudf::host_span<uint8_t const> buffer)
                                         ender->footer_len);
 }
 
-auto create_parquet_with_stats(bool is_concatenated = false)
+template <size_t NumTableConcats>
+auto create_parquet_with_stats()
 {
+  static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
+
   auto col0 = testdata::ascending<uint32_t>();
   auto col1 = testdata::descending<int64_t>();
   auto col2 = testdata::ascending<cudf::string_view>();
 
   auto expected = table_view{{col0, col1, col2}};
-  auto table    = std::unique_ptr<cudf::table>();
-  if (is_concatenated) {
-    table    = cudf::concatenate(std::vector<table_view>(2, expected));
-    expected = table->view();
-  }
+  auto table    = cudf::concatenate(std::vector<table_view>(NumTableConcats, expected));
+  expected      = table->view();
 
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_uint32");
@@ -108,7 +107,7 @@ auto create_parquet_with_stats(bool is_concatenated = false)
       .max_page_size_rows(1000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
 
-  if (is_concatenated) {
+  if constexpr (NumTableConcats > 1) {
     out_opts.set_row_group_size_rows(20000);
     out_opts.set_max_page_size_rows(5000);
   }
@@ -116,7 +115,7 @@ auto create_parquet_with_stats(bool is_concatenated = false)
   cudf::io::write_parquet(out_opts);
 
   auto columns = std::vector<std::unique_ptr<column>>{};
-  if (not is_concatenated) {
+  if constexpr (NumTableConcats == 1) {
     columns.push_back(col0.release());
     columns.push_back(col1.release());
     columns.push_back(col2.release());
@@ -152,108 +151,142 @@ std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
   return column_chunk_buffers;
 }
 
+auto hybrid_scan(std::vector<char>& buffer,
+                 cudf::size_type const num_columns,
+                 cudf::ast::operation const& filter_expression,
+                 rmm::cuda_stream_view stream,
+                 rmm::device_async_resource_ref mr)
+{
+  cudf::io::parquet_reader_options const options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+      .filter(filter_expression);
+
+  auto const footer_bytes = get_footer_bytes(
+    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+  auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
+    reinterpret_cast<uint8_t const*>(buffer.data()),
+    buffer.size());
+  auto const reader =
+    cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
+
+  auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
+
+  auto stats_filtered_row_groups =
+    cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
+
+  auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
+
+  auto [bloom_filter_bytes, dict_page_bytes] =
+    cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
+
+  std::vector<cudf::size_type> bloom_filtered_row_groups;
+  bloom_filtered_row_groups.reserve(filtered_row_groups.size());
+  if (bloom_filter_bytes.size()) {
+    // TODO: Read bloom filter data
+    std::vector<rmm::device_buffer> bloom_filter_data;
+    bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
+      reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
+    filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
+  }
+
+  auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
+    reader, stats_filtered_row_groups, options, stream, mr);
+
+  EXPECT_EQ(data_page_validity.size(), num_columns);
+
+  auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
+    reader, stats_filtered_row_groups, options);
+
+  auto column_chunk_buffers =
+    fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
+
+  auto [table, metadata] =
+    cudf::experimental::io::materialize_filter_columns(reader,
+                                                       data_page_validity,
+                                                       stats_filtered_row_groups,
+                                                       std::move(column_chunk_buffers),
+                                                       predicate->mutable_view(),
+                                                       options,
+                                                       stream);
+
+  return std::tuple{std::move(table), std::move(metadata), std::move(predicate)};
+}
+
 }  // namespace
 
-TEST_F(ParquetExperimentalReaderTest, FilterWithStats)
+TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
 {
   srand(31337);
 
-  auto const hybrid_scan = [&](bool is_testing_pages) {
-    auto [written_table, buffer] = create_parquet_with_stats(is_testing_pages);
+  // A table not concated with itself with result in a parquet file with several row groups each
+  // with a single page. Since there is only one page per row group, the page and row group stats
+  // are identical and we can only prune row groups.
+  auto constexpr num_concat    = 1;
+  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+  // Filtering AST - table[0] < 100
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-    // Filtering AST - table[0] < 100
-    auto literal_value = cudf::numeric_scalar<uint32_t>(100);
-    auto literal       = cudf::ast::literal(literal_value);
-    auto col_ref_0     = cudf::ast::column_name_reference("col_uint32");
-    auto filter_expression =
-      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
 
+  auto [read_table, read_meta, row_validity_col] =
+    hybrid_scan(buffer, written_table.num_columns(), filter_expression, stream, mr);
+
+  // Check equality with the parquet file read with the original reader
+  {
     cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
+    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), read_table->view());
+  }
+}
 
-    auto const stream = cudf::get_default_stream();
+TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
+{
+  srand(31337);
 
-    auto const footer_bytes     = get_footer_bytes(cudf::host_span<uint8_t const>(
-      reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
-    auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
-      reinterpret_cast<uint8_t const*>(buffer.data()),
-      buffer.size());
-    auto const reader =
-      cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
+  auto constexpr num_concat = 2;
 
-    auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
+  // A table concatenated multiple times by itself with result in a parquet file with a row group
+  // per concatenation with multiple pages per row group. Since all row groups will be identical, we
+  // can only prune pages based on `PageIndex` stats
+  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
 
-    auto stats_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_stats(
-      reader, input_row_groups, options, stream);
+  // Filtering AST - table[0] < 100
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-    auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+  auto [read_table, read_meta, row_validity_col] =
+    hybrid_scan(buffer, written_table.num_columns(), filter_expression, stream, mr);
 
-    auto [bloom_filter_bytes, dict_page_bytes] =
-      cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
-
-    std::vector<cudf::size_type> bloom_filtered_row_groups;
-    bloom_filtered_row_groups.reserve(filtered_row_groups.size());
-    if (bloom_filter_bytes.size()) {
-      // TODO: Read bloom filter data
-      std::vector<rmm::device_buffer> bloom_filter_data;
-      bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
-        reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
-      filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
-    }
-
-    auto mr = cudf::get_current_device_resource_ref();
-
-    auto [row_validity, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
-      reader, stats_filtered_row_groups, options, stream, mr);
-
-    EXPECT_EQ(data_page_validity.size(), written_table.num_columns());
-
-    auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
-      reader, stats_filtered_row_groups, options);
-
-    auto column_chunk_buffers =
-      fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
-
-    auto const [read_table, read_meta] =
-      cudf::experimental::io::materialize_filter_columns(reader,
-                                                         data_page_validity,
-                                                         stats_filtered_row_groups,
-                                                         std::move(column_chunk_buffers),
-                                                         row_validity->mutable_view(),
-                                                         options,
-                                                         stream);
-
-    // Check equality with the parquet file read with the original reader
-    {
-      auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-      CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), read_table->view());
-    }
-
-    // Check equivalence with the original table with the applied boolean mask
-    {
-      auto col_ref_0 = cudf::ast::column_reference(0);
-      auto filter_expression =
-        cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
-
-      auto predicate = cudf::compute_column(written_table, filter_expression);
-      EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
-        << "Predicate filter should return a boolean";
-      auto expected = cudf::apply_boolean_mask(written_table, *predicate);
-      // Check equivalence as the nullability between columns may be different
-      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_table->view());
-    }
-  };
-
-  // Only test filtering row groups
+  // Check equality with the parquet file read with the original reader
   {
-    auto constexpr filter_pages = false;
-    hybrid_scan(filter_pages);
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+        .filter(filter_expression);
+    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->view(), read_table->view());
   }
 
-  // Only test filtering data pages
+  // Check equivalence with the original table with the applied boolean mask
   {
-    auto constexpr filter_pages = true;
-    hybrid_scan(filter_pages);
+    auto col_ref_0 = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+    auto predicate = cudf::compute_column(written_table, filter_expression);
+    EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
+      << "Predicate filter should return a boolean";
+    auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+    // Check equivalence as the nullability between columns may be different
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), read_table->view());
   }
 }
