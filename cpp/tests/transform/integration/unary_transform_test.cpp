@@ -436,4 +436,22 @@ TEST_F(TernaryStringOperationTest, StringComparison)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(TernaryStringOperationTest, StringContains)
+{
+  auto a = cudf::test::strings_column_wrapper({"a", "ab", "ccc", "dddd", "eee", "123"});
+  auto b = cudf::test::strings_column_wrapper({"aa", "b", "d", "dddddd", "e", "321"});
+
+  std::string cuda = R"***(
+  __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
+    *out =  a.find(b) != cudf::string_view::npos;
+  }
+  )***";
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<bool>{false, true, false, false, true, false};
+  auto result = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 }  // namespace transformation

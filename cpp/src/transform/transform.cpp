@@ -157,7 +157,7 @@ jitify2::Kernel get_kernel(mutable_column_view output,
     .get_kernel(kernel_name,
                 {},
                 {{"transform/jit/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.", "--device-debug",
+                {"-arch=sm_.",
                  "--device-int128",
                  // TODO: remove when we upgrade to CCCL >= 3.0
 
@@ -198,10 +198,13 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type), "Transforms only support fixed-width types");
-  CUDF_EXPECTS(
-    std::all_of(
-      inputs.begin(), inputs.end(), [](auto& input) { return is_fixed_width(input.type()) || (input.type().id() == type_id::STRING); }),
-    "Transforms only support fixed-width and string types");
+  CUDF_EXPECTS(std::all_of(inputs.begin(),
+                           inputs.end(),
+                           [](auto& input) {
+                             return is_fixed_width(input.type()) ||
+                                    (input.type().id() == type_id::STRING);
+                           }),
+               "Transforms only support fixed-width and string types");
 
   auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });

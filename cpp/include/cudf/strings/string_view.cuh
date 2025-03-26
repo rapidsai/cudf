@@ -26,7 +26,7 @@
 
 // This is defined when including this header in a https://github.com/NVIDIA/jitify
 // or jitify2 source file. The jitify cannot include thrust headers at this time.
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #endif
@@ -53,7 +53,7 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
 {
   if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 #else
@@ -161,8 +161,7 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 {
   if (byte_pos < bytes) {
     // max is used to prevent an infinite loop on invalid UTF-8 data
-    byte_pos +=
-      std::max(1, strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos])));
+    byte_pos += std::max(1, strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos])));
   }
   ++char_pos;
   return *this;

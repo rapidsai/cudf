@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-
- #define CUDF_JIT_UDF
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf/strings/string_view.cuh>
-#include <cudf/column/column_device_view.cuh>
 
 #include <cuda/std/climits>
 #include <cuda/std/cstddef>

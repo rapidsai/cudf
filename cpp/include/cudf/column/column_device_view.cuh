@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 #pragma once
-
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/lists/list_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
@@ -38,7 +38,6 @@
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -109,6 +108,8 @@ namespace detail {
  */
 class alignas(16) column_device_view_base {
  public:
+  static constexpr size_type string_offsets_column_index{0};  ///< Child index of the offsets column
+
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
   column_device_view_base(column_device_view_base const&) = default;  ///< Copy constructor
@@ -143,7 +144,7 @@ class alignas(16) column_device_view_base {
    * @return Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   [[nodiscard]] CUDF_HOST_DEVICE T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -451,12 +452,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
-    auto const offsets    = d_children[strings_column_view::offsets_column_index];
+    auto const offsets    = d_children[string_offsets_column_index];
     auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
     auto const offset     = itr[index];
     return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
@@ -486,6 +487,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   };
 
  public:
+#ifndef CUDF_RUNTIME_JIT
+
   /**
    * @brief Returns `dictionary32` element at the specified index for a
    * dictionary column.
@@ -518,6 +521,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
   }
 
+#endif
+
   /**
    * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
    * column.
@@ -549,7 +554,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return has_element_accessor_impl<column_device_view, T>::value;
   }
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
   /// Counting iterator
   using count_it = thrust::counting_iterator<size_type>;
@@ -865,7 +870,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return d_children[child_index];
   }
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
   /**
    * @brief Returns a span containing the children of this column
@@ -960,7 +965,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   mutable_column_device_view& operator=(mutable_column_device_view&&) = default;
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
   /**
    * @brief Creates an instance of this class using the specified host memory
@@ -1015,7 +1020,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   CUDF_HOST_DEVICE T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
@@ -1114,7 +1119,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
   /// Counting iterator
   using count_it = thrust::counting_iterator<size_type>;
@@ -1224,7 +1229,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
     null_mask()[word_index] = new_word;
   }
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
   /**
    * @brief Return the size in bytes of the amount of memory needed to hold a
@@ -1266,7 +1271,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
 
 namespace detail {
 
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
 
