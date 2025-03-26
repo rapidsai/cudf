@@ -307,34 +307,73 @@ class Merge:
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
 
-        left_rows, right_rows = self._gather_maps(
-            left_join_cols, right_join_cols
-        )
-        gather_kwargs = {
-            "keep_index": self._using_left_index or self._using_right_index,
-        }
-        left_result = (
-            self.lhs._gather(
-                GatherMap.from_column_unchecked(
-                    left_rows, len(self.lhs), nullify=True
+        if self.how == "cross":
+            lib_table = plc.join.cross_join(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.lhs._columns
+                    ]
                 ),
-                **gather_kwargs,
-            )
-            if left_rows is not None
-            else cudf.DataFrame._from_data({})
-        )
-        del left_rows
-        right_result = (
-            self.rhs._gather(
-                GatherMap.from_column_unchecked(
-                    right_rows, len(self.rhs), nullify=True
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.rhs._columns
+                    ]
                 ),
-                **gather_kwargs,
             )
-            if right_rows is not None
-            else cudf.DataFrame._from_data({})
-        )
-        del right_rows
+            columns = lib_table.columns()
+            left_names, right_names = (
+                self.lhs._column_names,
+                self.rhs._column_names,
+            )
+            left_result = cudf.DataFrame._from_data(
+                {
+                    col: ColumnBase.from_pylibcudf(lib_col)
+                    for col, lib_col in zip(
+                        left_names, columns[: len(left_names)], strict=True
+                    )
+                }
+            )
+            right_result = cudf.DataFrame._from_data(
+                {
+                    col: ColumnBase.from_pylibcudf(lib_col)
+                    for col, lib_col in zip(
+                        right_names, columns[len(left_names) :], strict=True
+                    )
+                }
+            )
+            del columns, lib_table
+        else:
+            left_rows, right_rows = self._gather_maps(
+                left_join_cols, right_join_cols
+            )
+            gather_kwargs = {
+                "keep_index": self._using_left_index
+                or self._using_right_index,
+            }
+            left_result = (
+                self.lhs._gather(
+                    GatherMap.from_column_unchecked(
+                        left_rows, len(self.lhs), nullify=True
+                    ),
+                    **gather_kwargs,
+                )
+                if left_rows is not None
+                else cudf.DataFrame._from_data({})
+            )
+            del left_rows
+            right_result = (
+                self.rhs._gather(
+                    GatherMap.from_column_unchecked(
+                        right_rows, len(self.rhs), nullify=True
+                    ),
+                    **gather_kwargs,
+                )
+                if right_rows is not None
+                else cudf.DataFrame._from_data({})
+            )
+            del right_rows
         result = cudf.DataFrame._from_data(
             *self._merge_results(left_result, right_result)
         )
@@ -371,7 +410,12 @@ class Merge:
         common_names = set(left_result._column_names) & set(
             right_result._column_names
         )
-        cols_to_suffix = common_names - self._key_columns_with_same_name
+
+        cols_to_suffix = (
+            common_names
+            if self.how == "cross"
+            else common_names - self._key_columns_with_same_name
+        )
         data = {
             (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
             for name, col in left_result._column_labels_and_values
@@ -381,7 +425,10 @@ class Merge:
         # key columns from the right table are removed.
         for name, col in right_result._column_labels_and_values:
             if name in common_names:
-                if name not in self._key_columns_with_same_name:
+                if (
+                    self.how == "cross"
+                    or name not in self._key_columns_with_same_name
+                ):
                     r_label = f"{name}{self.rsuffix}"
                     if r_label in data:
                         raise NotImplementedError(
@@ -482,7 +529,14 @@ class Merge:
         # Error for various invalid combinations of merge input parameters
 
         # We must actually support the requested merge type
-        if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
+        if how not in {
+            "left",
+            "inner",
+            "outer",
+            "leftanti",
+            "leftsemi",
+            "cross",
+        }:
             raise NotImplementedError(f"{how} merge not supported yet")
 
         if on:
@@ -544,7 +598,7 @@ class Merge:
 
         # If nothing specified, must have common cols to use implicitly
         same_named_columns = set(lhs._data) & set(rhs._data)
-        if (
+        if how != "cross" and (
             not (left_index or right_index)
             and not (left_on or right_on)
             and len(same_named_columns) == 0

@@ -710,33 +710,40 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        other = self._wrap_binop_normalization(other)
-        # TODO: This is currently just here to make mypy happy, but eventually
-        # we'll need to properly establish the APIs for these methods.
-        if not isinstance(other, CategoricalColumn):
-            raise ValueError
-        # Note: at this stage we are guaranteed that the dtypes are equal.
-        if not self.ordered and op not in {
-            "__eq__",
-            "__ne__",
-            "NULL_EQUALS",
-            "NULL_NOT_EQUALS",
-        }:
+        other = self._normalize_binop_operand(other)
+        equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
+        if not self.ordered and op not in equality_ops:
             raise TypeError(
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
+        if not isinstance(other, CategoricalColumn):
+            if op not in equality_ops:
+                raise TypeError(
+                    f"Cannot compare a Categorical for op {op} with a "
+                    "non-categorical type. If you want to compare values, "
+                    "decategorize the Categorical first."
+                )
+            elif op not in equality_ops.union(
+                {"__gt__", "__lt__", "__ge__", "__le__"}
+            ):
+                # TODO: Other non-comparison ops may raise or be supported
+                return NotImplemented
+            return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def normalize_binop_value(self, other: ScalarLike) -> Self:
+    def _normalize_binop_operand(
+        self, other: ColumnBinaryOperand
+    ) -> column.ColumnBase:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
-                return NotImplemented
+                # We'll compare self's decategorized values later
+                return other
             if other.dtype != self.dtype:
                 raise TypeError(
                     "Categoricals can only compare with the same type"
                 )
-            return cast(Self, other)
+            return other
         codes = column.as_column(
             self._encode(other), length=len(self), dtype=self.codes.dtype
         )
@@ -858,6 +865,27 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes.offset,
             children=(codes,),
         )
+
+    def _cast_self_and_other_for_where(
+        self, other: ScalarLike | ColumnBase, inplace: bool
+    ) -> tuple[ColumnBase, plc.Scalar | ColumnBase]:
+        if is_scalar(other):
+            try:
+                other = self._encode(other)
+            except ValueError:
+                # When other is not present in categories,
+                # fill with Null.
+                other = None
+            other = pa_scalar_to_plc_scalar(
+                pa.scalar(
+                    other,
+                    type=cudf_dtype_to_pa_type(self.codes.dtype),
+                )
+            )
+        elif isinstance(other.dtype, CategoricalDtype):
+            other = other.codes  # type: ignore[union-attr]
+
+        return self.codes, other
 
     def _encode(self, value) -> ScalarLike:
         return self.categories.find_first_value(value)

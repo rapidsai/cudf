@@ -305,12 +305,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
+# find zstd
+include(cmake/thirdparty/get_zstd.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -463,10 +465,12 @@ add_library(
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
+  src/interop/arrow_data_structures.cpp
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
+  src/interop/from_arrow_host_strings.cu
   src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
   src/io/avro/avro.cpp
@@ -475,6 +479,7 @@ add_library(
   src/io/comp/brotli_dict.cpp
   src/io/comp/comp.cpp
   src/io/comp/comp.cu
+  src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
@@ -559,6 +564,7 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
+  src/jit/runtime_support.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
@@ -651,6 +657,7 @@ add_library(
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
+  src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/round/round.cu
@@ -828,6 +835,7 @@ set_target_properties(
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -884,6 +892,7 @@ target_include_directories(
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
+          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -943,7 +952,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
