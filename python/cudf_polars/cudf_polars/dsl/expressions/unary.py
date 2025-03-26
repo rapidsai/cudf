@@ -247,6 +247,8 @@ class UnaryFunction(Expr):
                 child.evaluate(df, context=context, mapping=mapping)
                 for child in self.children
             )
+            if column.null_count == 0:
+                return column
             return Column(
                 plc.stream_compaction.drop_nulls(
                     plc.Table([column.obj]), [0], 1
@@ -254,6 +256,8 @@ class UnaryFunction(Expr):
             )
         elif self.name == "fill_null":
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            if column.null_count == 0:
+                return column
             if isinstance(self.children[1], Literal):
                 arg = plc.interop.from_arrow(self.children[1].value)
             else:
