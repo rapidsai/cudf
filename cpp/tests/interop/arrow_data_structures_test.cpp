@@ -47,7 +47,7 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
   auto col = cudf::column(int_col);
   auto arrow_column_from_cudf_column =
     cudf::interop::arrow_column(std::move(col), cudf::interop::get_column_metadata(int_col));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column.view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, arrow_column_from_cudf_column.view());
 
   auto [arrow_schema_from_arrow_column, arrow_array_from_arrow_column] =
     export_to_arrow(arrow_column_from_cudf_column);
@@ -56,7 +56,7 @@ TEST_F(ArrowColumnTest, TwoWayConversion)
 
   auto arrow_column_from_arrow_array = cudf::interop::arrow_column(
     std::move(*arrow_schema_from_arrow_column), std::move(*arrow_array_from_arrow_column));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, arrow_column_from_arrow_array.view());
 }
 
 TEST_F(ArrowColumnTest, LifetimeManagement)
@@ -66,7 +66,7 @@ TEST_F(ArrowColumnTest, LifetimeManagement)
   auto arrow_column_from_cudf_column = std::make_unique<cudf::interop::arrow_column>(
     std::move(*col), cudf::interop::get_column_metadata(int_col));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_cudf_column->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, arrow_column_from_cudf_column->view());
 
   auto [schema1, array1] = export_to_arrow(*arrow_column_from_cudf_column);
   auto [schema2, array2] = export_to_arrow(*arrow_column_from_cudf_column);
@@ -78,8 +78,8 @@ TEST_F(ArrowColumnTest, LifetimeManagement)
     std::make_unique<cudf::interop::arrow_column>(std::move(*schema1), std::move(*array1));
   auto col2 =
     std::make_unique<cudf::interop::arrow_column>(std::move(*schema2), std::move(*array2));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *col1->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col1->view(), *col2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, col1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col1->view(), col2->view());
 }
 
 TEST_F(ArrowColumnTest, ComplexNanoarrowDeviceTables)
@@ -96,7 +96,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowDeviceTables)
     ArrowArrayMove(arr->children[i], &device_arr.array);
     auto arrow_column_from_nanoarrow_array =
       cudf::interop::arrow_column(std::move(*schema->children[i]), std::move(device_arr));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_nanoarrow_array.view());
 
     auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_column] =
       export_to_arrow(arrow_column_from_nanoarrow_array);
@@ -106,7 +106,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowDeviceTables)
 
     auto arrow_column_from_arrow_array = cudf::interop::arrow_column(
       std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_column));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_arrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_arrow_array.view());
   }
 }
 
@@ -124,7 +124,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostTables)
     ArrowArrayMove(arr->children[i], &device_arr.array);
     auto arrow_column_from_nanoarrow_array =
       cudf::interop::arrow_column(std::move(*schema->children[i]), std::move(device_arr));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_nanoarrow_array.view());
 
     auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_column] =
       export_to_arrow(arrow_column_from_nanoarrow_array);
@@ -134,7 +134,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostTables)
 
     auto arrow_column_from_arrow_array = cudf::interop::arrow_column(
       std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_column));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_arrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_arrow_array.view());
   }
 }
 
@@ -146,7 +146,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostArrowArrayTables)
 
     auto arrow_column_from_nanoarrow_array =
       cudf::interop::arrow_column(std::move(*schema->children[i]), std::move(*arr->children[i]));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_nanoarrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_nanoarrow_array.view());
 
     auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_column] =
       export_to_arrow(arrow_column_from_nanoarrow_array);
@@ -156,7 +156,7 @@ TEST_F(ArrowColumnTest, ComplexNanoarrowHostArrowArrayTables)
 
     auto arrow_column_from_arrow_array = cudf::interop::arrow_column(
       std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_column));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), *arrow_column_from_arrow_array.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col.view(), arrow_column_from_arrow_array.view());
   }
 }
 
@@ -174,7 +174,7 @@ TEST_F(ArrowColumnTest, ToFromHost)
 
   auto arrow_column_from_arrow_array = cudf::interop::arrow_column(
     std::move(*arrow_schema_from_arrow_column), std::move(*arrow_array_from_arrow_column));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, *arrow_column_from_arrow_array.view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col, arrow_column_from_arrow_array.view());
 }
 
 struct ArrowTableTest : public cudf::test::BaseFixture {};
@@ -189,7 +189,7 @@ TEST_F(ArrowTableTest, TwoWayConversion)
   auto arrow_table_from_cudf_table =
     cudf::interop::arrow_table(std::move(table), cudf::interop::get_table_metadata(original_view));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_cudf_table.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, arrow_table_from_cudf_table.view());
 
   auto [arrow_schema_from_arrow_table, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_cudf_table);
@@ -198,7 +198,7 @@ TEST_F(ArrowTableTest, TwoWayConversion)
 
   auto arrow_table_from_arrow_array = cudf::interop::arrow_table(
     std::move(*arrow_schema_from_arrow_table), std::move(*arrow_array_from_arrow_table));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, ComplexNanoarrowDeviceTables)
@@ -213,7 +213,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowDeviceTables)
   auto arrow_table_from_nanoarrow_array =
     cudf::interop::arrow_table(std::move(*schema.get()), std::move(device_arr));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_nanoarrow_array.view());
 
   auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_nanoarrow_array);
@@ -222,7 +222,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowDeviceTables)
 
   auto arrow_table_from_arrow_array = cudf::interop::arrow_table(
     std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_table));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
@@ -237,7 +237,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
   auto arrow_table_from_nanoarrow_array =
     cudf::interop::arrow_table(std::move(*schema.get()), std::move(device_arr));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_nanoarrow_array.view());
 
   auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_nanoarrow_array);
@@ -246,7 +246,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostTables)
 
   auto arrow_table_from_arrow_array = cudf::interop::arrow_table(
     std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_table.get()));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, ComplexNanoarrowHostArrowArrayTables)
@@ -255,7 +255,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostArrowArrayTables)
   auto arrow_table_from_nanoarrow_array =
     cudf::interop::arrow_table(std::move(*schema.get()), std::move(*arr.get()));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_nanoarrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_nanoarrow_array.view());
 
   auto [arrow_schema_from_nanoarrow_array, arrow_array_from_arrow_table] =
     export_to_arrow(arrow_table_from_nanoarrow_array);
@@ -264,7 +264,7 @@ TEST_F(ArrowTableTest, ComplexNanoarrowHostArrowArrayTables)
 
   auto arrow_table_from_arrow_array = cudf::interop::arrow_table(
     std::move(*arrow_schema_from_nanoarrow_array), std::move(*arrow_array_from_arrow_table));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *arrow_table_from_arrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, ToFromHost)
@@ -284,7 +284,7 @@ TEST_F(ArrowTableTest, ToFromHost)
 
   auto arrow_table_from_arrow_array = cudf::interop::arrow_table(
     std::move(*arrow_schema_from_arrow_table), std::move(*arrow_array_from_arrow_table));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, *arrow_table_from_arrow_array.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(original_view, arrow_table_from_arrow_array.view());
 }
 
 TEST_F(ArrowTableTest, FromArrowArrayStream)
@@ -293,5 +293,5 @@ TEST_F(ArrowTableTest, FromArrowArrayStream)
   auto [tbl, sch, stream] = get_nanoarrow_stream(num_copies);
 
   auto result = cudf::interop::arrow_table(std::move(stream));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), *result.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), result.view());
 }

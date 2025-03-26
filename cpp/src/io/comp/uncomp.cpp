@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 
+#include "common_internal.hpp"
+#include "gpuinflate.hpp"
+#include "io/utilities/getenv_or.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -29,6 +35,8 @@
 
 #include <cstdint>
 #include <cstring>  // memset
+#include <future>
+#include <numeric>
 #include <sstream>
 
 namespace cudf::io::detail {
@@ -542,7 +550,7 @@ size_t decompress(compression_type compression,
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
     case compression_type::ZSTD: return decompress_zstd(src, dst);
-    default: CUDF_FAIL("Unsupported compression type");
+    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
   }
 }
 
@@ -612,6 +620,160 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   }
 
   CUDF_FAIL("Unsupported compressed stream type");
+}
+
+void device_decompress(compression_type compression,
+                       device_span<device_span<uint8_t const> const> inputs,
+                       device_span<device_span<uint8_t> const> outputs,
+                       device_span<compression_result> results,
+                       size_t max_uncomp_chunk_size,
+                       size_t max_total_uncomp_size,
+                       rmm::cuda_stream_view stream)
+{
+  if (compression == compression_type::NONE) { return; }
+
+  auto const nvcomp_type      = to_nvcomp_compression(compression);
+  auto nvcomp_disabled_reason = nvcomp_type.has_value()
+                                  ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                  : "invalid compression type";
+  if (not nvcomp_disabled_reason) {
+    return nvcomp::batched_decompress(
+      *nvcomp_type, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
+  }
+
+  switch (compression) {
+    case compression_type::BROTLI: return gpu_debrotli(inputs, outputs, results, stream);
+    case compression_type::GZIP:
+      return gpuinflate(inputs, outputs, results, gzip_header_included::YES, stream);
+    case compression_type::SNAPPY: return gpu_unsnap(inputs, outputs, results, stream);
+    case compression_type::ZLIB:
+      return gpuinflate(inputs, outputs, results, gzip_header_included::NO, stream);
+    default: CUDF_FAIL("Compression error: " + nvcomp_disabled_reason.value());
+  }
+}
+
+void host_decompress(compression_type compression,
+                     device_span<device_span<uint8_t const> const> inputs,
+                     device_span<device_span<uint8_t> const> outputs,
+                     device_span<compression_result> results,
+                     rmm::cuda_stream_view stream)
+{
+  if (compression == compression_type::NONE) { return; }
+
+  auto const num_chunks = inputs.size();
+  auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
+  auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
+  stream.synchronize();
+
+  // Generate order vector to submit largest tasks first
+  std::vector<size_t> task_order(num_chunks);
+  std::iota(task_order.begin(), task_order.end(), 0);
+  std::sort(task_order.begin(), task_order.end(), [&](size_t a, size_t b) {
+    return h_inputs[a].size() > h_inputs[b].size();
+  });
+
+  std::vector<std::future<size_t>> tasks;
+  auto const num_streams =
+    std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
+  auto const streams = cudf::detail::fork_streams(stream, num_streams);
+  for (size_t i = 0; i < num_chunks; ++i) {
+    auto const idx        = task_order[i];
+    auto const cur_stream = streams[i % streams.size()];
+    auto task =
+      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+      auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
+
+      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
+      auto const uncomp_size = decompress(compression, h_in, h_out, cur_stream);
+      h_in.clear();  // Free pinned memory as soon as possible
+
+      cudf::detail::cuda_memcpy_async<uint8_t>(d_out.subspan(0, uncomp_size),
+                                               host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
+                                               cur_stream);
+      return uncomp_size;
+    };
+    tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
+  }
+  auto h_results = cudf::detail::make_pinned_vector_sync<compression_result>(num_chunks, stream);
+  for (auto i = 0ul; i < num_chunks; ++i) {
+    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
+  }
+  cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
+  cudf::detail::join_streams(streams, stream);
+}
+
+[[nodiscard]] bool host_decompression_supported(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::GZIP:
+    case compression_type::SNAPPY:
+    case compression_type::ZLIB:
+    case compression_type::ZSTD:
+    case compression_type::NONE: return true;
+    default: return false;
+  }
+}
+
+[[nodiscard]] bool device_decompression_supported(compression_type compression)
+{
+  auto const nvcomp_type = to_nvcomp_compression(compression);
+  switch (compression) {
+    case compression_type::ZSTD: return not nvcomp::is_decompression_disabled(nvcomp_type.value());
+    case compression_type::BROTLI:
+    case compression_type::GZIP:
+    case compression_type::LZ4:
+    case compression_type::SNAPPY:
+    case compression_type::ZLIB:
+    case compression_type::NONE: return true;
+    default: return false;
+  }
+}
+
+[[nodiscard]] bool use_host_decompression(compression_type compression)
+{
+  CUDF_EXPECTS(
+    host_decompression_supported(compression) or device_decompression_supported(compression),
+    "Unsupported compression type: " + compression_type_name(compression));
+  if (not host_decompression_supported(compression)) { return false; }
+  if (not device_decompression_supported(compression)) { return true; }
+  // If both host and device compression are supported, use the host if the env var is set
+  return getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"}) == "ON";
+}
+
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di)
+{
+  if (di.type == compression_type::NONE or use_host_decompression(di.type)) { return 0; }
+
+  auto const nvcomp_type = to_nvcomp_compression(di.type);
+  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
+                                                   : "invalid compression type";
+  if (not nvcomp_disabled) {
+    nvcomp::batched_decompress_temp_size(
+      nvcomp_type.value(), di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
+  }
+
+  if (di.type == compression_type::BROTLI) return get_gpu_debrotli_scratch_size(di.num_pages);
+  // only Brotli kernel requires scratch memory
+  return 0;
+}
+
+void decompress(compression_type compression,
+                device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<compression_result> results,
+                size_t max_uncomp_chunk_size,
+                size_t max_total_uncomp_size,
+                rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  if (inputs.empty()) { return; }
+  if (use_host_decompression(compression)) {
+    return host_decompress(compression, inputs, outputs, results, stream);
+  } else {
+    return device_decompress(
+      compression, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
+  }
 }
 
 }  // namespace cudf::io::detail
