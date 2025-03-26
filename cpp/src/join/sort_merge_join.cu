@@ -243,11 +243,10 @@ sort_merge_inner_join(table_view const& left,
   thrust::exclusive_scan(
     rmm::exec_policy(stream), match_counts.begin(), match_counts.end(), match_counts.begin());
   auto const total_matches = match_counts.back_element(stream);
-  auto larger_indices =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
-  rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
 
   // populate larger indices
+  auto larger_indices =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
   nvtxRangePushA("larger indices");
   thrust::scatter(rmm::exec_policy(stream),
                   nonzero_matches.begin(),
@@ -276,6 +275,7 @@ sort_merge_inner_join(table_view const& left,
 #endif
 
   // populate smaller indices
+  rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
   nvtxRangePushA("smaller indices");
   /*
   auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
