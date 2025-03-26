@@ -23,6 +23,10 @@ def df():
             "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+            "uint16_with_null": pl.Series(
+                [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
+            ),
             "float": [7.0, 1, 2, 3, 4, 5, 6, 7, 8],
             "string": ["abc", "def", "hijk", "lmno", "had", "to", "be", "or", "not"],
             "datetime": [
@@ -62,6 +66,12 @@ def keys(request):
         ["int"],
         ["float", "int"],
         [pl.col("float") + pl.col("int")],
+        [pl.col("int32").sum()],
+        [pl.col("int32").mean()],
+        [
+            pl.col("uint16_with_null").sum(),
+            pl.col("uint16_with_null").mean().alias("mean"),
+        ],
         [pl.col("float").max() - pl.col("int").min()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
@@ -131,7 +141,12 @@ def test_groupby_len(df, keys):
 
 @pytest.mark.parametrize(
     "expr",
-    [(pl.col("int").max() + pl.col("float").min()).max()],
+    [
+        (pl.col("int").max() + pl.col("float").min()).max(),
+        pl.when(pl.col("int") < pl.lit(2))
+        .then(pl.col("float").sum())
+        .otherwise(pl.lit(-2)),
+    ],
 )
 def test_groupby_unsupported(df, expr):
     q = df.group_by("key1").agg(expr)
