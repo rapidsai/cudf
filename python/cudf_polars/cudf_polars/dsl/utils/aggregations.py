@@ -91,22 +91,31 @@ def decompose_single_agg(
                 expr.NamedExpr(name, expr.Col(agg.dtype, name)),
                 True,
             )
-        elif agg.name == "sum" and is_top:
-            # In polars sum(empty_group) => 0, but in libcudf sum(empty_group) => null
-            # So must post-process by replacing nulls, but only if we're a "top-level" agg.
-            rep = expr.Literal(
-                agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
+        elif agg.name == "sum":
+            col = (
+                expr.Cast(agg.dtype, expr.Col(plc.DataType(plc.TypeId.INT64), name))
+                if (
+                    plc.traits.is_integral(agg.dtype)
+                    and agg.dtype.id() != plc.TypeId.INT64
+                )
+                else expr.Col(agg.dtype, name)
             )
-            return (
-                [named_expr],
-                expr.NamedExpr(
-                    name,
-                    expr.UnaryFunction(
-                        agg.dtype, "fill_null", (), expr.Col(agg.dtype, name), rep
+            if is_top:
+                # In polars sum(empty_group) => 0, but in libcudf sum(empty_group) => null
+                # So must post-process by replacing nulls, but only if we're a "top-level" agg.
+                rep = expr.Literal(
+                    agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
+                )
+                return (
+                    [named_expr],
+                    expr.NamedExpr(
+                        name,
+                        expr.UnaryFunction(agg.dtype, "fill_null", (), col, rep),
                     ),
-                ),
-                True,
-            )
+                    True,
+                )
+            else:
+                return [named_expr], expr.NamedExpr(name, col), True
         else:
             return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), True
     if isinstance(agg, expr.Ternary):
