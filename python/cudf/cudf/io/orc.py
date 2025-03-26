@@ -265,9 +265,8 @@ def read_orc(
         df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
 
         if isinstance(columns, list) and len(columns) == 0:
-            # When `columns=[]`, index needs to be
-            # established, but not the columns.
-            df.index = cudf.RangeIndex(tbl_w_meta.tbl.num_rows())
+            # Index to deselect all columns
+            df = df.loc[:, columns]
         else:
             index_col = None
             is_range_index = False
