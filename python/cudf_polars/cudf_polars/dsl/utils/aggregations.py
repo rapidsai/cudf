@@ -109,6 +109,8 @@ def decompose_single_agg(
             )
         else:
             return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), True
+    if isinstance(agg, expr.Ternary):
+        raise NotImplementedError("Ternary inside groupby")
     if agg.is_pointwise:
         aggs, posts, has_aggs = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),
