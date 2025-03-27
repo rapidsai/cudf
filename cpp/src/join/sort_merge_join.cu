@@ -291,6 +291,87 @@ merge(table_view const& smaller,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
 }
 
+std::tuple<table_view, table_view, std::optional<std::unique_ptr<table>>, std::optional<std::unique_ptr<table>>>
+preprocess_tables(table_view const left, 
+                      table_view const right,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr) {
+  if(compare_nulls == null_equality::EQUAL) {
+    return {left, right, std::nullopt, std::nullopt};
+  }
+  std::vector<size_type> check_columns(left.num_columns());
+  std::iota(check_columns.begin(), check_columns.end(), 0);
+  auto non_null_left  = drop_nulls(left, check_columns, stream, mr);
+  auto non_null_right = drop_nulls(right, check_columns, stream, mr);
+
+  auto nnlv                                            = non_null_left->view();
+  auto nnrv                                            = non_null_right->view();
+
+  return {nnlv, nnrv, std::move(non_null_left), std::move(non_null_right)};
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+postprocess_indices(table_view const& left,
+                      table_view const& right,
+                      std::unique_ptr<rmm::device_uvector<size_type>> smaller_indices,
+                      std::unique_ptr<rmm::device_uvector<size_type>> larger_indices,
+                      bool is_left_smaller,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
+  if (compare_nulls == null_equality::EQUAL) {
+    if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
+    return {std::move(larger_indices), std::move(smaller_indices)};
+  }
+  auto get_mapping = [stream, mr](table_view const& tbl) {
+    auto [tbl_result_mask, tbl_num_nulls] = bitmask_and(tbl, stream, mr);
+    rmm::device_uvector<size_type> tbl_mapping(tbl.num_rows() - tbl_num_nulls, stream, mr);
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(tbl.num_rows()),
+                    tbl_mapping.begin(),
+                    [mask = static_cast<uint32_t*>(tbl_result_mask.data())] __device__(
+                      size_type idx) { return cudf::bit_is_set(mask, idx); });
+    return tbl_mapping;
+  };
+
+  auto left_mapping  = get_mapping(left);
+  auto right_mapping = get_mapping(right);
+
+  if (is_left_smaller) {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      smaller_indices->begin(),
+      smaller_indices->end(),
+      smaller_indices->begin(),
+      [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+    thrust::transform(rmm::exec_policy(stream),
+                      larger_indices->begin(),
+                      larger_indices->end(),
+                      larger_indices->begin(),
+                      [right_mapping = right_mapping.begin()] __device__(auto idx) {
+                        return right_mapping[idx];
+                      });
+    return {std::move(smaller_indices), std::move(larger_indices)};
+  }
+  thrust::transform(
+    rmm::exec_policy(stream),
+    smaller_indices->begin(),
+    smaller_indices->end(),
+    smaller_indices->begin(),
+    [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    larger_indices->begin(),
+    larger_indices->end(),
+    larger_indices->begin(),
+    [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+  return {std::move(larger_indices), std::move(smaller_indices)};
+}
+
 }  // anonymous namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -309,88 +390,14 @@ sort_merge_inner_join(table_view const& left,
   CUDF_EXPECTS(!cudf::has_nested_columns(left) && !cudf::has_nested_columns(right),
                "Don't have sorting logic for nested columns yet");
 
-  if (compare_nulls == null_equality::UNEQUAL) {
-    std::vector<size_type> check_columns(left.num_columns());
-    std::iota(check_columns.begin(), check_columns.end(), 0);
-    auto non_null_left  = drop_nulls(left, check_columns, stream, mr);
-    auto non_null_right = drop_nulls(right, check_columns, stream, mr);
+  auto [true_left_view, true_right_view, left_table, right_table] = preprocess_tables(left, right, compare_nulls, stream, mr);
 
-    auto nnlv                                            = non_null_left->view();
-    auto nnrv                                            = non_null_right->view();
-    auto [sorted_left_order_col, sorted_right_order_col] = sort(nnlv, nnrv, stream, mr);
-    bool is_left_smaller                                 = nnlv.num_rows() < nnrv.num_rows();
-    auto& smaller                                        = is_left_smaller ? nnlv : nnrv;
-    auto& sorted_smaller_order_col =
-      is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
+  auto [sorted_left_order_col, sorted_right_order_col] = sort(true_left_view, true_right_view, stream, mr);
 
-    auto& larger = !is_left_smaller ? nnlv : nnrv;
-    auto& sorted_larger_order_col =
-      !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
-
-    auto [smaller_indices, larger_indices] =
-      merge(smaller,
-            sorted_smaller_order_col->view().begin<size_type>(),
-            sorted_smaller_order_col->view().end<size_type>(),
-            larger,
-            sorted_larger_order_col->view().begin<size_type>(),
-            sorted_larger_order_col->view().end<size_type>(),
-            compare_nulls,
-            stream,
-            mr);
-
-    auto get_mapping = [stream, mr](table_view const& tbl) {
-      auto [tbl_result_mask, tbl_num_nulls] = bitmask_and(tbl, stream, mr);
-      rmm::device_uvector<size_type> tbl_mapping(tbl.num_rows() - tbl_num_nulls, stream, mr);
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::counting_iterator<cudf::size_type>(0),
-                      thrust::counting_iterator<cudf::size_type>(tbl.num_rows()),
-                      tbl_mapping.begin(),
-                      [mask = static_cast<uint32_t*>(tbl_result_mask.data())] __device__(
-                        size_type idx) { return cudf::bit_is_set(mask, idx); });
-      return tbl_mapping;
-    };
-
-    auto left_mapping  = get_mapping(left);
-    auto right_mapping = get_mapping(right);
-
-    if (is_left_smaller) {
-      thrust::transform(
-        rmm::exec_policy(stream),
-        smaller_indices->begin(),
-        smaller_indices->end(),
-        smaller_indices->begin(),
-        [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
-      thrust::transform(rmm::exec_policy(stream),
-                        larger_indices->begin(),
-                        larger_indices->end(),
-                        larger_indices->begin(),
-                        [right_mapping = right_mapping.begin()] __device__(auto idx) {
-                          return right_mapping[idx];
-                        });
-      return {std::move(smaller_indices), std::move(larger_indices)};
-    }
-    thrust::transform(
-      rmm::exec_policy(stream),
-      smaller_indices->begin(),
-      smaller_indices->end(),
-      smaller_indices->begin(),
-      [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
-    thrust::transform(
-      rmm::exec_policy(stream),
-      larger_indices->begin(),
-      larger_indices->end(),
-      larger_indices->begin(),
-      [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
-    return {std::move(larger_indices), std::move(smaller_indices)};
-  }
-
-  auto [sorted_left_order_col, sorted_right_order_col] = sort(left, right, stream, mr);
-
-  bool is_left_smaller           = left.num_rows() < right.num_rows();
-  auto& smaller                  = is_left_smaller ? left : right;
+  bool is_left_smaller           = true_left_view.num_rows() < true_right_view.num_rows();
+  auto& smaller                  = is_left_smaller ? true_left_view : true_right_view;
   auto& sorted_smaller_order_col = is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
-
-  auto& larger                  = !is_left_smaller ? left : right;
+  auto& larger                  = !is_left_smaller ? true_left_view : true_right_view;
   auto& sorted_larger_order_col = !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
 
   auto [smaller_indices, larger_indices] =
@@ -404,8 +411,7 @@ sort_merge_inner_join(table_view const& left,
           stream,
           mr);
 
-  if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-  return {std::move(larger_indices), std::move(smaller_indices)};
+  return postprocess_indices(left, right, std::move(smaller_indices), std::move(larger_indices), is_left_smaller, compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -424,7 +430,9 @@ merge_inner_join(table_view const& sorted_left,
   CUDF_EXPECTS(!cudf::has_nested_columns(sorted_left) && !cudf::has_nested_columns(sorted_right),
                "Don't have sorting logic for nested columns yet");
 
-  bool is_sorted_left_smaller = sorted_left.num_rows() < sorted_right.num_rows();
+  auto [true_sorted_left_view, true_sorted_right_view, left_table, right_table] = preprocess_tables(sorted_left, sorted_right, compare_nulls, stream, mr);
+
+  bool is_sorted_left_smaller = true_sorted_left_view.num_rows() < true_sorted_right_view.num_rows();
   auto& smaller               = is_sorted_left_smaller ? sorted_left : sorted_right;
   auto& larger                = !is_sorted_left_smaller ? sorted_left : sorted_right;
 
@@ -439,8 +447,7 @@ merge_inner_join(table_view const& sorted_left,
           stream,
           mr);
 
-  if (is_sorted_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-  return {std::move(larger_indices), std::move(smaller_indices)};
+  return postprocess_indices(sorted_left, sorted_right, std::move(smaller_indices), std::move(larger_indices), is_sorted_left_smaller, compare_nulls, stream, mr);
 }
 
 }  // namespace cudf
