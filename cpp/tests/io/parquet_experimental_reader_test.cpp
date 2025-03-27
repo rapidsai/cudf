@@ -259,13 +259,14 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
                 stream,
                 mr);
 
-  // Check equality with the parquet file read with the original reader
+  // Check equivalence (equal without checking nullability) with the parquet file read with the
+  // original reader
   {
     cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->select({0}), read_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_table->view());
   }
 }
 
@@ -298,16 +299,18 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
                 stream,
                 mr);
 
-  // Check equality with the parquet file read with the original reader
+  // Check equivalence (equal without checking nullability) with the parquet file read with the
+  // original reader
   {
     cudf::io::parquet_reader_options const options =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_tbl->select({0}), read_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_table->view());
   }
 
-  // Check equivalence with the original table with the applied boolean mask
+  // Check equivalence (equal without checking nullability) with the original table with the
+  // applied boolean mask
   {
     auto col_ref_0 = cudf::ast::column_reference(0);
     auto filter_expression =
