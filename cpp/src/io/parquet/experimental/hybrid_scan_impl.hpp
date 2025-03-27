@@ -90,8 +90,9 @@ class impl {
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
-  get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                               cudf::io::parquet_reader_options const& options) const;
+  get_filter_column_chunk_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::io::parquet_reader_options const& options) const;
 
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> data_page_validity,

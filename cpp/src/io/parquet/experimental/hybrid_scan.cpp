@@ -98,12 +98,12 @@ hybrid_scan_reader::filter_data_pages_with_stats(
 }
 
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader::get_column_chunk_byte_ranges(
+hybrid_scan_reader::get_filter_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  return _impl->get_column_chunk_byte_ranges(row_group_indices, options);
+  return _impl->get_filter_column_chunk_byte_ranges(row_group_indices, options);
 }
 
 cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(

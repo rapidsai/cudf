@@ -104,13 +104,13 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
 
 // API # 8
 std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
-get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-                             cudf::host_span<size_type const> row_group_indices,
-                             cudf::io::parquet_reader_options const& options)
+get_filter_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                                    cudf::host_span<size_type const> row_group_indices,
+                                    cudf::io::parquet_reader_options const& options)
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
-  return reader->get_column_chunk_byte_ranges(input_row_group_indices, options);
+  return reader->get_filter_column_chunk_byte_ranges(input_row_group_indices, options);
 }
 
 // API # 9

@@ -207,7 +207,7 @@ auto hybrid_scan(std::vector<char>& buffer,
   EXPECT_EQ(data_page_validity.size(), num_filter_columns);
 
   // Get column chunk byte ranges from the reader - API # 7
-  auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
+  auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_filter_column_chunk_byte_ranges(
     reader, stats_filtered_row_groups, options);
 
   // Fetch column chunk device buffers from the input buffer - API # 8

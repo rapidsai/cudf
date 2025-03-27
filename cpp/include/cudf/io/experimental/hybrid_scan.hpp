@@ -96,8 +96,9 @@ class hybrid_scan_reader {
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
-  get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                               cudf::io::parquet_reader_options const& options) const;
+  get_filter_column_chunk_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::io::parquet_reader_options const& options) const;
 
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> filtered_data_pages,
@@ -167,9 +168,9 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
 
 // API # 8
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
-get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-                             cudf::host_span<size_type const> row_group_indices,
-                             cudf::io::parquet_reader_options const& options);
+get_filter_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                                    cudf::host_span<size_type const> row_group_indices,
+                                    cudf::io::parquet_reader_options const& options);
 
 // API # 9
 [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
@@ -178,6 +179,22 @@ get_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const&
   cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view predicate,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream);
+
+// API # 10
+[[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+get_payload_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                                     cudf::host_span<size_type const> row_group_indices,
+                                     cudf::io::parquet_reader_options const& options);
+
+// API # 11
+[[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+  cudf::host_span<std::vector<bool> const> filtered_data_pages,
+  cudf::host_span<size_type const> row_group_indices,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::column_view predicate,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream);
 

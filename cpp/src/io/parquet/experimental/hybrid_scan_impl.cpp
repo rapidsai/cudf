@@ -683,8 +683,9 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                   cudf::io::parquet_reader_options const& options) const
+impl::get_filter_column_chunk_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options) const
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
