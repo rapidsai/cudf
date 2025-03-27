@@ -41,7 +41,7 @@ dependencies:
 - libcufile-dev
 - libcurand-dev
 - libkvikio==25.6.*,>=0.0.0a0
-- librdkafka>=2.5.0,<2.6.0a0
+- librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.6.*,>=0.0.0a0
 - make
 - mmh3
@@ -75,7 +75,7 @@ dependencies:
 - pytest-cov
 - pytest-xdist
 - pytest<8
-- python-confluent-kafka>=2.5.0,<2.6.0a0
+- python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.13
 - pytorch>=2.4.0

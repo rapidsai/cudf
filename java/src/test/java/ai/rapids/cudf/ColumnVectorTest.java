@@ -4356,20 +4356,35 @@ void testExtractReWithMultiLineDelimiters() {
     List<Integer> list1 = Arrays.asList(1, 2);
     List<Integer> list2 = Arrays.asList(3, 4, 5);
     List<Integer> list3 = Arrays.asList(null, 0, 6, 6, 0);
-    List<Integer> dedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> keepAnyDedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> keepFirstDedupeList3 = Arrays.asList(null, 0, 6);
+    List<Integer> keepLastDedupeList3 = Arrays.asList(null, 6, 0);
+    List<Integer> keepNoneDedupeList3 = Collections.singletonList(null);
     List<Integer> list4 = Arrays.asList(null, 6, 7, null, 7);
-    List<Integer> dedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> keepAnyDedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> keepFirstDedupeList4 = Arrays.asList(null, 6, 7);
+    List<Integer> keepLastDedupeList4 = Arrays.asList(6, null, 7);
+    List<Integer> keepNoneDedupeList4 = Collections.singletonList(6);
     List<Integer> list5 = null;
 
     HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32));
     try (ColumnVector v = ColumnVector.fromLists(listType, list1, list2, list3, list4, list5);
-         ColumnVector expected = ColumnVector.fromLists(listType, list1, list2, dedupeList3, dedupeList4, list5);
-         ColumnVector tmp = v.dropListDuplicates();
-         // Note dropping duplicates does not have any ordering guarantee, so sort to make it all
+         ColumnVector keepAnyExpected = ColumnVector.fromLists(listType, list1, list2, keepAnyDedupeList3, keepAnyDedupeList4, list5);
+         ColumnVector keepFirstExpected = ColumnVector.fromLists(listType, list1, list2, keepFirstDedupeList3, keepFirstDedupeList4, list5);
+         ColumnVector keepLastExpected = ColumnVector.fromLists(listType, list1, list2, keepLastDedupeList3, keepLastDedupeList4, list5);
+         ColumnVector keepNoneExpected = ColumnVector.fromLists(listType, list1, list2, keepNoneDedupeList3, keepNoneDedupeList4, list5);
+         ColumnVector tmp = v.dropListDuplicates(DuplicateKeepOption.KEEP_ANY);
+         // Note dropping duplicates w/ KEEP_ANY does not have any ordering guarantee, so sort to make it all
          // consistent
-         ColumnVector result = tmp.listSortRows(false, false)) {
-      assertColumnsAreEqual(expected, result);
+         ColumnVector keepAnyResult = tmp.listSortRows(false, false);
+         ColumnVector keepFirstResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_FIRST);
+         ColumnVector keepLastResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_LAST);
+         ColumnVector keepNoneResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_NONE)) {
+      assertColumnsAreEqual(keepAnyExpected, keepAnyResult);
+      assertColumnsAreEqual(keepFirstExpected, keepFirstResult);
+      assertColumnsAreEqual(keepLastExpected, keepLastResult);
+      assertColumnsAreEqual(keepNoneExpected, keepNoneResult);
     }
   }
 
