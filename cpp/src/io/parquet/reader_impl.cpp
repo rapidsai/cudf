@@ -17,7 +17,6 @@
 #include "reader_impl.hpp"
 
 #include "error.hpp"
-#include "reader_impl_page_pruning.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
@@ -212,51 +211,15 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  // MH: Temporary code to test parquet decoders with page pruning
-  {
-    auto invalidate_pages = [&](std::vector<size_t> invalid_page_indices) {
-      auto h_page_validity = std::vector<bool>(pass.pages.size(), true);
-      for (auto idx : invalid_page_indices) {
-        h_page_validity[idx] = false;
-      }
-      pass.page_validity = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
-      std::copy(h_page_validity.begin(), h_page_validity.end(), pass.page_validity.begin());
-    };
-
-    switch (_file) {
-      case testfile::FILE1: {
-        invalidate_pages({1, 8, 17});
-        break;
-      }
-      case testfile::FILE2: {
-        invalidate_pages({5, 11, 16, 20, 26, 28});
-        break;
-      }
-      case testfile::FILE3: {
-        invalidate_pages({2, 14, 16, 20, 22, 25});
-        break;
-      }
-      case testfile::FILE4: {
-        invalidate_pages({1, 2, 5});
-        break;
-      }
-      case testfile::FILE5: {
-        invalidate_pages({1, 6, 7, 8, 9, 12, 14, 15, 21, 31, 33, 38, 40});
-        break;
-      }
-      case testfile::FILE6: {
-        invalidate_pages({1, 2, 4, 6, 8, 11, 13, 14, 16});
-        break;
-      }
-      default: {
-        pass.page_validity = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
-        std::fill(pass.page_validity.begin(), pass.page_validity.end(), true);
-      }
-    }
+  // TODO: Page pruning not yet implemented (especially for the chunked reader) so mark all pages to
+  // be valid
+  if (pass.page_validity.size() == 0) {
+    pass.page_validity = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
+    std::fill(pass.page_validity.begin(), pass.page_validity.end(), true);
 
     pass.page_validity.host_to_device_async(_stream);
-    subpass.page_validity = pass.page_validity;
   }
+  subpass.page_validity = pass.page_validity;
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
