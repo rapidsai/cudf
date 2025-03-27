@@ -158,28 +158,38 @@ auto hybrid_scan(std::vector<char>& buffer,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
+  // Hybrid scan reader options
   cudf::io::parquet_reader_options const options =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
       .filter(filter_expression);
 
+  // Get footer and page index bytes from the buffer.
+  // TODO: Currently, we are just using the entire buffer and figuring out bytes within the reader.
   auto const footer_bytes = get_footer_bytes(
     cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
   auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
     reinterpret_cast<uint8_t const*>(buffer.data()),
     buffer.size());
+
+  // Create hybrid scan reader - API # 1
   auto const reader =
     cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
 
+  // Get valid row groups from the reader
   auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
 
+  // Filter row groups with stats - API # 2
   auto stats_filtered_row_groups =
     cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
-
   auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
 
+  // Get bloom filter and dictionary page bytes from the reader - API # 3
   auto [bloom_filter_bytes, dict_page_bytes] =
     cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
 
+  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 4
+
+  // Filter row groups with bloom filters - API # 5
   std::vector<cudf::size_type> bloom_filtered_row_groups;
   bloom_filtered_row_groups.reserve(filtered_row_groups.size());
   if (bloom_filter_bytes.size()) {
@@ -190,17 +200,21 @@ auto hybrid_scan(std::vector<char>& buffer,
     filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
   }
 
+  // Filter data pages with `PageIndex` stats - API # 6
   auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
     reader, stats_filtered_row_groups, options, stream, mr);
 
   EXPECT_EQ(data_page_validity.size(), num_filter_columns);
 
+  // Get column chunk byte ranges from the reader - API # 7
   auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_column_chunk_byte_ranges(
     reader, stats_filtered_row_groups, options);
 
+  // Fetch column chunk device buffers from the input buffer - API # 8
   auto column_chunk_buffers =
     fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
 
+  // Materialize the table with only the filter columns - API # 9
   auto [table, metadata] =
     cudf::experimental::io::materialize_filter_columns(reader,
                                                        data_page_validity,
@@ -210,6 +224,7 @@ auto hybrid_scan(std::vector<char>& buffer,
                                                        options,
                                                        stream);
 
+  // Return the materialized table, metadata, and the final row validity predicate
   return std::tuple{std::move(table), std::move(metadata), std::move(predicate)};
 }
 
@@ -235,6 +250,7 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
   auto stream = cudf::get_default_stream();
   auto mr     = cudf::get_current_device_resource_ref();
 
+  // Read parquet using the hybrid scan reader
   auto [read_table, read_meta, row_validity_col] =
     hybrid_scan(buffer,
                 num_filter_columns,
@@ -273,6 +289,7 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
   auto stream = cudf::get_default_stream();
   auto mr     = cudf::get_current_device_resource_ref();
 
+  // Read parquet using the hybrid scan reader
   auto [read_table, read_meta, row_validity_col] =
     hybrid_scan(buffer,
                 num_filter_columns,
