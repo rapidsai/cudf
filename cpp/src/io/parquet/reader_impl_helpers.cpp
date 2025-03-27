@@ -670,11 +670,11 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
               })) {
           return false;
         }
-        // arrow and parquet schemas are structured slightly differently for list type fields.
-        // list type fields in arrow are structured as: "field:list<element>" vs structured as:
-        // "field:list.element" in Parquet. To handle this, whenever we encounter a list type
-        // field, we add a dummy node "field.list" to the end of current children and move the
-        // current children (".element") to it.
+        // arrow and parquet schemas are structured slightly differently for list type fields. list
+        // type fields in arrow are structured as: "field:list<element>" vs structured as:
+        // "field:list.element" in Parquet. To handle this, whenever we encounter a list type field,
+        // we add a dummy node "field.list" to the end of current children and move the current
+        // children (".element") to it.
         switch (field->type_type()) {
           case flatbuf::Type::Type_List:
           case flatbuf::Type::Type_LargeList:
