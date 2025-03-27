@@ -147,7 +147,8 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Merges sorted left and right tables.
+ * @brief Merges sorted left and right tables. The sorting is
+ * assumed to be cudf::order::ASCENDING with cudf::null_order::BEFORE.
  * Returns a pair of row index vectors corresponding to an
  * inner join between the specified tables.
  *

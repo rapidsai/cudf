@@ -977,9 +977,9 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
 }
 
 // // Test to check join behavior when join keys are null.
-// TODO: parameterize this test
-TEST_F(JoinTest, InnerJoinOnNulls)
+TEST_P(JoinParameterizedTest, InnerJoinOnNulls)
 {
+  auto algo = GetParam();
   // clang-format off
   column_wrapper<int32_t> col0_0{{  3,    1,    2,    0,    2}};
   strcol_wrapper          col0_1({"s1", "s1", "s8", "s4", "s0"},
@@ -1002,7 +1002,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1031,7 +1031,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL);
+  result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
