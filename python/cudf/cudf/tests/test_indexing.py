@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import weakref
 from datetime import datetime
@@ -165,17 +165,6 @@ def test_series_get_item_iloc_defer(arg):
         got = gs[arg]
 
     assert_eq(expect, got)
-
-
-def test_series_iloc_defer_cudf_scalar():
-    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
-    gs = cudf.from_pandas(ps)
-
-    for t in index_dtypes:
-        arg = cudf.Scalar(1, dtype=t)
-        got = gs.iloc[arg]
-        expect = 2
-        assert_eq(expect, got)
 
 
 def test_series_indexing_large_size():

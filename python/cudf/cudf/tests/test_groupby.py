@@ -2703,7 +2703,7 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
             42,
             "fill",
             np.datetime64(123, "ns"),
-            cudf.Scalar(456, dtype="timedelta64[ns]"),
+            np.timedelta64(456, dtype="timedelta64[ns]"),
         ]
     ],
 )
