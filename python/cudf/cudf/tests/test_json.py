@@ -217,7 +217,6 @@ def test_cudf_json_writer_read(gdf_writer_types):
     # Bug in pandas https://github.com/pandas-dev/pandas/issues/28558
     if pdf2.empty:
         pdf2.reset_index(drop=True, inplace=True)
-        pdf2.columns = pdf2.columns.astype("object")
 
     # Pandas moved to consistent datetimes parsing format:
     # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#datetimes-are-now-parsed-with-a-consistent-format
