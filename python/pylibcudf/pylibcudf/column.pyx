@@ -12,6 +12,7 @@ from pylibcudf.libcudf.types cimport size_type
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
+from .filling cimport sequence
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
@@ -368,8 +369,8 @@ cdef class Column:
         ImportError
             If CuPy is required but not installed.
         """
-        if cp is None:
-            raise ImportError("CuPy must be installed to use this method")
+        if np is None or cp is None:
+            raise ImportError("NumPy and CuPy must be installed to use this method")
 
         iface = getattr(obj, "__cuda_array_interface__", None)
         if iface is None:
@@ -394,8 +395,10 @@ cdef class Column:
             flat_data = cp.ravel(arr)
             num_rows, num_cols = shape
             if num_rows < INT_MAX:
-                offsets = cp.arange(
-                    0, (num_rows + 1) * num_cols, num_cols, dtype=cp.int32
+                offsets_col = sequence(
+                    num_rows + 1,
+                    Scalar.from_numpy(np.int32(0)),
+                    Scalar.from_numpy(np.int32(num_cols))
                 )
             else:
                 raise ValueError(
@@ -405,15 +408,6 @@ cdef class Column:
                 data_type=data_type,
                 size=flat_data.size,
                 data=gpumemoryview(flat_data),
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[],
-            )
-            offsets_col = cls(
-                data_type=DataType(type_id.INT32),
-                size=num_rows + 1,
-                data=gpumemoryview(offsets),
                 mask=None,
                 null_count=0,
                 offset=0,
@@ -459,9 +453,9 @@ cdef class Column:
         supports 1D or 2D arrays.
         - For `numpy.ndarray`, this is not yet implemented.
         """
-        if cp is not None and isinstance(obj, cp.ndarray):
+        if hasattr(obj, "__cuda_array_interface__"):
             return cls.from_cuda_array_interface(obj)
-        if np is not None and isinstance(obj, np.ndarray):
+        if hasattr(obj, "__array_interface__"):
             return cls.from_array_interface(obj)
 
         raise TypeError(
