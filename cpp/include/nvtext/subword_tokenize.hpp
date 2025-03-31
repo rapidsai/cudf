@@ -58,6 +58,8 @@ struct hashed_vocabulary {
  * The object here can be used to call the subword_tokenize without
  * incurring the cost of loading the same file each time.
  *
+ * @deprecated in 25.06 and to be removed in a future release
+ *
  * @throw cudf::logic_error if the `filename_hashed_vocabulary` could not be opened.
  *
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
@@ -67,7 +69,7 @@ struct hashed_vocabulary {
  * @param mr Memory resource to allocate any returned objects.
  * @return vocabulary hash-table elements
  */
-std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+[[deprecated]] std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -109,6 +111,9 @@ struct tokenizer_result {
 /**
  * @brief Creates a tokenizer that cleans the text, splits it into tokens and
  *        returns token-ids from an input vocabulary.
+ *
+ * @deprecated in 25.06 and to be removed in a future release
+ * Use nvtext::wordpiece_tokenize instead
  *
  * The strings are first normalized by converting to lower-case, removing
  * punctuation, replacing a select set of multi-byte characters and
@@ -154,7 +159,7 @@ struct tokenizer_result {
  * @param mr Memory resource to allocate any returned objects.
  * @return token-ids, attention-mask, and metadata
  */
-tokenizer_result subword_tokenize(
+[[deprecated]] tokenizer_result subword_tokenize(
   cudf::strings_column_view const& strings,
   hashed_vocabulary const& vocabulary_table,
   uint32_t max_sequence_length,
