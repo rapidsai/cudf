@@ -106,6 +106,9 @@ class ScanPartitionPlan:
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
+            # Some columns (e.g., "include_file_paths") may be present in the schema
+            # but not in the Parquet statistics dict. We use stats.get(column, 0)
+            # to safely fall back to 0 in those cases.
             file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
             if file_size > 0:
                 if file_size > blocksize:
