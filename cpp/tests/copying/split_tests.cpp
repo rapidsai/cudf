@@ -2607,3 +2607,144 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStructChunked)
     },
     /*split*/ false);
 }
+
+struct ContiguousSplitLongStrings : public cudf::test::BaseFixture {};
+
+std::unique_ptr<cudf::column> make_long_offsets_string_column()
+{
+  // manually specified long offsets, but < 2B chars
+  auto const num_chars = 1024;
+  std::vector<int8_t> chars(num_chars);
+  auto iter = thrust::make_counting_iterator(0);
+  std::transform(iter, iter + num_chars, chars.begin(), [](cudf::size_type i) {
+    return static_cast<int8_t>('a' + (i % 26));
+  });
+  rmm::device_buffer d_chars(
+    num_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  cudf::detail::cuda_memcpy(
+    cudf::device_span<int8_t>{static_cast<int8_t*>(d_chars.data()), d_chars.size()},
+    cudf::host_span<int8_t const>{chars.data(), chars.size()},
+    cudf::get_default_stream());
+
+  cudf::test::fixed_width_column_wrapper<int64_t> long_offsets{
+    0, 20, 40, 60, 80, 100, 500, 600, 700, 1000, 1010};
+  auto str = cudf::make_strings_column(10, long_offsets.release(), std::move(d_chars), 0, {});
+  cudf::strings_column_view scv(*str);
+  CUDF_EXPECTS(scv.offsets().type().id() == cudf::type_id::INT64, "Unexpected short offset type");
+
+  return str;
+}
+
+TEST_F(ContiguousSplitLongStrings, LongOffsets)
+{
+  auto str = make_long_offsets_string_column();
+  cudf::table_view tbl({*str});
+
+  {
+    auto res      = cudf::contiguous_split(tbl, {});
+    auto expected = cudf::split(tbl, {});
+
+    for (size_t idx = 0; idx < expected.size(); idx++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+    }
+  }
+
+  {
+    std::vector<int> splits{3, 7};
+    auto res      = cudf::contiguous_split(tbl, splits);
+    auto expected = cudf::split(tbl, splits);
+
+    for (size_t idx = 0; idx < expected.size(); idx++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+    }
+  }
+}
+
+TEST_F(ContiguousSplitLongStrings, LongOffsetsNested)
+{
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(make_long_offsets_string_column());
+  children.push_back(make_long_offsets_string_column());
+  cudf::test::structs_column_wrapper st(std::move(children));
+
+  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  auto list = make_lists_column(5, offsets.release(), st.release(), 0, {});
+
+  cudf::table_view tbl({*list});
+  std::vector<int> splits{2, 3};
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
+}
+
+std::unique_ptr<cudf::column> make_long_offsets_and_chars_string_column()
+{
+  // manually specified long offsets, but < 2B chars
+  rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024,
+                             cudf::get_default_stream(),
+                             rmm::mr::get_current_device_resource()};
+
+  int8_t* charp         = reinterpret_cast<int8_t*>(d_chars.data());
+  auto const block_size = 100 * 1024 * 1024;
+  // memset a few blocks to known values, leave the rest uninitialized
+  int64_t const block_a = 0;
+  cudaMemsetAsync(charp + block_a, 'a', block_size);  // first 100 MB
+  int64_t const block_b = block_size;
+  cudaMemsetAsync(charp + block_b, 'b', block_size);  // second 100 MB
+  int64_t const block_c = d_chars.size() - (block_size * 2);
+  cudaMemsetAsync(charp + block_c, 'c', block_size);  // second-to-last 100 MB
+  int64_t const block_d = d_chars.size() - block_size;
+  cudaMemsetAsync(charp + block_d, 'd', block_size);  // last 100 MB
+
+  // choose some rows that span various boundaries of the blocks
+  cudf::test::fixed_width_column_wrapper<int64_t> long_offsets{
+    int64_t{0},
+    block_a + (block_size / 4),
+    block_a + (block_size / 2),
+    block_b - 16,
+    block_b + 16,
+    block_b + (block_size / 2),
+    block_c + 100,
+    block_c + (block_size / 2),
+    block_d - 1000,
+    block_d + (block_size / 2),
+    static_cast<int64_t>(d_chars.size())};
+  auto str = cudf::make_strings_column(10, long_offsets.release(), std::move(d_chars), 0, {});
+  cudf::strings_column_view scv(*str);
+  CUDF_EXPECTS(scv.offsets().type().id() == cudf::type_id::INT64, "Unexpected short offset type");
+
+  return str;
+}
+
+TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndChars)
+{
+  auto str = make_long_offsets_and_chars_string_column();
+
+  std::vector<int> splits{3, 7};
+  cudf::table_view tbl({*str});
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
+}
+
+TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndCharsNested)
+{
+  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  auto list =
+    make_lists_column(5, offsets.release(), make_long_offsets_and_chars_string_column(), 0, {});
+
+  cudf::table_view tbl({*list});
+  std::vector<int> splits{2, 3};
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
+}
