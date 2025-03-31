@@ -50,7 +50,7 @@ def get_kernels(func, dtype, size):
     sig = nb_signature(void, CPointer(string_view), outty)
 
     @cuda.jit(
-        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler], nrt=True
+        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
     )
     def string_view_kernel(input_strings, output_col):
         id = cuda.grid(1)
@@ -60,7 +60,7 @@ def get_kernels(func, dtype, size):
             output_col[id] = result
 
     @cuda.jit(
-        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler], nrt=True
+        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
     )
     def managed_udf_string_kernel(input_strings, output_col):
         # test the string function with a managed_udf_string as input

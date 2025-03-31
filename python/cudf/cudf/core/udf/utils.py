@@ -306,7 +306,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
     kernel = cuda.jit(
-        sig, link=[_ptx_file()], extensions=[str_view_arg_handler], nrt=True
+        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
     )(_kernel)
 
     return kernel
@@ -351,7 +351,6 @@ def _post_process_output_col(col, retty):
             void(CPointer(managed_udf_string), int64),
             link=[_ptx_file()],
             extensions=[str_view_arg_handler],
-            nrt=True,
         )
         def free_managed_udf_string_array(ary, size):
             gid = cuda.grid(1)
