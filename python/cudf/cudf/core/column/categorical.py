@@ -710,7 +710,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
         if not self.ordered and op not in equality_ops:
             raise TypeError(
@@ -732,7 +732,7 @@ class CategoricalColumn(column.ColumnBase):
             return self._get_decategorized_column()._binaryop(other, op)
         return self.codes._binaryop(other.codes, op)
 
-    def normalize_binop_value(
+    def _normalize_binop_operand(
         self, other: ColumnBinaryOperand
     ) -> column.ColumnBase:
         if isinstance(other, column.ColumnBase):

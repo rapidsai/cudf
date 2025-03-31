@@ -459,18 +459,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-    0    2
-    1    3
-    2    4
-    dtype: int64
-    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-    >>> slr = cudf.Scalar(10, dtype='uint8')
-    >>> df - slr
-       a    b
-    0 -9 -5.5
-    1 -8 -4.5
-    2 -7 -3.5
 
     Parameters
     ----------

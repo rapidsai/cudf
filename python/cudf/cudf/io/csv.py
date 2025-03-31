@@ -17,8 +17,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -275,16 +273,7 @@ def read_csv(
         options.set_na_values([str(val) for val in na_values])
 
     table_w_meta = plc.io.csv.read_csv(options)
-    data = {
-        name: ColumnBase.from_pylibcudf(col)
-        for name, col in zip(
-            table_w_meta.column_names(include_children=False),
-            table_w_meta.columns,
-            strict=True,
-        )
-    }
-    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
-    df = cudf.DataFrame._from_data(ca)
+    df = cudf.DataFrame.from_pylibcudf(table_w_meta)
 
     # Cast result to categorical if specified in dtype=
     # since categorical is not handled in pylibcudf
