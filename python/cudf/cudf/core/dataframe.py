@@ -663,7 +663,11 @@ def _mapping_to_column_accessor(
         - Resulting columns from the data
     """
     if len(data) == 0:
-        return {}, cudf.RangeIndex(0), pd.RangeIndex(0)
+        return (
+            {},
+            cudf.RangeIndex(0) if index is None else index,
+            pd.RangeIndex(0),
+        )
     data = dict(data)
 
     # 1) Align indexes of all data.values() that are Series/dicts

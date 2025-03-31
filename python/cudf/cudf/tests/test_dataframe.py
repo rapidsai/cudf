@@ -11315,3 +11315,26 @@ def test_dataframe_midx_columns_loc():
 
     assert_eq(expected, actual)
     assert_eq(df, pdf)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, 3),
+        (3, 0),
+        (0, 0),
+    ],
+)
+def test_construct_zero_axis_ndarray(shape):
+    arr = np.empty(shape, dtype=np.float64)
+    result = cudf.DataFrame(arr)
+    expected = pd.DataFrame(arr)
+    assert_eq(result, expected)
+
+
+def test_construct_dict_scalar_values_raises():
+    data = {"a": 1, "b": "2"}
+    with pytest.raises(ValueError):
+        pd.DataFrame(data)
+    with pytest.raises(ValueError):
+        cudf.DataFrame(data)
