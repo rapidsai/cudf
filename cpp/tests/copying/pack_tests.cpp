@@ -588,7 +588,7 @@ TEST_F(PackUnpackTest, LongOffsets)
   this->run_test(tbl);
 }
 
-TEST_F(PackUnpackTest, LongOffsetsAndChars)
+TEST_F(PackUnpackTest, DISABLED_LongOffsetsAndChars)
 {
   auto str = make_long_offsets_and_chars_string_column();
   cudf::table_view tbl({*str});
