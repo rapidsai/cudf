@@ -96,7 +96,6 @@ files:
   test_java:
     output: none
     includes:
-      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -867,7 +866,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - *cmake_ver
+          - cmake>=3.30.4,<4.0.0
+          - ninja
           - maven
           - openjdk=8.*
           - boost
