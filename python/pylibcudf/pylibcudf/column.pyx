@@ -344,7 +344,7 @@ cdef class Column:
             This method is not yet implemented.
         """
         raise NotImplementedError(
-            "Converting a pylibcudf Column is not yet implemented."
+            "Converting to a pylibcudf Column is not yet implemented."
         )
 
     @classmethod
