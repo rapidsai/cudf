@@ -33,6 +33,7 @@
 
 #include <array>
 #include <fstream>
+#include <functional>
 
 using cudf::test::iterators::no_nulls;
 

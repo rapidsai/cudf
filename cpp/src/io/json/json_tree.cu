@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -213,8 +214,8 @@ void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_l
     sorted_node_levels.end(),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
-    thrust::equal_to<TreeDepthT>{},
-    thrust::maximum<NodeIndexT>{});
+    cuda::std::equal_to<TreeDepthT>{},
+    cudf::detail::maximum<NodeIndexT>{});
 }
 
 // Generates a tree representation of the given tokens, token_indices.

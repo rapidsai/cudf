@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -23,7 +23,7 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
 
     cdef void fill_in_place(
         const mutable_column_view & destination,
-        size_type beign,
+        size_type begin,
         size_type end,
         const scalar & value
     ) except +libcudf_exception_handler

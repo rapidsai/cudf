@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from packaging.version import Version
-from pandas.api.types import is_scalar
 
 from dask import config
 from dask.array.dispatch import percentile_lookup
@@ -43,7 +42,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
-from cudf.api.types import is_string_dtype
+from cudf.api.types import is_scalar, is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 # Required for Arrow filesystem support in read_parquet
@@ -354,7 +353,8 @@ def percentile_cudf(a, q, interpolation="linear"):
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], a.min())
         return result.to_pandas(), n
-    if not np.issubdtype(a.dtype, np.number):
+    if a.dtype.kind not in "iufm":
+        # TODO: Do we want to include timedelta?
         interpolation = "nearest"
     return (
         a.quantile(

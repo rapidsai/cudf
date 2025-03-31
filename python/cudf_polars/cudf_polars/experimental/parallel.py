@@ -9,6 +9,7 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
@@ -23,6 +24,7 @@ from cudf_polars.experimental.dispatch import (
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import Any
 
     from distributed import Client
 
@@ -149,13 +151,16 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, list(partition_info[ir].keys(ir)))
+        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
         return graph, key_name
     else:
         return graph, (key_name, 0)
 
 
-def get_client():
+# The true type signature for get_client() needs an overload. Not worth it.
+
+
+def get_client() -> Any:
     """Get appropriate Dask client or scheduler."""
     SerializerManager.register_serialize()
 

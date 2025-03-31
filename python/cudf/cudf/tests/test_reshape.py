@@ -798,6 +798,25 @@ def test_dataframe_pivot_table_simple(aggfunc, fill_value):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.parametrize("index", ["A", ["A"]])
+@pytest.mark.parametrize("columns", ["C", ["C"]])
+def test_pivot_table_scalar_index_columns(index, columns):
+    data = {
+        "A": ["one", "one", "two", "three"] * 6,
+        "B": ["A", "B", "C"] * 8,
+        "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+        "D": range(24),
+        "E": range(24),
+    }
+    result = cudf.DataFrame(data).pivot_table(
+        values="D", index=index, columns=columns, aggfunc="sum"
+    )
+    expected = pd.DataFrame(data).pivot_table(
+        values="D", index=index, columns=columns, aggfunc="sum"
+    )
+    assert_eq(result, expected)
+
+
 def test_crosstab_simple():
     a = np.array(
         [

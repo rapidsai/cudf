@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,7 +26,7 @@ interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 def test_series_reductions(method, dtype, skipna):
     rng = np.random.default_rng(seed=0)
     arr = rng.random(100)
-    if np.issubdtype(dtype, np.integer):
+    if np.dtype(dtype).kind in "iu":
         arr *= 100
         mask = arr > 10
     else:
@@ -315,7 +315,8 @@ def test_skew_series(data, null_flag, numeric_only):
 def test_series_median(dtype, num_na):
     rng = np.random.default_rng(seed=0)
     arr = rng.random(100)
-    if np.issubdtype(dtype, np.integer):
+    dtype = np.dtype(dtype)
+    if dtype.kind in "iu":
         arr *= 100
     mask = np.arange(100) >= num_na
 
@@ -332,7 +333,7 @@ def test_series_median(dtype, num_na):
 
     # only for float until integer null supported convert to pandas in cudf
     # eg. pd.Int64Dtype
-    if np.issubdtype(dtype, np.floating):
+    if dtype.kind == "f":
         ps = sr.to_pandas()
         actual = sr.median(skipna=False)
         desired = ps.median(skipna=False)
