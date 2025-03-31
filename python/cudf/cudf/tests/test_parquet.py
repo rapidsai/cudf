@@ -2453,10 +2453,20 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(cudf_buffer)
     actual = cudf.read_parquet(pandas_buffer)
 
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
+
     assert_eq(expected, actual, check_index_type=True)
 
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
+
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
 
     assert_eq(
         expected,
@@ -3167,6 +3177,10 @@ def test_parquet_columns_and_index_param(index, columns):
 
     expected = pd.read_parquet(buffer, columns=columns)
     got = cudf.read_parquet(buffer, columns=columns)
+    if columns == [] and index in {False, None}:
+        # cuDF returns RangeIndex columns compared
+        # to pandas' Index[object] columns
+        got.columns = expected.columns
 
     assert_eq(expected, got, check_index_type=True)
 
