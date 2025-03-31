@@ -1,11 +1,32 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Protocol, TypedDict
 
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
+
+class AI(TypedDict):
+    shape: tuple[int, ...]
+    typestr: str
+    data: tuple[int, bool]
+    version: int
+    strides: None | tuple[int, ...]
+    descr: None | list[tuple[Any, ...]]
+    mask: None | "SupportsAI"
+
+class CAI(AI):
+    stream: None | int
+    mask: None | "SupportsCAI"
+
+class SupportsCAI(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> CAI: ...
+
+class SupportsAI(Protocol):
+    @property
+    def __array_interface__(self) -> AI: ...
 
 class Column:
     def __init__(
@@ -36,9 +57,11 @@ class Column:
     @staticmethod
     def all_null_like(like: Column, size: int) -> Column: ...
     @classmethod
-    def from_cuda_array_interface_obj(cls, obj: Any) -> Column: ...
+    def from_cuda_array_interface(cls, obj: SupportsCAI) -> Column: ...
     @classmethod
-    def from_ndarray(cls, obj: Any) -> Column: ...
+    def from_array_interface(cls, obj: SupportsAI) -> Column: ...
+    @classmethod
+    def from_arraylike(cls, obj: SupportsCAI | SupportsAI) -> Column: ...
 
 class ListColumnView:
     def __init__(self, column: Column): ...

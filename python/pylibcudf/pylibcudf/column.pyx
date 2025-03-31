@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libc.limits cimport INT_MAX
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column, column_contents
@@ -15,22 +16,19 @@ from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
-from functools import cache, singledispatchmethod
+from functools import cache
 
 
 try:
     import numpy as np
-    np_error = None
-except ImportError as err:
+except ImportError:
     np = None
-    np_error = err
 
 try:
     import cupy as cp
-    cp_error = None
-except ImportError as err:
+except ImportError:
     cp = None
-    cp_error = err
+
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -330,122 +328,83 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @classmethod
-    def from_cuda_array_interface_obj(cls, object obj):
-        """Create a Column from an object with a CUDA array interface.
+    def from_array_interface(cls, obj):
+        """
+        Create a Column from an object implementing the NumPy Array Interface.
 
         Parameters
         ----------
         obj : object
-            The object with the CUDA array interface to create a column from.
-
-        Returns
-        -------
-        Column
-            A Column containing the data from the CUDA array interface.
-
-        Notes
-        -----
-        Data is not copied when creating the column. The caller is
-        responsible for ensuring the data is not mutated unexpectedly while the
-        column is in use.
-        """
-        data = gpumemoryview(obj)
-        iface = data.__cuda_array_interface__
-        if iface.get('mask') is not None:
-            raise ValueError("mask not yet supported.")
-
-        typestr = iface['typestr'][1:]
-        data_type = _datatype_from_dtype_desc(typestr)
-
-        if not is_c_contiguous(
-            iface['shape'],
-            iface['strides'],
-            size_of(data_type)
-        ):
-            raise ValueError("Data must be C-contiguous")
-
-        if len(iface['shape']) > 1:
-            raise ValueError("Data must be 1-dimensional")
-        size = iface['shape'][0]
-        return cls(
-            data_type,
-            size,
-            data,
-            None,
-            0,
-            0,
-            []
-        )
-
-    @classmethod
-    def from_ndarray(cls, obj):
-        """
-        Create a Column from any object which supports the NumPy array interface.
-
-        Parameters
-        ----------
-        obj : Any
-            The input array to be converted into a `pylibcudf.Column`.
-
-        Returns
-        -------
-        Column
+            Must implement the `__array_interface__` protocol.
 
         Raises
         ------
-        TypeError
-            If the input type is neither `numpy.ndarray` nor `cupy.ndarray`.
-        ImportError
-            If NumPy or CuPy is required but not installed.
-
-        Notes
-        -----
-        If `obj` is a 2D CuPy array, the resulting column is a list column.
-        NumPy conversion logic is not yet implemented.
-        Multi-dimensional arrays (ndim > 2) are not supported.
+        NotImplementedError
+            This method is not yet implemented.
         """
-        return cls._from_ndarray(obj)
+        raise NotImplementedError(
+            "Converting a pylibcudf Column is not yet implemented."
+        )
 
-    @singledispatchmethod
     @classmethod
-    def _from_ndarray(cls, obj):
-        if np_error is not None:
-            raise np_error
-        if cp_error is not None:
-            raise cp_error
-        raise TypeError(f"Cannot convert a {type(obj)} to a pylibcudf Column")
+    def from_cuda_array_interface(cls, obj):
+        """
+        Create a Column from an object implementing the CUDA Array Interface.
 
-    if np is not None:
-        @classmethod
-        def from_numpy_array(cls, object obj):
-            # TODO: Should expand to support __array_interface__
-            raise NotImplementedError(
-                "Converting to a pylibcudf Column from "
-                "a numpy object is not yet implemented."
-            )
+        Parameters
+        ----------
+        obj : object
+            Must implement the `__cuda_array_interface__` protocol.
 
-        @_from_ndarray.register(np.ndarray)
-        @classmethod
-        def _(cls, obj):
-            return cls.from_numpy_array(obj)
+        Returns
+        -------
+        Column
+            A 1D or 2D list column, depending on the input shape.
 
-    if cp is not None:
-        @classmethod
-        def _from_2d_cupy_array(cls, object arr):
-            """Convert a 2D CuPy array to a Column."""
-            flat_data = arr.ravel()
+        Raises
+        ------
+        ValueError
+            If the object is not 1D or 2D, or is not C-contiguous.
+        ImportError
+            If CuPy is required but not installed.
+        """
+        if cp is None:
+            raise ImportError("CuPy must be installed to use this method")
 
-            num_rows, num_cols = arr.shape
-            offsets = cp.arange(0, (num_rows + 1) * num_cols, num_cols, dtype=cp.int32)
+        iface = getattr(obj, "__cuda_array_interface__", None)
+        if iface is None:
+            raise TypeError("Object does not implement __cuda_array_interface__")
 
-            data_view = gpumemoryview(flat_data)
-            offsets_view = gpumemoryview(offsets)
-            typestr = arr.__cuda_array_interface__['typestr'][1:]
+        if iface.get("mask") is not None:
+            raise ValueError("mask not yet supported")
 
+        typestr = iface["typestr"][1:]
+        data_type = _datatype_from_dtype_desc(typestr)
+
+        shape = iface["shape"]
+        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
+            raise ValueError("Data must be C-contiguous")
+
+        if len(shape) == 1:
+            data = gpumemoryview(obj)
+            size = shape[0]
+            return cls(data_type, size, data, None, 0, 0, [])
+        elif len(shape) == 2:
+            arr = obj
+            flat_data = cp.ravel(arr)
+            num_rows, num_cols = shape
+            if num_rows < INT_MAX:
+                offsets = cp.arange(
+                    0, (num_rows + 1) * num_cols, num_cols, dtype=cp.int32
+                )
+            else:
+                raise ValueError(
+                    "Number of rows exceeds int32 limit for offsets column."
+                )
             data_col = cls(
-                data_type=_datatype_from_dtype_desc(typestr),
+                data_type=data_type,
                 size=flat_data.size,
-                data=data_view,
+                data=gpumemoryview(flat_data),
                 mask=None,
                 null_count=0,
                 offset=0,
@@ -454,7 +413,7 @@ cdef class Column:
             offsets_col = cls(
                 data_type=DataType(type_id.INT32),
                 size=num_rows + 1,
-                data=offsets_view,
+                data=gpumemoryview(offsets),
                 mask=None,
                 null_count=0,
                 offset=0,
@@ -469,17 +428,45 @@ cdef class Column:
                 offset=0,
                 children=[offsets_col, data_col],
             )
+        else:
+            raise ValueError("Only 1D or 2D arrays are supported")
 
-        @_from_ndarray.register(cp.ndarray)
-        @classmethod
-        def _(cls, obj):
-            ndim = len(obj.shape)
-            if ndim == 1:
-                return cls.from_cuda_array_interface_obj(obj)
-            elif ndim == 2:
-                return cls._from_2d_cupy_array(obj)
-            else:
-                raise ValueError("Must pass a 1D or 2D CuPy array only")
+    @classmethod
+    def from_arraylike(cls, obj):
+        """
+        Create a Column from any object which supports the NumPy
+        or CUDA array interface.
+
+        Parameters
+        ----------
+        obj : object
+            The input array to be converted into a `pylibcudf.Column`.
+
+        Returns
+        -------
+        Column
+
+        Raises
+        ------
+        TypeError
+            If the input does not implement a supported array interface.
+        ImportError
+            If NumPy or CuPy is required but not installed.
+
+        Notes
+        -----
+        - For `cupy.ndarray`, this uses the CUDA array interface and
+        supports 1D or 2D arrays.
+        - For `numpy.ndarray`, this is not yet implemented.
+        """
+        if cp is not None and isinstance(obj, cp.ndarray):
+            return cls.from_cuda_array_interface(obj)
+        if np is not None and isinstance(obj, np.ndarray):
+            return cls.from_array_interface(obj)
+
+        raise TypeError(
+            f"Cannot convert object of type {type(obj)} to a pylibcudf Column"
+        )
 
     cpdef DataType type(self):
         """The type of data in the column."""
