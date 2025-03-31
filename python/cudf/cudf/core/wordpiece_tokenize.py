@@ -28,6 +28,8 @@ class WordPieceVocabulary:
         ----------
         text : cudf.Series
             The strings to be tokenized.
+            This input is expected to be the output of NormalizeCharacters
+            or similar.
         max_words_per_row : int
             Maximum number of words to tokenize per row.
             Default 0 tokenizes all words.
