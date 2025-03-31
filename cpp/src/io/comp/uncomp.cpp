@@ -741,18 +741,8 @@ void host_decompress(compression_type compression,
 
   auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
   if (env_var == "AUTO") {
-    auto const best_guess_threshold = [&] {
-      constexpr auto kernel_single_block_throughput = 50;   // MBps
-      constexpr auto host_single_thread_throughput  = 600;  // MBps
-      // Below this number of buffers submitted to each host thread, the host threads will have
-      // lower latency, even when assuming a single buffer per kernel block
-      auto const per_host_thread_threshold =
-        host_single_thread_throughput / kernel_single_block_throughput;
-
-      auto const num_threads = cudf::detail::host_worker_pool().get_thread_count();
-      return per_host_thread_threshold * num_threads;
-    }();
-    auto const threshold = getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", best_guess_threshold);
+    constexpr auto const default_threshold = 128;
+    auto const threshold = getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_threshold);
     return num_buffers < threshold;
   }
 
