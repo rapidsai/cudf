@@ -16,3 +16,8 @@ def test_construct_timezone_scalar_error():
     date_scalar = datetime.datetime.now(datetime.timezone.utc)
     with pytest.raises(NotImplementedError):
         cudf.utils.dtypes.to_cudf_compatible_scalar(date_scalar)
+
+
+def test_scalar_deprecation():
+    with pytest.warns(FutureWarning):
+        cudf.Scalar(1)
