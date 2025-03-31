@@ -93,6 +93,17 @@ mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
 option(CUDF_IWYU "Enable IWYU during compilation" OFF)
 option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
+set(CUDF_FAST_COMPILE_MODE
+    "0"
+    CACHE STRING "Fast compilation mode to use. 0 | min | mid | max"
+)
+
+if(NOT CUDF_FAST_COMPILE_MODE MATCHES "(0|min|mid|max)")
+  message(
+    FATAL_ERROR
+      "CUDF_FAST_COMPILE_MODE must be 0, min, mid, or max (Set to ${CUDF_FAST_COMPILE_MODE})"
+  )
+endif()
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -139,9 +150,21 @@ if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
 set(CUDF_CXX_FLAGS "")
-set(CUDF_CUDA_FLAGS "")
+list(APPEND CUDF_CUDA_FLAGS)
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
+
+# Set the fast compilation mode
+if(NOT CUDF_FAST_COMPILE_MODE EQUAL "0")
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.9)
+    message(
+      WARNING
+        "Fast compilation requires CUDA Toolkit 12.9+ (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+    )
+  else()
+    list(APPEND CUDF_CUDA_FLAGS --Ofast-compile=${CUDF_FAST_COMPILE_MODE})
+  endif()
+endif()
 
 # Set logging level
 set(LIBCUDF_LOGGING_LEVEL
