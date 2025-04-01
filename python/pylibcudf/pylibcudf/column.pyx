@@ -367,7 +367,7 @@ cdef class Column:
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
         ImportError
-            If CuPy is required but not installed.
+            If CuPy is not installed.
         """
         if np is None or cp is None:
             raise ImportError("NumPy and CuPy must be installed to use this method")
