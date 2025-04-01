@@ -203,18 +203,7 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    table_w_meta.column_names(include_children=False),
-                    table_w_meta.columns,
-                    strict=True,
-                )
-            }
-            df = cudf.DataFrame._from_data(data)
-
-            # Post-processing to add in struct column names
-            ioutils._add_df_col_struct_names(df, table_w_meta.child_names)
+            df = cudf.DataFrame.from_pylibcudf(table_w_meta)
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "

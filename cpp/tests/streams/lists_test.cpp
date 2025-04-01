@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 
 class ListTest : public cudf::test::BaseFixture {};
 
@@ -167,6 +168,7 @@ TEST_F(ListTest, Distinct)
   cudf::lists::distinct(list_col,
                         cudf::null_equality::EQUAL,
                         cudf::nan_equality::ALL_EQUAL,
+                        cudf::duplicate_keep_option::KEEP_ANY,
                         cudf::test::get_default_stream());
 }
 

@@ -120,6 +120,24 @@ def _shape_mismatch_error(x, y):
     )
 
 
+def _recursively_update_struct_names(
+    col: ColumnBase, child_names: dict
+) -> ColumnBase:
+    """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(
+            zip(children, child_names.values())
+        ):
+            children[i] = _recursively_update_struct_names(child, names)
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, cudf.StructDtype):
+        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
+
+    return col
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if (
@@ -8160,23 +8178,26 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def from_pylibcudf(cls, table: plc.Table, metadata: dict) -> Self:
+    def from_pylibcudf(
+        cls,
+        table: plc.Table | plc.io.TableWithMetadata,
+        metadata: dict[str, Any] | None = None,
+    ) -> Self:
         """
         Create a DataFrame from a pylibcudf.Table.
 
         Parameters
         ----------
-        table : pylibcudf.Table
+        table : pylibcudf.Table, pylibcudf.io.TableWithMetadata
             The input Table.
-        metadata : dict
+        metadata : dict, default None
             Metadata necessary to reconstruct the dataframe
+            if table is a pylibcudf.Table.
 
         Returns
         -------
         table : cudf.DataFrame
             A cudf.DataFrame referencing the columns in the pylibcudf.Table.
-        metadata : list[str]
-            Dict of metadata (includes column names and dataframe indices)
 
         Notes
         -----
@@ -8185,26 +8206,59 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         the data and mask buffers of the pylibcudf columns, so the newly created
         object is not tied to the lifetime of the original pylibcudf.Table.
         """
-        if not (
-            isinstance(metadata, dict)
-            and 1 <= len(metadata) <= 2
-            and "columns" in metadata
-            and (len(metadata) != 2 or {"columns", "index"} == set(metadata))
-        ):
-            raise ValueError(
-                "Must at least pass metadata dict with column names and optionally indices only"
-            )
-        columns = table.columns()
-        df = cls._from_data(
-            {
-                name: cudf.core.column.ColumnBase.from_pylibcudf(
-                    col, data_ptr_exposed=True
+        if isinstance(table, plc.io.TableWithMetadata):
+            tbl = table.tbl
+            if metadata is not None:
+                raise ValueError(
+                    "metadata must be None when table is a pylibcudf.io.TableWithMetadata"
                 )
-                for name, col in zip(metadata["columns"], columns)
-            },
-            index=metadata.get("index"),
+            column_names = table.column_names(include_children=False)
+            child_names = table.child_names
+            index = None
+        elif isinstance(table, plc.Table):
+            tbl = table
+            if not (
+                isinstance(metadata, dict)
+                and 1 <= len(metadata) <= 2
+                and "columns" in metadata
+                and (
+                    len(metadata) != 2 or {"columns", "index"} == set(metadata)
+                )
+            ):
+                raise ValueError(
+                    "Must pass a metadata dict with column names and optionally indices only "
+                    "when table is a pylibcudf.Table "
+                )
+            column_names = metadata["columns"]
+            # TODO: Allow user to include this in metadata?
+            child_names = None
+            index = metadata.get("index")
+        else:
+            raise ValueError(
+                "table must be a pylibcudf.Table or pylibcudf.io.TableWithMetadata"
+            )
+
+        plc_columns = tbl.columns()
+        cudf_cols = (
+            ColumnBase.from_pylibcudf(plc_col, data_ptr_exposed=True)
+            for plc_col in plc_columns
         )
-        return df
+        if child_names is not None:
+            cudf_cols = (
+                _recursively_update_struct_names(col, child_names)
+                for col, child_names in zip(
+                    cudf_cols, child_names.values(), strict=True
+                )
+            )
+        col_accessor = ColumnAccessor(
+            {
+                name: cudf_col
+                for name, cudf_col in zip(column_names, cudf_cols, strict=True)
+            },
+            verify=False,
+            rangeindex=len(plc_columns) == 0,
+        )
+        return cls._from_data(col_accessor, index=index)
 
 
 def make_binop_func(op, postprocess=None):
