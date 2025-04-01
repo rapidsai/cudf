@@ -28,15 +28,6 @@ if TYPE_CHECKING:
 
 __all__ = ["TemporalFunction"]
 
-_unit_to_nanoseconds_conversion_strs = {
-    "ns": 1,
-    "us": 1_000,
-    "ms": 1_000_000,
-    "s": 1_000_000_000,
-    "m": 60_000_000_000,
-    "h": 3_600_000_000_000,
-    "D": 86_400_000_000_000,
-}
 
 _unit_to_nanoseconds_conversion = {
     plc.TypeId.DURATION_NANOSECONDS: 1,
