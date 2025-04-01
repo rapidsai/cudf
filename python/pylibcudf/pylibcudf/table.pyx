@@ -226,7 +226,8 @@ cdef class Table:
     def _create_nested_column_metadata(Column col):
         # TODO: We'll need to reshuffle where things are defined to avoid circular
         # imports. For now, we'll just import this inline. We should be able to avoid
-        # circularity altogether by simply
+        # circularity altogether by simply not needing ColumnMetadata at all in the
+        # future and just using the schema directly, so we can consider that approach.
         from pylibcudf.interop import ColumnMetadata
         return ColumnMetadata(
             children_meta=[
@@ -238,7 +239,8 @@ cdef class Table:
         """Create an Arrow schema from this table."""
         # TODO: We'll need to reshuffle where things are defined to avoid circular
         # imports. For now, we'll just import this inline. We should be able to avoid
-        # circularity altogether by simply
+        # circularity altogether by simply not needing ColumnMetadata at all in the
+        # future and just using the schema directly, so we can consider that approach.
         from pylibcudf.interop import ColumnMetadata
         if metadata is None:
             metadata = [
