@@ -131,14 +131,14 @@ class hostdevice_vector {
     cuda_memcpy_async<T>(d_data, h_data, stream);
   }
 
-  void host_to_device_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
+  void host_to_device(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
     cuda_memcpy_async<T>(h_data, d_data, stream);
   }
 
-  void device_to_host_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
+  void device_to_host(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
@@ -217,10 +217,10 @@ class hostdevice_2dvector {
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
-  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
+  void host_to_device(rmm::cuda_stream_view stream) { _data.host_to_device(stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
-  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
+  void device_to_host(rmm::cuda_stream_view stream) { _data.device_to_host(stream); }
 
  private:
   hostdevice_vector<T> _data;

@@ -69,7 +69,7 @@ class kernel_error {
    */
   [[nodiscard]] auto value_sync(rmm::cuda_stream_view stream) const
   {
-    _error_code.device_to_host_sync(stream);
+    _error_code.device_to_host(stream);
     return _error_code[0];
   }
 

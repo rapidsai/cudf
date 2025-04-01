@@ -96,7 +96,7 @@ struct DecompressTest : public cudf::test::BaseFixture, public testing::WithPara
     static_cast<Decompressor*>(this)->device_dispatch(inf_in, inf_out, inf_stat);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed.data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
-    inf_stat.device_to_host_sync(stream);
+    inf_stat.device_to_host(stream);
     CUDF_EXPECTS(inf_stat[0].status == compression_status::SUCCESS,
                  "Failure in device decompression");
 
@@ -383,7 +383,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_stats.host_to_device_async(stream);
 
       cudf::io::detail::compress(compression, hd_srcs, hd_dsts, hd_stats, stream);
-      hd_stats.device_to_host_sync(stream);
+      hd_stats.device_to_host(stream);
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
@@ -404,7 +404,7 @@ void roundtrip_test(cudf::io::compression_type compression)
 
       cudf::io::detail::decompress(
         compression, hd_srcs, hd_dsts, hd_stats, expected.size(), expected.size(), stream);
-      hd_stats.device_to_host_sync(stream);
+      hd_stats.device_to_host(stream);
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
     }
 
