@@ -1374,9 +1374,8 @@ TEST_F(ParquetWriterTest, SkipCompression)
   constexpr auto row_group_rows = 2 * page_rows;
   constexpr auto num_rows       = 2 * row_group_rows;
 
-  auto sequence          = thrust::make_counting_iterator(0);
-  auto repeated_sequence = thrust::make_transform_iterator(sequence, [](int i) { return i / 4; });
-  column_wrapper<int> col(repeated_sequence, repeated_sequence + num_rows, no_nulls());
+  auto sequence = thrust::make_counting_iterator(0);
+  column_wrapper<int> col(sequence, sequence + num_rows, no_nulls());
 
   auto expected          = table_view{{col, col}};
   auto expected_metadata = cudf::io::table_input_metadata{expected};
