@@ -43,18 +43,18 @@ static void BM_ast_compute_column(nvbench::state& state)
   auto table = create_random_table({cudf::type_to_id<key_type>()}, row_count{num_rows}, profile);
   auto column_view = table->get_column(0);
 
-  std::vector<cudf::numeric_scalar<key_type>> constants{
-    cudf::numeric_scalar<key_type>{2},
-    cudf::numeric_scalar<key_type>{3}
-  };
+  std::vector<cudf::numeric_scalar<key_type>> constants{cudf::numeric_scalar<key_type>{2},
+                                                        cudf::numeric_scalar<key_type>{3}};
 
   cudf::ast::tree tree{};
 
   auto& column_ref = tree.push(cudf::ast::column_reference{0});
 
   // computes polynomial: ax + b
-  auto& product = tree.push(cudf::ast::operation{cudf::ast::ast_operator::MUL, column_ref, tree.push(cudf::ast::literal{constants[0]})});
-  tree.push(cudf::ast::operation{cudf::ast::ast_operator::ADD, product, tree.push(cudf::ast::literal{constants[1]})});
+  auto& product = tree.push(cudf::ast::operation{
+    cudf::ast::ast_operator::MUL, column_ref, tree.push(cudf::ast::literal{constants[0]})});
+  tree.push(cudf::ast::operation{
+    cudf::ast::ast_operator::ADD, product, tree.push(cudf::ast::literal{constants[1]})});
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(num_rows);
@@ -66,11 +66,9 @@ static void BM_ast_compute_column(nvbench::state& state)
   });
 }
 
-#define AST_COMPUTE_COLUMN_BENCHMARK_DEFINE(name, key_type)                          \
+#define AST_COMPUTE_COLUMN_BENCHMARK_DEFINE(name, key_type)                         \
   static void name(::nvbench::state& st) { ::BM_ast_compute_column<key_type>(st); } \
-  NVBENCH_BENCH(name)                                                            \
-    .set_name(#name)                                                             \
-    .add_int64_axis("num_rows", {600'000'000})
+  NVBENCH_BENCH(name).set_name(#name).add_int64_axis("num_rows", {600'000'000})
 
 AST_COMPUTE_COLUMN_BENCHMARK_DEFINE(ast_compute_column_float32, float);
 

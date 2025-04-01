@@ -346,7 +346,8 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
-# * compute column benchmark ---------------------------------------------------------------------------------
+# * compute column benchmark
+#   ---------------------------------------------------------------------------------
 ConfigureNVBench(COMPUTE_COLUMN_NVBENCH ast/compute_column.cpp)
 
 # ##################################################################################################
