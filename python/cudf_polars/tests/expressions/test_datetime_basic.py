@@ -265,3 +265,18 @@ def test_isoyear():
     q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+def test_datetime_cast_time_unit(dtype, time_unit):
+    sr = pl.Series(
+        [datetime.datetime(2001, 1, 1), datetime.datetime(2001, 1, 3)], dtype=dtype
+    )
+    df = pl.DataFrame({"date": sr}).lazy()
+
+    q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
+
+    assert_gpu_result_equal(q)
