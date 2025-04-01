@@ -338,14 +338,85 @@ cdef class Column:
         obj : object
             Must implement the `__array_interface__` protocol.
 
+        Returns
+        -------
+        Column
+            A Column containing the data from the array interface.
+
         Raises
         ------
-        NotImplementedError
-            This method is not yet implemented.
+        ValueError
+            If the object is not 1D or 2D, or is not C-contiguous.
+        ImportError
+            If NumPy is required but not installed.
         """
-        raise NotImplementedError(
-            "Converting to a pylibcudf Column is not yet implemented."
-        )
+        if np is None:
+            raise ImportError("NumPy must be installed to use this method")
+
+        iface = getattr(obj, "__array_interface__", None)
+        if iface is None:
+            raise TypeError("Object does not implement __array_interface__")
+
+        if iface.get("mask") is not None:
+            raise ValueError("mask not yet supported")
+
+        typestr = iface["typestr"][1:]
+        data_type = _datatype_from_dtype_desc(typestr)
+
+        shape = iface["shape"]
+        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
+            raise ValueError("Data must be C-contiguous")
+
+        if len(shape) == 1:
+            data_view = memoryview(np.asarray(obj).view(np.uint8))
+            device_buffer = DeviceBuffer.to_device(data_view)
+            data = gpumemoryview(device_buffer)
+            size = shape[0]
+            return cls(data_type, size, data, None, 0, 0, [])
+        elif len(shape) == 2:
+            arr = np.asarray(obj)
+            typestr = arr.dtype.str[1:]
+            data_type = _datatype_from_dtype_desc(typestr)
+
+            flat_arr = arr.ravel()
+            flat_data_view = memoryview(flat_arr.view(np.uint8))
+            device_buffer = DeviceBuffer.to_device(flat_data_view)
+
+            num_rows, num_cols = shape
+            flat_size = flat_arr.size
+
+            if num_rows < INT_MAX:
+                offsets_col = sequence(
+                    num_rows + 1,
+                    Scalar.from_numpy(np.int32(0)),
+                    Scalar.from_numpy(np.int32(num_cols))
+                )
+            else:
+                raise ValueError(
+                    "Number of rows exceeds int32 limit for offsets column."
+                )
+
+            data_col = cls(
+                data_type=data_type,
+                size=flat_size,
+                data=gpumemoryview(device_buffer),
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+
+            return cls(
+                data_type=DataType(type_id.LIST),
+                size=num_rows,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[offsets_col, data_col],
+            )
+        else:
+            raise ValueError("Only 1D or 2D arrays are supported")
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -360,14 +431,14 @@ cdef class Column:
         Returns
         -------
         Column
-            A 1D or 2D list column, depending on the input shape.
+            A Column containing the data from the CUDA array interface.
 
         Raises
         ------
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
         ImportError
-            If CuPy is required but not installed.
+            If CuPy is not installed.
         """
         if np is None or cp is None:
             raise ImportError("NumPy and CuPy must be installed to use this method")
