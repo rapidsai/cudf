@@ -360,7 +360,7 @@ cdef class Column:
         Returns
         -------
         Column
-            A 1D or 2D list column, depending on the input shape.
+            A Column containing the data from the CUDA array interface.
 
         Raises
         ------
