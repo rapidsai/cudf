@@ -64,7 +64,7 @@ def test_from_ndarray_cupy_2d(cp_2darray, np_2darray):
 def test_from_ndarray_numpy_1d(np_1darray):
     with pytest.raises(
         NotImplementedError,
-        match="Converting a pylibcudf Column is not yet implemented.",
+        match="Converting to a pylibcudf Column is not yet implemented.",
     ):
         plc.Column.from_arraylike(np_1darray)
 
@@ -72,7 +72,7 @@ def test_from_ndarray_numpy_1d(np_1darray):
 def test_from_ndarray_numpy_2d(np_2darray):
     with pytest.raises(
         NotImplementedError,
-        match="Converting a pylibcudf Column is not yet implemented.",
+        match="Converting to a pylibcudf Column is not yet implemented.",
     ):
         plc.Column.from_arraylike(np_2darray)
 
