@@ -152,6 +152,7 @@ outputs:
           - libcurand
           - libkvikio
           - librdkafka
+          - libzlib
           - librmm
           - nvcomp
           - if: cuda_major == "11"
@@ -193,9 +194,11 @@ outputs:
           - flatbuffers
           - libcufile
           - libcurand
+          - libcudf
           - libkvikio
           - librdkafka
           - librmm
+          - libzlib
           - nvcomp
           - if: cuda_major == "11"
             then:
@@ -276,6 +279,7 @@ outputs:
           - libkvikio
           - librdkafka
           - librmm
+          - libzlib
           - nvcomp
           - if: cuda_major == "11"
             then:
@@ -332,11 +336,13 @@ outputs:
           - cuda-nvtx
           - cuda-version
           - flatbuffers
+          - libcudf
           - libcufile
           - libcurand
           - libkvikio
           - librdkafka
           - librmm
+          - libzlib
           - nvcomp
           - if: cuda_major == "11"
             then:
