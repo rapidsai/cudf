@@ -450,8 +450,14 @@ cdef class Column:
         Notes
         -----
         - For `cupy.ndarray`, this uses the CUDA array interface and
-        supports 1D or 2D arrays.
+          supports 1D or 2D arrays.
         - For `numpy.ndarray`, this is not yet implemented.
+
+        Examples:
+            >>> import pylibcudf as plc
+            >>> import cupy as cp
+            >>> cp_arr = cp.array([[1,2],[3,4]])
+            >>> col = plc.Column.from_arraylike(cp_arr)
         """
         if hasattr(obj, "__cuda_array_interface__"):
             return cls.from_cuda_array_interface(obj)
