@@ -16,11 +16,12 @@ import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
 from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -68,21 +69,9 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
             ir: PartitionInfo(count=1)
         }  # pragma: no cover; Missed by pylibcudf executor
 
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check that child partitioning is supported
-    if any(partition_info[c].count > 1 for c in children):
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-
-    # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=1)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
+    return _lower_ir_fallback(
+        ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+    )
 
 
 def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -229,11 +218,9 @@ def _(
 
     # Check zlice
     if ir.zlice is not None:  # pragma: no cover
-        if any(p[c].count > 1 for p, c in zip(children, _partition_info, strict=False)):
-            raise NotImplementedError("zlice is not supported for multiple partitions.")
-        new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
+        return _lower_ir_fallback(
+            ir, rec, msg="zlice is not supported for multiple partitions."
+        )
 
     # Partition count is the sum of all child partitions
     count = sum(partition_info[c].count for c in children)
@@ -268,10 +255,10 @@ def _lower_ir_pwise(
     counts = {partition_info[c].count for c in children}
 
     # Check that child partitioning is supported
-    if len(counts) > 1:
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support unbalanced partitions."
-        )  # pragma: no cover
+    if len(counts) > 1:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Class {type(ir)} does not support unbalanced partitions."
+        )
 
     # Return reconstructed node and partition-info dict
     partition = PartitionInfo(count=max(counts))

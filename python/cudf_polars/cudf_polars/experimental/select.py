@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Select Logic."""
 
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -28,8 +29,8 @@ def _(
         expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
     ):
         # TODO: Handle non-pointwise expressions.
-        raise NotImplementedError(
-            f"Selection {ir} does not support multiple partitions."
+        return _lower_ir_fallback(
+            ir, rec, msg=f"Selection {ir} does not support multiple partitions."
         )
     new_node = ir.reconstruct([child])
     partition_info[new_node] = pi

@@ -82,10 +82,7 @@ def test_groupby_agg_config_options(df, op, keys):
 
 def test_groupby_raises(df, engine):
     q = df.group_by("y").median()
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+    with pytest.warns(UserWarning, match="Failed to decompose groupby aggs"):
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 

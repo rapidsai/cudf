@@ -13,8 +13,9 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR
-from cudf_polars.experimental.base import _concat, get_key_name
+from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping

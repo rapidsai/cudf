@@ -22,9 +22,10 @@ from cudf_polars.dsl.expr import (
 )
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
@@ -198,10 +199,14 @@ def _(
         return single_part_node, partition_info
 
     # Check group-by keys
-    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
-        raise NotImplementedError(
-            f"GroupBy does not support multiple partitions for keys:\n{ir.keys}"
-        )  # pragma: no cover
+    if not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.keys])
+    ):  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg=f"GroupBy does not support multiple partitions for keys:\n{ir.keys}",
+        )
 
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
@@ -226,9 +231,14 @@ def _(
         )
 
     # Decompose the aggregation requests into three distinct phases
-    selection_exprs, piecewise_exprs, reduction_exprs = combine(
-        *(decompose(agg.name, agg.value) for agg in ir.agg_requests)
-    )
+    try:
+        selection_exprs, piecewise_exprs, reduction_exprs = combine(
+            *(decompose(agg.name, agg.value) for agg in ir.agg_requests)
+        )
+    except NotImplementedError:
+        return _lower_ir_fallback(
+            ir, rec, msg="Failed to decompose groupby aggs: {ir.agg_requests}."
+        )
 
     # Partition-wise groupby operation
     pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
@@ -250,8 +260,10 @@ def _(
     gb_inter: GroupBy | Shuffle = gb_pwise
     if post_aggregation_count > 1:
         if ir.maintain_order:  # pragma: no cover
-            raise NotImplementedError(
-                "maintain_order not supported for multiple output partitions."
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="maintain_order not supported for multiple output partitions.",
             )
 
         gb_inter = Shuffle(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -41,10 +41,7 @@ def test_select_reduce_raises(df, engine):
         (pl.col("a") + pl.col("b")).max(),
         (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
     )
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+    with pytest.warns(UserWarning, match="does not support multiple partitions"):
         assert_gpu_result_equal(query, engine=engine)
 
 
