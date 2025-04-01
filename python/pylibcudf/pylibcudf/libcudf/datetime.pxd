@@ -21,9 +21,20 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
         MICROSECOND
         NANOSECOND
 
+    cpdef enum class duration_total(uint8_t):
+        TOTAL_SECONDS
+        TOTAL_MILLISECONDS
+        TOTAL_MICROSECONDS
+        TOTAL_NANOSECONDS
+
     cdef unique_ptr[column] extract_datetime_component(
         const column_view& column,
         datetime_component component
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] duration_as_unit(
+        const column_view& column,
+        duration_total unit
     ) except +libcudf_exception_handler
 
     cpdef enum class rounding_frequency(int32_t):

@@ -153,7 +153,7 @@ def test_date_extract(field):
 @pytest.mark.parametrize(
     "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
 )
-def test_duration_component_extract(field, dtype):
+def test_duration_total_component_extract(field, dtype):
     ldf = pl.LazyFrame(
         {
             "durations": pl.Series(
