@@ -369,9 +369,6 @@ cdef class Column:
         ImportError
             If CuPy is not installed.
         """
-        if np is None or cp is None:
-            raise ImportError("NumPy and CuPy must be installed to use this method")
-
         iface = getattr(obj, "__cuda_array_interface__", None)
         if iface is None:
             raise TypeError("Object does not implement __cuda_array_interface__")
@@ -391,7 +388,11 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            flat_data = cp.ravel(obj)
+            if np is None or cp is None:
+                raise ImportError(
+                    "NumPy and CuPy must be installed to use this method on 2D data"
+                )
+            flat_data = cp.asarray(obj).ravel()
             num_rows, num_cols = shape
             if num_rows < INT_MAX:
                 offsets_col = sequence(
@@ -425,7 +426,7 @@ cdef class Column:
             raise ValueError("Only 1D or 2D arrays are supported")
 
     @classmethod
-    def from_arraylike(cls, obj):
+    def from_array(cls, obj):
         """
         Create a Column from any object which supports the NumPy
         or CUDA array interface.
@@ -452,11 +453,12 @@ cdef class Column:
           supports 1D or 2D arrays.
         - For `numpy.ndarray`, this is not yet implemented.
 
-        Examples:
-            >>> import pylibcudf as plc
-            >>> import cupy as cp
-            >>> cp_arr = cp.array([[1,2],[3,4]])
-            >>> col = plc.Column.from_arraylike(cp_arr)
+        Examples
+        --------
+        >>> import pylibcudf as plc
+        >>> import cupy as cp
+        >>> cp_arr = cp.array([[1,2],[3,4]])
+        >>> col = plc.Column.from_array(cp_arr)
         """
         if hasattr(obj, "__cuda_array_interface__"):
             return cls.from_cuda_array_interface(obj)
