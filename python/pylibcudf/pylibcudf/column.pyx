@@ -391,8 +391,7 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            arr = obj
-            flat_data = cp.ravel(arr)
+            flat_data = cp.ravel(obj)
             num_rows, num_cols = shape
             if num_rows < INT_MAX:
                 offsets_col = sequence(
