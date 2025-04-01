@@ -237,7 +237,7 @@ def _(
         )
     except NotImplementedError:
         return _lower_ir_fallback(
-            ir, rec, msg="Failed to decompose groupby aggs: {ir.agg_requests}."
+            ir, rec, msg=f"Failed to decompose groupby aggs: {ir.agg_requests}."
         )
 
     # Partition-wise groupby operation
