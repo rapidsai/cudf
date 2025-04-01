@@ -172,7 +172,6 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
-<<<<<<< HEAD
         if self.name in self._ADDITIONAL_COMPONENTS:
             # inspired by cuDF algorithm
             if self.name == TemporalFunction.Name.TotalSeconds:
@@ -197,7 +196,6 @@ class TemporalFunction(Expr):
             )
             return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
 
-=======
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -222,7 +220,6 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(result)
->>>>>>> branch-25.06
         if self.name is TemporalFunction.Name.MonthStart:
             ends = plc.datetime.last_day_of_month(column.obj)
             days_to_subtract = plc.datetime.days_in_month(column.obj)
