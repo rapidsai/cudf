@@ -34,7 +34,7 @@ static void bench_like(nvbench::state& state)
   auto input = cudf::strings_column_view(col->view());
 
   // This pattern forces reading the entire target string (when matched expected)
-  auto pattern = std::string_view("% 5W4_");  // regex equivalent: ".* 5W4.$"
+  auto pattern = std::string_view("_% % 5W4_");
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well

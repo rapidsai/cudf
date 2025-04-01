@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,26 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/contains.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
+#include <thrust/copy.h>
+#include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -36,9 +44,27 @@ namespace detail {
 
 namespace {
 
+/**
+ * @brief Threshold to decide on using string or warp parallel functions.
+ *
+ * If the average byte length of a string in a column exceeds this value then
+ * the warp-parallel function is used to compute the output sizes.
+ * Otherwise, a regular row-per-thread function is used.
+ *
+ * This value was found using benchmark results.
+ */
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 72;
+
 constexpr char multi_wildcard  = '%';
 constexpr char single_wildcard = '_';
 
+/**
+ * @brief Like functor for matching a pattern to a string
+ *
+ * This function performs the like pattern on a single string
+ * per thread. The patterns_itr may provide a unique pattern
+ * per string as well.
+ */
 template <typename PatternIterator>
 struct like_fn {
   column_device_view const d_strings;
@@ -62,7 +88,7 @@ struct like_fn {
 
     auto const target_end  = target_itr + d_str.size_bytes();
     auto const pattern_end = d_pattern.end();
-    auto const esc_char    = d_escape.empty() ? 0 : d_escape[0];
+    auto const esc_char    = d_escape.empty() ? 0 : d_escape.data()[0];
 
     auto last_target_itr  = target_end;
     auto last_pattern_itr = pattern_end;
@@ -119,6 +145,154 @@ struct like_fn {
   }
 };
 
+/**
+ * @brief Compare a literal part of the pattern against a target string
+ *
+ * The literal part of a pattern is between two multi-wildcards.
+ * This handles the escape character and the single-wildcard character.
+ */
+__device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_itr,
+                                                            char const* target_end,
+                                                            char const esc_char,
+                                                            char const* pattern_itr,
+                                                            char const* pattern_end)
+{
+  bool result           = true;
+  auto target_itr_start = target_itr;
+  while (result && pattern_itr < pattern_end) {
+    auto const escaped = *pattern_itr == esc_char;
+    auto const pattern_char =
+      escaped && (pattern_itr + 1 < pattern_end) ? *(++pattern_itr) : *pattern_itr;
+    ++pattern_itr;
+    if (!escaped && pattern_char == single_wildcard && target_itr < target_end) {
+      target_itr += bytes_in_utf8_byte(*target_itr);
+      continue;
+    }
+    auto const target_char = target_itr < target_end ? *target_itr++ : 0;
+
+    result = (pattern_char == target_char);
+  }
+  return {result, thrust::distance(target_itr_start, target_itr)};
+}
+
+/**
+ * @brief Like function for a single string and pattern
+ *
+ * This is the warp-parallel version of the like function.
+ * It is only used for longer strings.
+ *
+ * @param d_strings The input strings column
+ * @param d_pattern The pattern to match
+ * @param d_escape The escape character
+ * @param d_wcs The multi-wildcard indices
+ * @param results The output of boolean values
+ */
+[[maybe_unused]] CUDF_KERNEL void like_kernel(column_device_view d_strings,
+                                              string_view d_pattern,
+                                              string_view d_escape,
+                                              cudf::device_span<size_type const> d_wcs,
+                                              bool* results)
+{
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
+
+  // Each warp handles one string
+  auto const str_idx = tid / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
+  if (d_strings.is_null(str_idx)) { return; }
+
+  namespace cg    = cooperative_groups;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
+  auto const d_str = d_strings.element<string_view>(str_idx);
+  auto target_itr  = d_str.data();
+
+  auto const target_end  = target_itr + d_str.size_bytes();
+  auto const pattern_itr = d_pattern.data();
+  auto const pattern_end = pattern_itr + d_pattern.size_bytes();
+  auto const esc_char    = d_escape.empty() ? 0 : d_escape.data()[0];
+  auto const lane_idx    = warp.thread_rank();
+
+  auto wcs_idx  = 0;
+  auto wcs_size = static_cast<size_type>(d_wcs.size());
+  bool result   = true;
+  if (wcs_size == 0 || d_wcs.front() != 0) {
+    // pattern does not start with a wildcard; check for literal match
+    auto out_size = 0;
+    if (lane_idx == 0) {
+      auto const end = (wcs_idx < wcs_size) ? pattern_itr + d_wcs[wcs_idx] : pattern_end;
+      cuda::std::tie(result, out_size) =
+        compare_literal(target_itr, target_end, esc_char, pattern_itr, end);
+    }
+    out_size = warp.shfl(out_size, 0);  // copy out_size to all threads in the warp
+    target_itr += out_size;
+  }
+  warp.sync();  // not sure if this is needed
+
+  result = warp.shfl(result, 0);  // copy result to all threads in the warp
+
+  // process literals between wildcards
+  while (result && ((wcs_idx + 1) < wcs_size)) {
+    auto const begin = pattern_itr + d_wcs[wcs_idx++] + 1;  // point just past wildcard;
+    auto const end   = (wcs_idx < wcs_size) ? pattern_itr + d_wcs[wcs_idx] : pattern_end;
+    if (thrust::distance(begin, end) == 0) { continue; }
+
+    auto const not_found = d_str.size_bytes();
+    auto find_idx        = not_found;
+    while (find_idx == not_found && target_itr < target_end) {
+      size_type tid_find = find_idx;
+      size_type out_size = 0;
+      auto itr           = target_itr + lane_idx;  // each thread starts at a different position
+      if ((itr < target_end) && is_begin_utf8_char(*itr)) {
+        bool cmp                      = false;
+        cuda::std::tie(cmp, out_size) = compare_literal(itr, target_end, esc_char, begin, end);
+        if (cmp) { tid_find = lane_idx; }
+      }
+      warp.sync();
+      find_idx = cg::reduce(warp, tid_find, cg::less<size_type>{});
+      out_size = warp.shfl(out_size, find_idx);
+      target_itr += (find_idx == not_found) ? cudf::detail::warp_size : find_idx + out_size;
+    }
+
+    // all threads have the same find_idx here
+    result = (find_idx != not_found);
+    warp.sync();
+  }
+
+  // check for last literal match
+  if (result) {
+    auto const begin = wcs_size > 0 ? pattern_itr + d_wcs.back() + 1 : pattern_end;
+    auto itr         = begin;
+    size_type size   = 0;
+    while (itr < pattern_end) {
+      auto const chr   = (*itr == esc_char) && (itr + 1 < pattern_end) ? *(++itr) : *itr;
+      auto const bytes = bytes_in_utf8_byte(chr);
+      itr += bytes;
+      size += (bytes > 0);  // counting whole characters and not bytes
+    }
+
+    if (begin < pattern_end) {
+      if (target_itr + size <= target_end) {  // estimate
+        if (lane_idx == 0) {
+          target_itr = target_end;
+          while (size > 0 && target_itr > d_str.data()) {
+            size -= is_begin_utf8_char(*(--target_itr));
+          }
+          cuda::std::tie(result, size) =
+            compare_literal(target_itr, target_end, esc_char, begin, pattern_end);
+          target_itr += size;
+        }
+      } else {
+        result = false;  // literal will not match the remaining string
+      }
+    } else if (wcs_size > 0) {
+      target_itr = target_end;  // pattern ends with a multi-wildcard
+    }
+  }
+
+  // result is good if everything matches and we have exhausted the target string
+  if (lane_idx == 0) { results[str_idx] = result && target_itr == target_end; }
+}
+
 template <typename PatternIterator>
 std::unique_ptr<column> like(strings_column_view const& input,
                              PatternIterator const patterns_itr,
@@ -154,13 +328,56 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(pattern.is_valid(stream), "Parameter pattern must be valid");
-  CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
+  CUDF_EXPECTS(pattern.is_valid(stream), "Parameter pattern must be valid", std::invalid_argument);
+  CUDF_EXPECTS(escape_character.is_valid(stream),
+               "Parameter escape_character must be valid",
+               std::invalid_argument);
 
-  auto const d_pattern    = pattern.value(stream);
-  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+  auto const d_pattern = pattern.value(stream);
+  auto const d_escape  = escape_character.value(stream);
 
-  return like(input, patterns_itr, escape_character.value(stream), stream, mr);
+  CUDF_EXPECTS(d_escape.size_bytes() <= 1,
+               "Parameter escape_character must be a single character",
+               std::invalid_argument);
+
+  // handle small or empty or all-null input
+  auto [first_offset, last_offset] = get_first_and_last_offset(input, stream);
+  if ((input.size() == input.null_count()) ||
+      ((last_offset - first_offset) / (input.size() - input.null_count())) <
+        AVG_CHAR_BYTES_THRESHOLD) {
+    auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+    return like(input, patterns_itr, d_escape, stream, mr);
+  }
+
+  // build indices to the multi-wildcards in the input pattern;
+  // these are the offsets of the non-escaped '%'s in the pattern
+  auto fn_wc = [p = d_pattern.data(), esc = d_escape.data()] __device__(auto const idx) {
+    auto const esc_char = esc ? *esc : 0;
+    if (esc_char == multi_wildcard) { return false; }
+    return (p[idx] == multi_wildcard) && (idx == 0 || p[idx - 1] != esc_char);
+  };
+  auto const begin = thrust::counting_iterator<int>(0);
+  auto const end   = begin + d_pattern.size_bytes();
+  auto d_wildcards = rmm::device_uvector<size_type>(
+    thrust::count_if(rmm::exec_policy(stream), begin, end, fn_wc), stream);
+  thrust::copy_if(rmm::exec_policy_nosync(stream), begin, end, d_wildcards.begin(), fn_wc);
+
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  constexpr auto block_size = 512;
+  auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+  like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+    *d_strings, d_pattern, d_escape, d_wildcards, results->mutable_view().data<bool>());
+
+  results->set_null_count(input.null_count());
+  return results;
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
@@ -169,14 +386,25 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns must match the input size");
-  CUDF_EXPECTS(patterns.has_nulls() == false, "Parameter patterns must not contain nulls");
-  CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
+  CUDF_EXPECTS(patterns.size() == input.size(),
+               "Number of patterns must match the input size",
+               std::invalid_argument);
+  CUDF_EXPECTS(patterns.has_nulls() == false,
+               "Parameter patterns must not contain nulls",
+               std::invalid_argument);
+  CUDF_EXPECTS(escape_character.is_valid(stream),
+               "Parameter escape_character must be valid",
+               std::invalid_argument);
 
   auto const d_patterns   = column_device_view::create(patterns.parent(), stream);
   auto const patterns_itr = d_patterns->begin<string_view>();
+  auto const d_escape     = escape_character.value(stream);
 
-  return like(input, patterns_itr, escape_character.value(stream), stream, mr);
+  CUDF_EXPECTS(d_escape.size_bytes() <= 1,
+               "Parameter escape_character must be a single character",
+               std::invalid_argument);
+
+  return like(input, patterns_itr, d_escape, stream, mr);
 }
 
 }  // namespace detail
