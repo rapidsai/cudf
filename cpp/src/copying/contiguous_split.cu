@@ -1859,7 +1859,7 @@ struct contiguous_split_state {
   {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(
-      user_buffer.size() == user_buffer_size,
+      user_buffer.size() >= user_buffer_size,
       "Cannot use a device span smaller than the output buffer size configured at instantiation!");
     CUDF_EXPECTS(has_next(), "Cannot call contiguous_split_chunk with has_next() == false!");
 
