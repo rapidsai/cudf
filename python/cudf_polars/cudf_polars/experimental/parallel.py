@@ -22,6 +22,7 @@ from cudf_polars.experimental.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -74,7 +75,9 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
     )
 
 
-def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def lower_ir_graph(
+    ir: IR, config_options: ConfigOptions | None = None
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -82,6 +85,8 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     ----------
     ir
         Root of the graph to rewrite.
+    config_options
+        GPUEngine configuration options.
 
     Returns
     -------
@@ -98,7 +103,8 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node)
+    config_options = config_options or ConfigOptions({})
+    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
     return mapper(ir)
 
 
@@ -169,9 +175,9 @@ def get_client() -> Any:
         return client.get
 
 
-def evaluate_dask(ir: IR) -> DataFrame:
-    """Evaluate an IR graph with Dask."""
-    ir, partition_info = lower_ir_graph(ir)
+def evaluate_dask(ir: IR, config_options: ConfigOptions | None = None) -> DataFrame:
+    """Evaluate an IR graph with partitioning."""
+    ir, partition_info = lower_ir_graph(ir, config_options)
 
     get = get_client()
 

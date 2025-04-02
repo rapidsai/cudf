@@ -149,7 +149,7 @@ def decompose(
             return selection, aggregations, reductions
         else:
             raise NotImplementedError(
-                "GroupBy does not support multiple partitions "
+                "group_by does not support multiple partitions "
                 f"for this aggregation type:\n{type(expr)}\n"
                 f"Only {_GB_AGG_SUPPORTED} are supported."
             )
