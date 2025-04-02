@@ -147,8 +147,6 @@ cpdef Table unpack(PackedColumns input):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
-    Contrary to the libcudf C++ function, the returned table is a copy
-    of the serialized data.
 
     For details, see :cpp:func:`cudf::unpack`.
 
@@ -170,8 +168,6 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
-    Contrary to the libcudf C++ function, the returned table is a copy
-    of the serialized data.
 
     For details, see :cpp:func:`cudf::unpack`.
 
