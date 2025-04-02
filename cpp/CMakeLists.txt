@@ -526,7 +526,6 @@ add_library(
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
-  src/io/parquet/experimental/hybrid_scan_page_pruning.cu
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/page_index_filter.cu
