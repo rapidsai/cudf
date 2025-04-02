@@ -1458,7 +1458,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return as_column(False, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
 
         return lhs._obtain_isin_result(rhs)
 
@@ -1485,9 +1485,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if self.null_count and rhs.null_count:
                 return self.isnull()
             else:
-                return as_column(False, length=len(self), dtype="bool")
+                return as_column(
+                    False, length=len(self), dtype=np.dtype(np.bool_)
+                )
         elif self.null_count == 0 and (rhs.null_count == len(rhs)):
-            return as_column(False, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
         else:
             return None
 
@@ -2784,17 +2786,18 @@ def as_column(
             length = 1
         elif length < 0:
             raise ValueError(f"{length=} must be >=0.")
+
+        pa_type = None
         if isinstance(
             arbitrary, pd.Interval
         ) or cudf.api.types._is_categorical_dtype(dtype):
-            # No cudf.Scalar support yet
             return as_column(
                 pd.Series([arbitrary] * length),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
-        if (
+        elif (
             nan_as_null is True
             and isinstance(arbitrary, (np.floating, float))
             and np.isnan(arbitrary)
@@ -2802,22 +2805,43 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", np.dtype(np.float64))
             arbitrary = None
-        if isinstance(arbitrary, pa.Scalar):
+            pa_type = cudf_dtype_to_pa_type(dtype)
+            dtype = None
+        elif arbitrary is pd.NA or arbitrary is None:
+            arbitrary = None
+            if dtype is not None:
+                pa_type = cudf_dtype_to_pa_type(dtype)
+                dtype = None
+            else:
+                raise ValueError(
+                    "Need to pass dtype when passing pd.NA or None"
+                )
+        elif (
+            isinstance(arbitrary, (pd.Timestamp, pd.Timedelta))
+            or arbitrary is pd.NaT
+        ):
+            arbitrary = arbitrary.to_numpy()
+        elif isinstance(arbitrary, (np.datetime64, np.timedelta64)):
+            unit = np.datetime_data(arbitrary.dtype)[0]
+            if unit not in {"s", "ms", "us", "ns"}:
+                arbitrary = arbitrary.astype(
+                    np.dtype(f"{arbitrary.dtype.kind}8[s]")
+                )
+
+        pa_scalar = pa.scalar(arbitrary, type=pa_type)
+        if length == 0:
+            if dtype is None:
+                dtype = cudf_dtype_from_pa_type(pa_scalar.type)
+            return column_empty(length, dtype=dtype)
+        else:
             col = ColumnBase.from_pylibcudf(
                 plc.Column.from_scalar(
-                    pa_scalar_to_plc_scalar(arbitrary), length
+                    pa_scalar_to_plc_scalar(pa_scalar), length
                 )
             )
             if dtype is not None:
                 col = col.astype(dtype)
             return col
-        else:
-            arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-            if length == 0:
-                return column_empty(length, dtype=arbitrary.dtype)
-            else:
-                return ColumnBase.from_scalar(arbitrary, length)
-
     elif hasattr(arbitrary, "__array_interface__"):
         desc = arbitrary.__array_interface__
         check_invalid_array(desc["shape"], np.dtype(desc["typestr"]))
