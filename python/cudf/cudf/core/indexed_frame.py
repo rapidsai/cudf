@@ -6455,28 +6455,24 @@ class IndexedFrame(Frame):
 
         if cudf.get_option("mode.pandas_compatible"):
             source = source.nans_to_nulls()
-        with acquire_spill_lock():
-            result_columns = [
-                ColumnBase.from_pylibcudf(
-                    plc.sorting.rank(
-                        col.to_pylibcudf(mode="read"),
-                        method_enum,
-                        column_order,
-                        c_null_handling,
-                        null_precedence,
-                        pct,
-                    )
-                )
-                for col in source._columns
-            ]
+        result_columns = [
+            col.rank(
+                method=method_enum,
+                column_order=column_order,
+                null_handling=c_null_handling,
+                null_precedence=null_precedence,
+                pct=pct,
+            )
+            for col in source._columns
+        ]
 
         if dropped_cols:
             result = type(source)._from_data(
                 ColumnAccessor(
                     dict(zip(source._column_names, result_columns)),
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                    label_dtype=self._data.label_dtype,
+                    multiindex=source._data.multiindex,
+                    level_names=source._data.level_names,
+                    label_dtype=source._data.label_dtype,
                     verify=False,
                 ),
             )

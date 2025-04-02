@@ -1545,6 +1545,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             [self], [False], None
         )
 
+    @acquire_spill_lock()
     def contains(self, other: ColumnBase) -> ColumnBase:
         """
         Check whether column contains multiple values.
@@ -1554,13 +1555,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         other : Column
             A column of values to search for
         """
-        with acquire_spill_lock():
-            return ColumnBase.from_pylibcudf(
-                plc.search.contains(
-                    self.to_pylibcudf(mode="read"),
-                    other.to_pylibcudf(mode="read"),
-                )
+        return ColumnBase.from_pylibcudf(
+            plc.search.contains(
+                self.to_pylibcudf(mode="read"),
+                other.to_pylibcudf(mode="read"),
             )
+        )
 
     def sort_values(
         self: Self,
@@ -2150,6 +2150,49 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             type(self)
             .from_pylibcudf(plc.Column.from_scalar(max_val, 1))
             .element_indexing(0),
+        )
+
+    @acquire_spill_lock()
+    def rank(
+        self,
+        *method: plc.aggregation.RankMethod,
+        column_order: plc.types.Order,
+        null_handling: plc.types.NullPolicy.EXCLUDE,
+        null_precedence: plc.types.NullOrder,
+        pct: bool,
+    ) -> Self:
+        return type(self).from_pylibcudf(
+            plc.sorting.rank(
+                self.to_pylibcudf(mode="read"),
+                method,
+                column_order,
+                null_handling,
+                null_precedence,
+                pct,
+            )
+        )
+
+    @acquire_spill_lock()
+    def label_bins(
+        self,
+        *,
+        left_edge: Self,
+        left_inclusive: bool,
+        right_edge: Self,
+        right_inclusive: bool,
+    ) -> cudf.core.column.NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.labeling.label_bins(
+                self.to_pylibcudf(mode="read"),
+                left_edge.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if left_inclusive
+                else plc.labeling.Inclusive.NO,
+                right_edge.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if right_inclusive
+                else plc.labeling.Inclusive.NO,
+            )
         )
 
     def _cast_self_and_other_for_where(
