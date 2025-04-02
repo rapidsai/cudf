@@ -42,7 +42,8 @@ from cython.operator cimport dereference
 from pylibcudf.libcudf.types cimport size_type
 from cython.operator cimport dereference
 from pylibcudf.libcudf.types cimport size_type
-
+from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 __all__ = [
     "ColumnEncoding",
     "ColumnInMetadata",
@@ -384,10 +385,13 @@ cdef class TableWithMetadata:
         return names
 
     @staticmethod
-    cdef TableWithMetadata from_libcudf(table_with_metadata& tbl_with_meta):
+    cdef TableWithMetadata from_libcudf(
+        table_with_metadata& tbl_with_meta, Stream stream = None
+    ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
+        stream = _get_stream(stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
         out.metadata = tbl_with_meta.metadata
         return out
 
