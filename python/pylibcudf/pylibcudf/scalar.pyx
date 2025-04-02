@@ -206,25 +206,33 @@ def _(py_val: int, dtype: DataType | None):
     tid = c_dtype.id()
 
     if tid == type_id.INT8:
-        if abs(py_val) > numeric_limits[int8_t].max():
+        if not (
+            numeric_limits[int8_t].min() <= py_val <= numeric_limits[int8_t].max()
+        ):
             raise OverflowError(f"{py_val} out of range for INT8 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int8_t]*>c_obj.get()).set_value(py_val)
 
     elif tid == type_id.INT16:
-        if abs(py_val) > numeric_limits[int16_t].max():
+        if not (
+            numeric_limits[int16_t].min() <= py_val <= numeric_limits[int16_t].max()
+        ):
             raise OverflowError(f"{py_val} out of range for INT16 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int16_t]*>c_obj.get()).set_value(py_val)
 
     elif tid == type_id.INT32:
-        if abs(py_val) > numeric_limits[int32_t].max():
+        if not (
+            numeric_limits[int32_t].min() <= py_val <= numeric_limits[int32_t].max()
+        ):
             raise OverflowError(f"{py_val} out of range for INT32 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int32_t]*>c_obj.get()).set_value(py_val)
 
     elif tid == type_id.INT64:
-        if abs(py_val) > numeric_limits[int64_t].max():
+        if not (
+            numeric_limits[int64_t].min() <= py_val <= numeric_limits[int64_t].max()
+        ):
             raise OverflowError(f"{py_val} out of range for INT64 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)

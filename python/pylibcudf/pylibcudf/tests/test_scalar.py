@@ -7,7 +7,10 @@ import pytest
 import pylibcudf as plc
 from pylibcudf.types import DataType, TypeId
 
-np = pytest.importorskip("numpy")
+
+@pytest.fixture(scope="module")
+def np():
+    return pytest.importorskip("numpy")
 
 
 @pytest.mark.parametrize(
@@ -117,6 +120,7 @@ def test_from_py_with_dtype_errors(val, tid, error, msg):
 @pytest.mark.parametrize(
     "val, tid",
     [
+        (-(2**7) - 1, TypeId.INT8),
         (2**7, TypeId.INT8),
         (2**15, TypeId.INT16),
         (2**31, TypeId.INT32),
@@ -126,6 +130,7 @@ def test_from_py_with_dtype_errors(val, tid, error, msg):
         (2**32, TypeId.UINT32),
         (2**64, TypeId.UINT64),
         (float(2**150), TypeId.FLOAT32),
+        (float(-(2**150)), TypeId.FLOAT32),
     ],
 )
 def test_from_py_overflow_errors(val, tid):
@@ -165,7 +170,7 @@ def test_from_py_typeerror(val):
         "float64",
     ],
 )
-def test_from_numpy(np_type):
+def test_from_numpy(np, np_type):
     np_klass = getattr(np, np_type)
     np_val = np_klass("1" if np_type == "str_" else 1)
     result = plc.Scalar.from_numpy(np_val)
@@ -174,12 +179,12 @@ def test_from_numpy(np_type):
 
 
 @pytest.mark.parametrize("np_type", ["datetime64", "timedelta64"])
-def test_from_numpy_notimplemented(np_type):
+def test_from_numpy_notimplemented(np, np_type):
     np_val = getattr(np, np_type)(1, "ns")
     with pytest.raises(NotImplementedError):
         plc.Scalar.from_numpy(np_val)
 
 
-def test_from_numpy_typeerror():
+def test_from_numpy_typeerror(np):
     with pytest.raises(TypeError):
         plc.Scalar.from_numpy(np.void(5))
