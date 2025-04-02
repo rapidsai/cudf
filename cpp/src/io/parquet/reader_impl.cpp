@@ -253,8 +253,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    skip_rows,
                    level_type_size,
                    decoder_mask,
-                   initial_str_offsets,
                    page_validity,
+                   initial_str_offsets,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -311,8 +311,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         initial_str_offsets,
                          page_validity,
+                         initial_str_offsets,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -324,8 +324,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
-                               initial_str_offsets,
                                page_validity,
+                               initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
   }
