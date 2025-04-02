@@ -454,6 +454,23 @@ TEST_F(StringOperationTest, StringContains)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(StringOperationTest, StringFind)
+{
+  auto a = cudf::test::strings_column_wrapper{"a", "b", " h", "123"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "about", "oh hi", "012345"};
+
+  std::string cuda = R"***(
+  __device__ void transform(int32_t * out, cudf::string_view a, cudf::string_view b){
+    *out =  b.find(a);
+  }
+  )***";
+
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 1};
+  auto result   = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::INT32), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TEST_F(StringOperationTest, MixedTypes)
 {
   auto a = cudf::test::strings_column_wrapper{"a", "b", "ccc", "dddd", "eee", "123"};
