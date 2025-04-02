@@ -368,10 +368,11 @@ cdef class Column:
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
         ImportError
-            If CuPy is not installed.
+            If the data is 2D and NumPy is not installed.
         """
-        iface = getattr(obj, "__cuda_array_interface__", None)
-        if iface is None:
+        try:
+            iface = obj.__cuda_array_interface__
+        except AttributeError:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         if iface.get("mask") is not None:
@@ -450,7 +451,7 @@ cdef class Column:
         TypeError
             If the input does not implement a supported array interface.
         ImportError
-            If NumPy or CuPy is required but not installed.
+            If NumPy is not installed.
 
         Notes
         -----
