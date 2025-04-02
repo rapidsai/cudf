@@ -934,14 +934,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             else:
                 if columns is not None and not columns.isin([data.name]).any():
-                    # data = data.copy()[:0]
-                    # col_accessor = ColumnAccessor(
-                    #     {col: data._column for col in columns}, verify=False
-                    # )
                     index = index[:0]
-                    empty = column_empty(0, dtype=CUDF_STRING_DTYPE)
                     col_accessor = ColumnAccessor(
-                        {col: empty for col in columns}, verify=False
+                        {
+                            col: column_empty(0, dtype=CUDF_STRING_DTYPE)
+                            for col in columns
+                        },
+                        verify=False,
                     )
                 else:
                     col_accessor = ColumnAccessor(
@@ -958,9 +957,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if columns is not None:
                 col_accessor = ColumnAccessor(
                     {
-                        k: column.column_empty(
-                            len(index), dtype=CUDF_STRING_DTYPE
-                        )
+                        k: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
                     verify=False,
@@ -1090,13 +1087,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         if second_columns is not None:
-            empty_column = column_empty(
-                col_accessor.nrows, dtype=CUDF_STRING_DTYPE
-            )
             new_data = {
                 second_label: col_accessor[second_label]
                 if second_label in col_accessor
-                else empty_column
+                else column_empty(col_accessor.nrows, dtype=CUDF_STRING_DTYPE)
                 for second_label in second_columns
             }
             col_accessor = ColumnAccessor(
@@ -3036,7 +3030,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             intersection = self._data.to_pandas_index.intersection(
                 columns.to_pandas()
             )
-
             df = self.loc[:, intersection]
 
         return df._reindex(
