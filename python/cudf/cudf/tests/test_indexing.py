@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import weakref
 from datetime import datetime
@@ -2392,3 +2392,22 @@ def test_loc_iloc_setitem_col_slice_non_cupy_types(indexer, dtype):
     getattr(df_pd, indexer)[:, 0] = getattr(df_pd, indexer)[:, 0]
     getattr(df_cudf, indexer)[:, 0] = getattr(df_cudf, indexer)[:, 0]
     assert_eq(df_pd, df_cudf)
+
+
+@pytest.mark.parametrize("indexer", ["iloc", "loc"])
+@pytest.mark.parametrize(
+    "column_slice",
+    [
+        slice(None),
+        slice(0, 0),
+        slice(0, 1),
+        slice(1, 0),
+        slice(0, 2, 2),
+    ],
+)
+def test_slice_empty_columns(indexer, column_slice):
+    df_pd = pd.DataFrame(index=[0, 1, 2])
+    df_cudf = cudf.from_pandas(df_pd)
+    result = getattr(df_cudf, indexer)[:, column_slice]
+    expected = getattr(df_pd, indexer)[:, column_slice]
+    assert_eq(result, expected)
