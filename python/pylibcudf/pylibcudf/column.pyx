@@ -3,6 +3,7 @@
 from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
@@ -13,7 +14,7 @@ from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+from .utils cimport int_to_bitmask_ptr, int_to_void_ptr, _get_stream
 
 import functools
 
@@ -129,7 +130,7 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col):
+    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=None):
         """Create a Column from a libcudf column.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -143,10 +144,11 @@ cdef class Column:
 
         cdef column_contents contents = libcudf_col.get().release()
 
+        stream = _get_stream(stream)
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
         cdef gpumemoryview data = gpumemoryview(
-            DeviceBuffer.c_from_unique_ptr(move(contents.data))
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
         )
 
         cdef gpumemoryview mask = None
