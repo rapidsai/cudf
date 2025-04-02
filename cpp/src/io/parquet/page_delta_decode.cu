@@ -444,8 +444,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          cudf::device_span<size_t> initial_str_offsets,
                           cudf::device_span<bool const> page_validity,
+                          cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -626,8 +626,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                                 device_span<ColumnChunkDesc const> chunks,
                                 size_t min_row,
                                 size_t num_rows,
-                                cudf::device_span<size_t> initial_str_offsets,
                                 cudf::device_span<bool const> page_validity,
+                                cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -851,8 +851,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                                    chunks,
                                                    min_row,
                                                    num_rows,
-                                                   initial_str_offsets,
                                                    page_validity,
+                                                   initial_str_offsets,
                                                    error_code);
   } else {
     gpuDecodeDeltaByteArray<uint16_t>
@@ -860,8 +860,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                                    chunks,
                                                    min_row,
                                                    num_rows,
-                                                   initial_str_offsets,
                                                    page_validity,
+                                                   initial_str_offsets,
                                                    error_code);
   }
 }
@@ -890,8 +890,8 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                                    chunks,
                                                    min_row,
                                                    num_rows,
-                                                   initial_str_offsets,
                                                    page_validity,
+                                                   initial_str_offsets,
                                                    error_code);
   } else {
     gpuDecodeDeltaLengthByteArray<uint16_t>
@@ -899,8 +899,8 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                                    chunks,
                                                    min_row,
                                                    num_rows,
-                                                   initial_str_offsets,
                                                    page_validity,
+                                                   initial_str_offsets,
                                                    error_code);
   }
 }
