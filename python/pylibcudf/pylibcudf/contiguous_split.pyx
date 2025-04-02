@@ -138,9 +138,10 @@ cpdef PackedColumns pack(Table input):
     PackedColumns
         The packed columns.
     """
-    return PackedColumns.from_libcudf(
-        make_unique[packed_columns](cpp_pack(input.view()))
-    )
+    cdef unique_ptr[packed_columns] pack
+    with nogil:
+        pack = move(make_unique[packed_columns](cpp_pack(input.view())))
+    return PackedColumns.from_libcudf(move(pack))
 
 
 cpdef Table unpack(PackedColumns input):
@@ -160,7 +161,9 @@ cpdef Table unpack(PackedColumns input):
     Table
         Copy of the packed columns.
     """
-    cdef table_view v = cpp_unpack(dereference(input.c_obj))
+    cdef table_view v
+    with nogil:
+        v = cpp_unpack(dereference(input.c_obj))
     return Table.from_table_view_of_arbitrary(v, input)
 
 
@@ -193,5 +196,7 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
     cdef const uint8_t* metadata_ptr = &_metadata[0]
     cdef const uint8_t* gpu_data_ptr = <uint8_t*>int_to_void_ptr(gpu_data.ptr)
 
-    cdef table_view v = cpp_unpack(metadata_ptr, gpu_data_ptr)
+    cdef table_view v
+    with nogil:
+        v = cpp_unpack(metadata_ptr, gpu_data_ptr)
     return Table.from_table_view_of_arbitrary(v, gpu_data)
