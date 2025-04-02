@@ -798,6 +798,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] page_validity Vector of booleans indicating the validity of each page
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
