@@ -35,7 +35,3 @@ include(rapids-cython-core)
 rapids_cython_init()
 
 add_subdirectory(cudf_kafka/_lib)
-
-if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET cudf_kafka PATHS "${cython_lib_dir}")
-endif()

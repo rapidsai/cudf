@@ -17,13 +17,13 @@ repos:
         exclude: |
           (?x)^(
             ^cpp/cmake/thirdparty/patches/.*|
-            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
+            ^python/cudf/cudf/tests/data/vocab.txt
           )
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
             ^cpp/cmake/thirdparty/patches/.*|
-            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
+            ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.6
@@ -62,7 +62,7 @@ repos:
             ^cpp/src/io/parquet/ipc/Schema_generated.h|
             ^cpp/src/io/parquet/ipc/Message_generated.h|
             ^cpp/include/cudf_test/cxxopts.hpp|
-            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
+            ^python/cudf/cudf/tests/data/vocab.txt|
             ^python/cudf/cudf/tests/text/test_text_methods.py
           )
   - repo: local
@@ -107,10 +107,6 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
-        exclude: |
-          (?x)^(
-            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
-          )
       - id: cmake-lint
         name: cmake-lint
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -122,10 +118,6 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
-        exclude: |
-          (?x)^(
-            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
-          )
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
@@ -159,8 +151,7 @@ repos:
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
-            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
       - id: verify-alpha-spec
       - id: verify-codeowners

@@ -1,5 +1,4 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
-
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp cimport bool
@@ -43,7 +42,8 @@ from cython.operator cimport dereference
 from pylibcudf.libcudf.types cimport size_type
 from cython.operator cimport dereference
 from pylibcudf.libcudf.types cimport size_type
-
+from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.utils cimport _get_stream
 __all__ = [
     "ColumnEncoding",
     "ColumnInMetadata",
@@ -385,10 +385,13 @@ cdef class TableWithMetadata:
         return names
 
     @staticmethod
-    cdef TableWithMetadata from_libcudf(table_with_metadata& tbl_with_meta):
+    cdef TableWithMetadata from_libcudf(
+        table_with_metadata& tbl_with_meta, Stream stream = None
+    ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
+        stream = _get_stream(stream)
+        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl), stream)
         out.metadata = tbl_with_meta.metadata
         return out
 
@@ -408,6 +411,35 @@ cdef class TableWithMetadata:
         of rows for each file being read in.
         """
         return self.metadata.num_rows_per_source
+
+    # The following functions are currently only for Parquet reader
+    @property
+    def num_input_row_groups(self):
+        """
+        Returns the total number of input
+        Parquet row groups across all data sources.
+        """
+        return self.metadata.num_input_row_groups
+
+    @property
+    def num_row_groups_after_stats_filter(self):
+        """
+        Returns the number of remaining Parquet row groups
+        after stats filter. None if no filtering done.
+        """
+        if self.metadata.num_row_groups_after_stats_filter.has_value():
+            return self.metadata.num_row_groups_after_stats_filter.value()
+        return None
+
+    @property
+    def num_row_groups_after_bloom_filter(self):
+        """
+        Returns the number of remaining Parquet row groups
+        after bloom filter. None if no filtering done.
+        """
+        if self.metadata.num_row_groups_after_bloom_filter.has_value():
+            return self.metadata.num_row_groups_after_bloom_filter.value()
+        return None
 
 
 cdef class SourceInfo:

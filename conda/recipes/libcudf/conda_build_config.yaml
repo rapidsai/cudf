@@ -23,7 +23,7 @@ dlpack_version:
   - ">=0.8,<1.0"
 
 librdkafka_version:
-  - ">=2.5.0,<2.6.0a0"
+  - ">=2.8.0,<2.9.0a0"
 
 flatbuffers_version:
   - "=24.3.25"

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -9,6 +9,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
+from libcpp.optional cimport optional
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
@@ -78,6 +79,10 @@ cdef extern from "cudf/io/types.hpp" \
         vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
         vector[size_t] num_rows_per_source
+        # The following variables are currently only computed for Parquet reader
+        size_type num_input_row_groups
+        optional[size_type] num_row_groups_after_stats_filter
+        optional[size_type] num_row_groups_after_bloom_filter
 
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl

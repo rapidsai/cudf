@@ -27,16 +27,20 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set(one_value GPUS PERCENT STREAM_MODE)
   set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
     set(_CUDF_TEST_PERCENT 15)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_GPUS)
     set(_CUDF_TEST_GPUS 1)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
@@ -55,16 +59,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME}
-    PRIVATE cudf::cudftestutil
-            cudf::cudftestutil_impl
-            GTest::gmock
-            GTest::gmock_main
-            GTest::gtest
-            GTest::gtest_main
-            nvtx3::nvtx3-cpp
-            $<TARGET_NAME_IF_EXISTS:conda_env>
-            "${_CUDF_TEST_EXTRA_LIBS}"
+    ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -283,6 +279,7 @@ ConfigureTest(
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
+  interop/arrow_data_structures_test.cpp
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
@@ -309,7 +306,7 @@ ConfigureTest(
 ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   PARQUET_TEST
@@ -340,7 +337,7 @@ ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
@@ -500,6 +497,7 @@ ConfigureTest(
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
+  rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
   PERCENT 70
@@ -748,7 +746,6 @@ ConfigureTest(
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
-  streams/text/subword_tokenize_test.cpp
   streams/text/tokenize_test.cpp
   STREAM_MODE
   testing
