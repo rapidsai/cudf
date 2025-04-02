@@ -21,7 +21,7 @@
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pushimpl(JNIEnv* env,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_push(JNIEnv* env,
                                                           jclass clazz,
                                                           jstring name,
                                                           jint color_bits)
@@ -35,7 +35,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pushimpl(JNIEnv* env,
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_popimpl(JNIEnv* env, jclass clazz)
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv* env, jclass clazz)
 {
   try {
     nvtxDomainRangePop(nvtx3::domain::get<cudf::jni::java_domain>());
