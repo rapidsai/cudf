@@ -3614,13 +3614,14 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
         }
     )
 
+    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
+    if version.parse(pa.__version__) < version.parse("19.0.0"):
+        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
+        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
+
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True, index=index)
-
-    # Convert decimal types to d128
-    expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-    expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
