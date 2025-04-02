@@ -1402,7 +1402,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return last
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return concat_columns([self, as_column(other)])
+        return concat_columns([self, other])
 
     def quantile(
         self,

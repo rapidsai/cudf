@@ -123,9 +123,9 @@ class NumericalColumn(NumericalBaseColumn):
                 f"Cannot use a {type(value).__name__} to find an index of "
                 f"a {self.dtype} Index."
             )
-        if (
-            value is not None
-            and self.dtype.kind in {"c", "f"}
+        elif (
+            self.dtype.kind in {"c", "f"}
+            and isinstance(value, (float, np.floating))
             and np.isnan(value)
         ):
             return self.isnan().indices_of(True)

@@ -861,17 +861,6 @@ class DatetimeColumn(column.ColumnBase):
             value = pd.Timestamp(value.item())
         return super()._cast_setitem_value(value)
 
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
-        value = (
-            pd.to_datetime(value)
-            .to_numpy()
-            .astype(self.dtype)
-            .astype(np.dtype(np.int64))
-        )
-        return self.astype(np.dtype(np.int64)).indices_of(value)
-
     @property
     def is_unique(self) -> bool:
         return self.astype(np.dtype(np.int64)).is_unique
