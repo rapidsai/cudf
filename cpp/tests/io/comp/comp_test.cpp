@@ -298,9 +298,8 @@ TEST_P(ZstdDecompressTest, HelloWorld)
 {
   std::string const uncompressed{"hello world"};
   std::vector<uint8_t> input = vector_from_string(uncompressed);
-  auto compressed =
-    cudf::io::detail::compress(cudf::io::compression_type::ZSTD, input, cudf::get_default_stream());
-  auto output = Decompress(
+  auto compressed            = cudf::io::detail::compress(cudf::io::compression_type::ZSTD, input);
+  auto output                = Decompress(
     GetParam(), cudf::host_span<uint8_t const>(compressed.data(), compressed.size()), input.size());
   EXPECT_EQ(output, input);
 }

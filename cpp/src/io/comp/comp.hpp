@@ -31,13 +31,10 @@ namespace io::detail {
  *
  * @param compression Type of compression of the input data
  * @param src         Decompressed host buffer
- * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Vector containing the Compressed output
  */
-std::vector<uint8_t> compress(compression_type compression,
-                              host_span<uint8_t const> src,
-                              rmm::cuda_stream_view stream);
+std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t const> src);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed.
