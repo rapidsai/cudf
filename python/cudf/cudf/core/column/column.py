@@ -2158,7 +2158,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         *,
         method: plc.aggregation.RankMethod,
         column_order: plc.types.Order,
-        null_handling: plc.types.NullPolicy.EXCLUDE,
+        null_handling: plc.types.NullPolicy,
         null_precedence: plc.types.NullOrder,
         pct: bool,
     ) -> Self:
