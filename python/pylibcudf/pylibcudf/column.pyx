@@ -396,10 +396,19 @@ cdef class Column:
                 raise ValueError(
                     "Number of rows exceeds size_type limit for offsets column."
                 )
+
+            class _Ravelled:
+                def __init__(self, obj):
+                    self.obj = obj
+                    cai = obj.__cuda_array_interface__.copy()
+                    shape = cai["shape"]
+                    cai["shape"] = (shape[0]*shape[1],)
+                    self.__cuda_array_interface__ = cai
+            rav_obj = _Ravelled(obj)
             data_col = cls(
                 data_type=data_type,
-                size=shape[0]*shape[1],
-                data=gpumemoryview(obj),
+                size=rav_obj.__cuda_array_interface__["shape"][0],
+                data=gpumemoryview(rav_obj),
                 mask=None,
                 null_count=0,
                 offset=0,
