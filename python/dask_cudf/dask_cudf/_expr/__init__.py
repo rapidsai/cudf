@@ -53,7 +53,7 @@ from dask.dataframe.dask_expr.io.parquet import (
 _dask_version = importlib.metadata.version("dask")
 
 # TODO: change ">2025.2.0" to ">={next-version}" when released.
-DASK_2025_3_0 = Version(_dask_version) > Version("2025.2.1")
+DASK_2025_3_0 = Version(_dask_version) > Version("2025.2.0")
 
 
 if DASK_2025_3_0:
