@@ -327,7 +327,6 @@ void host_compress(compression_type compression,
   if (compression == compression_type::NONE) { return; }
 
   auto const num_chunks = inputs.size();
-  auto h_results        = cudf::detail::make_host_vector<compression_result>(num_chunks, stream);
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
@@ -350,17 +349,20 @@ void host_compress(compression_type compression,
       [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
-      auto const h_out = compress(compression, h_in, cur_stream);
+
+      auto const h_out = compress(compression, h_in);
+      h_in.clear();
+
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
       return h_out.size();
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-
+  auto h_results = cudf::detail::make_pinned_vector_sync<compression_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
-  cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
+  cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
 [[nodiscard]] bool host_compression_supported(compression_type compression)
@@ -433,9 +435,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
 }
 
-std::vector<std::uint8_t> compress(compression_type compression,
-                                   host_span<uint8_t const> src,
-                                   rmm::cuda_stream_view)
+std::vector<std::uint8_t> compress(compression_type compression, host_span<uint8_t const> src)
 {
   CUDF_FUNC_RANGE();
   switch (compression) {
