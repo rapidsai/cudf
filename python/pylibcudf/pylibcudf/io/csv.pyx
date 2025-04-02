@@ -660,7 +660,7 @@ cpdef TableWithMetadata read_csv(
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj, s.view()))
 
-    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
+    cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s)
     return tbl_meta
 
 
