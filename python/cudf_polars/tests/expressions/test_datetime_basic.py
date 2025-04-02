@@ -273,7 +273,15 @@ def test_isoyear():
 @pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
 def test_datetime_cast_time_unit(dtype, time_unit):
     sr = pl.Series(
-        [datetime.datetime(2001, 1, 1), datetime.datetime(2001, 1, 3)], dtype=dtype
+        "date",
+        [
+            datetime.datetime(1970, 1, 1, 0, 0, 0),
+            datetime.datetime(1999, 12, 31, 23, 59, 59),
+            datetime.datetime(2001, 1, 1, 12, 0, 0),
+            datetime.datetime(2020, 2, 29, 23, 59, 59),
+            datetime.datetime(2024, 12, 31, 23, 59, 59, 999999),
+        ],
+        dtype=dtype,
     )
     df = pl.DataFrame({"date": sr}).lazy()
 
