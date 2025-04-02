@@ -61,7 +61,7 @@ struct bounded_closed {
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
    */
-  cudf::scalar const* delta() const noexcept { return &delta_; }
+  [[nodiscard]] cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -90,7 +90,7 @@ struct bounded_open {
    * @brief Return pointer to the row delta scalar.
    * @return pointer to scalar, not null.
    */
-  cudf::scalar const* delta() const noexcept { return &delta_; }
+  [[nodiscard]] cudf::scalar const* delta() const noexcept { return &delta_; }
 };
 
 /**
@@ -103,7 +103,7 @@ struct unbounded {
    * @brief Return a null row delta
    * @return nullptr
    */
-  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+  [[nodiscard]] constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
 };
 /**
  * @brief Strongly typed wrapper for current_row rolling windows.
@@ -115,7 +115,7 @@ struct current_row {
    * @brief Return a null row delta
    * @return nullptr
    */
-  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+  [[nodiscard]] constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
 };
 
 /**
