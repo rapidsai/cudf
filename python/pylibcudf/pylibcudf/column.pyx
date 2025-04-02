@@ -22,6 +22,16 @@ from functools import cache
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
+
+class _Ravelled:
+    def __init__(self, obj):
+        self.obj = obj
+        cai = obj.__cuda_array_interface__.copy()
+        shape = cai["shape"]
+        cai["shape"] = (shape[0]*shape[1],)
+        self.__cuda_array_interface__ = cai
+
+
 cdef class Column:
     """A container of nullable device data as a column of elements.
 
@@ -396,14 +406,6 @@ cdef class Column:
                 raise ValueError(
                     "Number of rows exceeds size_type limit for offsets column."
                 )
-
-            class _Ravelled:
-                def __init__(self, obj):
-                    self.obj = obj
-                    cai = obj.__cuda_array_interface__.copy()
-                    shape = cai["shape"]
-                    cai["shape"] = (shape[0]*shape[1],)
-                    self.__cuda_array_interface__ = cai
             rav_obj = _Ravelled(obj)
             data_col = cls(
                 data_type=data_type,
@@ -450,8 +452,8 @@ cdef class Column:
 
         Notes
         -----
-        - For `cupy.ndarray`, this uses the CUDA array interface and
-          supports 1D or 2D arrays.
+        - 1D and 2D C-contiguous device arrays are supported.
+          The data are not copied.
         - For `numpy.ndarray`, this is not yet implemented.
 
         Examples
