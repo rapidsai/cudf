@@ -228,7 +228,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   auto h_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
   std::copy(_page_validity.cbegin(), _page_validity.cend(), h_page_validity.begin());
 
-  auto d_page_validity = cudf::detail::make_device_uvector_async<bool>(
+  auto page_validity = cudf::detail::make_device_uvector_async<bool>(
     h_page_validity, _stream, cudf::get_current_device_resource_ref());
 
   // create this before we fork streams
@@ -247,8 +247,8 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    skip_rows,
                    level_type_size,
                    decoder_mask,
+                   page_validity,
                    initial_str_offsets,
-                   d_page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -305,8 +305,8 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                          num_rows,
                          skip_rows,
                          level_type_size,
+                         page_validity,
                          initial_str_offsets,
-                         d_page_validity,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -318,8 +318,8 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                                num_rows,
                                skip_rows,
                                level_type_size,
+                               page_validity,
                                initial_str_offsets,
-                               d_page_validity,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -331,7 +331,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                       num_rows,
                       skip_rows,
                       level_type_size,
-                      d_page_validity,
+                      page_validity,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -358,7 +358,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        d_page_validity,
+                        page_validity,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -415,7 +415,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    num_rows,
                    skip_rows,
                    level_type_size,
-                   d_page_validity,
+                   page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   }

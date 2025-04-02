@@ -160,10 +160,12 @@ __device__ void update_string_offsets_for_pruned_pages(
   PageInfo const& page,
   bool has_lists)
 {
+  namespace cg = cooperative_groups;
+
   // Initial string offset
   auto const initial_value = state->page.str_offset;
   auto value_count         = state->page.num_input_values;
-  int const t              = threadIdx.x;
+  auto const tid           = cg::this_thread_block().thread_rank();
 
   // Offsets pointer contains string sizes in case of large strings and actual offsets
   // otherwise
@@ -173,7 +175,7 @@ __device__ void update_string_offsets_for_pruned_pages(
   // column construction. Otherwise, convert string sizes to final offsets
   if (state->col.is_large_string_col) {
     // Write zero string sizes
-    for (int idx = t; idx < value_count; idx += blockDim.x) {
+    for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = 0;
     }
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
@@ -186,7 +188,7 @@ __device__ void update_string_offsets_for_pruned_pages(
     if (not has_lists) { value_count -= state->first_row; }
 
     // Write the initial offset at all positions to indicate zero sized strings
-    for (int idx = t; idx < value_count; idx += blockDim.x) {
+    for (int idx = tid; idx < value_count; idx += block_size) {
       offptr[idx] = initial_value;
     }
   }

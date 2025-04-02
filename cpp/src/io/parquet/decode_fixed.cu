@@ -967,6 +967,7 @@ constexpr bool is_split_decode()
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_validity Vector of booleans indicating the validity of each page
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param error_code Error code to set if an error is encountered
  */
@@ -976,8 +977,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
-                           cudf::device_span<size_t> initial_str_offsets,
                            cudf::device_span<bool const> page_validity,
+                           cudf::device_span<size_t> initial_str_offsets,
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
@@ -1264,8 +1265,8 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      chunks,
                                                      min_row,
                                                      num_rows,
-                                                     initial_str_offsets,
                                                      page_validity,
+                                                     initial_str_offsets,
                                                      error_code);
     } else {
       gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
@@ -1273,8 +1274,8 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      chunks,
                                                      min_row,
                                                      num_rows,
-                                                     initial_str_offsets,
                                                      page_validity,
+                                                     initial_str_offsets,
                                                      error_code);
     }
   };
