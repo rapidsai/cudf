@@ -173,8 +173,10 @@ class reader::impl {
 
   /**
    * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
+   *
+   * @param page_validity A boolean host vector indicating if a subpass page is valid
    */
-  void update_output_bitmasks_for_pruned_pages();
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_validity);
 
   /**
    * @brief Read a chunk of data and return an output table.

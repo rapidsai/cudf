@@ -21,6 +21,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -211,15 +212,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  // TODO: Page pruning not yet implemented (especially for the chunked reader) so mark all pages to
-  // be valid
-  if (pass.page_validity.size() == 0) {
-    pass.page_validity = cudf::detail::hostdevice_vector<bool>(pass.pages.size(), _stream);
-    std::fill(pass.page_validity.begin(), pass.page_validity.end(), true);
-
-    pass.page_validity.host_to_device_async(_stream);
-  }
-  subpass.page_validity = pass.page_validity;
+  // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
+  // this subpass to be valid.
+  auto host_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::fill(host_page_validity.begin(), host_page_validity.end(), true);
+  auto page_validity = cudf::detail::make_device_uvector_async(host_page_validity, _stream, _mr);
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
@@ -257,7 +254,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    level_type_size,
                    decoder_mask,
                    initial_str_offsets,
-                   subpass.page_validity,
+                   page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   };
@@ -315,7 +312,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          skip_rows,
                          level_type_size,
                          initial_str_offsets,
-                         subpass.page_validity,
+                         page_validity,
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -328,7 +325,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                skip_rows,
                                level_type_size,
                                initial_str_offsets,
-                               subpass.page_validity,
+                               page_validity,
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -340,7 +337,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                       num_rows,
                       skip_rows,
                       level_type_size,
-                      subpass.page_validity,
+                      page_validity,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -367,7 +364,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        subpass.page_validity,
+                        page_validity,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -424,7 +421,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    num_rows,
                    skip_rows,
                    level_type_size,
-                   subpass.page_validity,
+                   page_validity,
                    error_code.data(),
                    streams[s_idx++]);
   }
@@ -436,8 +433,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  // Invalidate output buffer bitmasks at row indices spanned by pruned pages
-  update_output_bitmasks_for_pruned_pages();
+  // Invalidate output buffer nullmasks at row indices spanned by pruned pages
+  update_output_nullmasks_for_pruned_pages(host_page_validity);
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -874,6 +871,44 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
                           metadata.get_num_row_groups(),
                           metadata.get_key_value_metadata()[0],
                           metadata.get_rowgroup_metadata()};
+}
+
+void reader::impl::update_output_nullmasks_for_pruned_pages(
+  cudf::host_span<bool const> page_validity)
+{
+  auto const& subpass    = _pass_itm_data->subpass;
+  auto const& pages      = subpass->pages;
+  auto const& chunks     = _pass_itm_data->chunks;
+  auto const num_columns = _input_columns.size();
+
+  CUDF_EXPECTS(pages.size() == page_validity.size(), "Page validity size mismatch");
+
+  thrust::for_each(
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_validity.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_end(), page_validity.end())),
+    [&](auto const& page_and_validity_pair) {
+      // Return if the page is valid
+      if (thrust::get<1>(page_and_validity_pair)) { return; }
+
+      auto const& page     = thrust::get<0>(page_and_validity_pair);
+      auto const chunk_idx = page.chunk_idx;
+      auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
+      auto const end_row   = start_row + page.num_rows;
+      auto& input_col      = _input_columns[chunk_idx % num_columns];
+      auto max_depth       = input_col.nesting_depth();
+      auto* cols           = &_output_buffers;
+
+      for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+        auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+        cols          = &out_buf.children;
+        // Continue if the current column is a list column
+        if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) { continue; }
+        // Update the nullmask corresponding to the current page's row bounds
+        cudf::set_null_mask(out_buf.null_mask(), start_row, end_row, false, _stream);
+        // Increment the null count
+        out_buf.null_count() += (end_row - start_row);
+      }
+    });
 }
 
 }  // namespace cudf::io::parquet::detail
