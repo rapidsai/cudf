@@ -12,6 +12,7 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
+from libcpp.limits cimport numeric_limits
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -122,7 +123,7 @@ cdef class Scalar:
             The datatype to cast the value to. If None,
             the type is inferred from `py_val`.
 
-        Return
+        Returns
         -------
         Scalar
             New pylibcudf.Scalar
@@ -171,17 +172,22 @@ def _(py_val, dtype: DataType | None):
 
 @_from_py.register(float)
 def _(py_val: float, dtype: DataType | None):
-    if dtype is None:
-        dtype = DataType(type_id.FLOAT64)
-
     cdef unique_ptr[scalar] c_obj
-    tid = dtype.id()
+    cdef DataType c_dtype
+    if dtype is None:
+        c_dtype = DataType(type_id.FLOAT64)
+    else:
+        c_dtype = <DataType>dtype
+
+    tid = c_dtype.id()
 
     if tid == type_id.FLOAT32:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if abs(py_val) > numeric_limits[float].max():
+            raise OverflowError(f"{py_val} out of range for FLOAT32 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[float]*>c_obj.get()).set_value(py_val)
     elif tid == type_id.FLOAT64:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
     else:
         raise TypeError(f"Cannot convert float to Scalar with dtype {tid.name}")
@@ -191,44 +197,70 @@ def _(py_val: float, dtype: DataType | None):
 
 @_from_py.register(int)
 def _(py_val: int, dtype: DataType | None):
-    if dtype is None:
-        dtype = DataType(type_id.INT64)
-
     cdef unique_ptr[scalar] c_obj
-    tid = dtype.id()
+    cdef DataType c_dtype
+    if dtype is None:
+        c_dtype = DataType(type_id.INT64)
+    else:
+        c_dtype = <DataType>dtype
+    tid = c_dtype.id()
 
     if tid == type_id.INT8:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if abs(py_val) > numeric_limits[int8_t].max():
+            raise OverflowError(f"{py_val} out of range for INT8 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int8_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.INT16:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if abs(py_val) > numeric_limits[int16_t].max():
+            raise OverflowError(f"{py_val} out of range for INT16 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int16_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.INT32:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if abs(py_val) > numeric_limits[int32_t].max():
+            raise OverflowError(f"{py_val} out of range for INT32 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int32_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.INT64:
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if abs(py_val) > numeric_limits[int64_t].max():
+            raise OverflowError(f"{py_val} out of range for INT64 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.UINT8:
         if py_val < 0:
             raise ValueError("Cannot assign negative value to UINT8 scalar")
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if py_val > numeric_limits[uint8_t].max():
+            raise OverflowError(f"{py_val} out of range for UINT8 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.UINT16:
         if py_val < 0:
             raise ValueError("Cannot assign negative value to UINT16 scalar")
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if py_val > numeric_limits[uint16_t].max():
+            raise OverflowError(f"{py_val} out of range for UINT16 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.UINT32:
         if py_val < 0:
             raise ValueError("Cannot assign negative value to UINT32 scalar")
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if py_val > numeric_limits[uint32_t].max():
+            raise OverflowError(f"{py_val} out of range for UINT32 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(py_val)
+
     elif tid == type_id.UINT64:
         if py_val < 0:
             raise ValueError("Cannot assign negative value to UINT64 scalar")
-        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        if py_val > numeric_limits[uint64_t].max():
+            raise OverflowError(f"{py_val} out of range for UINT64 scalar")
+        c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
+
     else:
         raise TypeError(f"Cannot convert int to Scalar with dtype {tid.name}")
 

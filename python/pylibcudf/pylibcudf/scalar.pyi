@@ -5,7 +5,7 @@ from typing import Any
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
 
-NpDtype = type[Any]
+NpGeneric = type[Any]
 
 class Scalar:
     def __init__(self): ...
@@ -16,4 +16,4 @@ class Scalar:
     @classmethod
     def from_py(cls, py_val: Any, dtype: DataType | None = None) -> Scalar: ...
     @classmethod
-    def from_numpy(cls, np_val: NpDtype) -> Scalar: ...
+    def from_numpy(cls, np_val: NpGeneric) -> Scalar: ...
