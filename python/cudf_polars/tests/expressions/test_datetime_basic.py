@@ -158,10 +158,14 @@ def test_duration_total_component_extract(field, dtype):
         {
             "durations": pl.Series(
                 [
-                    datetime.timedelta(seconds=1),
-                    datetime.timedelta(seconds=2),
-                    datetime.timedelta(seconds=3),
-                    datetime.timedelta(days=2, seconds=4),
+                    1,
+                    15,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    10000,
+                    15000,
                 ],
                 dtype=dtype,
             ),

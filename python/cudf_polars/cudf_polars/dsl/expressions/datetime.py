@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import math
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -174,18 +173,13 @@ class TemporalFunction(Expr):
             elif self.name == TemporalFunction.Name.TotalNanoseconds:
                 denom = 1
             conversion = _unit_to_nanoseconds_conversion[column.obj.type().id()] / denom
-            seconds = plc.binaryop.binary_operation(
+            result = plc.binaryop.binary_operation(
                 plc.unary.cast(column.obj, plc.DataType(plc.TypeId.INT64)),
                 plc.interop.from_arrow(pa.scalar(conversion, type=pa.float64())),
                 plc.binaryop.BinaryOperator.MUL,
                 plc.DataType(plc.TypeId.INT64),
             )
-            decimal = plc.unary.cast(seconds, plc.DataType(plc.TypeId.DECIMAL128))
-            factor = abs(int(math.log10(conversion)))
-            result = plc.round.round(
-                decimal, factor, plc.round.RoundingMethod.HALF_EVEN
-            )
-            return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
+            return Column(result)
 
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
