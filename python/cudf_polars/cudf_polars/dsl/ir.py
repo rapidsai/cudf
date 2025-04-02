@@ -447,6 +447,21 @@ class Scan(IR):
             self.predicate,
         )
 
+    @staticmethod
+    def add_file_paths(
+        name: str, paths: list[str], rows_per_path: list[int], df: DataFrame
+    ) -> DataFrame:
+        """
+        Add a Column of file paths to the DataFrame.
+
+        Each path is repeated according to the number of rows read from it.
+        """
+        (filepaths,) = plc.filling.repeat(
+            plc.Table([plc.interop.from_arrow(pa.array(paths))]),
+            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+        ).columns()
+        return df.with_columns([Column(filepaths, name=name)])
+
     @classmethod
     def do_evaluate(
         cls,
@@ -463,16 +478,6 @@ class Scan(IR):
         predicate: expr.NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-
-        def _include_file_paths_column(
-            include_file_paths: str, paths: list[str], repeats: list[int], df: DataFrame
-        ) -> DataFrame:
-            (filepaths,) = plc.filling.repeat(
-                plc.Table([plc.interop.from_arrow(pa.array(paths))]),
-                plc.interop.from_arrow(pa.array(repeats, type=pa.int32())),
-            ).columns()
-            return df.with_columns([Column(filepaths, name=include_file_paths)])
-
         if typ == "csv":
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -555,11 +560,12 @@ class Scan(IR):
                 colnames[0],
             )
             if include_file_paths is not None:
-                (file_paths,) = plc.filling.repeat(
-                    plc.Table([plc.interop.from_arrow(pa.array(seen_paths))]),
-                    plc.interop.from_arrow(pa.array(t.num_rows() for t in tables)),
-                ).columns()
-                df = df.with_columns([Column(file_paths, name=include_file_paths)])
+                df = Scan.add_file_paths(
+                    include_file_paths,
+                    seen_paths,
+                    pa.array(t.num_rows() for t in tables),
+                    df,
+                )
         elif typ == "parquet":
             filters = None
             if predicate is not None and row_index is None:
@@ -593,7 +599,7 @@ class Scan(IR):
                         default=cls.PARQUET_DEFAULT_PASS_LIMIT,
                     ),
                 )
-                chk = reader.read_chunk()
+                chunk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
 
                 def slice_skip(tbl: plc.Table) -> plc.Table:
@@ -608,13 +614,13 @@ class Scan(IR):
                         rows_left_to_skip -= chunk_skip
                     return tbl
 
-                tbl = slice_skip(chk.tbl)
+                tbl = slice_skip(chunk.tbl)
                 # TODO: Nested column names
-                names = chk.column_names(include_children=False)
+                names = chunk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    chk = reader.read_chunk()
-                    tbl = slice_skip(chk.tbl)
+                    chunk = reader.read_chunk()
+                    tbl = slice_skip(chunk.tbl)
 
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
@@ -628,8 +634,8 @@ class Scan(IR):
                     names=names,
                 )
                 if include_file_paths is not None:
-                    df = _include_file_paths_column(
-                        include_file_paths, paths, chk.num_rows_per_source, df
+                    df = Scan.add_file_paths(
+                        include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
                 if n_rows != -1:
@@ -643,7 +649,7 @@ class Scan(IR):
                     tbl_w_meta.column_names(include_children=False),
                 )
                 if include_file_paths is not None:
-                    df = _include_file_paths_column(
+                    df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
                     )
             if filters is not None:
