@@ -72,7 +72,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
   // page is invalid.
   // MH: What to do if `has_repetition` is true?
-  if (!page_validity[page_idx]) {
+  if (not page_validity[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
