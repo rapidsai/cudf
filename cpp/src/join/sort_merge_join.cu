@@ -388,8 +388,6 @@ sort_merge_inner_join(table_view const& left,
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() == right.num_columns(),
                "Number of columns must match for a join");
-  CUDF_EXPECTS(!cudf::has_nested_columns(left) && !cudf::has_nested_columns(right),
-               "Don't have sorting logic for nested columns yet");
 
   auto [true_left_view, true_right_view, left_table, right_table] =
     preprocess_tables(left, right, compare_nulls, stream, mr);
@@ -437,8 +435,6 @@ merge_inner_join(table_view const& sorted_left,
   // Sanity checks
   CUDF_EXPECTS(sorted_left.num_columns() == sorted_right.num_columns(),
                "Number of columns must match for a join");
-  CUDF_EXPECTS(!cudf::has_nested_columns(sorted_left) && !cudf::has_nested_columns(sorted_right),
-               "Don't have sorting logic for nested columns yet");
 
   auto [true_sorted_left_view, true_sorted_right_view, left_table, right_table] =
     preprocess_tables(sorted_left, sorted_right, compare_nulls, stream, mr);

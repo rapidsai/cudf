@@ -888,9 +888,9 @@ TEST_P(JoinParameterizedTest, InnerJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-// TODO: needs to be parameterized as well
-TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
+TEST_P(JoinParameterizedTest, InnerJoinWithStructsAndNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -935,7 +935,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3});
+  auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1797,8 +1797,9 @@ TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinNoNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1_w({"s1", "s1", "s0", "s4", "s0"});
   auto col0_1 = cudf::dictionary::encode(col0_1_w);
@@ -1812,7 +1813,7 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   auto t0 = cudf::table_view({col0_0, col0_1->view(), col0_2});
   auto t1 = cudf::table_view({col1_0, col1_1->view(), col1_2});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded1    = cudf::dictionary::decode(result_view.column(1));
   auto decoded4    = cudf::dictionary::decode(result_view.column(4));
@@ -1834,8 +1835,9 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinWithNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2_w{{0, 1, 2, 4, 1}};
@@ -1849,7 +1851,7 @@ TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
   auto t0 = cudf::table_view({col0_0, col0_1, col0_2->view()});
   auto t1 = cudf::table_view({col1_0, col1_1, col1_2->view()});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded2    = cudf::dictionary::decode(result_view.column(2));
   auto decoded5    = cudf::dictionary::decode(result_view.column(5));
