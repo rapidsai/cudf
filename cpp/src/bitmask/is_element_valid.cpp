@@ -35,7 +35,7 @@ bool is_element_valid_sync(column_view const& col_view,
   size_type const index = element_index + col_view.offset();
 
   auto const word =
-    cudf::detail::make_host_vector_sync(
+    cudf::detail::make_host_vector(
       device_span<bitmask_type const>{col_view.null_mask() + word_index(index), 1}, stream)
       .front();
 

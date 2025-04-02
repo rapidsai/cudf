@@ -177,7 +177,7 @@ template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   auto col_span  = cudf::device_span<T const>(c.data<T>(), c.size());
-  auto host_data = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
+  auto host_data = cudf::detail::make_host_vector(col_span, cudf::get_default_stream());
   return {std::move(host_data), bitmask_to_host(c)};
 }
 

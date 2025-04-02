@@ -32,7 +32,7 @@ struct host_ticket {
   cudaEvent_t event{};  // tracks the completion of the last device-to-host copy.
   cudf::detail::host_vector<char> buffer;
 
-  host_ticket() : buffer{cudf::detail::make_pinned_vector_sync<char>(0, cudf::get_default_stream())}
+  host_ticket() : buffer{cudf::detail::make_pinned_vector<char>(0, cudf::get_default_stream())}
   {
     cudaEventCreate(&event);
   }
@@ -77,7 +77,7 @@ class datasource_chunk_reader : public data_chunk_reader {
 
       // resize the host buffer as necessary to contain the requested number of bytes
       if (h_ticket.buffer.size() < read_size) {
-        h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+        h_ticket.buffer = cudf::detail::make_pinned_vector<char>(read_size, stream);
       }
 
       _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer.data()));
@@ -138,7 +138,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
     // resize the host buffer as necessary to contain the requested number of bytes
     if (h_ticket.buffer.size() < read_size) {
-      h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+      h_ticket.buffer = cudf::detail::make_pinned_vector<char>(read_size, stream);
     }
 
     // read data from the host istream in to the pinned host memory buffer

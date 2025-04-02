@@ -1845,7 +1845,7 @@ orc_table_view make_orc_table_view(table_view const& table,
   return {std::move(orc_columns),
           std::move(d_orc_columns),
           str_col_indexes,
-          cudf::detail::make_device_uvector_sync(
+          cudf::detail::make_device_uvector(
             str_col_indexes, stream, cudf::get_current_device_resource_ref())};
 }
 
@@ -2014,7 +2014,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
                        orc_table.d_string_column_indices,
                        stream);
 
-  auto const h_counts = cudf::detail::make_host_vector_sync(counts, stream);
+  auto const h_counts = cudf::detail::make_host_vector(counts, stream);
 
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
@@ -2237,8 +2237,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       return lhs.stream_size < rhs.stream_size;
     }));
 
-  auto const h_longest_stream = cudf::detail::make_host_vector_sync(
-    device_span<stripe_stream const>{longest_stream, 1}, stream);
+  auto const h_longest_stream =
+    cudf::detail::make_host_vector(device_span<stripe_stream const>{longest_stream, 1}, stream);
   return h_longest_stream[0].stream_size;
 }
 

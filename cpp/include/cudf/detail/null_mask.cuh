@@ -444,7 +444,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        cudf::get_current_device_resource_ref());
 
   // Copy the results back to the host.
-  return make_std_vector_sync(d_bit_counts, stream);
+  return make_std_vector(d_bit_counts, stream);
 }
 
 // Count non-zero bits in the specified ranges.

@@ -406,7 +406,7 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector_sync(
+    auto const h_bytes = cudf::detail::make_host_vector(
       device_span<char const>{ptr_all_bytes, total_num_bytes}, stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);

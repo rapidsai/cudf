@@ -108,8 +108,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    return std::pair(std::move(uniq_tbl),
-                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
   } else {  //( num_partitions > nrows )
     rmm::device_uvector<cudf::size_type> d_row_indices(nrows, stream);
 
@@ -146,8 +145,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
 
-    return std::pair(std::move(uniq_tbl),
-                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
   }
 }
 }  // namespace

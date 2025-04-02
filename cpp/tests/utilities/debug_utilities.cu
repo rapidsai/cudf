@@ -168,7 +168,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
   auto const h_shifted_offsets =
-    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::get_default_stream());
+    cudf::detail::make_host_vector(shifted_offsets, cudf::get_default_stream());
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];

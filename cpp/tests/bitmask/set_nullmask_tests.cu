@@ -55,7 +55,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
                       result.begin(),
                       valid_bit_functor{bitmask});
 
-    auto host_result = cudf::detail::make_host_vector_sync(result, stream);
+    auto host_result = cudf::detail::make_host_vector(result, stream);
     EXPECT_THAT(host_result, testing::ElementsAreArray(expect));
   }
 

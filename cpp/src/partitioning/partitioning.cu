@@ -696,7 +696,7 @@ struct dispatch_map_type {
       rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
 
     // Copy offsets to host before the transform below modifies the histogram
-    auto const partition_offsets = cudf::detail::make_std_vector_sync(histogram, stream);
+    auto const partition_offsets = cudf::detail::make_std_vector(histogram, stream);
 
     // Unfortunately need to materialize the scatter map because
     // `detail::scatter` requires multiple passes through the iterator

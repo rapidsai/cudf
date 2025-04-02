@@ -89,7 +89,7 @@ TEST_F(CountBitmaskTest, NullMask)
 rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fill_valid = false)
 {
   if (!fill_valid) {
-    return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
+    return cudf::detail::make_zeroed_device_uvector<cudf::bitmask_type>(
       size, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());

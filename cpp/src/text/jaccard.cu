@@ -377,7 +377,7 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
                           sub_offsets.begin(),
                           sub_offsets.end(),
                           indices.begin());
-      return cudf::detail::make_host_vector_sync(indices, stream);
+      return cudf::detail::make_host_vector(indices, stream);
     }();
 
     // Call segmented sort with the sort sections

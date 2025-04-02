@@ -693,7 +693,7 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty ? std::pair(cuda::std::nullopt, 0)
-                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector_sync(
+                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
                                 h_operators, stream, cudf::get_current_device_resource_ref())),
                               max_stack_depth);
 }
