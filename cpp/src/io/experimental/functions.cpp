@@ -133,4 +133,30 @@ cudf::io::table_with_metadata materialize_filter_columns(
                                             stream);
 }
 
+// API # 10
+std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+get_payload_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                                     cudf::host_span<size_type const> row_group_indices,
+                                     cudf::io::parquet_reader_options const& options)
+{
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+  return reader->get_payload_column_chunk_byte_ranges(input_row_group_indices, options);
+}
+
+// API # 11
+cudf::io::table_with_metadata materialize_payload_columns(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+  cudf::host_span<size_type const> row_group_indices,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  auto const input_row_group_indices =
+    std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
+  return reader->materialize_payload_columns(
+    input_row_group_indices, std::move(column_chunk_buffers), predicate, options, stream);
+}
+
 }  // namespace cudf::experimental::io

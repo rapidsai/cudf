@@ -41,6 +41,11 @@ using metadata_base                  = cudf::io::parquet::detail::metadata;
 using input_column_info              = cudf::io::parquet::detail::input_column_info;
 using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
 using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+using SchemaElement                  = cudf::io::parquet::detail::SchemaElement;
+using column_name_info               = cudf::io::column_name_info;
+using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
+using input_column_info              = cudf::io::parquet::detail::input_column_info;
+using size_type                      = cudf::size_type;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
                    cudf::host_span<uint8_t const> page_index_bytes)
@@ -128,6 +133,370 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 
 std::
   tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+  aggregate_reader_metadata::select_payload_columns(
+    std::optional<std::vector<std::string>> const& use_names,
+    std::optional<std::vector<std::string>> const& filter_columns_names,
+    bool include_index,
+    bool strings_to_categorical,
+    type_id timestamp_type_id)
+{
+  auto const find_schema_child =
+    [&](SchemaElement const& schema_elem, std::string const& name, int const pfm_idx = 0) {
+      auto const& col_schema_idx = std::find_if(
+        schema_elem.children_idx.cbegin(),
+        schema_elem.children_idx.cend(),
+        [&](size_t col_schema_idx) { return get_schema(col_schema_idx, pfm_idx).name == name; });
+
+      return (col_schema_idx != schema_elem.children_idx.end())
+               ? static_cast<size_type>(*col_schema_idx)
+               : -1;
+    };
+
+  std::vector<cudf::io::detail::inline_column_buffer> output_columns;
+  std::vector<input_column_info> input_columns;
+  std::vector<int> nesting;
+
+  // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
+  // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
+  // not a child of "struct1" then the function will return false for "struct1"
+  std::function<bool(
+    column_name_info const*, int, std::vector<cudf::io::detail::inline_column_buffer>&, bool)>
+    build_column = [&](column_name_info const* col_name_info,
+                       int schema_idx,
+                       std::vector<cudf::io::detail::inline_column_buffer>& out_col_array,
+                       bool has_list_parent) {
+      auto const& schema_elem = get_schema(schema_idx);
+
+      // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer
+      // hierarchy. So continue on
+      if (schema_elem.is_stub()) {
+        // is this legit?
+        CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
+        return build_column(
+          child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
+      }
+
+      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+
+      // if we're at the root, this is a new output column
+      auto const col_type = one_level_list
+                              ? type_id::LIST
+                              : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+      auto const dtype    = to_data_type(col_type, schema_elem);
+
+      cudf::io::detail::inline_column_buffer output_col(
+        dtype, schema_elem.repetition_type == cudf::io::parquet::detail::OPTIONAL);
+      if (has_list_parent) {
+        output_col.user_data |=
+          cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
+      }
+      // store the index of this element if inserted in out_col_array
+      nesting.push_back(static_cast<int>(out_col_array.size()));
+      output_col.name = schema_elem.name;
+
+      // build each child
+      bool path_is_valid = false;
+      if (col_name_info == nullptr or col_name_info->children.empty()) {
+        // add all children of schema_elem.
+        // At this point, we can no longer pass a col_name_info to build_column
+        for (int idx = 0; idx < schema_elem.num_children; idx++) {
+          path_is_valid |= build_column(nullptr,
+                                        schema_elem.children_idx[idx],
+                                        output_col.children,
+                                        has_list_parent || col_type == type_id::LIST);
+        }
+      } else {
+        for (const auto& idx : col_name_info->children) {
+          path_is_valid |= build_column(&idx,
+                                        find_schema_child(schema_elem, idx.name),
+                                        output_col.children,
+                                        has_list_parent || col_type == type_id::LIST);
+        }
+      }
+
+      // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
+      // data stored) so add me to the list.
+      if (schema_elem.num_children == 0) {
+        input_column_info& input_col = input_columns.emplace_back(
+          schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0);
+
+        // set up child output column for one-level encoding list
+        if (one_level_list) {
+          // determine the element data type
+          auto const element_type =
+            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+          auto const element_dtype = to_data_type(element_type, schema_elem);
+
+          cudf::io::detail::inline_column_buffer element_col(
+            element_dtype, schema_elem.repetition_type == cudf::io::parquet::detail::OPTIONAL);
+          if (has_list_parent || col_type == type_id::LIST) {
+            element_col.user_data |=
+              cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
+          }
+          // store the index of this element
+          nesting.push_back(static_cast<int>(output_col.children.size()));
+          // TODO: not sure if we should assign a name or leave it blank
+          element_col.name = "element";
+
+          output_col.children.push_back(std::move(element_col));
+        }
+
+        std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
+
+        // pop off the extra nesting element.
+        if (one_level_list) { nesting.pop_back(); }
+
+        path_is_valid = true;  // If we're able to reach leaf then path is valid
+      }
+
+      if (path_is_valid) { out_col_array.push_back(std::move(output_col)); }
+
+      nesting.pop_back();
+      return path_is_valid;
+    };
+
+  // Compares two schema elements to be equal except their number of children
+  auto const equal_to_except_num_children = [](SchemaElement const& lhs, SchemaElement const& rhs) {
+    return lhs.type == rhs.type and lhs.converted_type == rhs.converted_type and
+           lhs.type_length == rhs.type_length and lhs.name == rhs.name and
+           lhs.decimal_scale == rhs.decimal_scale and
+           lhs.decimal_precision == rhs.decimal_precision and lhs.field_id == rhs.field_id;
+  };
+
+  // Maps a projected column's schema_idx in the zeroth per_file_metadata (source) to the
+  // corresponding schema_idx in pfm_idx'th per_file_metadata (destination). The projected
+  // column's path must match across sources, else an appropriate exception is thrown.
+  std::function<void(column_name_info const*, int const, int const, int const)> map_column =
+    [&](column_name_info const* col_name_info,
+        int const src_schema_idx,
+        int const dst_schema_idx,
+        int const pfm_idx) {
+      auto const& src_schema_elem = get_schema(src_schema_idx);
+      auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
+
+      // Check the schema elements to be equal except their number of children as we only care about
+      // the specific column paths in the schema trees. Raise an invalid_argument error if the
+      // schema elements don't match.
+      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+                   "Encountered mismatching SchemaElement properties for a column in "
+                   "the selected path",
+                   std::invalid_argument);
+
+      // Get the schema_idx_map for this data source (pfm)
+      auto& schema_idx_map = schema_idx_maps[pfm_idx - 1];
+      // Map the schema index from 0th tree (src) to the one in the current (dst) tree.
+      schema_idx_map[src_schema_idx] = dst_schema_idx;
+
+      // If src_schema_elem is a stub, it does not exist in the column_name_info and column_buffer
+      // hierarchy. So continue on with mapping.
+      if (src_schema_elem.is_stub()) {
+        // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
+        // previously check. Raise an invalid_argument error if dst_schema_elem is not a stub.
+        CUDF_EXPECTS(dst_schema_elem.is_stub(),
+                     "Encountered mismatching schemas for stub.",
+                     std::invalid_argument);
+        auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
+        return map_column(child_col_name_info,
+                          src_schema_elem.children_idx[0],
+                          dst_schema_elem.children_idx[0],
+                          pfm_idx);
+      }
+
+      // The path ends here. If this is a list/struct col (has children), then map all its children
+      // which must be identical.
+      if (col_name_info == nullptr or col_name_info->children.empty()) {
+        // Check the number of children to be equal to be mapped. An out_of_range error if the
+        // number of children isn't equal.
+        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
+                     "Encountered mismatching number of children for a "
+                     "column in the selected path",
+                     std::out_of_range);
+
+        std::for_each(thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(src_schema_elem.num_children),
+                      [&](auto const child_idx) {
+                        map_column(nullptr,
+                                   src_schema_elem.children_idx[child_idx],
+                                   dst_schema_elem.children_idx[child_idx],
+                                   pfm_idx);
+                      });
+      }
+      // The path goes further down to specific child(ren) of this column so map only those
+      // children.
+      else {
+        std::for_each(
+          col_name_info->children.cbegin(),
+          col_name_info->children.cend(),
+          [&](auto const& child_col_name_info) {
+            // Ensure that each named child column exists in the destination schema tree for the
+            // paths to align up. An out_of_range error otherwise.
+            CUDF_EXPECTS(
+              find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
+              "Encountered mismatching schema tree depths across data sources",
+              std::out_of_range);
+            map_column(&child_col_name_info,
+                       find_schema_child(src_schema_elem, child_col_name_info.name),
+                       find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx),
+                       pfm_idx);
+          });
+      }
+    };
+
+  std::vector<int> output_column_schemas;
+
+  //
+  // there is not necessarily a 1:1 mapping between input columns and output columns.
+  // For example, parquet does not explicitly store a ColumnChunkDesc for struct columns.
+  // The "structiness" is simply implied by the schema.  For example, this schema:
+  //  required group field_id=1 name {
+  //    required binary field_id=2 firstname (String);
+  //    required binary field_id=3 middlename (String);
+  //    required binary field_id=4 lastname (String);
+  // }
+  // will only contain 3 internal columns of data (firstname, middlename, lastname).  But of
+  // course "name" is ultimately the struct column we want to return.
+  //
+  // "firstname", "middlename" and "lastname" represent the input columns in the file that we
+  // process to produce the final cudf "name" column.
+  //
+  // A user can ask for a single field out of the struct e.g. firstname.
+  // In this case they'll pass a fully qualified name to the schema element like
+  // ["name", "firstname"]
+  //
+  auto const& root = get_schema(0);
+  if (not use_names.has_value() and not filter_columns_names.has_value()) {
+    for (auto const& schema_idx : root.children_idx) {
+      build_column(nullptr, schema_idx, output_columns, false);
+      output_column_schemas.push_back(schema_idx);
+    }
+  } else {
+    struct path_info {
+      std::string full_path;
+      int schema_idx;
+    };
+
+    // Convert schema into a vector of all possible predicate column paths
+    std::vector<path_info> payload_column_paths;
+    std::vector<std::reference_wrapper<std::vector<std::string> const>> const filter_column_names{
+      *filter_columns_names};
+    std::function<void(std::string, int)> add_path = [&](std::string path_till_now,
+                                                         int schema_idx) {
+      auto const& schema_elem     = get_schema(schema_idx);
+      std::string const curr_path = path_till_now + schema_elem.name;
+      // Do not push to payload_column_paths if the current path is in filter_column_names
+      if (std::none_of(filter_column_names[0].get().cbegin(),
+                       filter_column_names[0].get().cend(),
+                       [&](auto const& name) { return name == curr_path; })) {
+        payload_column_paths.push_back({curr_path, schema_idx});
+        for (auto const& child_idx : schema_elem.children_idx) {
+          add_path(curr_path + ".", child_idx);
+        }
+      }
+    };
+    for (auto const& child_idx : get_schema(0).children_idx) {
+      add_path("", child_idx);
+    }
+
+    // Now construct paths as vector of strings for further consumption
+    std::vector<std::vector<std::string>> use_names3;
+    std::transform(payload_column_paths.cbegin(),
+                   payload_column_paths.cend(),
+                   std::back_inserter(use_names3),
+                   [&](path_info const& valid_path) {
+                     auto schema_idx = valid_path.schema_idx;
+                     std::vector<std::string> result_path;
+                     do {
+                       SchemaElement const& elem = get_schema(schema_idx);
+                       result_path.push_back(elem.name);
+                       schema_idx = elem.parent_idx;
+                     } while (schema_idx > 0);
+                     return std::vector<std::string>(result_path.rbegin(), result_path.rend());
+                   });
+
+    std::vector<column_name_info> selected_columns;
+    if (include_index) {
+      std::vector<std::string> const index_names = get_pandas_index_names();
+      std::transform(index_names.cbegin(),
+                     index_names.cend(),
+                     std::back_inserter(selected_columns),
+                     [](std::string const& name) { return column_name_info(name); });
+    }
+    // Merge the vector use_names into a set of hierarchical column_name_info objects
+    /* This is because if we have columns like this:
+     *     col1
+     *      / \
+     *    s3   f4
+     *   / \
+     * f5   f6
+     *
+     * there may be common paths in use_names like:
+     * {"col1", "s3", "f5"}, {"col1", "f4"}
+     * which means we want the output to contain
+     *     col1
+     *      / \
+     *    s3   f4
+     *   /
+     * f5
+     *
+     * rather than
+     *  col1   col1
+     *   |      |
+     *   s3     f4
+     *   |
+     *   f5
+     */
+    for (auto const& path : use_names3) {
+      auto array_to_find_in = &selected_columns;
+      for (auto const& name_to_find : path) {
+        // Check if the path exists in our selected_columns and if not, add it.
+        auto found_col = std::find_if(
+          array_to_find_in->begin(),
+          array_to_find_in->end(),
+          [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
+        if (found_col == array_to_find_in->end()) {
+          auto& col        = array_to_find_in->emplace_back(name_to_find);
+          array_to_find_in = &col.children;
+        } else {
+          // Path exists. go down further.
+          array_to_find_in = &found_col->children;
+        }
+      }
+    }
+    for (auto& col : selected_columns) {
+      auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
+      bool const valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
+      if (valid_column) {
+        output_column_schemas.push_back(top_level_col_schema_idx);
+
+        // Map the column's schema_idx across the rest of the data sources if required.
+        if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
+          std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
+                        thrust::make_counting_iterator(per_file_metadata.size()),
+                        [&](auto const pfm_idx) {
+                          auto const& dst_root = get_schema(0, pfm_idx);
+                          // Ensure that each top level column exists in the destination schema
+                          // tree. An out_of_range error is thrown otherwise.
+                          CUDF_EXPECTS(
+                            find_schema_child(dst_root, col.name, pfm_idx) != -1,
+                            "Encountered mismatching schema tree depths across data sources",
+                            std::out_of_range);
+                          map_column(&col,
+                                     top_level_col_schema_idx,
+                                     find_schema_child(dst_root, col.name, pfm_idx),
+                                     pfm_idx);
+                        });
+        }
+      }
+    }
+  }
+
+  return std::make_tuple(
+    std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
+}
+
+std::
+  tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
   aggregate_reader_metadata::select_filter_columns(
     std::optional<std::vector<std::string>> const& filter_columns_names,
     bool include_index,
@@ -141,6 +510,7 @@ std::
                         strings_to_categorical,
                         timestamp_type_id);
 }
+
 std::tuple<int64_t, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
                                           int64_t row_start,

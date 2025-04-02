@@ -108,6 +108,19 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  get_payload_column_chunk_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::io::parquet_reader_options const& options) const;
+
+  [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::vector<rmm::device_buffer> column_chunk_buffers,
+    cudf::mutable_column_view predicate,
+    cudf::io::parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
+
  private:
   std::unique_ptr<detail::impl> _impl;
 };
@@ -191,10 +204,9 @@ get_payload_column_chunk_byte_ranges(std::unique_ptr<parquet::hybrid_scan_reader
 // API # 11
 [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-  cudf::host_span<std::vector<bool> const> filtered_data_pages,
   cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::column_view predicate,
+  cudf::mutable_column_view predicate,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream);
 

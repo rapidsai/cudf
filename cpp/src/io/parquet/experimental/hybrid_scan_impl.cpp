@@ -55,6 +55,19 @@ namespace {
   return logical_type->type != LogicalType::DECIMAL;
 }
 
+[[nodiscard]] std::vector<cudf::data_type> get_output_types(
+  cudf::host_span<inline_column_buffer const> output_buffer_template, bool has_converted_expr)
+{
+  std::vector<cudf::data_type> output_dtypes;
+  if (has_converted_expr) {
+    std::transform(output_buffer_template.begin(),
+                   output_buffer_template.end(),
+                   std::back_inserter(output_dtypes),
+                   [](auto const& col) { return col.type; });
+  }
+  return output_dtypes;
+}
+
 }  // namespace
 
 void impl::decode_page_data(size_t skip_rows, size_t num_rows)
@@ -270,17 +283,17 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
     decode_data(decode_kernel_mask::STRING_DICT_LIST);
   }
 
-  // launch string decoder for byte-stream-split encoded flat columns
+  // launch byte-stream-split encoded flat columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT);
   }
 
-  // launch string decoder for byte-stream-split encoded nested columns
+  // launch byte-stream-split encoded nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
   }
 
-  // launch string decoder for byte-stream-split encoded list columns
+  // launch byte-stream-split encoded list columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
   }
@@ -414,8 +427,8 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  // Invalidate output buffer bitmasks at row indices spanned by pruned pages
-  update_output_bitmasks_for_pruned_pages();
+  // Invalidate output buffer nullmasks at row indices spanned by pruned pages
+  update_output_nullmasks_for_pruned_pages();
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -508,38 +521,61 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
     page_index_bytes,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+}
 
+void impl::select_columns(read_mode read_mode, cudf::io::parquet_reader_options const& options)
+{
   // Strings may be returned as either string or categorical columns
   auto const strings_to_categorical = options.is_enabled_convert_strings_to_categories();
+  auto const use_pandas_metadata    = options.is_enabled_use_pandas_metadata();
+  auto const timestamp_type_id      = options.get_timestamp_type().id();
 
   // Select only columns required by the filter
-  std::optional<std::vector<std::string>> filter_columns_names;
-  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+  if (read_mode == read_mode::FILTER_COLUMNS) {
+    if (_is_filter_columns_selected) { return; }
     // list, struct, dictionary are not supported by AST filter yet.
-    // extract columns not present in get_columns() & keep count to remove at end.
-    filter_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
-      options.get_filter(), *(options.get_columns()));
-    _num_filter_only_columns = filter_columns_names->size();
-  }
-
-  // Only need to select columns if filter is available
-  if (options.get_filter().has_value()) {
-    if (not filter_columns_names.has_value()) {
-      filter_columns_names =
-        cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
-    }
-
+    _filter_columns_names =
+      cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_filter_columns(filter_columns_names,
-                                       options.is_enabled_use_pandas_metadata(),
-                                       strings_to_categorical,
-                                       options.get_timestamp_type().id());
+      _metadata->select_filter_columns(
+        _filter_columns_names, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
 
-    // Save the states of the output buffers for reuse.
-    for (auto const& buff : _output_buffers) {
-      _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
-    }
+    _is_filter_columns_selected  = true;
+    _is_payload_columns_selected = false;
+  } else {
+    if (_is_payload_columns_selected) { return; }
+
+    auto const empty_names = std::vector<std::string>{};
+    std::tie(_input_columns, _output_buffers, _output_column_schemas) =
+      _metadata->select_payload_columns(options.get_columns().value_or(empty_names),
+                                        _filter_columns_names.value_or(empty_names),
+                                        use_pandas_metadata,
+                                        strings_to_categorical,
+                                        timestamp_type_id);
+
+    _is_payload_columns_selected = true;
+    _is_filter_columns_selected  = false;
   }
+
+  CUDF_EXPECTS(_input_columns.size() > 0 and _output_buffers.size() > 0, "No columns selected");
+
+  // Clear the output buffers templates
+  _output_buffers_template.clear();
+
+  // Save the states of the output buffers for reuse.
+  for (auto const& buff : _output_buffers) {
+    _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
+  }
+}
+
+void impl::reset_internal_state()
+{
+  _file_itm_data     = file_intermediate_data{};
+  _file_preprocessed = false;
+  _has_page_index    = false;
+  _pass_itm_data.reset();
+  _page_validity.clear();
+  _output_metadata.reset();
 }
 
 std::vector<size_type> impl::get_valid_row_groups(
@@ -554,19 +590,17 @@ std::vector<size_type> impl::get_valid_row_groups(
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  std::vector<data_type> output_dtypes;
-  if (expr_conv.get_converted_expr().has_value()) {
-    std::transform(_output_buffers_template.cbegin(),
-                   _output_buffers_template.cend(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
   return _metadata->filter_row_groups_with_stats(row_group_indices,
                                                  output_dtypes,
@@ -577,19 +611,17 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options) const
+  cudf::io::parquet_reader_options const& options)
 {
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  std::vector<data_type> output_dtypes;
-  if (expr_conv.get_converted_expr().has_value()) {
-    std::transform(_output_buffers_template.cbegin(),
-                   _output_buffers_template.cend(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
   auto const bloom_filter_bytes = _metadata->get_bloom_filter_bytes(
     row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
@@ -603,19 +635,17 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_page
   std::vector<rmm::device_buffer>& dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  std::vector<data_type> output_dtypes;
-  if (expr_conv.get_converted_expr().has_value()) {
-    std::transform(_output_buffers_template.cbegin(),
-                   _output_buffers_template.cend(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
   return _metadata->filter_row_groups_with_dictionary_pages(dictionary_page_data,
                                                             row_group_indices,
@@ -629,19 +659,17 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream) const
+  rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  std::vector<data_type> output_dtypes;
-  if (expr_conv.get_converted_expr().has_value()) {
-    std::transform(_output_buffers_template.cbegin(),
-                   _output_buffers_template.cend(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
   return _metadata->filter_row_groups_with_bloom_filters(bloom_filter_data,
                                                          row_group_indices,
@@ -655,19 +683,17 @@ std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                    cudf::io::parquet_reader_options const& options,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr) const
+                                   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-
-  std::vector<data_type> output_dtypes;
-  if (expr_conv.get_converted_expr().has_value()) {
-    std::transform(_output_buffers_template.cbegin(),
-                   _output_buffers_template.cend(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
   auto predicate = _metadata->filter_data_pages_with_stats(row_group_indices,
                                                            output_dtypes,
@@ -683,9 +709,8 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_filter_column_chunk_byte_ranges(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options) const
+impl::get_input_column_chunk_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
@@ -730,6 +755,24 @@ impl::get_filter_column_chunk_byte_ranges(
   return {std::move(column_chunk_byte_ranges), std::move(chunk_source_map)};
 }
 
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+impl::get_filter_column_chunk_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options)
+{
+  select_columns(read_mode::FILTER_COLUMNS, options);
+  return get_input_column_chunk_byte_ranges(row_group_indices);
+}
+
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+impl::get_payload_column_chunk_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options)
+{
+  select_columns(read_mode::PAYLOAD_COLUMNS, options);
+  return get_input_column_chunk_byte_ranges(row_group_indices);
+}
+
 cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::host_span<std::vector<bool> const> data_page_validity,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -738,13 +781,50 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  reset_internal_state();
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
   initialize_options(row_group_indices, options, stream);
+
+  CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
   set_page_validity(data_page_validity);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
   return read_chunk_internal(read_mode::FILTER_COLUMNS, predicate);
+}
+
+cudf::io::table_with_metadata impl::materialize_payload_columns(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  reset_internal_state();
+  select_columns(read_mode::PAYLOAD_COLUMNS, options);
+
+  initialize_options(row_group_indices, options, stream);
+
+  auto output_dtypes =
+    get_output_types(_output_buffers_template, _expr_conv.get_converted_expr().has_value());
+
+  auto data_page_validity = _metadata->compute_data_page_validity(
+    predicate, row_group_indices, output_dtypes, _output_column_schemas, stream);
+
+  prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
+  set_page_validity(data_page_validity);
+
+  // Make sure we haven't gone past the input passes
+  CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
+  return read_chunk_internal(read_mode::PAYLOAD_COLUMNS, predicate);
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -755,7 +835,6 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 
   _uses_custom_row_bounds = (options.get_num_rows().has_value() or options.get_skip_rows() > 0);
 
@@ -876,7 +955,7 @@ cudf::io::table_with_metadata impl::finalize_output(
   _file_itm_data._output_chunk_count++;
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
-  if (_expr_conv.get_converted_expr().has_value()) {
+  if (read_mode == read_mode::FILTER_COLUMNS) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
     auto predicate  = cudf::detail::compute_column(*read_table,
                                                   _expr_conv.get_converted_expr().value().get(),
@@ -890,13 +969,19 @@ cudf::io::table_with_metadata impl::finalize_output(
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
     auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
-    if (read_mode == read_mode::FILTER_COLUMNS) {
-      auto predicate_view = predicate->view();
-      update_predicate(predicate->view(), out_predicate, _stream);
-    }
+    update_predicate(predicate->view(), out_predicate, _stream);
+    return {std::move(output_table), std::move(out_metadata)};
+  } else {
+    auto read_table  = std::make_unique<table>(std::move(out_columns));
+    auto counting_it = thrust::make_counting_iterator<std::size_t>(0);
+    CUDF_EXPECTS(out_predicate.type().id() == type_id::BOOL8,
+                 "Predicate filter should return a boolean");
+    auto const output_count = read_table->num_columns() - _num_filter_only_columns;
+    auto only_output        = read_table->select(counting_it, counting_it + output_count);
+    auto output_table = cudf::detail::apply_boolean_mask(only_output, out_predicate, _stream, _mr);
+    if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
     return {std::move(output_table), std::move(out_metadata)};
   }
-  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
 void impl::populate_metadata(table_metadata& out_metadata) const

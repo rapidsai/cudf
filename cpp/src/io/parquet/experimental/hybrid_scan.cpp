@@ -115,13 +115,33 @@ cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(
   rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  // TODO: Implement this
   return _impl->materialize_filter_columns(data_page_validity,
                                            row_group_indices,
                                            std::move(column_chunk_buffers),
                                            predicate,
                                            options,
                                            stream);
+}
+
+[[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>
+hybrid_scan_reader::get_payload_column_chunk_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::io::parquet_reader_options const& options) const
+{
+  CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
+  return _impl->get_payload_column_chunk_byte_ranges(row_group_indices, options);
+}
+
+cudf::io::table_with_metadata hybrid_scan_reader::materialize_payload_columns(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::mutable_column_view predicate,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream) const
+{
+  CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
+  return _impl->materialize_payload_columns(
+    row_group_indices, std::move(column_chunk_buffers), predicate, options, stream);
 }
 
 }  // namespace cudf::experimental::io::parquet

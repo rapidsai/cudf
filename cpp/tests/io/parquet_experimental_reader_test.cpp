@@ -151,6 +151,19 @@ std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
   return column_chunk_buffers;
 }
 
+/**
+ * @brief Read parquet file with the hybrid scan reader
+ *
+ * @param buffer Buffer containing the parquet file
+ * @param num_filter_columns Number of filter columns
+ * @param num_payload_columns Number of payload columns
+ * @param filter_expression Filter expression
+ * @param stream CUDA stream for hybrid scan reader
+ * @param mr Device memory resource
+ *
+ * @return Tuple of filter table, payload table, filter metadata, payload metadata, and the final
+ *         row validity column
+ */
 auto hybrid_scan(std::vector<char>& buffer,
                  cudf::size_type const num_filter_columns,
                  cudf::size_type const num_payload_columns,
@@ -175,21 +188,21 @@ auto hybrid_scan(std::vector<char>& buffer,
   auto const reader =
     cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
 
-  // Get valid row groups from the reader
+  // Get valid row groups from the reader - API # 2
   auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
 
-  // Filter row groups with stats - API # 2
+  // Filter row groups with stats - API # 3
   auto stats_filtered_row_groups =
     cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
   auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
 
-  // Get bloom filter and dictionary page bytes from the reader - API # 3
+  // Get bloom filter and dictionary page bytes from the reader - API # 4
   auto [bloom_filter_bytes, dict_page_bytes] =
     cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
 
-  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 4
+  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 5
 
-  // Filter row groups with bloom filters - API # 5
+  // Filter row groups with bloom filters - API # 6
   std::vector<cudf::size_type> bloom_filtered_row_groups;
   bloom_filtered_row_groups.reserve(filtered_row_groups.size());
   if (bloom_filter_bytes.size()) {
@@ -200,32 +213,54 @@ auto hybrid_scan(std::vector<char>& buffer,
     filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
   }
 
-  // Filter data pages with `PageIndex` stats - API # 6
+  // Filter data pages with `PageIndex` stats - API # 7
   auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
     reader, stats_filtered_row_groups, options, stream, mr);
 
   EXPECT_EQ(data_page_validity.size(), num_filter_columns);
 
-  // Get column chunk byte ranges from the reader - API # 7
-  auto [column_chunk_byte_ranges, _] = cudf::experimental::io::get_filter_column_chunk_byte_ranges(
-    reader, stats_filtered_row_groups, options);
+  // Get column chunk byte ranges from the reader - API # 8
+  auto [filter_column_chunk_byte_ranges, chunk_source_map] =
+    cudf::experimental::io::get_filter_column_chunk_byte_ranges(
+      reader, stats_filtered_row_groups, options);
 
-  // Fetch column chunk device buffers from the input buffer - API # 8
-  auto column_chunk_buffers =
-    fetch_column_chunk_buffers(buffer, column_chunk_byte_ranges, {}, stream);
+  // Fetch column chunk device buffers from the input buffer
+  auto filter_column_chunk_buffers =
+    fetch_column_chunk_buffers(buffer, filter_column_chunk_byte_ranges, {}, stream);
 
   // Materialize the table with only the filter columns - API # 9
-  auto [table, metadata] =
+  auto [filter_table, filter_metadata] =
     cudf::experimental::io::materialize_filter_columns(reader,
                                                        data_page_validity,
                                                        stats_filtered_row_groups,
-                                                       std::move(column_chunk_buffers),
+                                                       std::move(filter_column_chunk_buffers),
                                                        predicate->mutable_view(),
                                                        options,
                                                        stream);
 
-  // Return the materialized table, metadata, and the final row validity predicate
-  return std::tuple{std::move(table), std::move(metadata), std::move(predicate)};
+  // Get column chunk byte ranges from the reader - API # 10
+  auto [payload_column_chunk_byte_ranges, _] =
+    cudf::experimental::io::get_payload_column_chunk_byte_ranges(
+      reader, stats_filtered_row_groups, options);
+
+  // Fetch column chunk device buffers from the input buffer
+  [[maybe_unused]] auto payload_column_chunk_buffers =
+    fetch_column_chunk_buffers(buffer, payload_column_chunk_byte_ranges, {}, stream);
+
+  // Materialize the table with only the payload columns - API # 11
+  [[maybe_unused]] auto [payload_table, payload_metadata] =
+    cudf::experimental::io::materialize_payload_columns(reader,
+                                                        stats_filtered_row_groups,
+                                                        std::move(payload_column_chunk_buffers),
+                                                        predicate->mutable_view(),
+                                                        options,
+                                                        stream);
+
+  return std::tuple{std::move(filter_table),
+                    std::move(payload_table),
+                    std::move(filter_metadata),
+                    std::move(payload_metadata),
+                    std::move(predicate)};
 }
 
 }  // namespace
@@ -251,13 +286,19 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Read parquet using the hybrid scan reader
-  auto [read_table, read_meta, row_validity_col] =
-    hybrid_scan(buffer,
-                num_filter_columns,
-                written_table.num_columns() - num_filter_columns,
-                filter_expression,
-                stream,
-                mr);
+  auto [read_filter_table,
+        read_payload_table,
+        read_filter_meta,
+        read_payload_meta,
+        row_validity_col] = hybrid_scan(buffer,
+                                        num_filter_columns,
+                                        written_table.num_columns() - num_filter_columns,
+                                        filter_expression,
+                                        stream,
+                                        mr);
+
+  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables should have the same number of rows");
 
   // Check equivalence (equal without checking nullability) with the parquet file read with the
   // original reader
@@ -266,7 +307,8 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
 }
 
@@ -291,13 +333,19 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Read parquet using the hybrid scan reader
-  auto [read_table, read_meta, row_validity_col] =
-    hybrid_scan(buffer,
-                num_filter_columns,
-                written_table.num_columns() - num_filter_columns,
-                filter_expression,
-                stream,
-                mr);
+  auto [read_filter_table,
+        read_payload_table,
+        read_filter_meta,
+        read_payload_meta,
+        row_validity_col] = hybrid_scan(buffer,
+                                        num_filter_columns,
+                                        written_table.num_columns() - num_filter_columns,
+                                        filter_expression,
+                                        stream,
+                                        mr);
+
+  CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+               "Filter and payload tables should have the same number of rows");
 
   // Check equivalence (equal without checking nullability) with the parquet file read with the
   // original reader
@@ -306,7 +354,8 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
         .filter(filter_expression);
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
   }
 
   // Check equivalence (equal without checking nullability) with the original table with the
@@ -321,6 +370,7 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
       << "Predicate filter should return a boolean";
     auto expected = cudf::apply_boolean_mask(written_table, *predicate);
     // Check equivalence as the nullability between columns may be different
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0}), read_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({1, 2}), read_payload_table->view());
   }
 }

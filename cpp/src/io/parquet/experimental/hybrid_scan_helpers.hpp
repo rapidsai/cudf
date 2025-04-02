@@ -121,6 +121,26 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                           bool strings_to_categorical,
                           type_id timestamp_type_id);
 
+  /**
+   * @brief Filters and reduces down to a selection of payload columns
+   *
+   * @param column_names List of paths of column names that are present only in payload and filter
+   * @param filter_columns_names List of paths of column names that are present only in filter
+   * @param include_index Whether to always include the PANDAS index column(s)
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
+   *
+   * @return input column information, output column information, list of output column schema
+   * indices
+   */
+  [[nodiscard]] std::
+    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+    select_payload_columns(std::optional<std::vector<std::string>> const& column_names,
+                           std::optional<std::vector<std::string>> const& filter_columns_names,
+                           bool include_index,
+                           bool strings_to_categorical,
+                           type_id timestamp_type_id);
+
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> add_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,

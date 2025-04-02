@@ -63,36 +63,36 @@ class impl {
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream);
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
   get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                        cudf::io::parquet_reader_options const& options) const;
+                        cudf::io::parquet_reader_options const& options);
 
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
     std::vector<rmm::device_buffer>& dictionary_page_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream);
 
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
     std::vector<rmm::device_buffer>& bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+    rmm::cuda_stream_view stream);
 
   [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                cudf::io::parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr) const;
+                               rmm::device_async_resource_ref mr);
 
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
   get_filter_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::io::parquet_reader_options const& options) const;
+    cudf::io::parquet_reader_options const& options);
 
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> data_page_validity,
@@ -105,6 +105,19 @@ class impl {
   static void update_predicate(cudf::column_view in_predicate,
                                cudf::mutable_column_view out_predicate,
                                rmm::cuda_stream_view stream);
+
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  get_payload_column_chunk_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::io::parquet_reader_options const& options);
+
+  [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    std::vector<rmm::device_buffer> column_chunk_buffers,
+    cudf::mutable_column_view predicate,
+    cudf::io::parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
 
  private:
   using table_metadata = cudf::io::table_metadata;
@@ -123,9 +136,28 @@ class impl {
   void set_page_validity(cudf::host_span<std::vector<bool> const> data_page_validity);
 
   /**
-   * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
+   * @brief Select the columns to be read.
+   *
+   * @param read_mode Read mode
+   * @param options Reader options
    */
-  void update_output_bitmasks_for_pruned_pages();
+  void select_columns(read_mode read_mode, cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @brief Get the byte ranges for the input column chunks.
+   *
+   * @param row_group_indices The row groups to read
+   * @return A pair of vectors containing the byte ranges and the source indices
+   */
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  get_input_column_chunk_byte_ranges(
+    cudf::host_span<std::vector<size_type> const> row_group_indices) const;
+
+  /**
+   * @brief Invalidate output buffer nullmasks at row indices spanned by pruned pages
+   */
+  void update_output_nullmasks_for_pruned_pages();
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -251,6 +283,11 @@ class impl {
   void allocate_level_decode_space();
 
   /**
+   * @brief Reset the internal state of the reader.
+   */
+  void reset_internal_state();
+
+  /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
@@ -372,6 +409,7 @@ class impl {
 
   // number of extra filter columns
   std::size_t _num_filter_only_columns{0};
+  std::optional<std::vector<std::string>> _filter_columns_names;
 
   bool _strings_to_categorical = false;
 
@@ -390,6 +428,9 @@ class impl {
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
   bool _uses_custom_row_bounds{false};
+
+  bool _is_filter_columns_selected{false};
+  bool _is_payload_columns_selected{false};
 
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 };
