@@ -84,15 +84,10 @@ rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
 }
 
 /**
- * @brief Synchronously construct a `device_uvector` and set all elements to zero.
+ * @copydoc cudf::detail::make_zeroed_device_uvector(std::size_t size, rmm::cuda_stream_view
+ * stream, rmm::device_async_resource_ref mr)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam T The type of the data to copy
- * @param size The number of elements in the created vector
- * @param stream The stream on which to allocate memory and perform the memset
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing zeros
+ * @deprecated This function is deprecated. Use `make_zeroed_device_uvector` instead.
  */
 template <typename T>
 [[deprecated("Use make_zeroed_device_uvector instead")]] rmm::device_uvector<T>
@@ -221,16 +216,10 @@ rmm::device_uvector<T> make_device_uvector(host_span<T const> source_data,
 }
 
 /**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * `host_span`
+ * @copydoc cudf::detail::make_device_uvector(host_span<T const> source_data, rmm::cuda_stream_view
+ * stream, rmm::device_async_resource_ref mr)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam T The type of the data to copy
- * @param source_data The host_span of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
  */
 template <typename T>
 [[deprecated("Use make_device_uvector instead")]] rmm::device_uvector<T> make_device_uvector_sync(
@@ -263,17 +252,10 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector(
 }
 
 /**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a host
- * container
+ * @copydoc cudf::detail::make_device_uvector(Container const& c, rmm::cuda_stream_view stream,
+ * rmm::device_async_resource_ref mr)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
- * @param c The input host container from which to copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
  */
 template <
   typename Container,
@@ -311,16 +293,10 @@ rmm::device_uvector<T> make_device_uvector(device_span<T const> source_data,
 }
 
 /**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
- * `device_span`
+ * @copydoc cudf::detail::make_device_uvector(device_span<T const> source_data,
+ * rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam T The type of the data to copy
- * @param source_data The device_span of data to deep copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
  */
 template <typename T>
 [[deprecated("Use make_device_uvector instead")]] rmm::device_uvector<T> make_device_uvector_sync(
@@ -353,17 +329,10 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector(
 }
 
 /**
- * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a device
- * container
+ * @copydoc cudf::detail::make_device_uvector(Container const& c, rmm::cuda_stream_view stream,
+ * rmm::device_async_resource_ref mr)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
- * @param c The input device container from which to copy
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
  */
 template <
   typename Container,
@@ -440,15 +409,9 @@ std::vector<T> make_std_vector(device_span<T const> v, rmm::cuda_stream_view str
 }
 
 /**
- * @brief Synchronously construct a `std::vector` containing a copy of data from a
- * `device_span`
+ * @copydoc cudf::detail::make_std_vector(device_span<T const> v, rmm::cuda_stream_view stream)
  *
- * @note This function does a synchronize on `stream` after the copy.
- *
- * @tparam T The type of the data to copy
- * @param source_data The device data to copy
- * @param stream The stream on which to perform the copy
- * @return The data copied to the host
+ * @deprecated This function is deprecated. Use `make_std_vector` instead.
  */
 template <typename T>
 [[deprecated("Use make_std_vector instead")]] std::vector<T> make_std_vector_sync(
@@ -480,16 +443,9 @@ std::vector<typename Container::value_type> make_std_vector(Container const& c,
 }
 
 /**
- * @brief Synchronously construct a `std::vector` containing a copy of data from a device
- * container
+ * @copydoc cudf::detail::make_std_vector(Container const& c, rmm::cuda_stream_view stream)
  *
- * @note This function synchronizes `stream`.
- *
- * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
- * @param c The input device container from which to copy
- * @param stream The stream on which to perform the copy
- * @return The data copied to the host
+ * @deprecated This function is deprecated. Use `make_std_vector` instead.
  */
 template <
   typename Container,
@@ -599,16 +555,9 @@ host_vector<T> make_host_vector(device_span<T const> v, rmm::cuda_stream_view st
 }
 
 /**
- * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a
- * `device_span`
+ * @copydoc cudf::detail::make_host_vector(device_span<T const> v, rmm::cuda_stream_view stream)
  *
- * @note This function does a synchronize on `stream` after the copy. The returned vector may be
- * using a pinned memory resource.
- *
- * @tparam T The type of the data to copy
- * @param source_data The device data to copy
- * @param stream The stream on which to perform the copy
- * @return The data copied to the host
+ * @deprecated This function is deprecated. Use `make_host_vector` instead.
  */
 template <typename T>
 [[deprecated("Use make_host_vector instead")]] host_vector<T> make_host_vector_sync(
@@ -640,16 +589,9 @@ host_vector<typename Container::value_type> make_host_vector(Container const& c,
 }
 
 /**
- * @brief Synchronously construct a `thrust::host_vector` containing a copy of data from a device
- * container
+ * @copydoc cudf::detail::make_host_vector(Container const& c, rmm::cuda_stream_view stream)
  *
- * @note This function synchronizes `stream` after the copy.
- *
- * @tparam Container The type of the container to copy from
- * @tparam T The type of the data to copy
- * @param c The input device container from which to copy
- * @param stream The stream on which to perform the copy
- * @return The data copied to the host
+ * @deprecated This function is deprecated. Use `make_host_vector` instead.
  */
 template <
   typename Container,
@@ -696,14 +638,9 @@ host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
+ * @copydoc cudf::detail::make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
  *
- * @note This function synchronizes `stream` after the copy.
- *
- * @tparam T The type of the vector data
- * @param size The number of elements in the created vector
- * @param stream The stream on which to allocate memory
- * @return A host_vector of the given size
+ * @deprecated This function is deprecated. Use `make_pinned_vector` instead.
  */
 template <typename T>
 [[deprecated("Use make_pinned_vector instead")]] host_vector<T> make_pinned_vector_sync(
