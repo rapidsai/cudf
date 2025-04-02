@@ -208,8 +208,12 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                     stream,
                                     cudf::get_current_device_resource_ref());
 
-  return cudf::lists::detail::distinct(
-    lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
+  return cudf::lists::detail::distinct(lists_column_view{union_col->view()},
+                                       nulls_equal,
+                                       nans_equal,
+                                       duplicate_keep_option::KEEP_ANY,
+                                       stream,
+                                       mr);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
