@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 __all__ = ["TemporalFunction"]
 
 
+_unit_to_nanoseconds_conversion = {
+    plc.TypeId.DURATION_NANOSECONDS: 1,
+    plc.TypeId.DURATION_MICROSECONDS: 1_000,
+    plc.TypeId.DURATION_MILLISECONDS: 1_000_000,
+    plc.TypeId.DURATION_SECONDS: 1_000_000_000,
+    plc.TypeId.DURATION_DAYS: 86_400_000_000_000,
+}
+
+
 class TemporalFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `TemporalFunction`."""
@@ -104,6 +113,16 @@ class TemporalFunction(Expr):
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
 
+    _ADDITIONAL_COMPONENTS: ClassVar[list[Name]] = [
+        Name.TotalDays,
+        Name.TotalSeconds,
+        Name.TotalMicroseconds,
+        Name.TotalMilliseconds,
+        Name.TotalNanoseconds,
+        Name.TotalHours,
+        Name.TotalMinutes,
+    ]
+
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
@@ -112,6 +131,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        *_ADDITIONAL_COMPONENTS,
     }
 
     def __init__(
@@ -142,6 +162,25 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name in self._ADDITIONAL_COMPONENTS:
+            # inspired by cuDF algorithm
+            if self.name == TemporalFunction.Name.TotalSeconds:
+                denom = 1e9
+            elif self.name == TemporalFunction.Name.TotalMilliseconds:
+                denom = 1e6
+            elif self.name == TemporalFunction.Name.TotalMicroseconds:
+                denom = 1e3
+            elif self.name == TemporalFunction.Name.TotalNanoseconds:
+                denom = 1
+            conversion = _unit_to_nanoseconds_conversion[column.obj.type().id()] / denom
+            result = plc.binaryop.binary_operation(
+                plc.unary.cast(column.obj, plc.DataType(plc.TypeId.INT64)),
+                plc.interop.from_arrow(pa.scalar(conversion, type=pa.float64())),
+                plc.binaryop.BinaryOperator.MUL,
+                plc.DataType(plc.TypeId.INT64),
+            )
+            return Column(result)
+
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -182,7 +221,6 @@ class TemporalFunction(Expr):
                 plc.binaryop.BinaryOperator.SUB,
                 column.obj.type(),
             )
-
             return Column(result)
         if self.name is TemporalFunction.Name.MonthEnd:
             return Column(
@@ -216,7 +254,7 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_micros)
-        elif self.name is TemporalFunction.Name.Nanosecond:
+        if self.name is TemporalFunction.Name.Nanosecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )
@@ -251,7 +289,6 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_nanos)
-
         return Column(
             plc.datetime.extract_datetime_component(
                 column.obj,

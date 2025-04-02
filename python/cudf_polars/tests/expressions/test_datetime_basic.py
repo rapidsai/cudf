@@ -54,6 +54,15 @@ datetime_extract_fields = [
     "nanosecond",
 ]
 
+duration_extract_fields = [
+    "total_seconds",
+    "total_milliseconds",
+    "total_microseconds",
+    "total_nanoseconds",
+    "total_days",
+    "total_hours",
+]
+
 
 @pytest.fixture(
     ids=datetime_extract_fields,
@@ -134,6 +143,35 @@ def test_date_extract(field):
 
     q = ldf.select(field(pl.col("dates").dt))
 
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["total_seconds", "total_milliseconds", "total_microseconds", "total_nanoseconds"],
+)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_total_component_extract(field, dtype):
+    ldf = pl.LazyFrame(
+        {
+            "durations": pl.Series(
+                [
+                    1,
+                    15,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    10000,
+                    15000,
+                ],
+                dtype=dtype,
+            ),
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)())
     assert_gpu_result_equal(q)
 
 
