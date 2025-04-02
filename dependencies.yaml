@@ -955,7 +955,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
       - output_types: conda
@@ -981,7 +984,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
   test_python_cudf_polars:
