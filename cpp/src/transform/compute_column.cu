@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,15 @@
 namespace cudf {
 namespace detail {
 
+CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
+{
+  // TODO: only decimals? impact of dictionary types, strings?
+  return type == cudf::type_id::STRUCT || type == cudf::type_id::LIST ||
+         type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
+         type == cudf::type_id::DECIMAL128 || type == cudf::type_id::STRING ||
+         type == cudf::type_id::DICTIONARY32;
+}
+
 /**
  * @brief Kernel for evaluating an expression on a table to produce a new column.
  *
@@ -54,7 +63,7 @@ namespace detail {
  * expression.
  * @param output_column The destination for the results of evaluating the expression.
  */
-template <cudf::size_type max_block_size, bool has_nulls>
+template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type = true>
 __launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
@@ -72,8 +81,8 @@ __launch_bounds__(max_block_size) CUDF_KERNEL
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
   auto start_idx    = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto evaluator =
-    cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
+  auto evaluator    = cudf::ast::detail::expression_evaluator<has_nulls, has_complex_type>(
+    table, device_expression_data);
 
   for (thread_index_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
@@ -92,6 +101,9 @@ std::unique_ptr<column> compute_column(table_view const& table,
   auto const has_nulls = expr.may_evaluate_null(table, stream);
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
+
+  // TODO: only checking the output type not sufficient, need to check the expression tree?
+  auto const has_complex_type = is_complex_type(parser.output_type().id());
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
@@ -118,16 +130,26 @@ std::unique_ptr<column> compute_column(table_view const& table,
   auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
+  // TODO: problematic branching?
   auto table_device = table_device_view::create(table, stream);
-  if (has_nulls) {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
+  if (has_nulls && has_complex_type) {
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, device_expression_data, *mutable_output_device);
+  } else if (has_nulls) {
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, device_expression_data, *mutable_output_device);
+  } else if (has_complex_type) {
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   } else {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   }
+
   CUDF_CHECK_CUDA(stream.value());
   output_column->set_null_count(
     cudf::detail::null_count(mutable_output_device->null_mask(), 0, output_column->size(), stream));

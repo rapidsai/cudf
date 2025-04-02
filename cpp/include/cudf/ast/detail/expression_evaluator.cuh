@@ -37,6 +37,7 @@ namespace ast {
 
 namespace detail {
 
+// TODO: duplicate
 CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
 {
   // TODO: only decimals? impact of dictionary types, strings?
@@ -250,7 +251,7 @@ struct single_dispatch_binary_operator {
  * This class is designed for n-ary transform evaluation. It operates on two
  * tables.
  */
-template <bool has_nulls>
+template <bool has_nulls, bool has_complex_type = true>
 struct expression_evaluator {
  public:
   /**
@@ -533,7 +534,7 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        if (is_complex_type(input.data_type.id())) {
+        if (has_complex_type) {
           type_dispatcher(input.data_type,
                           *this,
                           output_object,
@@ -562,7 +563,7 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        if (is_complex_type(lhs.data_type.id())) {
+        if (has_complex_type) {
           type_dispatcher(lhs.data_type,
                           detail::single_dispatch_binary_operator{},
                           *this,
@@ -589,8 +590,6 @@ struct expression_evaluator {
                                                 op,
                                                 thread_intermediate_storage);
         }
-      } else {
-        CUDF_UNREACHABLE("Invalid operator arity.");
       }
     }
   }
