@@ -155,9 +155,11 @@ class impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Invalidate output buffer nullmasks at row indices spanned by pruned pages
+   * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
+   *
+   * @param page_validity A boolean host vector indicating if a subpass page is valid
    */
-  void update_output_nullmasks_for_pruned_pages();
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_validity);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
