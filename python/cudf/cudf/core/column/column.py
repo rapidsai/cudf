@@ -2155,7 +2155,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @acquire_spill_lock()
     def rank(
         self,
-        *method: plc.aggregation.RankMethod,
+        *,
+        method: plc.aggregation.RankMethod,
         column_order: plc.types.Order,
         null_handling: plc.types.NullPolicy.EXCLUDE,
         null_precedence: plc.types.NullOrder,
