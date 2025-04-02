@@ -110,7 +110,7 @@ cdef class Scalar:
         return s
 
     @classmethod
-    def from_py(cls, py_val):
+    def from_py(cls, py_val, dtype: DataType = None):
         """
         Convert a Python standard library object to a Scalar.
 
@@ -124,7 +124,7 @@ cdef class Scalar:
         Scalar
             New pylibcudf.Scalar
         """
-        return _from_py(py_val)
+        return _from_py(py_val, dtype)
 
     @classmethod
     def from_numpy(cls, np_val):
@@ -152,7 +152,7 @@ cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
 
 
 @singledispatch
-def _from_py(py_val):
+def _from_py(py_val, dtype: DataType | None):
     raise TypeError(f"{type(py_val).__name__} cannot be converted to pylibcudf.Scalar")
 
 
@@ -160,45 +160,99 @@ def _from_py(py_val):
 @_from_py.register(list)
 @_from_py.register(datetime.datetime)
 @_from_py.register(datetime.timedelta)
-def _(py_val):
+def _(py_val, dtype: DataType | None):
     raise NotImplementedError(
         f"Conversion from {type(py_val).__name__} is currently not supported."
     )
 
 
 @_from_py.register(float)
-def _(py_val):
-    cdef DataType dtype = DataType(type_id.FLOAT64)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+def _(py_val: float, dtype: DataType | None):
+    if dtype is None:
+        dtype = DataType(type_id.FLOAT64)
+
+    cdef unique_ptr[scalar] c_obj
+    tid = dtype.id()
+
+    if tid == type_id.FLOAT32:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[float]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.FLOAT64:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
+    else:
+        raise TypeError(f"Cannot convert float to Scalar with dtype {tid.name}")
+
+    return _new_scalar(move(c_obj), dtype)
 
 
 @_from_py.register(int)
-def _(py_val):
-    cdef DataType dtype = DataType(type_id.INT64)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
-    (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+def _(py_val: int, dtype: DataType | None):
+    if dtype is None:
+        dtype = DataType(type_id.INT64)
+
+    cdef unique_ptr[scalar] c_obj
+    tid = dtype.id()
+
+    if tid == type_id.INT8:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[int8_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.INT16:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[int16_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.INT32:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[int32_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.INT64:
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[int64_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.UINT8:
+        if py_val < 0:
+            raise ValueError("Cannot assign negative value to UINT8 scalar")
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[uint8_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.UINT16:
+        if py_val < 0:
+            raise ValueError("Cannot assign negative value to UINT16 scalar")
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[uint16_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.UINT32:
+        if py_val < 0:
+            raise ValueError("Cannot assign negative value to UINT32 scalar")
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[uint32_t]*>c_obj.get()).set_value(py_val)
+    elif tid == type_id.UINT64:
+        if py_val < 0:
+            raise ValueError("Cannot assign negative value to UINT64 scalar")
+        c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
+        (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
+    else:
+        raise TypeError(f"Cannot convert int to Scalar with dtype {tid.name}")
+
+    return _new_scalar(move(c_obj), dtype)
 
 
 @_from_py.register(py_bool)
-def _(py_val):
-    cdef DataType dtype = DataType(type_id.BOOL8)
-    cdef unique_ptr[scalar] c_obj = make_numeric_scalar(dtype.c_obj)
+def _(py_val: py_bool, dtype: DataType | None):
+    if dtype is None:
+        dtype = DataType(type_id.BOOL8)
+    elif dtype.id() != type_id.BOOL8:
+        raise TypeError(f"Cannot convert bool to Scalar with dtype {dtype.id().name}")
+
+    cdef unique_ptr[scalar] c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
     (<numeric_scalar[cbool]*>c_obj.get()).set_value(py_val)
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    return _new_scalar(move(c_obj), dtype)
 
 
 @_from_py.register(str)
-def _(py_val):
-    cdef DataType dtype = DataType(type_id.STRING)
+def _(py_val: str, dtype: DataType | None):
+    if dtype is None:
+        dtype = DataType(type_id.STRING)
+    elif dtype.id() != type_id.STRING:
+        raise TypeError(f"Cannot convert str to Scalar with dtype {dtype.id().name}")
+
     cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
-    cdef Scalar slr = _new_scalar(move(c_obj), dtype)
-    return slr
+    return _new_scalar(move(c_obj), dtype)
 
 
 @singledispatch
