@@ -54,13 +54,6 @@ enum class datetime_component : uint8_t {
   NANOSECOND
 };
 
-enum class duration_total: uint8_t {
-  TOTAL_SECONDS,
-  TOTAL_MILLISECONDS,
-  TOTAL_MICROSECONDS,
-  TOTAL_NANOSECONDS
-};
-
 /**
  * @brief Extracts the specified datetime component from any datetime type and
  * returns an int16_t cudf::column.
@@ -78,26 +71,6 @@ std::unique_ptr<cudf::column> extract_datetime_component(
   datetime_component component,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-
-/**
- * @brief Computes the total duration of the duration column in the specified unit
- * and returns an int64_t cudf::column.
- * 
- * @param column cudf::column_view of the input duration values
- * @param total_unit The unit to which the total duration should be converted.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate device memory of the returned column
- * 
- * @returns cudf::column of the total duration in the specified unit as INT64
- * @ throw cudf::logic_error if input column datatype is not a DURATION
- */
-std::unique_ptr<cudf::column> duration_as_unit(
-  cudf::column_view const& column,
-  duration_total total_unit,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
 
 /** @} */  // end of group
 /**

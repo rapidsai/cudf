@@ -7,9 +7,9 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from utils import assert_column_eq
-from decimal import Decimal
+
 import pylibcudf as plc
-import math
+
 
 @pytest.fixture(scope="module", params=["s", "ms", "us", "ns"])
 def datetime_column(has_nulls, request):
@@ -27,20 +27,6 @@ def datetime_column(has_nulls, request):
         pa.array(values, type=pa.timestamp(request.param))
     )
 
-@pytest.fixture(scope="module", params=["s", "ms", "us", "ns"])
-def duration_column(has_nulls, request):
-    values = [
-        datetime.timedelta(days=1, hours=2, minutes=3),
-        datetime.timedelta(days=0, hours=0, minutes=0),  # zero duration
-        datetime.timedelta(days=-1, hours=-2, minutes=-3),
-        datetime.timedelta(days=365, hours=23, minutes=59, seconds=59),
-        datetime.timedelta(days=0, hours=0, minutes=0, seconds=1),  # 1 second
-    ]
-    if has_nulls:
-        values[2] = None
-    return plc.interop.from_arrow(
-        pa.array(values, type=pa.duration(request.param))
-    )
 
 @pytest.fixture(
     params=[
@@ -60,17 +46,6 @@ def duration_column(has_nulls, request):
 def component(request):
     return request.param
 
-@pytest.fixture(
-        params=[
-            ("total_seconds", plc.datetime.DurationComponent.TOTAL_SECONDS),
-            ("total_milliseconds", plc.datetime.DurationComponent.TOTAL_MILLISECONDS),
-            ("total_microseconds", plc.datetime.DurationComponent.TOTAL_MICROSECONDS),
-            ("total_nanoseconds", plc.datetime.DurationComponent.TOTAL_NANOSECONDS),
-        ],
-        ids=lambda x: x[0],     
-)
-def duration_total(request):
-    return request.param
 
 @pytest.fixture(
     params=[
@@ -101,36 +76,7 @@ def test_extract_datetime_component(datetime_column, component):
 
     assert_column_eq(expect, got)
 
-def test_duration_as_unit(duration_column, duration_total):
-    _unit_to_nanoseconds_conversion = {
-        plc.TypeId.DURATION_NANOSECONDS: 1,
-        plc.TypeId.DURATION_MICROSECONDS: 1_000,
-        plc.TypeId.DURATION_MILLISECONDS: 1_000_000,
-        plc.TypeId.DURATION_SECONDS: 1_000_000_000,
-        plc.TypeId.DURATION_DAYS: 86_400_000_000_000,
-    }
-    _duration_total_denom = {
-        plc.datetime.DurationTotal.TOTAL_SECONDS: 1e9,
-        plc.datetime.DurationTotal.TOTAL_MILLISECONDS: 1e6,
-        plc.datetime.DurationTotal.TOTAL_MICROSECONDS: 1e3,
-        plc.datetime.DurationTotal.TOTAL_NANOSECONDS: 1,
-    }
-    denom = _duration_total_denom.get(duration_total, 1)
-    conversion = _unit_to_nanoseconds_conversion[duration_column.type().id()] / denom
 
-
-        seconds = plc.binaryop.binary_operation(
-            plc.unary.cast(column.obj, plc.DataType(plc.TypeId.INT64)),
-            plc.interop.from_arrow(pa.scalar(conversion, type=pa.float64())),
-            plc.binaryop.BinaryOperator.MUL,
-            plc.DataType(plc.TypeId.INT64),
-        )
-        decimal = plc.unary.cast(seconds, plc.DataType(plc.TypeId.DECIMAL128))
-        factor = abs(int(math.log10(conversion)))
-        result = plc.round.round(
-            decimal, factor, plc.round.RoundingMethod.HALF_EVEN
-        )
-        return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
 @pytest.mark.parametrize(
     "op",
     [

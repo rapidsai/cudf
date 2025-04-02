@@ -499,18 +499,6 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
 #undef extract
 }
 
-std::unique_ptr<cudf::column> duration_as_unit(
-  cudf::column_view const& column,
-  duration_total total_unit,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  CUDF_EXPECTS(is_duration(column.type()), "Column type should be timestamp");
-  CUDF_FAIL("Reached function");  
-}
-
-
-
 }  // namespace detail
 
 std::unique_ptr<column> ceil_datetimes(column_view const& column,
@@ -548,16 +536,6 @@ std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const
   CUDF_FUNC_RANGE();
   return detail::extract_datetime_component(column, component, stream, mr);
 }
-
-std::unique_ptr<cudf::column> duration_as_unit(cudf::column_view const& column,
-                                             duration_total total_unit,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::duration_as_unit(column, total_unit, stream, mr);
-}
-
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::cuda_stream_view stream,

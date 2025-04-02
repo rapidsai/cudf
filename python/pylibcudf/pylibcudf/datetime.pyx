@@ -6,7 +6,6 @@ from pylibcudf.libcudf.datetime cimport (
     add_calendrical_months as cpp_add_calendrical_months,
     ceil_datetimes as cpp_ceil_datetimes,
     datetime_component,
-    duration_total,
     day_of_year as cpp_day_of_year,
     days_in_month as cpp_days_in_month,
     extract_datetime_component as cpp_extract_datetime_component,
@@ -15,7 +14,6 @@ from pylibcudf.libcudf.datetime cimport (
     is_leap_year as cpp_is_leap_year,
     last_day_of_month as cpp_last_day_of_month,
     round_datetimes as cpp_round_datetimes,
-    duration_as_unit as cpp_duration_as_unit,
     rounding_frequency,
 )
 
@@ -23,8 +21,6 @@ from pylibcudf.libcudf.datetime import \
     datetime_component as DatetimeComponent  # no-cython-lint
 from pylibcudf.libcudf.datetime import \
     rounding_frequency as RoundingFrequency  # no-cython-lint
-from pylibcudf.libcudf.datetime import \
-    duration_total as DurationTotal  # no-cython-lint
 
 from cython.operator cimport dereference
 
@@ -43,7 +39,6 @@ __all__ = [
     "is_leap_year",
     "last_day_of_month",
     "round_datetimes",
-    "duration_as_unit",
 ]
 
 cpdef Column extract_datetime_component(
@@ -71,33 +66,6 @@ cpdef Column extract_datetime_component(
 
     with nogil:
         result = cpp_extract_datetime_component(input.view(), component)
-    return Column.from_libcudf(move(result))
-
-cpdef Column duration_as_unit(
-    Column input,
-    duration_total unit
-):
-    """
-    Convert a duration column to the specified unit.
-
-    For details, see :cpp:func:`duration_as_unit`.
-
-    Parameters
-    ----------
-    input : Column
-        The column of input duration values.
-    unit : duration_total
-        The unit to convert the durations to.
-
-    Returns
-    -------
-    Column
-        Column of the same resolution as the input column but in the new unit.
-    """
-    cdef unique_ptr[column] result
-
-    with nogil:
-        result = cpp_duration_as_unit(input.view(), unit)
     return Column.from_libcudf(move(result))
 
 cpdef Column ceil_datetimes(

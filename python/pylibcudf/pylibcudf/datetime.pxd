@@ -1,7 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from pylibcudf.column cimport Column
-from pylibcudf.libcudf.datetime cimport datetime_component, duration_total, rounding_frequency
+from pylibcudf.libcudf.datetime cimport datetime_component, rounding_frequency
 from pylibcudf.scalar cimport Scalar
 
 ctypedef fused ColumnOrScalar:
@@ -11,11 +11,6 @@ ctypedef fused ColumnOrScalar:
 cpdef Column extract_datetime_component(
     Column input,
     datetime_component component
-)
-
-cpdef Column duration_as_unit(
-    Column input,
-    duration_total unit
 )
 
 cpdef Column ceil_datetimes(
