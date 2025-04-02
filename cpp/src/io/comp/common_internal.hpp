@@ -39,6 +39,4 @@ constexpr uint8_t fcomment = 0x10;  // Comment present
 [[nodiscard]] std::optional<nvcomp::compression_type> to_nvcomp_compression(
   compression_type compression);
 
-[[nodiscard]] std::string compression_type_name(compression_type compression);
-
 }  // namespace cudf::io::detail
