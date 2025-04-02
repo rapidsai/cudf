@@ -77,6 +77,22 @@ def test_from_ndarray_numpy_2d(np_2darray):
         plc.Column.from_array(np_2darray)
 
 
+def test_non_c_contiguous_raises(cp_2darray):
+    with pytest.raises(
+        ValueError,
+        match="Data must be C-contiguous",
+    ):
+        plc.Column.from_array(cp.asfortranarray(cp_2darray))
+
+
+def test_row_limit_exceed_raises():
+    with pytest.raises(
+        ValueError,
+        match="Number of rows exceeds size_type limit for offsets column.",
+    ):
+        plc.Column.from_array(cp.zeros((2**31, 1)))
+
+
 @pytest.mark.parametrize("obj", [None, "str"])
 def test_from_ndarray_invalid_obj(obj):
     with pytest.raises(

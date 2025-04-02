@@ -1,7 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libc.limits cimport INT_MAX
+from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column, column_contents
@@ -18,17 +18,6 @@ from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 from functools import cache
-
-
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
 
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
@@ -355,7 +344,7 @@ cdef class Column:
         Parameters
         ----------
         obj : object
-            Must implement the `__cuda_array_interface__` protocol.
+            Must implement the ``__cuda_array_interface__`` protocol.
 
         Returns
         -------
@@ -388,13 +377,16 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            if np is None or cp is None:
+            try:
+                import numpy as np
+            except ImportError:
                 raise ImportError(
-                    "NumPy and CuPy must be installed to use this method on 2D data"
+                    "NumPy must be installed to use this method on 2D data"
                 )
-            flat_data = cp.asarray(obj).ravel()
             num_rows, num_cols = shape
-            if num_rows < INT_MAX:
+            if num_rows < numeric_limits[size_type].max():
+                # TODO: Add a new Scalar.from_py(value, dtype) API so
+                # we can specify the dtype (size_type in this case) too.
                 offsets_col = sequence(
                     num_rows + 1,
                     Scalar.from_numpy(np.int32(0)),
@@ -402,12 +394,12 @@ cdef class Column:
                 )
             else:
                 raise ValueError(
-                    "Number of rows exceeds int32 limit for offsets column."
+                    "Number of rows exceeds size_type limit for offsets column."
                 )
             data_col = cls(
                 data_type=data_type,
-                size=flat_data.size,
-                data=gpumemoryview(flat_data),
+                size=shape[0]*shape[1],
+                data=gpumemoryview(obj),
                 mask=None,
                 null_count=0,
                 offset=0,

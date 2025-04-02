@@ -7,26 +7,26 @@ from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
 
-class AI(TypedDict):
+class ArrayInterface(TypedDict):
     shape: tuple[int, ...]
     typestr: str
     data: tuple[int, bool]
     version: int
     strides: None | tuple[int, ...]
     descr: None | list[tuple[Any, ...]]
-    mask: None | "SupportsAI"
+    mask: None | "SupportsArrayInterface"
 
-class CAI(AI):
+class CudaArrayInterface(ArrayInterface):
     stream: None | int
-    mask: None | "SupportsCAI"
+    mask: None | "SupportsCudaArrayInterface"
 
-class SupportsCAI(Protocol):
+class SupportsCudaArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CAI: ...
+    def __cuda_array_interface__(self) -> CudaArrayInterface: ...
 
-class SupportsAI(Protocol):
+class SupportsArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> AI: ...
+    def __array_interface__(self) -> ArrayInterface: ...
 
 class Column:
     def __init__(
@@ -57,11 +57,15 @@ class Column:
     @staticmethod
     def all_null_like(like: Column, size: int) -> Column: ...
     @classmethod
-    def from_cuda_array_interface(cls, obj: SupportsCAI) -> Column: ...
+    def from_cuda_array_interface(
+        cls, obj: SupportsCudaArrayInterface
+    ) -> Column: ...
     @classmethod
-    def from_array_interface(cls, obj: SupportsAI) -> Column: ...
+    def from_array_interface(cls, obj: SupportsArrayInterface) -> Column: ...
     @classmethod
-    def from_arraylike(cls, obj: SupportsCAI | SupportsAI) -> Column: ...
+    def from_arraylike(
+        cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
+    ) -> Column: ...
 
 class ListColumnView:
     def __init__(self, column: Column): ...
