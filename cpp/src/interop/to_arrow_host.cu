@@ -22,10 +22,12 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -377,6 +379,95 @@ unique_device_array_t to_arrow_host(cudf::column_view const& col,
   return create_device_array(std::move(tmp));
 }
 
+struct strings_to_binary_view {
+  cudf::column_device_view d_strings;
+  input_offsetalator d_offsets;
+  ArrowBinaryView* d_items;
+
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    if (d_strings.is_null(idx)) { return; }
+    auto const d_str  = d_strings.element<cudf::string_view>(idx);
+    auto& item        = d_items[idx];
+    item.inlined.size = d_str.size_bytes();
+    if (d_str.size_bytes() <= NANOARROW_BINARY_VIEW_INLINE_SIZE) {
+      thrust::copy(thrust::seq, d_str.data(), d_str.data() + d_str.size_bytes(), item.inlined.data);
+      thrust::uninitialized_fill(thrust::seq,
+                                 item.inlined.data + item.inlined.size,
+                                 item.inlined.data + NANOARROW_BINARY_VIEW_INLINE_SIZE,
+                                 0);
+    } else {
+      thrust::copy(thrust::seq,
+                   d_str.data(),
+                   d_str.data() + NANOARROW_BINARY_VIEW_PREFIX_SIZE,
+                   item.ref.prefix);
+      item.ref.buffer_index = 0;
+      item.ref.offset       = static_cast<int32_t>(d_offsets[idx]);
+    }
+  }
+};
+
+unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& col,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  //
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(tmp.get()));
+
+  if (col.size() == 0) { return create_device_array(std::move(tmp)); }
+
+  dispatch_to_arrow_host fn{col.parent(), stream, mr};
+  NANOARROW_THROW_NOT_OK(fn.populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
+
+  auto const d_strings = column_device_view::create(col.parent(), stream);
+
+  auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream);
+
+  // gather all the long strings into a single strings column
+  auto indices = make_counting_transform_iterator(
+    0, [d_strings = *d_strings] __device__(auto idx) -> cudf::strings::detail::string_index_pair {
+      if (d_strings.is_null(idx)) { return cudf::strings::detail::string_index_pair{nullptr, 0}; }
+      auto const d_str = d_strings.element<cudf::string_view>(idx);
+      return (d_str.size_bytes() > NANOARROW_BINARY_VIEW_INLINE_SIZE)
+               ? cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()}
+               : cudf::strings::detail::string_index_pair{"", 0};
+    });
+  auto const just_the_longer_ones = cudf::strings::detail::make_strings_column(
+    indices, indices + col.size(), stream, cudf::get_current_device_resource_ref());
+  auto const view        = cudf::strings_column_view(just_the_longer_ones->view());
+  auto const buffer_size = view.chars_size(stream);
+
+  // copy the gathered data into a variadic buffer
+  if (buffer_size > 0) {
+    auto const chars_data = view.chars_begin(stream);
+    NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(tmp.get(), 1));
+    auto private_data = static_cast<struct ArrowArrayPrivateData*>(tmp->private_data);
+    auto variadic_buf = &private_data->variadic_buffers[0];
+    NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, buffer_size));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      variadic_buf->data, chars_data, buffer_size, cudaMemcpyDefault, stream.value()));
+    private_data->variadic_buffer_sizes[0] = variadic_buf->size_bytes;
+  }
+
+  // now build BinaryView objects from the strings
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(view.offsets());
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     col.size(),
+                     strings_to_binary_view{*d_strings, d_offsets, d_items.data()});
+
+  // copy the BinaryView array into host memory
+  auto data_buffer   = ArrowArrayBuffer(tmp.get(), 1);
+  auto const bv_size = d_items.size() * sizeof(ArrowBinaryView);
+  NANOARROW_THROW_NOT_OK(ArrowBufferReserve(data_buffer, bv_size));
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(data_buffer->data, d_items.data(), bv_size, cudaMemcpyDefault, stream.value()));
+
+  stream.synchronize();
+  return create_device_array(std::move(tmp));
+}
 }  // namespace detail
 
 unique_device_array_t to_arrow_host(cudf::column_view const& col,
@@ -395,4 +486,11 @@ unique_device_array_t to_arrow_host(cudf::table_view const& table,
   return detail::to_arrow_host(table, stream, mr);
 }
 
+unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& col,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::to_arrow_host_stringview(col, stream, mr);
+}
 }  // namespace cudf
