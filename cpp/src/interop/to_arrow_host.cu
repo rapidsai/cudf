@@ -427,13 +427,15 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
 
   // gather all the long strings into a single strings column
   auto indices = make_counting_transform_iterator(
-    0, [d_strings = *d_strings] __device__(auto idx) -> cudf::strings::detail::string_index_pair {
-      if (d_strings.is_null(idx)) { return cudf::strings::detail::string_index_pair{nullptr, 0}; }
-      auto const d_str = d_strings.element<cudf::string_view>(idx);
-      return (d_str.size_bytes() > NANOARROW_BINARY_VIEW_INLINE_SIZE)
-               ? cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()}
-               : cudf::strings::detail::string_index_pair{"", 0};
-    });
+    0,
+    cuda::proclaim_return_type<cudf::strings::detail::string_index_pair>(
+      [d_strings = *d_strings] __device__(auto idx) {
+        if (d_strings.is_null(idx)) { return cudf::strings::detail::string_index_pair{nullptr, 0}; }
+        auto const d_str = d_strings.element<cudf::string_view>(idx);
+        return (d_str.size_bytes() > NANOARROW_BINARY_VIEW_INLINE_SIZE)
+                 ? cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()}
+                 : cudf::strings::detail::string_index_pair{"", 0};
+      }));
   auto const just_the_longer_ones = cudf::strings::detail::make_strings_column(
     indices, indices + col.size(), stream, cudf::get_current_device_resource_ref());
   auto const view        = cudf::strings_column_view(just_the_longer_ones->view());
