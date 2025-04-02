@@ -1246,8 +1246,8 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t min_row,
                              int level_type_size,
                              decode_kernel_mask kernel_mask,
-                             cudf::device_span<size_t> initial_str_offsets,
                              cudf::device_span<bool const> page_validity,
+                             cudf::device_span<size_t> initial_str_offsets,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
