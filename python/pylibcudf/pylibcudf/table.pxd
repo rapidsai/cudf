@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-
+from rmm.pylibrmm.stream cimport Stream
 
 cdef class Table:
     # List[pylibcudf.Column]
@@ -15,7 +15,7 @@ cdef class Table:
     cpdef int num_rows(self)
 
     @staticmethod
-    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
+    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=*)
 
     @staticmethod
     cdef Table from_table_view(const table_view& tv, Table owner)
