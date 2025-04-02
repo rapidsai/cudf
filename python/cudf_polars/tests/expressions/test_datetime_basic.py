@@ -265,3 +265,18 @@ def test_isoyear():
     q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
 
     assert_gpu_result_equal(q)
+
+def test_epoch():
+    start = datetime.datetime(2001, 1, 1)
+    stop = datetime.datetime(2001, 1, 3)
+    date = pl.datetime_range(start, stop, interval="1d", eager=True).alias(
+        "datetime"
+    )
+
+    df = pl.DataFrame(
+        {
+            "date": date
+        }
+    ).lazy()
+    q = df.select(pl.col("date").dt.epoch())
+    assert_gpu_result_equal(q)

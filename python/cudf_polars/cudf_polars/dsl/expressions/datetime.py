@@ -112,6 +112,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.TimeStamp
     }
 
     def __init__(
@@ -142,6 +143,9 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name is TemporalFunction.Name.TimeStamp:
+            casted_plc_col = plc.column.Column(plc.DataType(plc.TypeId.INT64), column.obj.size(), column.obj.data(), None, 0, 0, [])
+            return Column(casted_plc_col)
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
