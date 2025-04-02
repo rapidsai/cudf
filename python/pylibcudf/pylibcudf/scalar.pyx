@@ -110,7 +110,7 @@ cdef class Scalar:
         return s
 
     @classmethod
-    def from_py(cls, py_val, dtype: DataType = None):
+    def from_py(cls, py_val, dtype: DataType | None = None):
         """
         Convert a Python standard library object to a Scalar.
 
@@ -118,8 +118,11 @@ cdef class Scalar:
         ----------
         py_val: bool, int, float, str, datetime.datetime, datetime.timedelta, list, dict
             Value to convert to a pylibcudf.Scalar
+        dtype: DataType | None
+            The datatype to cast the value to. If None,
+            the type is inferred from `py_val`.
 
-        Returns
+        Return
         -------
         Scalar
             New pylibcudf.Scalar
