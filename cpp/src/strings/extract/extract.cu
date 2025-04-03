@@ -166,7 +166,7 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
 
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern", std::invalid_argument);
-  CUDF_EXPECTS(group < groups,
+  CUDF_EXPECTS(group >= 0 && group < groups,
                "group parameter outside the range of groups in the regex pattern",
                std::invalid_argument);
 
