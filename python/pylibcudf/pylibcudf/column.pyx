@@ -368,8 +368,6 @@ cdef class Column:
         ------
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
-        ImportError
-            If the data is 2D and NumPy is not installed.
         """
         try:
             iface = obj.__cuda_array_interface__
@@ -391,20 +389,12 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            try:
-                import numpy as np
-            except ImportError:
-                raise ImportError(
-                    "NumPy must be installed to use this method on 2D data"
-                )
             num_rows, num_cols = shape
             if num_rows < numeric_limits[size_type].max():
-                # TODO: Add a new Scalar.from_py(value, dtype) API so
-                # we can specify the dtype (size_type in this case) too.
                 offsets_col = sequence(
                     num_rows + 1,
-                    Scalar.from_numpy(np.int32(0)),
-                    Scalar.from_numpy(np.int32(num_cols))
+                    Scalar.from_py(0, DataType(type_id.INT32)),
+                    Scalar.from_py(num_cols, DataType(type_id.INT32)),
                 )
             else:
                 raise ValueError(
