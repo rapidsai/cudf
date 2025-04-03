@@ -407,7 +407,15 @@ class NumericalColumn(NumericalBaseColumn):
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
-        lhs, rhs = super()._process_values_for_isin(values)
+        try:
+            lhs, rhs = super()._process_values_for_isin(values)
+        except TypeError:
+            # dask.dataframe attempts to pass np.ndarray[object]
+            # https://github.com/rapidsai/cudf/issues/15768#issuecomment-2116129685
+            if isinstance(values, np.ndarray) and values.dtype.kind == "O":
+                return super()._process_values_for_isin(values.tolist())
+            else:
+                raise
         if isinstance(rhs, NumericalColumn):
             rhs = rhs.astype(self.dtype)
         return lhs, rhs
