@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
     from typing import Literal
 
+    from typing_extensions import Self
+
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import CSECache, Schema, Slice as Zlice
@@ -671,6 +673,8 @@ class Cache(IR):
     _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
+    refcount: int
+    """The number of cache hits."""
 
     def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
         self.schema = schema
@@ -678,6 +682,18 @@ class Cache(IR):
         self.refcount = refcount
         self.children = (value,)
         self._non_child_args = (key, refcount)
+
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        # Polars arranges that the keys are unique across all cache
+        # nodes that reference the same child, so we don't need to
+        # hash the child.
+        return (type(self), self.key, self.refcount)
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        if self.key == other.key and self.refcount == other.refcount:
+            self.children = other.children
+            return True
+        return False
 
     @classmethod
     def do_evaluate(
