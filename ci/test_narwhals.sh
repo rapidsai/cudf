@@ -15,8 +15,20 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest narwhals"
-git clone https://github.com/narwhals-dev/narwhals --depth=1 -b stable
+
+NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
+
+if [ ! -d "narwhals" ]; then
+    git clone https://github.com/narwhals-dev/narwhals
+fi
+
 pushd narwhals || exit 1
+git fetch --all
+git clean -fdx
+git checkout "v${NARWHALS_VERSION}" || {
+    echo "WARNING: Failed to checkout tag v${NARWHALS_VERSION}. Falling back to 'stable' branch."
+    git checkout stable
+}
 rapids-pip-retry install -U -e . pytest-env hypothesis
 
 rapids-logger "Check narwhals versions"
