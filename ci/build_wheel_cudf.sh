@@ -5,8 +5,6 @@ set -euo pipefail
 
 package_dir="python/cudf"
 
-wheel_dir=${RAPIDS_WHEEL_BLD_OUTPUT_DIR}
-
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Downloads libcudf and pylibcudf wheels from this current build,
@@ -22,14 +20,15 @@ export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 ./ci/build_wheel.sh cudf ${package_dir}
 
+# repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
-    -w "${wheel_dir}" \
+    -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
     ${package_dir}/dist/*
 
-./ci/validate_wheel.sh "${package_dir}" "${wheel_dir}"
+./ci/validate_wheel.sh "${package_dir}" "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
 
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python "${wheel_dir}"
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
