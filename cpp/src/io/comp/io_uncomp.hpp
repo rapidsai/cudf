@@ -101,5 +101,19 @@ struct decompression_info {
  */
 [[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
 
+/**
+ * @brief Computes the uncompressed sizes of Snappy-compressed input data.
+ *
+ * This function takes a collection of Snappy-compressed input data spans and computes
+ * their respective uncompressed sizes. The results are stored in the provided output span.
+ *
+ * @param inputs Compressed device memory buffers
+ * @param uncompressed_sizes Output device memory buffers to store the uncompressed sizes
+ * @param stream CUDA stream to be used for device operations and synchronization.
+ */
+void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<size_t> uncompressed_sizes,
+                                  rmm::cuda_stream_view stream);
+
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

@@ -17,6 +17,8 @@
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
@@ -714,6 +716,58 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
   unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
+}
+
+__global__ void get_snappy_uncompressed_size_kernel(
+  device_span<device_span<uint8_t const> const> inputs, device_span<size_t> uncompressed_sizes)
+{
+  int idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= inputs.size()) return;
+
+  auto cur = inputs[idx].begin();
+  auto end = inputs[idx].end();
+
+  if (cur < end) {
+    uint32_t uncompressed_size = *cur++;
+    if (uncompressed_size > 0x7f) {
+      uint32_t c        = (cur < end) ? *cur++ : 0;
+      uncompressed_size = (uncompressed_size & 0x7f) | (c << 7);
+      if (uncompressed_size >= (0x80 << 7)) {
+        c                 = (cur < end) ? *cur++ : 0;
+        uncompressed_size = (uncompressed_size & ((0x7f << 7) | 0x7f)) | (c << 14);
+        if (uncompressed_size >= (0x80 << 14)) {
+          c                 = (cur < end) ? *cur++ : 0;
+          uncompressed_size = (uncompressed_size & ((0x7f << 14) | (0x7f << 7) | 0x7f)) | (c << 21);
+          if (uncompressed_size >= (0x80 << 21)) {
+            c = (cur < end) ? *cur++ : 0;
+            if (c < 0x8) {
+              uncompressed_size =
+                (uncompressed_size & ((0x7f << 21) | (0x7f << 14) | (0x7f << 7) | 0x7f)) |
+                (c << 28);
+            } else {
+              uncompressed_sizes[idx] = 0;  // Invalid varint
+              return;
+            }
+          }
+        }
+      }
+    }
+    uncompressed_sizes[idx] = uncompressed_size;
+  } else {
+    uncompressed_sizes[idx] = 0;  // Empty input
+  }
+}
+
+void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<size_t> uncompressed_sizes,
+                                  rmm::cuda_stream_view stream)
+{
+  int threads_per_block = 128;
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe<size_t>(inputs.size(), threads_per_block);
+
+  get_snappy_uncompressed_size_kernel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+    inputs, uncompressed_sizes);
 }
 
 }  // namespace cudf::io::detail
