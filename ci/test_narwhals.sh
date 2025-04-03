@@ -25,10 +25,7 @@ fi
 pushd narwhals || exit 1
 git fetch --all
 git clean -fdx
-git checkout "v${NARWHALS_VERSION}" || {
-    echo "WARNING: Failed to checkout tag v${NARWHALS_VERSION}. Falling back to 'stable' branch."
-    git checkout stable
-}
+git checkout "v${NARWHALS_VERSION}"
 rapids-pip-retry install -U -e . pytest-env hypothesis
 
 rapids-logger "Check narwhals versions"
