@@ -325,14 +325,15 @@ CUDF_KERNEL void __launch_bounds__(96)
   int const lane_id     = t % warp_size;
   auto* const db        = &db_state;
 
+  [[maybe_unused]] null_count_back_copier _{s, t};
+
   // Since only used for int32 and int64, we can simply skip decoding if the page is invalid.
   if (not page_validity[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
+    return;
   }
-
-  [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],

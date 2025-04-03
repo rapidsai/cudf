@@ -1007,6 +1007,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
 
+  // must come after the kernel mask check
+  [[maybe_unused]] null_count_back_copier _{s, t};
+
   // Exit super early for simple types if the page is invalid.
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
     if (not page_validity[page_idx]) {
@@ -1030,7 +1033,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   if (not page_validity[page_idx]) {
     pp->num_nulls  = pp->num_rows;
     pp->num_valids = 0;
-
     // Update offsets for all list depth levels
     if constexpr (has_lists_t) {
       update_list_offsets_for_pruned_pages<decode_block_size_t, state_buf_t>(s, sb);
@@ -1040,12 +1042,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       update_string_offsets_for_pruned_pages<decode_block_size_t>(
         s, initial_str_offsets, pages[page_idx], has_lists_t);
     }
-
     return;
   }
-
-  // must come after the kernel mask check
-  [[maybe_unused]] null_count_back_copier _{s, t};
 
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
