@@ -412,7 +412,7 @@ class Scan(IR):
                 )
             if include_file_paths is not None:
                 # TODO: Need to populate num_rows_per_source in read_json in libcudf
-                raise NotImplementedError("Including file paths in a json read.")
+                raise NotImplementedError("Including file paths in a json scan.")
         elif (
             self.typ == "parquet"
             and self.row_index is not None
