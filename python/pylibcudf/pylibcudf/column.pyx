@@ -348,9 +348,14 @@ cdef class Column:
         Raises
         ------
         ValueError
-            If the object is not 1D or 2D, or is not C-contiguous.
+            If the host array is not 1D or 2D, or is not C-contiguous.
+            If the number of rows exceeds size_type limit.
         ImportError
-            If NumPy is required but not installed.
+            If NumPy is not installed.
+        TypeError
+            If the object does not implement __array_interface__
+        NotImplementedError
+            If the host array has a mask.
         """
         try:
             import numpy as np
@@ -361,7 +366,7 @@ cdef class Column:
             raise TypeError("Object does not implement __array_interface__")
 
         if iface.get("mask") is not None:
-            raise ValueError("mask not yet supported")
+            raise NotImplementedError("mask not yet supported")
 
         typestr = iface["typestr"][1:]
         data_type = _datatype_from_dtype_desc(typestr)
