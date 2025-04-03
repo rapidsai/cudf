@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -72,6 +72,13 @@ cdef extern from *:
       return to_arrow_schema(input, metadata).release();
     }
 
+    void release_arrow_schema_raw(ArrowSchema *schema) {
+      if (schema->release != nullptr) {
+          schema->release(schema);
+      }
+      delete schema;
+    }
+
     ArrowArray* to_arrow_host_raw(
       cudf::table_view const& tbl,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
@@ -82,11 +89,24 @@ cdef extern from *:
       ArrowArrayMove(&device_arr->array, arr);
       return arr;
     }
+
+    void release_arrow_array_raw(ArrowArray *array) {
+      if (array->release != nullptr) {
+        array->release(array);
+      }
+      delete array;
+    }
     """
     cdef ArrowSchema *to_arrow_schema_raw(
         const table_view& tbl,
         const vector[column_metadata]& metadata,
     ) except +libcudf_exception_handler nogil
+    cdef void release_arrow_schema_raw(
+        ArrowSchema *
+    ) except +libcudf_exception_handler nogil
     cdef ArrowArray* to_arrow_host_raw(
         const table_view& tbl
+    ) except +libcudf_exception_handler nogil
+    cdef void release_arrow_array_raw(
+        ArrowArray *
     ) except +libcudf_exception_handler nogil

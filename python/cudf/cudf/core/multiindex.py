@@ -727,12 +727,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """Computes the valid set of indices of values in the lookup"""
-        lookup_dict = {}
-        for i, row in enumerate(row_tuple):
-            if isinstance(row, slice) and row == slice(None):
-                continue
-            lookup_dict[i] = row
-        lookup = cudf.DataFrame(lookup_dict)
+        # TODO: A non-slice(None) will probably raise in as_column
+        lookup_dict = {
+            i: column.as_column(row)
+            for i, row in enumerate(row_tuple)
+            if not (isinstance(row, slice) and row == slice(None))
+        }
+        lookup = cudf.DataFrame._from_data(lookup_dict)
         frame = cudf.DataFrame._from_data(
             ColumnAccessor(
                 dict(enumerate(index._columns)),

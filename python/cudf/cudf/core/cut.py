@@ -6,12 +6,9 @@ import cupy
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import as_column
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
 
@@ -259,19 +256,12 @@ def cut(
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    with acquire_spill_lock():
-        plc_column = plc.labeling.label_bins(
-            input_arr.to_pylibcudf(mode="read"),
-            left_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if left_inclusive
-            else plc.labeling.Inclusive.NO,
-            right_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if right_inclusive
-            else plc.labeling.Inclusive.NO,
-        )
-        index_labels = ColumnBase.from_pylibcudf(plc_column)
+    index_labels = input_arr.label_bins(
+        left_edge=left_edges,
+        left_inclusive=left_inclusive,
+        right_edge=right_edges,
+        right_inclusive=right_inclusive,
+    )
 
     if labels is False:
         # if labels is false we return the index labels, we return them

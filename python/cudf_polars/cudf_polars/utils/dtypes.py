@@ -12,6 +12,7 @@ from typing_extensions import assert_never
 
 import polars as pl
 
+import pylibcudf as plc
 from pylibcudf.traits import (
     is_floating_point,
     is_integral_not_bool,
@@ -19,12 +20,18 @@ from pylibcudf.traits import (
 )
 
 __all__ = [
+    "TO_ARROW_COMPAT_LEVEL",
     "can_cast",
     "downcast_arrow_lists",
     "from_polars",
     "is_order_preserving_cast",
 ]
-import pylibcudf as plc
+
+TO_ARROW_COMPAT_LEVEL = (
+    pl.CompatLevel.newest()
+    if hasattr(pa.lib, "Type_STRING_VIEW")
+    else pl.CompatLevel.oldest()
+)
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:

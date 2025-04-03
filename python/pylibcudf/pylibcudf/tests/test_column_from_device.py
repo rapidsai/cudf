@@ -76,6 +76,6 @@ def test_from_cuda_array_interface(
         # patch strides to be None to test C-configuous layout
         monkeypatch.setattr(iface_obj, "strides", None)
 
-    res = plc.Column.from_cuda_array_interface_obj(iface_obj)
+    res = plc.Column.from_cuda_array_interface(iface_obj)
 
     assert_column_eq(input_column, res)

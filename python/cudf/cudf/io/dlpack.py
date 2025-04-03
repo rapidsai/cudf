@@ -5,6 +5,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column import ColumnBase
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
@@ -36,10 +37,14 @@ def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
     tensor is row-major, transpose it before passing it to this function.
     """
     plc_table = plc.interop.from_dlpack(pycapsule_obj)
-    data = dict(
-        enumerate(
-            (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
-        )
+    data = ColumnAccessor(
+        dict(
+            enumerate(
+                (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
+            )
+        ),
+        verify=False,
+        rangeindex=True,
     )
 
     if len(data) == 1:

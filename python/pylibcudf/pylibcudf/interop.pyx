@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
@@ -6,7 +6,6 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
     PyCapsule_SetName,
 )
-from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -26,6 +25,8 @@ from pylibcudf.libcudf.interop cimport (
     from_arrow_column as cpp_from_arrow_column,
     from_arrow_stream as cpp_from_arrow_stream,
     from_dlpack as cpp_from_dlpack,
+    release_arrow_array_raw,
+    release_arrow_schema_raw,
     to_arrow_host_raw,
     to_arrow_schema_raw,
     to_dlpack as cpp_to_dlpack,
@@ -256,10 +257,7 @@ cdef void _release_schema(object schema_capsule) noexcept:
     cdef ArrowSchema* schema = <ArrowSchema*>PyCapsule_GetPointer(
         schema_capsule, 'arrow_schema'
     )
-    if schema.release != NULL:
-        schema.release(schema)
-
-    free(schema)
+    release_arrow_schema_raw(schema)
 
 
 cdef void _release_array(object array_capsule) noexcept:
@@ -267,10 +265,7 @@ cdef void _release_array(object array_capsule) noexcept:
     cdef ArrowArray* array = <ArrowArray*>PyCapsule_GetPointer(
         array_capsule, 'arrow_array'
     )
-    if array.release != NULL:
-        array.release(array)
-
-    free(array)
+    release_arrow_array_raw(array)
 
 
 def _maybe_create_nested_column_metadata(Column col):

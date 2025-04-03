@@ -1455,7 +1455,7 @@ def test_chunked_json_reader():
 
 @pytest.mark.parametrize("compression", ["gzip", None])
 def test_roundtrip_compression(compression, tmp_path):
-    expected = cudf.DataFrame({"a": 1, "b": "2"})
+    expected = cudf.DataFrame({"a": [1], "b": ["2"]})
     fle = BytesIO()
     expected.to_json(fle, engine="cudf", compression=compression)
     result = cudf.read_json(fle, engine="cudf", compression=compression)
