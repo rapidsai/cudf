@@ -1929,7 +1929,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                             table._columns
                             if ignore
                             else itertools.chain(
-                                table._index._columns, table._columns
+                                table.index._columns, table._columns
                             )
                         )
                     ]
@@ -2625,19 +2625,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             else self._columns
         )
 
+        if map_size is None:
+            map_size = map_index.distinct_count(dropna=True)
+
+        if map_index.size > 0:
+            lo, hi = map_index.minmax()
+            if lo < 0 or hi >= map_size:
+                raise ValueError("Partition map has invalid values")
+
         with acquire_spill_lock():
-            if map_size is None:
-                map_size = plc.stream_compaction.distinct_count(
-                    map_index.to_pylibcudf(mode="read"),
-                    plc.types.NullPolicy.EXCLUDE,
-                    plc.types.NanPolicy.NAN_IS_VALID,
-                )
-
-            if map_index.size > 0:
-                lo, hi = map_index.minmax()
-                if lo < 0 or hi >= map_size:
-                    raise ValueError("Partition map has invalid values")
-
             plc_table, output_offsets = plc.partitioning.partition(
                 plc.Table(
                     [col.to_pylibcudf(mode="read") for col in source_columns]
@@ -5166,10 +5162,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         key_indices = [self._column_names.index(k) for k in columns]
         if keep_index:
-            cols = [*self.index._columns, *self._columns]
+            cols: abc.Iterable[ColumnBase] = itertools.chain(
+                self.index._columns, self._columns
+            )
             key_indices = [i + len(self.index._columns) for i in key_indices]
         else:
-            cols = [*self._columns]
+            cols = self._columns
 
         with acquire_spill_lock():
             plc_table, offsets = plc.partitioning.hash_partition(
