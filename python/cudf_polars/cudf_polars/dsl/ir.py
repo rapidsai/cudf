@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 import time
 from functools import cache
 from pathlib import Path
@@ -754,10 +755,10 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars LazyFrame object."""
+    """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     config_options: ConfigOptions
@@ -780,19 +781,21 @@ class DataFrameScan(IR):
             self.projection,
         )
         self.children = ()
+        self._id_for_hash = random.randint(0, 2**64 - 1)
 
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
 
-        The (heavy) dataframe object is hashed as its id, so this is
-        not stable across runs, or repeat instances of the same equal dataframes.
+        The (heavy) dataframe object is not hashed. No two instances of
+        ``DataFrameScan`` will have the same hash, even if they have the
+        same schema, projection, and config options, and data.
         """
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
             schema_hash,
-            id(self.df),
+            self._id_for_hash,
             self.projection,
             self.config_options,
         )

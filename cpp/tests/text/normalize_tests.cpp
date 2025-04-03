@@ -70,10 +70,6 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::normalize_spaces(strings_view);
   EXPECT_EQ(results->size(), 0);
-  results = nvtext::normalize_characters(strings_view, true);
-  EXPECT_EQ(results->size(), 0);
-  results = nvtext::normalize_characters(strings_view, false);
-  EXPECT_EQ(results->size(), 0);
 
   auto normalizer = nvtext::create_character_normalizer(true);
   results         = nvtext::normalize_characters(strings_view, *normalizer);
@@ -86,8 +82,6 @@ TEST_F(TextNormalizeTest, AllNullStrings)
   cudf::strings_column_view strings_view(strings);
   auto results = nvtext::normalize_spaces(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
-  results = nvtext::normalize_characters(strings_view, false);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 
   auto normalizer = nvtext::create_character_normalizer(true);
   results         = nvtext::normalize_characters(strings_view, *normalizer);
@@ -98,52 +92,11 @@ TEST_F(TextNormalizeTest, SomeNullStrings)
 {
   cudf::test::strings_column_wrapper strings({"", ".", "a"}, {false, true, true});
   cudf::strings_column_view strings_view(strings);
-  auto results = nvtext::normalize_characters(strings_view, false);
   cudf::test::strings_column_wrapper expected({"", " . ", "a"}, {false, true, true});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto normalizer = nvtext::create_character_normalizer(true);
-  results         = nvtext::normalize_characters(strings_view, *normalizer);
+  auto results    = nvtext::normalize_characters(strings_view, *normalizer);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-}
-
-TEST_F(TextNormalizeTest, NormalizeCharacters)
-{
-  // These include punctuation, accents, whitespace, and CJK characters
-  auto input = cudf::test::strings_column_wrapper(
-    {"abc£def", "", "éè â îô\taeio", "\tĂĆĖÑ  Ü", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟", ""},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
-  auto sv = cudf::strings_column_view(input);
-  {
-    auto results = nvtext::normalize_characters(sv, true);
-    cudf::test::strings_column_wrapper expected({"abc£def",
-                                                 "",
-                                                 "ee a io aeio",
-                                                 " acen  u",
-                                                 "acen u",
-                                                 "p ^ np",
-                                                 " $ 41 . 07",
-                                                 " [ a , b ] ",
-                                                 " 丏  丟 ",
-                                                 ""},
-                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    auto results = nvtext::normalize_characters(sv, false);
-    cudf::test::strings_column_wrapper expected({"abc£def",
-                                                 "",
-                                                 "éè â îô aeio",
-                                                 " ĂĆĖÑ  Ü",
-                                                 "ACEN U",
-                                                 "P ^ NP",
-                                                 " $ 41 . 07",
-                                                 " [ a , b ] ",
-                                                 " 丏  丟 ",
-                                                 ""},
-                                                {1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
 }
 
 TEST_F(TextNormalizeTest, WithNormalizer)
@@ -258,18 +211,12 @@ TEST_F(TextNormalizeTest, NormalizeSlicedColumn)
     {"abc£def", "éè â îô\taeio", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟"});
 
   std::vector<cudf::column_view> sliced = cudf::split(strings, {4});
-  auto results = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), true);
-  auto expected =
-    cudf::test::strings_column_wrapper({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
-  results  = nvtext::normalize_characters(cudf::strings_column_view(sliced[1]), false);
-  expected = cudf::test::strings_column_wrapper({" $ 41 . 07", " [ a , b ] ", " 丏  丟 "});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto normalizer = nvtext::create_character_normalizer(true);
-  results  = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), *normalizer);
-  expected = cudf::test::strings_column_wrapper({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
+  auto results =
+    nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), *normalizer);
+  auto expected =
+    cudf::test::strings_column_wrapper({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   normalizer = nvtext::create_character_normalizer(false);
