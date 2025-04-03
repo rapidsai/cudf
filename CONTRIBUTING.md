@@ -28,7 +28,7 @@ To make a contribution only to cuDF documentation:
 
 ```bash
 conda activate cudf_dev
-mamba install cudf -c rapidsai-nightly -c conda-forge
+conda install cudf -c rapidsai-nightly -c conda-forge
 ```
 
 3. Build and view the docs locally following the instructions in the [Building
