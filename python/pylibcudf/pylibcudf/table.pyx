@@ -2,9 +2,11 @@
 
 from cython.operator cimport dereference
 
+from cpython cimport Py_INCREF, Py_DECREF
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
     PyCapsule_New,
+    PyCapsule_SetContext,
 )
 
 from libcpp.memory cimport unique_ptr, make_unique
@@ -19,9 +21,11 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
+    ArrowDeviceArray,
     ArrowSchema,
     arrow_table,
     column_metadata,
+    to_arrow_device_raw,
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
@@ -31,6 +35,7 @@ from .utils cimport _get_stream
 from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
+    _release_device_array,
     _metadata_to_libcudf,
 )
 from ._interop_helpers import ColumnMetadata
@@ -212,7 +217,7 @@ cdef class Table:
         with nogil:
             raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
 
-        return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
+        return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
     def _to_host_array(self):
         cdef ArrowArray* raw_host_array_ptr
@@ -221,8 +226,36 @@ cdef class Table:
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
+    def _to_device_array(self):
+        cdef ArrowDeviceArray* raw_device_array_ptr
+        with nogil:
+            raw_device_array_ptr = to_arrow_device_raw(self.view())
+
+        cdef object capsule = PyCapsule_New(
+            <void*>raw_device_array_ptr,
+            "arrow_device_array",
+            _release_device_array
+        )
+        PyCapsule_SetContext(capsule, <void*>self)
+        Py_INCREF(self)
+        return capsule
+
     def __arrow_c_array__(self, requested_schema=None):
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
         return self._to_schema(), self._to_host_array()
+
+    def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Table does not support alternative schema")
+
+        non_default_kwargs = [
+            name for name, value in kwargs.items() if value is not None
+        ]
+        if non_default_kwargs:
+            raise NotImplementedError(
+                f"Received unsupported keyword argument(s): {non_default_kwargs}"
+            )
+
+        return self._to_schema(), self._to_device_array()

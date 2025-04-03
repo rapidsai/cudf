@@ -1,12 +1,15 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-from cpython.pycapsule cimport PyCapsule_GetPointer
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_GetContext
+from cpython cimport Py_DECREF
 
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
+    ArrowDeviceArray,
     ArrowSchema,
     column_metadata,
     release_arrow_array_raw,
+    release_arrow_device_array_raw,
     release_arrow_schema_raw,
 )
 
@@ -37,6 +40,19 @@ cdef void _release_array(object array_capsule) noexcept:
         array_capsule, 'arrow_array'
     )
     release_arrow_array_raw(array)
+
+
+cdef void _release_device_array(object array_capsule) noexcept:
+    """Release the ArrowDeviceArray object stored in a PyCapsule."""
+    cdef ArrowDeviceArray* array = <ArrowDeviceArray*>PyCapsule_GetPointer(
+        array_capsule, 'arrow_device_array'
+    )
+    release_arrow_device_array_raw(array)
+
+    # TODO: Ultimately this logic actually needs to live in the array's release
+    # function.
+    cdef object obj = <object> PyCapsule_GetContext(array_capsule)
+    Py_DECREF(obj)
 
 
 cdef column_metadata _metadata_to_libcudf(metadata):

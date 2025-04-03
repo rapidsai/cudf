@@ -67,9 +67,10 @@ cdef extern from *:
     # Rather than exporting the underlying functions directly to Cython, we expose
     # these wrappers that handle the release to avoid needing to teach Cython how
     # to handle unique_ptrs with custom deleters that aren't default constructible.
-    # This will go away once we introduce cudf::arrow_column (need a
-    # cudf::arrow_schema as well), see
-    # https://github.com/rapidsai/cudf/issues/16104.
+    # We cannot use cudf's owning arrow types for this because pylibcudf's
+    # objects always manage data ownership independently of libcudf in order to
+    # support other data sources (e.g. cupy), so we must use the view-based
+    # C++ APIs and handle ownership in Python.
     """
     #include <nanoarrow/nanoarrow.h>
     #include <nanoarrow/nanoarrow_device.h>
@@ -102,7 +103,6 @@ cdef extern from *:
       cudf::table_view const& tbl,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      // Assumes the sync event is null and the data is already on the host.
       ArrowArray *arr = new ArrowArray();
       auto device_arr = cudf::to_arrow_host(tbl, stream, mr);
       ArrowArrayMove(&device_arr->array, arr);
@@ -125,6 +125,25 @@ cdef extern from *:
         array->release(array);
       }
       delete array;
+    }
+
+    void release_arrow_device_array_raw(ArrowDeviceArray *array) {
+      // TODO: Probably needs a sync
+      if (array->array.release != nullptr) {
+        array->array.release(&array->array);
+      }
+      delete array;
+    }
+
+    ArrowDeviceArray* to_arrow_device_raw(
+      cudf::table_view const& tbl,
+      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
+      // TODO: Technically need to call the sync event.
+      ArrowDeviceArray *arr = new ArrowDeviceArray();
+      auto tmp = cudf::to_arrow_device(tbl, stream, mr);
+      ArrowDeviceArrayMove(tmp.get(), arr);
+      return arr;
     }
     """
     # The `to_*_raw` functions are all defined in the above extern block as wrappers
@@ -157,4 +176,10 @@ cdef extern from *:
     ) except +libcudf_exception_handler nogil
     cdef void release_arrow_array_raw(
         ArrowArray *
+    ) except +libcudf_exception_handler nogil
+    cdef void release_arrow_device_array_raw(
+        ArrowDeviceArray *
+    ) except +libcudf_exception_handler nogil
+    cdef ArrowDeviceArray* to_arrow_device_raw(
+        const table_view& tbl,
     ) except +libcudf_exception_handler nogil
