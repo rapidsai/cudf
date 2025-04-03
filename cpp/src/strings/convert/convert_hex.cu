@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -254,7 +254,7 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                       };
                       auto begin = d_str.begin() + (starts_with_0x(d_str) ? 2 : 0);
                       auto end   = d_str.end();
-                      return (thrust::distance(begin, end) > 0) &&
+                      return (cuda::std::distance(begin, end) > 0) &&
                              thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
                                return (chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'F') ||
                                       (chr >= 'a' && chr <= 'f');

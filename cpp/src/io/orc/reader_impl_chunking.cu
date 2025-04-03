@@ -27,6 +27,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -156,8 +157,8 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   auto const end = start + cumulative_sizes.size();
 
   while (cur_count < total_count) {
-    int64_t split_pos = static_cast<int64_t>(
-      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
+    int64_t split_pos = static_cast<int64_t>(cuda::std::distance(
+      start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
 
     // If we're past the end, or if the returned range has size exceeds the given size limit,
     // move back one position.
