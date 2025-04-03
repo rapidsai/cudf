@@ -65,7 +65,9 @@ def _nonempty_index(idx):
             data=None,
             size=None,
             dtype=idx.dtype,
-            children=(cudf.core.column.as_column([0, 0], dtype=np.uint8),),
+            children=(
+                cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8)),
+            ),
         )
         return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
@@ -105,7 +107,7 @@ def _get_non_empty_data(
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=np.uint8,
+            dtype=np.dtype(np.uint8),
             length=2,
         )
         return cudf.core.column.CategoricalColumn(
