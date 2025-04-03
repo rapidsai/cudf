@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libc.stdint cimport uintptr_t
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
@@ -269,10 +270,10 @@ cdef class Column:
                 )
 
         cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.head[char](), owner
+            <uintptr_t> cv.head[char](), owner
         )
         cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.null_mask(), owner
+            <uintptr_t> cv.null_mask(), owner
         )
 
         return Column(
