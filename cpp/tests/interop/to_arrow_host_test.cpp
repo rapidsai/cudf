@@ -203,10 +203,6 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
 };
 
 struct ToArrowHostDeviceTest : public BaseToArrowHostFixture {};
-template <typename T>
-struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
-
-TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowHostDeviceTest, EmptyTable)
 {
@@ -285,6 +281,36 @@ TEST_F(ToArrowHostDeviceTest, DateTimeTable)
   ArrowArrayViewReset(&expected);
   ArrowArrayViewReset(&actual);
 }
+
+TEST_F(ToArrowHostDeviceTest, StringView)
+{
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
+
+  auto data = cudf::test::strings_column_wrapper(
+    {"hello", "worldy", "much longer string", "", "another even longer string", "", "other string"},
+    {1, 1, 1, 0, 1, 1, 1});
+  auto got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  auto result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+
+  data =
+    cudf::test::strings_column_wrapper({"all of", "these", "strings", "will", "fit", "inline"});
+  got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+
+  data = cudf::test::strings_column_wrapper(
+    {"all of these strings", "are longer and will", "not fit as inline"});
+  got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+}
+
+template <typename T>
+struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
+
+TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TYPED_TEST(ToArrowHostDeviceTestDurationsTest, DurationTable)
 {
