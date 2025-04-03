@@ -410,7 +410,7 @@ cdef class Column:
         Parameters
         ----------
         obj : object
-            Must implement the `__array_interface__` protocol.
+            Must implement the ``__array_interface__`` protocol.
 
         Returns
         -------
@@ -422,7 +422,7 @@ cdef class Column:
         ImportError
             If NumPy is not installed.
         TypeError
-            If the object does not implement __array_interface__
+            If the object does not implement ``__array_interface__``
         ValueError
             If the host array is not 1D or 2D, or is not C-contiguous.
             If the number of rows exceeds size_type limit.
@@ -468,7 +468,7 @@ cdef class Column:
         Raises
         ------
         TypeError
-            If the object does not support __cuda_array_interface__.
+            If the object does not support ``__cuda_array_interface__``.
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
             If the number of rows exceeds size_type limit.
