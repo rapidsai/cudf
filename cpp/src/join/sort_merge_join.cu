@@ -16,11 +16,15 @@
 
 #include "join_common_utils.hpp"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join.hpp>
+#include <cudf/lists/contains.hpp>
+#include <cudf/lists/detail/dremel.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -66,27 +70,38 @@ void debug_print(std::string str, host_span<const T> span)
 enum class bound_type { UPPER, LOWER };
 
 struct row_comparator {
-  row_comparator(table_device_view const lhs, table_device_view const rhs, bound_type* d_ptr)
-    : _lhs{lhs}, _rhs{rhs}, _d_ptr{d_ptr}
+  row_comparator(table_device_view const lhs,
+                 table_device_view const rhs,
+                 device_span<detail::dremel_device_view const> lhs_dremel,
+                 device_span<detail::dremel_device_view const> rhs_dremel,
+                 bound_type* d_ptr)
+    : _lhs{lhs},
+      _rhs{rhs},
+      _d_ptr{d_ptr},
+      _lhs_dremel{lhs_dremel},
+      _rhs_dremel{rhs_dremel},
+      ub_comparator{true, _lhs, _rhs, _lhs_dremel, _rhs_dremel},
+      lb_comparator{true, _rhs, _lhs, _rhs_dremel, _lhs_dremel}
   {
   }
 
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
     if (*_d_ptr == bound_type::UPPER) {
-      cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator(
-        true, _lhs, _rhs);
-      return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+      return ub_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
     }
-    cudf::experimental::row::lexicographic::device_row_comparator<false, bool> comparator(
-      true, _rhs, _lhs);
-    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+    return lb_comparator(lhs_index, rhs_index) == weak_ordering::LESS;
   }
+
+  bound_type* _d_ptr;
 
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  bound_type* _d_ptr;
+  device_span<detail::dremel_device_view const> _lhs_dremel;
+  device_span<detail::dremel_device_view const> _rhs_dremel;
+  cudf::experimental::row::lexicographic::device_row_comparator<true, bool> ub_comparator;
+  cudf::experimental::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
 };
 
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> sort(table_view const& left,
@@ -121,8 +136,26 @@ merge(table_view const& smaller,
       rmm::cuda_stream_view stream,
       rmm::device_async_resource_ref mr)
 {
-  auto smaller_dv_ptr = cudf::table_device_view::create(smaller, stream);
-  auto larger_dv_ptr  = cudf::table_device_view::create(larger, stream);
+  auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
+  auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
+  auto list_lex_preprocess = [stream](table_view const& table) {
+    std::vector<detail::dremel_data> dremel_data;
+    auto const num_list_columns = std::count_if(
+      table.begin(), table.end(), [](auto const& col) { return col.type().id() == type_id::LIST; });
+    auto dremel_device_views =
+      detail::make_empty_host_vector<detail::dremel_device_view>(num_list_columns, stream);
+    for (auto const& col : table) {
+      if (col.type().id() == type_id::LIST) {
+        dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
+        dremel_device_views.push_back(dremel_data.back());
+      }
+    }
+    auto d_dremel_device_views = detail::make_device_uvector_sync(
+      dremel_device_views, stream, cudf::get_current_device_resource_ref());
+    return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
+  };
+  auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
+  auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
 
   // naive: iterate through larger table and binary search on smaller table
   auto const larger_numrows  = larger.num_rows();
@@ -135,29 +168,31 @@ merge(table_view const& smaller,
 
 #if SORT_MERGE_JOIN_DEBUG
   rmm::device_uvector<size_type> lb1(larger_numrows, stream, mr);
-  row_comparator comp_lb_1(*larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
+  row_comparator comp_(
+    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_lb_type.data());
   thrust::lower_bound(rmm::exec_policy(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       lb1.begin(),
-                      comp_lb_1);
+                      comp_);
   debug_print<size_type>("h_lb1", cudf::detail::make_host_vector_sync(lb1, stream));
 
   rmm::device_uvector<size_type> ub1(larger_numrows, stream, mr);
-  row_comparator comp_ub_1(*larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
+  comp_._d_ptr = d_ub_type.data();
   thrust::upper_bound(rmm::exec_policy(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       ub1.begin(),
-                      comp_ub_1);
+                      comp_);
   debug_print<size_type>("h_ub1", cudf::detail::make_host_vector_sync(ub1, stream));
 #endif
 
-  row_comparator comp_ub(*larger_dv_ptr, *smaller_dv_ptr, d_ub_type.data());
+  row_comparator comp(
+    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
   auto match_counts_it = match_counts.begin();
   nvtxRangePushA("upper bound");
   thrust::upper_bound(rmm::exec_policy(stream),
@@ -166,7 +201,7 @@ merge(table_view const& smaller,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_it,
-                      comp_ub);
+                      comp);
   nvtxRangePop();
 
 #if SORT_MERGE_JOIN_DEBUG
@@ -174,7 +209,7 @@ merge(table_view const& smaller,
                          cudf::detail::make_host_vector_sync(match_counts, stream));
 #endif
 
-  row_comparator comp_lb(*larger_dv_ptr, *smaller_dv_ptr, d_lb_type.data());
+  comp._d_ptr                 = d_lb_type.data();
   auto match_counts_update_it = thrust::make_tabulate_output_iterator(
     [match_counts = match_counts.begin()] __device__(size_type idx, size_type val) {
       match_counts[idx] -= val;
@@ -186,7 +221,7 @@ merge(table_view const& smaller,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_update_it,
-                      comp_lb);
+                      comp);
   nvtxRangePop();
 
 #if SORT_MERGE_JOIN_DEBUG
@@ -243,7 +278,7 @@ merge(table_view const& smaller,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       dlb.begin(),
-                      comp_lb);
+                      comp);
   debug_print<size_type>("h_dlb", cudf::detail::make_host_vector_sync(dlb, stream));
 #endif
 
@@ -265,7 +300,7 @@ merge(table_view const& smaller,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       smaller_tabulate_it,
-                      comp_lb);
+                      comp);
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 larger_indices.begin(),
                                 larger_indices.end(),
@@ -302,13 +337,64 @@ preprocess_tables(table_view const left,
                   rmm::device_async_resource_ref mr)
 {
   if (compare_nulls == null_equality::EQUAL) { return {left, right, std::nullopt, std::nullopt}; }
-  std::vector<size_type> check_columns(left.num_columns());
-  std::iota(check_columns.begin(), check_columns.end(), 0);
-  auto non_null_left  = drop_nulls(left, check_columns, stream, mr);
-  auto non_null_right = drop_nulls(right, check_columns, stream, mr);
 
-  auto nnlv = non_null_left->view();
-  auto nnrv = non_null_right->view();
+  auto preprocess_table = [stream, mr](table_view const& tbl) {
+#if SORT_MERGE_JOIN_DEBUG
+    auto print = [stream](column_view bool_mask) {
+      stream.synchronize();
+      std::vector<int> h_data(bool_mask.size());
+      CUDF_CUDA_TRY(cudaMemcpyAsync(h_data.data(),
+                                    bool_mask.data<bool>(),
+                                    bool_mask.size() * sizeof(std::byte),
+                                    cudaMemcpyDefault,
+                                    stream.value()));
+      stream.synchronize();
+      std::cout << "bool_mask = ";
+      for (auto e : h_data)
+        std::cout << e << " ";
+      std::cout << std::endl;
+      return bool_mask;
+    };
+#endif
+
+    auto bool_mask       = make_numeric_column(cudf::data_type{cudf::type_to_id<bool>()},
+                                         tbl.num_rows(),
+                                         mask_state::UNALLOCATED,
+                                         stream,
+                                         mr);
+    auto bool_mask_begin = bool_mask->mutable_view().template begin<bool>();
+    thrust::fill(
+      rmm::exec_policy(stream), bool_mask_begin, bool_mask_begin + bool_mask->size(), false);
+    for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
+      auto col = tbl.column(col_idx);
+      if (col.type().id() == type_id::LIST) {
+        auto col_bool_mask = cudf::lists::contains_nulls(lists_column_view(col), stream, mr);
+        bool_mask          = binary_operation(bool_mask->view(),
+                                     col_bool_mask->view(),
+                                     binary_operator::LOGICAL_OR,
+                                     cudf::data_type{cudf::type_to_id<bool>()},
+                                     stream,
+                                     mr);
+      }
+    }
+    bool_mask_begin = bool_mask->mutable_view().template begin<bool>();
+    thrust::transform(rmm::exec_policy(stream),
+                      bool_mask_begin,
+                      bool_mask_begin + bool_mask->size(),
+                      bool_mask_begin,
+                      [] __device__(auto val) { return !val; });
+    auto non_list_nulls_tbl = cudf::apply_boolean_mask(tbl, *bool_mask, stream, mr);
+
+    std::vector<size_type> check_columns(tbl.num_columns());
+    std::iota(check_columns.begin(), check_columns.end(), 0);
+    auto non_null_tbl = drop_nulls(non_list_nulls_tbl->view(), check_columns, stream, mr);
+    return non_null_tbl;
+  };
+
+  auto non_null_left  = preprocess_table(left);
+  auto non_null_right = preprocess_table(right);
+  auto nnlv           = non_null_left->view();
+  auto nnrv           = non_null_right->view();
 
   return {nnlv, nnrv, std::move(non_null_left), std::move(non_null_right)};
 }

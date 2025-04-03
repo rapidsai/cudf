@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -2189,18 +2190,39 @@ struct JoinTestLists : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(JoinTestLists, ListWithNullsEqualInnerJoin)
+struct JoinParameterizedTestLists : public JoinTestLists,
+                                    public testing::WithParamInterface<algorithm> {
+  void inner_join(cudf::column_view left_gold_map,
+                  cudf::column_view right_gold_map,
+                  cudf::null_equality nulls_equal,
+                  algorithm algo)
+  {
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         algo == algorithm::HASH ? cudf::inner_join : cudf::sort_merge_inner_join,
+         cudf::out_of_bounds_policy::DONT_CHECK);
+  }
+};
+// Parametrize qualifying join tests for supported algorithms
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestLists,
+                        JoinParameterizedTestLists,
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+TEST_P(JoinParameterizedTestLists, ListWithNullsEqualInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 2, 3, 4});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL, algo);
 }
 
-TEST_F(JoinTestLists, ListWithNullsUnequalInnerJoin)
+TEST_P(JoinParameterizedTestLists, ListWithNullsUnequalInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({1, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 3});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL, algo);
 }
 
 TEST_F(JoinTestLists, ListWithNullsEqualFullJoin)
