@@ -299,7 +299,7 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
   auto const d_str   = d_strings.element<string_view>(str_idx);
   auto const str_ptr = d_str.data();
 
-  // each thread processes 4 bytes
+  // each thread processes bytes_per_thread bytes
   size_type size = 0;
   for (auto i = lane_idx * bytes_per_thread; i < d_str.size_bytes();
        i += cudf::detail::warp_size * bytes_per_thread) {
