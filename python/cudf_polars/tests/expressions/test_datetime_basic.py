@@ -179,7 +179,7 @@ def test_strftime_duration(format):
 
 @pytest.mark.parametrize(
     "field",
-    ["total_seconds", "total_milliseconds", "total_microseconds", "total_nanoseconds"],
+    ["total_hours", "total_days", "total_seconds", "total_milliseconds", "total_microseconds", "total_nanoseconds"],
 )
 @pytest.mark.parametrize(
     "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
@@ -197,6 +197,8 @@ def test_duration_total_component_extract(field, dtype):
                     11111,
                     10000,
                     15000,
+                    134234534,
+                    5857593848682946
                 ],
                 dtype=dtype,
             ),

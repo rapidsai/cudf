@@ -169,8 +169,12 @@ class TemporalFunction(Expr):
         ]
         (column,) = columns
         if self.name in self._ADDITIONAL_COMPONENTS:
-            # inspired by cuDF algorithm
-            if self.name == TemporalFunction.Name.TotalSeconds:
+            # Normalize to nanoseconds
+            if self.name == TemporalFunction.Name.TotalDays:
+                denom = 86400 * 1e9
+            elif self.name == TemporalFunction.Name.TotalHours:
+                denom = 3600 * 1e9
+            elif self.name == TemporalFunction.Name.TotalSeconds:
                 denom = 1e9
             elif self.name == TemporalFunction.Name.TotalMilliseconds:
                 denom = 1e6
@@ -178,14 +182,18 @@ class TemporalFunction(Expr):
                 denom = 1e3
             elif self.name == TemporalFunction.Name.TotalNanoseconds:
                 denom = 1
+            else:
+                raise AssertionError()
+            # divide to get to the target unit and cast to floor out the fractional part
             conversion = _unit_to_nanoseconds_conversion[column.obj.type().id()] / denom
+            casted = plc.unary.cast(column.obj, plc.DataType(plc.TypeId.INT64))
             result = plc.binaryop.binary_operation(
-                plc.unary.cast(column.obj, plc.DataType(plc.TypeId.INT64)),
+                casted,
                 plc.interop.from_arrow(pa.scalar(conversion, type=pa.float64())),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.DataType(plc.TypeId.INT64),
+                plc.DataType(plc.TypeId.FLOAT64),
             )
-            return Column(result)
+            return Column(plc.unary.cast(result, plc.DataType(plc.TypeId.INT64)))
         if self.name == TemporalFunction.Name.ToString:
             return Column(
                 plc.strings.convert.convert_datetime.from_timestamps(
