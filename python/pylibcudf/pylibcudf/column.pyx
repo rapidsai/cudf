@@ -427,7 +427,7 @@ cdef class Column:
             If the host array is not 1D or 2D, or is not C-contiguous.
             If the number of rows exceeds size_type limit.
         NotImplementedError
-            If the host array has a mask.
+            If the object has a mask.
         """
         try:
             import numpy as np
