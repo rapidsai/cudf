@@ -546,16 +546,19 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }:
             column, chars = (translator.translate_expr(n=n) for n in node.input)
             if isinstance(chars, expr.Literal):
-                if chars.value == pa.scalar(""):
-                    # No-op in polars, but libcudf uses empty string
-                    # as signifier to remove whitespace.
-                    return column
-                elif chars.value == pa.scalar(None):
+                # We check for null first because we want to use the
+                # chars pyarrow type, but it is invalid to try and
+                # produce a string scalar with a null dtype.
+                if chars.value == pa.scalar(None, type=pa.null()):
                     # Polars uses None to mean "strip all whitespace"
                     chars = expr.Literal(
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
+                elif chars.value == pa.scalar("", type=chars.value.type):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
             return expr.StringFunction(
                 dtype,
                 expr.StringFunction.Name.from_polars(name),
