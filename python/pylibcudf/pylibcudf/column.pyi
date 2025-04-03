@@ -56,6 +56,11 @@ class Column:
     def from_scalar(scalar: Scalar, size: int) -> Column: ...
     @staticmethod
     def all_null_like(like: Column, size: int) -> Column: ...
+    @staticmethod
+    def _column_from_array_interface(
+        iface: dict,
+        data_view: gpumemoryview,
+    ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
         cls, obj: SupportsCudaArrayInterface

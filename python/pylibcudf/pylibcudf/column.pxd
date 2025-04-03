@@ -41,6 +41,12 @@ cdef class Column:
     @staticmethod
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
+    @staticmethod
+    cdef Column _column_from_array_interface(
+        dict iface,
+        gpumemoryview data_view
+    )
+
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)

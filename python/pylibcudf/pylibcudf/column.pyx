@@ -330,6 +330,78 @@ cdef class Column:
             c_result = make_column_from_scalar(dereference(slr.get()), size)
         return Column.from_libcudf(move(c_result))
 
+    @staticmethod
+    cdef Column _column_from_array_interface(
+        dict iface,
+        gpumemoryview data_view
+    ):
+        """
+        Construct a Column from array interface and associated device data.
+
+        Parameters
+        ----------
+        iface : dict
+            The parsed ``__array_interface__`` or ``__cuda_array_interface__`` dict.
+        data_view : gpumemoryview
+            A ``gpumemoryview`` referencing the data buffer.
+
+        Returns
+        -------
+        Column
+        """
+        if iface.get("mask") is not None:
+            raise NotImplementedError("mask not yet supported")
+
+        typestr = iface["typestr"][1:]
+        data_type = _datatype_from_dtype_desc(typestr)
+        shape = iface["shape"]
+
+        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
+            raise ValueError("Data must be C-contiguous")
+
+        if len(shape) == 1:
+            size = shape[0]
+            return Column(data_type, size, data_view, None, 0, 0, [])
+
+        elif len(shape) == 2:
+            num_rows, num_cols = shape
+
+            if num_rows >= numeric_limits[size_type].max():
+                raise ValueError(
+                    "Number of rows exceeds size_type limit for offsets column."
+                )
+
+            offsets_col = sequence(
+                num_rows + 1,
+                Scalar.from_py(0, DataType(type_id.INT32)),
+                Scalar.from_py(num_cols, DataType(type_id.INT32)),
+            )
+
+            flat_size = num_rows * num_cols
+
+            data_col = Column(
+                data_type=data_type,
+                size=flat_size,
+                data=data_view,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+
+            return Column(
+                data_type=DataType(type_id.LIST),
+                size=num_rows,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[offsets_col, data_col],
+            )
+
+        else:
+            raise ValueError("Only 1D or 2D arrays are supported")
+
     @classmethod
     def from_array_interface(cls, obj):
         """
@@ -347,13 +419,13 @@ cdef class Column:
 
         Raises
         ------
-        ValueError
-            If the host array is not 1D or 2D, or is not C-contiguous.
-            If the number of rows exceeds size_type limit.
         ImportError
             If NumPy is not installed.
         TypeError
             If the object does not implement __array_interface__
+        ValueError
+            If the host array is not 1D or 2D, or is not C-contiguous.
+            If the number of rows exceeds size_type limit.
         NotImplementedError
             If the host array has a mask.
         """
@@ -365,61 +437,12 @@ cdef class Column:
         except AttributeError:
             raise TypeError("Object does not implement __array_interface__")
 
-        if iface.get("mask") is not None:
-            raise NotImplementedError("mask not yet supported")
+        arr = np.asarray(obj)
+        flat_data_view = memoryview(arr.ravel().view(np.uint8))
+        device_buffer = DeviceBuffer.to_device(flat_data_view)
+        data = gpumemoryview(device_buffer)
 
-        typestr = iface["typestr"][1:]
-        data_type = _datatype_from_dtype_desc(typestr)
-
-        shape = iface["shape"]
-        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
-            raise ValueError("Data must be C-contiguous")
-
-        if len(shape) == 1:
-            data_view = memoryview(np.asarray(obj).view(np.uint8))
-            device_buffer = DeviceBuffer.to_device(data_view)
-            data = gpumemoryview(device_buffer)
-            size = shape[0]
-            return cls(data_type, size, data, None, 0, 0, [])
-        elif len(shape) == 2:
-            flat_arr = np.asarray(obj).ravel()
-            flat_data_view = memoryview(flat_arr.view(np.uint8))
-            device_buffer = DeviceBuffer.to_device(flat_data_view)
-
-            num_rows, num_cols = shape
-
-            if num_rows < numeric_limits[size_type].max():
-                offsets_col = sequence(
-                    num_rows + 1,
-                    Scalar.from_py(0, DataType(type_id.INT32)),
-                    Scalar.from_py(num_cols, DataType(type_id.INT32))
-                )
-            else:
-                raise ValueError(
-                    "Number of rows exceeds size_type limit for offsets column."
-                )
-
-            data_col = cls(
-                data_type=data_type,
-                size=flat_arr.size,
-                data=gpumemoryview(device_buffer),
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[],
-            )
-
-            return cls(
-                data_type=DataType(type_id.LIST),
-                size=num_rows,
-                data=None,
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[offsets_col, data_col],
-            )
-        else:
-            raise ValueError("Only 1D or 2D arrays are supported")
+        return Column._column_from_array_interface(iface, data)
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -451,53 +474,11 @@ cdef class Column:
         except AttributeError:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
-        if iface.get("mask") is not None:
-            raise NotImplementedError("mask not yet supported")
+        if len(iface["shape"]) == 2:
+            obj = _Ravelled(obj)
 
-        typestr = iface["typestr"][1:]
-        data_type = _datatype_from_dtype_desc(typestr)
-
-        shape = iface["shape"]
-        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
-            raise ValueError("Data must be C-contiguous")
-
-        if len(shape) == 1:
-            data = gpumemoryview(obj)
-            size = shape[0]
-            return cls(data_type, size, data, None, 0, 0, [])
-        elif len(shape) == 2:
-            num_rows, num_cols = shape
-            if num_rows < numeric_limits[size_type].max():
-                offsets_col = sequence(
-                    num_rows + 1,
-                    Scalar.from_py(0, DataType(type_id.INT32)),
-                    Scalar.from_py(num_cols, DataType(type_id.INT32)),
-                )
-            else:
-                raise ValueError(
-                    "Number of rows exceeds size_type limit for offsets column."
-                )
-            rav_obj = _Ravelled(obj)
-            data_col = cls(
-                data_type=data_type,
-                size=rav_obj.__cuda_array_interface__["shape"][0],
-                data=gpumemoryview(rav_obj),
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[],
-            )
-            return cls(
-                data_type=DataType(type_id.LIST),
-                size=num_rows,
-                data=None,
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[offsets_col, data_col],
-            )
-        else:
-            raise ValueError("Only 1D or 2D arrays are supported")
+        data = gpumemoryview(obj)
+        return Column._column_from_array_interface(iface, data)
 
     @classmethod
     def from_array(cls, obj):
