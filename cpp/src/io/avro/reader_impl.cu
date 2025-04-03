@@ -43,8 +43,6 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tabulate.h>
 
-#include <nvcomp/snappy.h>
-
 #include <memory>
 #include <numeric>
 #include <string>
@@ -284,7 +282,6 @@ rmm::device_buffer decompress_data(datasource& source,
                    });
     compressed_data.host_to_device_async(stream);
 
-    // no need to be HDvector, only copied once
     cudf::detail::hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
     get_snappy_uncompressed_size(compressed_data, uncompressed_data_sizes, stream);
     uncompressed_data_sizes.device_to_host_sync(stream);
