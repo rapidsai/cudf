@@ -280,8 +280,9 @@ def _(py_val: py_bool, dtype: DataType | None):
     if dtype is None:
         dtype = DataType(type_id.BOOL8)
     elif dtype.id() != type_id.BOOL8:
+        tid = (<DataType>dtype).id()
         raise TypeError(
-            f"Cannot convert bool to Scalar with dtype {(<DataType>dtype).id().name}"
+            f"Cannot convert bool to Scalar with dtype {tid.name}"
         )
 
     cdef unique_ptr[scalar] c_obj = make_numeric_scalar((<DataType>dtype).c_obj)
@@ -294,10 +295,10 @@ def _(py_val: str, dtype: DataType | None):
     if dtype is None:
         dtype = DataType(type_id.STRING)
     elif dtype.id() != type_id.STRING:
+        tid = (<DataType>dtype).id()
         raise TypeError(
-            f"Cannot convert str to Scalar with dtype {(<DataType>dtype).id().name}"
+            f"Cannot convert str to Scalar with dtype {tid.name}"
         )
-
     cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
     return _new_scalar(move(c_obj), dtype)
 
