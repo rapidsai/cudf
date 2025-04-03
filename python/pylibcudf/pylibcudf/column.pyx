@@ -377,11 +377,7 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            arr = np.asarray(obj)
-            typestr = arr.dtype.str[1:]
-            data_type = _datatype_from_dtype_desc(typestr)
-
-            flat_arr = arr.ravel()
+            flat_arr = np.asarray(obj).ravel()
             flat_data_view = memoryview(flat_arr.view(np.uint8))
             device_buffer = DeviceBuffer.to_device(flat_data_view)
 
@@ -390,12 +386,12 @@ cdef class Column:
             if num_rows < numeric_limits[size_type].max():
                 offsets_col = sequence(
                     num_rows + 1,
-                    Scalar.from_numpy(np.int32(0)),
-                    Scalar.from_numpy(np.int32(num_cols))
+                    Scalar.from_py(0, DataType(type_id.INT32)),
+                    Scalar.from_py(num_cols, DataType(type_id.INT32))
                 )
             else:
                 raise ValueError(
-                    "Number of rows exceeds int32 limit for offsets column."
+                    "Number of rows exceeds size_type limit for offsets column."
                 )
 
             data_col = cls(
