@@ -108,7 +108,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        table = df.to_arrow(compat_level=pl.CompatLevel.newest())
+        table = df.to_arrow(compat_level=dtypes.TO_ARROW_COMPAT_LEVEL)
         schema = table.schema
         for i, field in enumerate(schema):
             schema = schema.set(
