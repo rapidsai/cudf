@@ -9,12 +9,12 @@ import numpy
 import pandas as pd
 import pytest
 import pytest_cases
-from config import cudf, cupy
+from config import NUM_COLS, NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 
-@pytest.mark.parametrize("num_rows", [100, 1_000_000])
-@pytest.mark.parametrize("num_cols", [1, 10, 100])
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
+@pytest.mark.parametrize("num_cols", NUM_COLS)
 @pytest.mark.parametrize(
     "values_constructor",
     [
@@ -53,15 +53,15 @@ def bench_construction_with_mapping(
 ):
     benchmark(
         cudf.DataFrame,
-        data={i: values_constructor(num_cols) for i in range(num_cols)},
+        data={i: values_constructor(num_rows) for i in range(num_cols)},
         columns=columns(num_cols),
         index=index(num_rows),
         dtype=dtype,
     )
 
 
-@pytest.mark.parametrize("num_rows", [100, 1_000_000])
-@pytest.mark.parametrize("num_cols", [1, 10, 100])
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
+@pytest.mark.parametrize("num_cols", NUM_COLS)
 @pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize(
     "array_constructor",
@@ -116,7 +116,7 @@ def bench_construction_with_array(
     )
 
 
-@pytest.mark.parametrize("num_rows", [100, 1_000_000])
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
 @pytest.mark.parametrize(
     "frame_index",
     [
@@ -153,12 +153,12 @@ def bench_construction_with_array(
 )
 @pytest.mark.parametrize("dtype", [None, "float32"])
 @pytest.mark.pandas_incompatible
-def benchmark_construction_with_framelike(
+def bench_construction_with_framelike(
     benchmark, framelike, num_rows, frame_index, index, dtype
 ):
     benchmark(
         cudf.DataFrame,
-        data=framelike(num_rows, index=frame_index(num_rows)),
+        data=framelike(num_rows, frame_index(num_rows)),
         index=index(num_rows),
         dtype=dtype,
     )
