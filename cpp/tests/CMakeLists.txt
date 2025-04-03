@@ -324,12 +324,6 @@ ConfigureTest(
   PERCENT 30
 )
 
-set_property(
-  SOURCE io/parquet_test.cpp io/parquet_experimental_reader_test.cpp
-  APPEND
-  PROPERTY COMPILE_FLAGS "-g -O0"
-)
-
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1

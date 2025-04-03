@@ -45,12 +45,10 @@ namespace cudf::experimental::io::parquet::detail {
 class impl {
  public:
   /**
-   * @brief Constructor from an array of dataset sources with reader options.
+   * @brief Constructor from a parquet file footer and page index.
    *
-   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
-   * entire given file.
-   *
-   * @param sources Dataset sources
+   * @param footer_bytes The parquet file footer
+   * @param page_index_bytes The parquet file page index
    * @param options Settings for controlling reading behavior
    */
   explicit impl(cudf::host_span<uint8_t const> footer_bytes,
@@ -121,6 +119,7 @@ class impl {
 
  private:
   using table_metadata = cudf::io::table_metadata;
+
   /**
    * @brief The enum indicating whether we are reading the predicate columns or the payload columns.
    */
@@ -133,6 +132,11 @@ class impl {
                           cudf::io::parquet_reader_options const& options,
                           rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Set the page validity for the current pass.
+   *
+   * @param data_page_validity The page validity for the current pass
+   */
   void set_page_validity(cudf::host_span<std::vector<bool> const> data_page_validity);
 
   /**
@@ -293,14 +297,16 @@ class impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
+   * @param read_mode The read mode
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
+   * @param in_predicate The input row validity predicate
    * @return The output table along with columns' metadata
    */
   cudf::io::table_with_metadata finalize_output(read_mode read_mode,
                                                 table_metadata& out_metadata,
                                                 std::vector<std::unique_ptr<column>>& out_columns,
-                                                cudf::mutable_column_view out_predicate);
+                                                cudf::mutable_column_view in_predicate);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -357,12 +363,12 @@ class impl {
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param in_predicate The input row validity predicate
    * @return The output table along with columns' metadata
    */
   cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode,
-                                                    cudf::mutable_column_view out_predicate = {});
+                                                    cudf::mutable_column_view in_predicate = {});
 
- private:
   /**
    * @brief Check if the user has specified custom row bounds
    *
@@ -409,8 +415,6 @@ class impl {
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
 
-  // number of extra filter columns
-  std::size_t _num_filter_only_columns{0};
   std::optional<std::vector<std::string>> _filter_columns_names;
 
   bool _strings_to_categorical = false;

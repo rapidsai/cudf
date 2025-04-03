@@ -853,7 +853,7 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
 }
 
 cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
-                                                        cudf::mutable_column_view out_predicate)
+                                                        cudf::mutable_column_view in_predicate)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -878,7 +878,7 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
     // Finalize output
-    return finalize_output(read_mode, out_metadata, out_columns, out_predicate);
+    return finalize_output(read_mode, out_metadata, out_columns, in_predicate);
   }
 
   auto& pass            = *_pass_itm_data;
@@ -916,14 +916,14 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
-  return finalize_output(read_mode, out_metadata, out_columns, out_predicate);
+  return finalize_output(read_mode, out_metadata, out_columns, in_predicate);
 }
 
 cudf::io::table_with_metadata impl::finalize_output(
   read_mode read_mode,
   table_metadata& out_metadata,
   std::vector<std::unique_ptr<column>>& out_columns,
-  cudf::mutable_column_view out_predicate)
+  cudf::mutable_column_view in_predicate)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
@@ -954,32 +954,26 @@ cudf::io::table_with_metadata impl::finalize_output(
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
-  // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
+  auto read_table = std::make_unique<table>(std::move(out_columns));
+
+  // If reading filter columns, compute the predicate, apply it to the table, and update the input
+  // row validity predicate. Otherwise, simply apply the input row validity predicate to the table.
   if (read_mode == read_mode::FILTER_COLUMNS) {
-    auto read_table = std::make_unique<table>(std::move(out_columns));
-    auto predicate  = cudf::detail::compute_column(*read_table,
+    auto predicate = cudf::detail::compute_column(*read_table,
                                                   _expr_conv.get_converted_expr().value().get(),
                                                   _stream,
                                                   cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
-    // Exclude columns present in filter only in output
-    auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
-    auto const output_count = read_table->num_columns() - _num_filter_only_columns;
-    auto only_output        = read_table->select(counting_it, counting_it + output_count);
-    auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
-    if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
-    update_predicate(predicate->view(), out_predicate, _stream);
+    auto output_table =
+      cudf::detail::apply_boolean_mask(read_table->view(), *predicate, _stream, _mr);
+    update_predicate(predicate->view(), in_predicate, _stream);
     return {std::move(output_table), std::move(out_metadata)};
   } else {
-    auto read_table  = std::make_unique<table>(std::move(out_columns));
-    auto counting_it = thrust::make_counting_iterator<std::size_t>(0);
-    CUDF_EXPECTS(out_predicate.type().id() == type_id::BOOL8,
+    CUDF_EXPECTS(in_predicate.type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
-    auto const output_count = read_table->num_columns() - _num_filter_only_columns;
-    auto only_output        = read_table->select(counting_it, counting_it + output_count);
-    auto output_table = cudf::detail::apply_boolean_mask(only_output, out_predicate, _stream, _mr);
-    if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
+    auto output_table =
+      cudf::detail::apply_boolean_mask(read_table->view(), in_predicate, _stream, _mr);
     return {std::move(output_table), std::move(out_metadata)};
   }
 }
