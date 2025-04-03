@@ -366,8 +366,13 @@ cdef class Column:
 
         Raises
         ------
+        TypeError
+            If the object does not support __cuda_array_interface__.
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
+            If the number of rows exceeds size_type limit.
+        NotImplementedError
+            If the object has a mask.
         """
         try:
             iface = obj.__cuda_array_interface__
@@ -375,7 +380,7 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         if iface.get("mask") is not None:
-            raise ValueError("mask not yet supported")
+            raise NotImplementedError("mask not yet supported")
 
         typestr = iface["typestr"][1:]
         data_type = _datatype_from_dtype_desc(typestr)
