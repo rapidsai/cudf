@@ -16,8 +16,7 @@
 
 #include "compact_protocol_writer.hpp"
 
-#include "parquet.hpp"
-
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::parquet::detail {

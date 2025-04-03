@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "parquet.hpp"
+#include <cudf/io/parquet_schema.hpp>
 
 #include <algorithm>
 #include <cstddef>
