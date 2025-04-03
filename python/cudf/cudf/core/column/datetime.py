@@ -288,11 +288,11 @@ class DatetimeColumn(column.ColumnBase):
         return np.datetime_data(self.dtype)[0]
 
     @property
+    @acquire_spill_lock()
     def quarter(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
+        )
 
     @property
     def year(self) -> ColumnBase:
@@ -338,11 +338,11 @@ class DatetimeColumn(column.ColumnBase):
         return result - result.dtype.type(1)
 
     @property
+    @acquire_spill_lock()
     def day_of_year(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
+        )
 
     @property
     def is_month_start(self) -> ColumnBase:
@@ -376,22 +376,22 @@ class DatetimeColumn(column.ColumnBase):
         return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
+    @acquire_spill_lock()
     def is_leap_year(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
+        )
 
     @property
     def is_year_start(self) -> ColumnBase:
         return (self.day_of_year == 1).fillna(False)
 
     @property
+    @acquire_spill_lock()
     def days_in_month(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
+        )
 
     @property
     def day_of_week(self) -> ColumnBase:
@@ -426,16 +426,16 @@ class DatetimeColumn(column.ColumnBase):
             return pd.Timestamp(result)
         return result
 
+    @acquire_spill_lock()
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_datetime_component(
-                    self.to_pylibcudf(mode="read"),
-                    field,
-                )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_datetime_component(
+                self.to_pylibcudf(mode="read"),
+                field,
             )
+        )
 
     def _get_field_names(
         self,
@@ -970,16 +970,12 @@ class DatetimeColumn(column.ColumnBase):
         # The end of an ambiguous time period is what Clock 2 reads at
         # the moment of transition:
         ambiguous_end = clock_2.apply_boolean_mask(cond)
-        with acquire_spill_lock():
-            plc_column = plc.labeling.label_bins(
-                self.to_pylibcudf(mode="read"),
-                ambiguous_begin.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES,
-                ambiguous_end.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.NO,
-            )
-            ambiguous = ColumnBase.from_pylibcudf(plc_column)
-        ambiguous = ambiguous.notnull()
+        ambiguous = self.label_bins(
+            left_edge=ambiguous_begin,
+            left_inclusive=True,
+            right_edge=ambiguous_end,
+            right_inclusive=False,
+        ).notnull()
 
         # At the start of a non-existent time period, Clock 2 reads less
         # than Clock 1 (which has been turned forward):
@@ -989,16 +985,12 @@ class DatetimeColumn(column.ColumnBase):
         # The end of the non-existent time period is what Clock 1 reads
         # at the moment of transition:
         nonexistent_end = clock_1.apply_boolean_mask(cond)
-        with acquire_spill_lock():
-            plc_column = plc.labeling.label_bins(
-                self.to_pylibcudf(mode="read"),
-                nonexistent_begin.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES,
-                nonexistent_end.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.NO,
-            )
-            nonexistent = ColumnBase.from_pylibcudf(plc_column)
-        nonexistent = nonexistent.notnull()
+        nonexistent = self.label_bins(
+            left_edge=nonexistent_begin,
+            left_inclusive=True,
+            right_edge=nonexistent_end,
+            right_inclusive=False,
+        ).notnull()
 
         return ambiguous, nonexistent  # type: ignore[return-value]
 
@@ -1166,16 +1158,16 @@ class DatetimeTZColumn(DatetimeColumn):
             return casted.tz_convert(str(dtype.tz))
         return super().as_datetime_column(dtype)
 
+    @acquire_spill_lock()
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_datetime_component(
-                    self._local_time.to_pylibcudf(mode="read"),
-                    field,
-                )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_datetime_component(
+                self._local_time.to_pylibcudf(mode="read"),
+                field,
             )
+        )
 
     def __repr__(self):
         # Arrow prints the UTC timestamps, but we want to print the
