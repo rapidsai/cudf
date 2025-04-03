@@ -999,8 +999,7 @@ void write_json(data_sink* out_sink,
     stream.synchronize();
     auto comp_hbuf = cudf::io::detail::compress(
       options.get_compression(),
-      host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()),
-      stream);
+      host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()));
     out_sink->host_write(comp_hbuf.data(), comp_hbuf.size());
     return;
   }

@@ -31,7 +31,6 @@ from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
 from .column cimport Column
 from .types cimport DataType
-
 from functools import singledispatch
 
 try:
