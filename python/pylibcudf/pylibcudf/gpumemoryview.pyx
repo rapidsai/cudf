@@ -2,6 +2,7 @@
 
 import functools
 import operator
+from libc.stdint cimport uintptr_t
 
 __all__ = ["gpumemoryview"]
 
@@ -25,6 +26,26 @@ cdef class gpumemoryview:
         self.obj = obj
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
+
+    @staticmethod
+    cdef gpumemoryview from_pointer(uintptr_t ptr, object owner):
+        """Create a gpumemoryview from a pointer and an owning object.
+
+        Parameters
+        ----------
+        ptr : uintptr_t
+            The pointer to the memory.
+        owner : object
+            The object that owns the data the pointer points to.
+
+        Returns
+        -------
+        gpumemoryview
+        """
+        cdef gpumemoryview out = gpumemoryview.__new__(gpumemoryview)
+        out.obj = owner
+        out.ptr = ptr
+        return out
 
     @property
     def __cuda_array_interface__(self):

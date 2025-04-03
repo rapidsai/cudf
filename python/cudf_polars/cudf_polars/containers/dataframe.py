@@ -108,7 +108,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        table = df.to_arrow()
+        table = df.to_arrow(compat_level=dtypes.TO_ARROW_COMPAT_LEVEL)
         schema = table.schema
         for i, field in enumerate(schema):
             schema = schema.set(
@@ -246,7 +246,9 @@ class DataFrame:
             for c, other in zip(self.columns, like.columns, strict=True)
         )
 
-    def with_columns(self, columns: Iterable[Column], *, replace_only=False) -> Self:
+    def with_columns(
+        self, columns: Iterable[Column], *, replace_only: bool = False
+    ) -> Self:
         """
         Return a new dataframe with extra columns.
 

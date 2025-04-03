@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
+import time
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.timer import Timer
 
 
 __all__ = [
@@ -182,7 +185,9 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
+    ) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -191,6 +196,9 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        timer
+            If not None, a Timer object to record timings for the
+            evaluation of the node.
 
         Notes
         -----
@@ -209,10 +217,16 @@ class IR(Node["IR"]):
             If evaluation fails. Ideally this should not occur, since the
             translation phase should fail earlier.
         """
-        return self.do_evaluate(
-            *self._non_child_args,
-            *(child.evaluate(cache=cache) for child in self.children),
-        )
+        children = [child.evaluate(cache=cache, timer=timer) for child in self.children]
+        if timer is not None:
+            start = time.monotonic_ns()
+            result = self.do_evaluate(*self._non_child_args, *children)
+            end = time.monotonic_ns()
+            # TODO: Set better names on each class object.
+            timer.store(start, end, type(self).__name__)
+            return result
+        else:
+            return self.do_evaluate(*self._non_child_args, *children)
 
 
 class ErrorNode(IR):
@@ -436,7 +450,7 @@ class Scan(IR):
         n_rows: int,
         row_index: tuple[str, int] | None,
         predicate: expr.NamedExpr | None,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
             parse_options = reader_options["parse_options"]
@@ -517,10 +531,18 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
+            filters = None
+            if predicate is not None and row_index is None:
+                # Can't apply filters during read if we have a row index.
+                filters = to_parquet_filter(predicate.value)
+            options = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(paths)
+            ).build()
+            if with_columns is not None:
+                options.set_columns(with_columns)
+            if filters is not None:
+                options.set_filter(filters)
             if config_options.get("parquet_options.chunked", default=True):
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -530,8 +552,6 @@ class Scan(IR):
                 nrows = n_rows + skip_rows
                 if nrows > -1:
                     options.set_num_rows(nrows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=config_options.get(
@@ -546,7 +566,7 @@ class Scan(IR):
                 chk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
 
-                def slice_skip(tbl: plc.Table):
+                def slice_skip(tbl: plc.Table) -> plc.Table:
                     nonlocal rows_left_to_skip
                     if rows_left_to_skip > 0:
                         table_rows = tbl.num_rows()
@@ -577,30 +597,19 @@ class Scan(IR):
                     names=names,
                 )
             else:
-                filters = None
-                if predicate is not None and row_index is None:
-                    # Can't apply filters during read if we have a row index.
-                    filters = to_parquet_filter(predicate.value)
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
                 if n_rows != -1:
                     options.set_num_rows(n_rows)
                 if skip_rows != 0:
                     options.set_skip_rows(skip_rows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
-                if filters is not None:
-                    options.set_filter(filters)
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
                 )
-                if filters is not None:
-                    # Mask must have been applied.
-                    return df
+            if filters is not None:
+                # Mask must have been applied.
+                return df
 
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
@@ -680,7 +689,9 @@ class Cache(IR):
         # return it.
         return df
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
@@ -688,7 +699,7 @@ class Cache(IR):
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            return cache.setdefault(self.key, value.evaluate(cache=cache, timer=timer))
 
 
 class DataFrameScan(IR):
@@ -698,10 +709,10 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars LazyFrame object."""
+    """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     config_options: ConfigOptions
@@ -724,19 +735,21 @@ class DataFrameScan(IR):
             self.projection,
         )
         self.children = ()
+        self._id_for_hash = random.randint(0, 2**64 - 1)
 
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
 
-        The (heavy) dataframe object is hashed as its id, so this is
-        not stable across runs, or repeat instances of the same equal dataframes.
+        The (heavy) dataframe object is not hashed. No two instances of
+        ``DataFrameScan`` will have the same hash, even if they have the
+        same schema, projection, and config options, and data.
         """
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
             schema_hash,
-            id(self.df),
+            self._id_for_hash,
             self.projection,
             self.config_options,
         )
@@ -842,7 +855,7 @@ class GroupBy(IR):
             self.agg_requests = tuple(agg_requests)
             self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle an AggInfos object."""
             return (type(self), (self.agg_requests,))
 
@@ -951,7 +964,7 @@ class GroupBy(IR):
         options: GroupbyOptions,
         agg_info_wrapper: AggInfos,
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         sorted = (
@@ -1050,7 +1063,7 @@ class ConditionalJoin(IR):
             self.predicate = predicate
             self.ast = to_ast(predicate)
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
             return (type(self), (self.predicate,))
 
@@ -1140,8 +1153,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options")
+    __slots__ = ("config_options", "left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1163,6 +1176,8 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
+    config_options: ConfigOptions
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1170,6 +1185,7 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
+        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1177,6 +1193,7 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
+        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
@@ -1478,7 +1495,7 @@ class Distinct(IR):
         zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if subset is None:
             indices = list(range(df.num_columns))

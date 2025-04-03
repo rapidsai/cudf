@@ -108,6 +108,9 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
+        Name.ToString,
+        Name.Week,
+        Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
     }
@@ -127,6 +130,11 @@ class TemporalFunction(Expr):
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
+        if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
+            self.children[0].dtype
+        ):
+            raise NotImplementedError("ToString is not supported on duration types")
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -140,6 +148,38 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name == TemporalFunction.Name.ToString:
+            return Column(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    self.options[0],
+                    plc.interop.from_arrow(pa.array([], type=pa.string())),
+                )
+            )
+        if self.name is TemporalFunction.Name.Week:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%V",
+                    input_strings_names=plc.interop.from_arrow(
+                        pa.array([], type=pa.string())
+                    ),
+                ),
+                plc.types.DataType(plc.types.TypeId.INT8),
+            )
+            return Column(result)
+        if self.name is TemporalFunction.Name.IsoYear:
+            result = plc.strings.convert.convert_integers.to_integers(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    format="%G",
+                    input_strings_names=plc.interop.from_arrow(
+                        pa.array([], type=pa.string())
+                    ),
+                ),
+                plc.types.DataType(plc.types.TypeId.INT32),
+            )
+            return Column(result)
         if self.name is TemporalFunction.Name.MonthStart:
             ends = plc.datetime.last_day_of_month(column.obj)
             days_to_subtract = plc.datetime.days_in_month(column.obj)

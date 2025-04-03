@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ INSTANTIATE_TEST_SUITE_P(JsonReaderTest,
                          JsonReaderTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
                                            cudf::io::compression_type::SNAPPY,
+                                           cudf::io::compression_type::ZSTD,
                                            cudf::io::compression_type::NONE));
 
 cudf::test::TempDirTestEnvironment* const temp_env =
@@ -61,8 +62,7 @@ TEST_P(JsonReaderTest, ByteRange_SingleSource)
     cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
-                                     json_string.size()),
-      cudf::get_default_stream());
+                                     json_string.size()));
   } else
     cdata = std::vector<uint8_t>(
       reinterpret_cast<uint8_t const*>(json_string.data()),
@@ -123,8 +123,7 @@ TEST_P(JsonReaderTest, ReadCompleteFiles)
     cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
-                                     json_string.size()),
-      cudf::get_default_stream());
+                                     json_string.size()));
   } else
     cdata = std::vector<uint8_t>(
       reinterpret_cast<uint8_t const*>(json_string.data()),
@@ -183,8 +182,7 @@ TEST_P(JsonReaderTest, ByteRange_MultiSource)
     cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
-                                     json_string.size()),
-      cudf::get_default_stream());
+                                     json_string.size()));
   } else
     cdata = std::vector<uint8_t>(
       reinterpret_cast<uint8_t const*>(json_string.data()),

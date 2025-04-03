@@ -24,12 +24,16 @@ function(find_and_configure_zstd)
     GIT_TAG v1.5.7
     GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
     OPTIONS "ZSTD_BUILD_STATIC ON" "ZSTD_BUILD_SHARED OFF" "ZSTD_BUILD_TESTS OFF"
-            "ZSTD_BUILD_PROGRAMS OFF"
+            "ZSTD_BUILD_PROGRAMS OFF" "BUILD_SHARED_LIBS OFF"
   )
 
-  # we need this to disable weak symbols support to hide tracing APIs as well
   if(zstd_ADDED)
+    # disable weak symbols support to hide tracing APIs as well
     target_compile_definitions(libzstd_static PRIVATE ZSTD_HAVE_WEAK_SYMBOLS=0)
+    # expose experimental API
+    target_compile_definitions(libzstd_static PUBLIC ZSTD_STATIC_LINKING_ONLY=0N)
+    # suppress warnings from uninitialized variables and redefining ZSTD_STATIC_LINKING_ONLY
+    target_compile_options(libzstd_static PRIVATE -w)
     add_library(zstd ALIAS libzstd_static)
   endif()
 
