@@ -252,8 +252,8 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                         return sv.length() > 1 && (sv.substr(0, 2) == string_view("0x", 2) ||
                                                    sv.substr(0, 2) == string_view("0X", 2));
                       };
-                      auto begin = d_str.begin() + (starts_with_0x(d_str) ? 2 : 0);
-                      auto end   = d_str.end();
+                      auto begin = d_str.data() + (starts_with_0x(d_str) ? 2 : 0);
+                      auto end   = begin + d_str.size_bytes();
                       return (cuda::std::distance(begin, end) > 0) &&
                              thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
                                return (chr >= '0' && chr <= '9') || (chr >= 'A' && chr <= 'F') ||
