@@ -15,7 +15,6 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest narwhals"
-
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals || exit 1
