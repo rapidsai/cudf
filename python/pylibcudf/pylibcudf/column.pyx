@@ -438,6 +438,12 @@ cdef class Column:
             raise TypeError("Object does not implement __array_interface__")
 
         arr = np.asarray(obj)
+        # ravel() is needed here because even though the array
+        # is C-contiguous, viewing it as np.uint8 retains its
+        # original shape. DeviceBuffer.to_device expects a 1D buffer,
+        # so we call ravel() to ensure the data is flattened. This
+        # doesn't copy the data for C-contiguous arrays, just creates
+        # a flat view.
         flat_data_view = memoryview(arr.ravel().view(np.uint8))
         device_buffer = DeviceBuffer.to_device(flat_data_view)
         data = gpumemoryview(device_buffer)
