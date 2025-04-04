@@ -187,11 +187,10 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
-[[maybe_unused]] CUDF_KERNEL void like_kernel(column_device_view d_strings,
-                                              string_view d_pattern,
-                                              string_view d_escape,
-                                              cudf::device_span<size_type const> d_wcs,
-                                              bool* results)
+CUDF_KERNEL void like_kernel(column_device_view d_strings,
+                             string_view d_pattern,
+                             string_view d_escape,
+                             bool* results)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
 
@@ -206,22 +205,42 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
   auto const d_str = d_strings.element<string_view>(str_idx);
   auto target_itr  = d_str.data();
 
-  auto const target_end  = target_itr + d_str.size_bytes();
-  auto const pattern_itr = d_pattern.data();
-  auto const pattern_end = pattern_itr + d_pattern.size_bytes();
-  auto const esc_char    = d_escape.empty() ? 0 : d_escape.data()[0];
-  auto const lane_idx    = warp.thread_rank();
+  auto const target_end    = target_itr + d_str.size_bytes();
+  auto const pattern_begin = d_pattern.data();
+  auto const pattern_end   = pattern_begin + d_pattern.size_bytes();
+  auto const esc_char      = d_escape.empty() ? 0 : d_escape.data()[0];
+  auto const lane_idx      = warp.thread_rank();
+
+  auto fn_wc = [p = pattern_begin, esc_char](auto const idx) {
+    return (p[idx] == multi_wildcard) && (idx == 0 || p[idx - 1] != esc_char);
+  };
+  auto find_next_wc = [pattern_begin, pattern_end, esc_char](size_type idx) {
+    auto itr = pattern_begin + idx;
+    while (itr < pattern_end) {
+      if (*itr == multi_wildcard && (*(itr - 1) != esc_char)) { return idx; }
+      ++itr;
+      ++idx;
+    }
+    return idx;
+  };
 
   auto wcs_idx  = 0;
-  auto wcs_size = static_cast<size_type>(d_wcs.size());
+  auto next_wc  = 0;
+  auto wcs_size = esc_char == multi_wildcard
+                    ? 0
+                    : thrust::count_if(thrust::seq,
+                                       thrust::counting_iterator<size_type>(0),
+                                       thrust::counting_iterator<size_type>(d_pattern.size_bytes()),
+                                       fn_wc);
   bool result   = true;
-  if (wcs_size == 0 || d_wcs.front() != 0) {
+  if (wcs_size == 0 || *pattern_begin != multi_wildcard) {
     // pattern does not start with a wildcard; check for literal match
+    next_wc       = wcs_size > 0 ? find_next_wc(0) : d_pattern.size_bytes();
     auto out_size = 0;
     if (lane_idx == 0) {
-      auto const end = (wcs_idx < wcs_size) ? pattern_itr + d_wcs[wcs_idx] : pattern_end;
+      auto const end = next_wc + pattern_begin;
       cuda::std::tie(result, out_size) =
-        compare_literal(target_itr, target_end, esc_char, pattern_itr, end);
+        compare_literal(target_itr, target_end, esc_char, pattern_begin, end);
     }
     out_size = warp.shfl(out_size, 0);  // copy out_size to all threads in the warp
     target_itr += out_size;
@@ -232,8 +251,10 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
 
   // process literals between wildcards
   while (result && ((wcs_idx + 1) < wcs_size)) {
-    auto const begin = pattern_itr + d_wcs[wcs_idx++] + 1;  // point just past wildcard;
-    auto const end   = (wcs_idx < wcs_size) ? pattern_itr + d_wcs[wcs_idx] : pattern_end;
+    auto const begin = next_wc + pattern_begin + 1;
+    next_wc          = find_next_wc(next_wc + 1);
+    auto const end   = next_wc + pattern_begin;
+    ++wcs_idx;
     if (thrust::distance(begin, end) == 0) { continue; }
 
     auto const not_found = d_str.size_bytes();
@@ -259,19 +280,18 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
   }
 
   // check for last literal match
-  if (result) {
-    auto const begin = wcs_size > 0 ? pattern_itr + d_wcs.back() + 1 : pattern_end;
-    auto itr         = begin;
-    size_type size   = 0;
-    while (itr < pattern_end) {
-      auto const chr   = (*itr == esc_char) && (itr + 1 < pattern_end) ? *(++itr) : *itr;
-      auto const bytes = bytes_in_utf8_byte(chr);
-      itr += bytes;
-      size += (bytes > 0);  // counting whole characters and not bytes
-    }
-
+  if (result && wcs_size > 0) {
+    auto const begin = pattern_begin + next_wc + 1;
     if (begin < pattern_end) {
-      if (target_itr + size <= target_end) {  // estimate
+      auto itr  = begin;
+      auto size = size_type{0};
+      while (itr < pattern_end) {  // count remaining accounting for any escape characters
+        auto const chr   = (*itr == esc_char) && (itr + 1 < pattern_end) ? *(++itr) : *itr;
+        auto const bytes = bytes_in_utf8_byte(chr);
+        itr += bytes;
+        size += (bytes > 0);  // counting whole characters and not bytes
+      }
+      if (target_itr + size <= target_end) {  // quick max estimate
         if (lane_idx == 0) {
           target_itr = target_end;
           while (size > 0 && target_itr > d_str.data()) {
@@ -284,7 +304,7 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
       } else {
         result = false;  // literal will not match the remaining string
       }
-    } else if (wcs_size > 0) {
+    } else {
       target_itr = target_end;  // pattern ends with a multi-wildcard
     }
   }
@@ -349,19 +369,6 @@ std::unique_ptr<column> like(strings_column_view const& input,
     return like(input, patterns_itr, d_escape, stream, mr);
   }
 
-  // build indices to the multi-wildcards in the input pattern;
-  // these are the offsets of the non-escaped '%'s in the pattern
-  auto fn_wc = [p = d_pattern.data(), esc = d_escape.data()] __device__(auto const idx) {
-    auto const esc_char = esc ? *esc : 0;
-    if (esc_char == multi_wildcard) { return false; }
-    return (p[idx] == multi_wildcard) && (idx == 0 || p[idx - 1] != esc_char);
-  };
-  auto const begin = thrust::counting_iterator<int>(0);
-  auto const end   = begin + d_pattern.size_bytes();
-  auto d_wildcards = rmm::device_uvector<size_type>(
-    thrust::count_if(rmm::exec_policy(stream), begin, end, fn_wc), stream);
-  thrust::copy_if(rmm::exec_policy_nosync(stream), begin, end, d_wildcards.begin(), fn_wc);
-
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),
@@ -374,7 +381,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   constexpr auto block_size = 512;
   auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
   like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-    *d_strings, d_pattern, d_escape, d_wildcards, results->mutable_view().data<bool>());
+    *d_strings, d_pattern, d_escape, results->mutable_view().data<bool>());
 
   results->set_null_count(input.null_count());
   return results;
