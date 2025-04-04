@@ -414,22 +414,21 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  //
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRING_VIEW));
-  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(tmp.get()));
+  nanoarrow::UniqueArray out;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(out.get(), NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(out.get()));
 
-  if (col.size() == 0) { return create_device_array(std::move(tmp)); }
+  if (col.size() == 0) { return create_device_array(std::move(out)); }
 
   dispatch_to_arrow_host fn{col.parent(), stream, mr};
-  NANOARROW_THROW_NOT_OK(fn.populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
+  NANOARROW_THROW_NOT_OK(fn.populate_validity_bitmap(ArrowArrayValidityBitmap(out.get())));
 
   auto const d_strings = column_device_view::create(col.parent(), stream);
-
-  // count the number of long-ish strings
   auto d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(col.offsets(), col.offset());
-  auto const num_long_strings = thrust::count_if(
+
+  // count the number of long-ish strings -- ones that cannot be inlined
+  auto const num_longer_strings = thrust::count_if(
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(col.size()),
@@ -439,7 +438,8 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
 
   // gather all the long-ish strings into a single strings column
   auto [tmp_col, longer_strings] = [&] {
-    if (num_long_strings == col.size()) {
+    if (num_longer_strings == col.size()) {
+      // we can use the input column as is for the remainder of this function
       return std::pair{cudf::make_empty_column(cudf::type_id::STRING), col};
     }
     auto indices = make_counting_transform_iterator(
@@ -462,11 +462,11 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   auto [first, last]    = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
   auto const chars_size = last - first;
 
-  // copy these into a variadic buffer
+  // copy the character bytes into an Arrow variadic buffer
   if (chars_size > 0) {
     auto const chars_data = longer_strings.chars_begin(stream) + first;
-    NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(tmp.get(), 1));
-    auto private_data = static_cast<struct ArrowArrayPrivateData*>(tmp->private_data);
+    NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), 1));
+    auto private_data = static_cast<struct ArrowArrayPrivateData*>(out->private_data);
     auto variadic_buf = &private_data->variadic_buffers[0];
     NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, chars_size));
     CUDF_CUDA_TRY(cudaMemcpyAsync(
@@ -474,7 +474,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
     private_data->variadic_buffer_sizes[0] = chars_size;
   }
 
-  // now build BinaryView objects from the strings
+  // now build BinaryView objects from the strings in device memory
   auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream);
   d_offsets    = cudf::detail::offsetalator_factory::make_input_iterator(longer_strings.offsets());
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
@@ -482,20 +482,20 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                      col.size(),
                      strings_to_binary_view{*d_strings, d_offsets, d_items.data()});
 
-  // copy the BinaryView array into host memory
-  auto data_buffer   = ArrowArrayBuffer(tmp.get(), 1);
+  // finally, copy the BinaryView array into host memory
+  auto data_buffer   = ArrowArrayBuffer(out.get(), 1);
   auto const bv_size = d_items.size() * sizeof(ArrowBinaryView);
   NANOARROW_THROW_NOT_OK(ArrowBufferReserve(data_buffer, bv_size));
   CUDF_CUDA_TRY(
     cudaMemcpyAsync(data_buffer->data, d_items.data(), bv_size, cudaMemcpyDefault, stream.value()));
   data_buffer->size_bytes = bv_size;
 
-  tmp->length     = col.size();
-  tmp->null_count = col.null_count();
-  tmp->offset     = 0;
+  out->length     = col.size();
+  out->null_count = col.null_count();
+  out->offset     = 0;
 
   stream.synchronize();
-  return create_device_array(std::move(tmp));
+  return create_device_array(std::move(out));
 }
 }  // namespace detail
 

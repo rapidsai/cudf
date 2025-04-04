@@ -290,21 +290,26 @@ TEST_F(ToArrowHostDeviceTest, StringView)
   auto data = cudf::test::strings_column_wrapper(
     {"hello", "worldy", "much longer string", "", "another even longer string", "", "other string"},
     {1, 1, 1, 0, 1, 1, 1});
-  auto got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
-  auto result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+  auto result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  auto expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
 
   data =
     cudf::test::strings_column_wrapper({"all of", "these", "strings", "will", "fit", "inline"});
-  got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
-  result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
 
   data = cudf::test::strings_column_wrapper(
-    {"all of these strings", "are longer and will", "not fit as inline"});
-  got_arrow_host = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
-  result         = cudf::from_arrow_column(&schema, &got_arrow_host->array);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
+    {"all of these strings", "are longer and will", "not fit as inline ones"});
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  data     = cudf::test::strings_column_wrapper();  // empty column test
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
 }
 
 template <typename T>
