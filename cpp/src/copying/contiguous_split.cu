@@ -241,7 +241,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
       std::size_t idx = (num_bytes - remainder) / sizeof(offset_type);
       while (remainder) {
         reinterpret_cast<offset_type*>(dst)[idx] =
-          (reinterpret_cast<offset_type const*>(src)[idx] - value_shift);
+          reinterpret_cast<offset_type const*>(src)[idx] - value_shift;
         idx++;
         remainder -= sizeof(offset_type);
       }
