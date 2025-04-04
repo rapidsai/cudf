@@ -44,6 +44,7 @@ dependencies:
 - libkvikio==25.4.*,>=0.0.0a0
 - librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.4.*,>=0.0.0a0
+- libxml2<2.14
 - make
 - mmh3
 - moto>=4.0.8

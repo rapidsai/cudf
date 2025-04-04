@@ -671,6 +671,8 @@ dependencies:
           - breathe>=4.35.0
           - dask-cuda==25.4.*,>=0.0.0a0
           - *doxygen
+          # Temporary fix while conda-forge sorts out breaking ABI in libxml2
+          - libxml2<2.14
           - make
           - myst-nb
           - nbsphinx
