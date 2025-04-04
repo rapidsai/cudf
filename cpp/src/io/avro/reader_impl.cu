@@ -269,63 +269,63 @@ rmm::device_buffer decompress_data(datasource& source,
     // comp_block_data contains contents of the avro file starting from the first block, excluding
     // file header. meta.block_list[i].offset refers to offset of block i in the file, including
     // file header.
-    // Find ptrs to each compressed block in comp_block_data by removing header offset.
-    cudf::detail::hostdevice_vector<device_span<uint8_t const>> compressed_data(num_blocks, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t const>> compressed_blocks(num_blocks,
+                                                                                  stream);
     std::transform(meta.block_list.begin(),
                    meta.block_list.end(),
-                   compressed_data.host_ptr(),
+                   compressed_blocks.host_ptr(),
                    [&](auto const& block) {
+                     // Find ptrs to each compressed block by removing the header offset
                      return device_span<uint8_t const>{
                        static_cast<uint8_t const*>(comp_block_data.data()) +
                          (block.offset - meta.block_list[0].offset),
                        block.size};
                    });
-    compressed_data.host_to_device_async(stream);
+    compressed_blocks.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
-    get_snappy_uncompressed_size(compressed_data, uncompressed_data_sizes, stream);
-    uncompressed_data_sizes.device_to_host(stream);
+    cudf::detail::hostdevice_vector<size_t> decompressed_sizes(num_blocks, stream);
+    get_snappy_uncompressed_size(compressed_blocks, decompressed_sizes, stream);
+    decompressed_sizes.device_to_host(stream);
 
-    cudf::detail::hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
-    std::exclusive_scan(uncompressed_data_sizes.begin(),
-                        uncompressed_data_sizes.end(),
-                        uncompressed_data_offsets.begin(),
-                        0);
-    uncompressed_data_offsets.host_to_device_async(stream);
+    cudf::detail::hostdevice_vector<size_t> decompressed_offsets(num_blocks, stream);
+    std::exclusive_scan(decompressed_sizes.begin(),
+                        decompressed_sizes.end(),
+                        decompressed_offsets.begin(),
+                        size_t{0});
+    decompressed_offsets.host_to_device_async(stream);
 
-    size_t const uncompressed_data_size =
-      uncompressed_data_offsets.back() + uncompressed_data_sizes.back();
-    size_t const max_uncomp_block_size =
-      *std::max_element(uncompressed_data_sizes.begin(), uncompressed_data_sizes.end());
+    size_t const decompressed_data_size = decompressed_offsets.back() + decompressed_sizes.back();
+    size_t const max_decomp_block_size =
+      *std::max_element(decompressed_sizes.begin(), decompressed_sizes.end());
 
-    rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
-    rmm::device_uvector<device_span<uint8_t>> uncompressed_data(num_blocks, stream);
+    rmm::device_buffer decompressed_data(decompressed_data_size, stream);
+    rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
     thrust::tabulate(rmm::exec_policy(stream),
-                     uncompressed_data.begin(),
-                     uncompressed_data.end(),
-                     [off  = uncompressed_data_offsets.device_ptr(),
-                      size = uncompressed_data_sizes.device_ptr(),
-                      data = static_cast<uint8_t*>(decomp_block_data.data())] __device__(int i) {
+                     decompressed_blocks.begin(),
+                     decompressed_blocks.end(),
+                     [off  = decompressed_offsets.device_ptr(),
+                      size = decompressed_sizes.device_ptr(),
+                      data = static_cast<uint8_t*>(decompressed_data.data())] __device__(int i) {
                        return device_span<uint8_t>{data + off[i], size[i]};
                      });
 
-    rmm::device_uvector<compression_result> decomp_res(num_blocks, stream);
+    rmm::device_uvector<compression_result> decomp_results(num_blocks, stream);
     thrust::fill(rmm::exec_policy_nosync(stream),
-                 decomp_res.begin(),
-                 decomp_res.end(),
+                 decomp_results.begin(),
+                 decomp_results.end(),
                  compression_result{0, compression_status::FAILURE});
 
     decompress(compression_type::SNAPPY,
-               compressed_data,
-               uncompressed_data,
-               decomp_res,
-               max_uncomp_block_size,
-               uncompressed_data_size,
+               compressed_blocks,
+               decompressed_blocks,
+               decomp_results,
+               max_decomp_block_size,
+               decompressed_data_size,
                stream);
     CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                               uncompressed_data_sizes.d_begin(),
-                               uncompressed_data_sizes.d_end(),
-                               decomp_res.begin(),
+                               decompressed_offsets.d_begin(),
+                               decompressed_offsets.d_end(),
+                               decomp_results.begin(),
                                [] __device__(auto const& size, auto const& result) {
                                  return size == result.bytes_written and
                                         result.status == compression_status::SUCCESS;
@@ -334,11 +334,11 @@ rmm::device_buffer decompress_data(datasource& source,
 
     // Update blocks offsets & sizes to refer to uncompressed data
     for (size_t i = 0; i < num_blocks; i++) {
-      meta.block_list[i].offset = uncompressed_data_offsets[i];
-      meta.block_list[i].size   = uncompressed_data_sizes[i];
+      meta.block_list[i].offset = decompressed_offsets[i];
+      meta.block_list[i].size   = decompressed_sizes[i];
     }
 
-    return decomp_block_data;
+    return decompressed_data;
   } else {
     CUDF_FAIL("Unsupported compression codec\n");
   }
