@@ -47,6 +47,7 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
@@ -55,7 +56,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                          device_span<ColumnChunkDesc const> chunks,
                          size_t min_row,
                          size_t num_rows,
-                         cudf::device_span<bool const> page_validity,
+                         cudf::device_span<bool const> page_mask,
                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -72,9 +73,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
-  // page is invalid.
+  // page does not need to be decoded
   // MH: What to do if `has_repetition` is true?
-  if (not page_validity[page_idx]) {
+  if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
@@ -228,6 +229,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
@@ -236,7 +238,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
                     size_t num_rows,
-                    cudf::device_span<bool const> page_validity,
+                    cudf::device_span<bool const> page_mask,
                     kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -252,9 +254,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Exit early if the page is invalid
+  // Exit early if the page does not need to be decoded
   // MH: How to handle all types in this decoder? Also what to do if `has_repetition` is true?
-  if (not page_validity[page_idx]) {
+  if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
@@ -450,7 +452,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
-                             cudf::device_span<bool const> page_validity,
+                             cudf::device_span<bool const> page_mask,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
@@ -461,10 +463,10 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodePageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
     gpuDecodePageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 
@@ -476,7 +478,7 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
-                                  cudf::device_span<bool const> page_validity,
+                                  cudf::device_span<bool const> page_mask,
                                   kernel_error::pointer error_code,
                                   rmm::cuda_stream_view stream)
 {
@@ -487,10 +489,10 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodeSplitPageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
     gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 

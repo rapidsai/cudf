@@ -967,7 +967,7 @@ constexpr bool is_split_decode()
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
- * @param page_validity Vector of booleans indicating the validity of each page
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param error_code Error code to set if an error is encountered
  */
@@ -977,7 +977,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
-                           cudf::device_span<bool const> page_validity,
+                           cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
                            kernel_error::pointer error_code)
 {
@@ -1010,9 +1010,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Exit super early for simple types if the page is invalid.
+  // Exit super early for simple types if the page does not need to be decoded
   if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
-    if (not page_validity[page_idx]) {
+    if (not page_mask[page_idx]) {
       pp->num_nulls  = pp->num_rows;
       pp->num_valids = 0;
       return;
@@ -1029,8 +1029,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     return;
   }
 
-  // Exit early if the page is invalid
-  if (not page_validity[page_idx]) {
+  // Exit early if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
     pp->num_nulls  = pp->num_rows;
     pp->num_valids = 0;
     // Update offsets for all list depth levels
@@ -1244,7 +1244,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t min_row,
                              int level_type_size,
                              decode_kernel_mask kernel_mask,
-                             cudf::device_span<bool const> page_validity,
+                             cudf::device_span<bool const> page_mask,
                              cudf::device_span<size_t> initial_str_offsets,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
@@ -1263,7 +1263,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      chunks,
                                                      min_row,
                                                      num_rows,
-                                                     page_validity,
+                                                     page_mask,
                                                      initial_str_offsets,
                                                      error_code);
     } else {
@@ -1272,7 +1272,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      chunks,
                                                      min_row,
                                                      num_rows,
-                                                     page_validity,
+                                                     page_mask,
                                                      initial_str_offsets,
                                                      error_code);
     }

@@ -310,7 +310,7 @@ CUDF_KERNEL void __launch_bounds__(96)
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
                        size_t num_rows,
-                       cudf::device_span<bool const> page_validity,
+                       cudf::device_span<bool const> page_mask,
                        kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -327,8 +327,9 @@ CUDF_KERNEL void __launch_bounds__(96)
 
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Since only used for int32 and int64, we can simply skip decoding if the page is invalid.
-  if (not page_validity[page_idx]) {
+  // Since only used for int32 and int64, we can simply skip decoding if the page does not need to
+  // be decoded
+  if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
@@ -445,7 +446,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
-                          cudf::device_span<bool const> page_validity,
+                          cudf::device_span<bool const> page_mask,
                           cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code)
 {
@@ -484,9 +485,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // Exit early if the page is invalid
+  // Exit early if the page does not need to be decoded
   // MH: What to do if `has_repetition` is true?
-  if (not page_validity[page_idx]) {
+  if (not page_mask[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
@@ -627,7 +628,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                                 device_span<ColumnChunkDesc const> chunks,
                                 size_t min_row,
                                 size_t num_rows,
-                                cudf::device_span<bool const> page_validity,
+                                cudf::device_span<bool const> page_mask,
                                 cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code)
 {
@@ -667,9 +668,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // Exit early if the page is invalid
+  // Exit early if the page does not need to be decoded
   // MH: What to do if `has_repetition` is true?
-  if (not page_validity[page_idx]) {
+  if (not page_mask[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
@@ -810,7 +811,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
-                       cudf::device_span<bool const> page_validity,
+                       cudf::device_span<bool const> page_mask,
                        kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream)
 {
@@ -821,10 +822,10 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodeDeltaBinary<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
     gpuDecodeDeltaBinary<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_validity, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 
@@ -836,7 +837,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          cudf::device_span<bool const> page_validity,
+                          cudf::device_span<bool const> page_mask,
                           cudf::device_span<size_t> initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream)
@@ -847,23 +848,11 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaByteArray<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
-                                                   chunks,
-                                                   min_row,
-                                                   num_rows,
-                                                   page_validity,
-                                                   initial_str_offsets,
-                                                   error_code);
+    gpuDecodeDeltaByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
   } else {
-    gpuDecodeDeltaByteArray<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
-                                                   chunks,
-                                                   min_row,
-                                                   num_rows,
-                                                   page_validity,
-                                                   initial_str_offsets,
-                                                   error_code);
+    gpuDecodeDeltaByteArray<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
   }
 }
 
@@ -875,7 +864,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
-                                cudf::device_span<bool const> page_validity,
+                                cudf::device_span<bool const> page_mask,
                                 cudf::device_span<size_t> initial_str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
@@ -886,23 +875,11 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 const dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeDeltaLengthByteArray<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
-                                                   chunks,
-                                                   min_row,
-                                                   num_rows,
-                                                   page_validity,
-                                                   initial_str_offsets,
-                                                   error_code);
+    gpuDecodeDeltaLengthByteArray<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
   } else {
-    gpuDecodeDeltaLengthByteArray<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
-                                                   chunks,
-                                                   min_row,
-                                                   num_rows,
-                                                   page_validity,
-                                                   initial_str_offsets,
-                                                   error_code);
+    gpuDecodeDeltaLengthByteArray<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
   }
 }
 
