@@ -248,7 +248,6 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
 
 inline std::unique_ptr<cudf::column> make_long_offsets_and_chars_string_column()
 {
-  // manually specified long offsets, but < 2B chars
   rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024,
                              cudf::get_default_stream(),
                              rmm::mr::get_current_device_resource()};
