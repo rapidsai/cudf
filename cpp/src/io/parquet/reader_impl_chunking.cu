@@ -1405,11 +1405,11 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
-      pass.pages.host_to_device_sync(_stream);
+      pass.pages.host_to_device(_stream);
     }
 
     subpass.decomp_page_data = std::move(subpass_data);
-    subpass.pages.host_to_device_sync(_stream);
+    subpass.pages.host_to_device(_stream);
   }
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the

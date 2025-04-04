@@ -542,8 +542,7 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst,
-                  rmm::cuda_stream_view stream)
+                  host_span<uint8_t> dst)
 {
   switch (compression) {
     case compression_type::GZIP: return decompress_gzip(src, dst);
@@ -684,13 +683,13 @@ void host_decompress(compression_type compression,
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
-      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
-      auto const uncomp_size = decompress(compression, h_in, h_out, cur_stream);
+      auto h_out = cudf::detail::make_pinned_vector_sync<uint8_t>(d_out.size(), cur_stream);
+      auto const uncomp_size = decompress(compression, h_in, h_out);
       h_in.clear();  // Free pinned memory as soon as possible
 
-      cudf::detail::cuda_memcpy_async<uint8_t>(d_out.subspan(0, uncomp_size),
-                                               host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
-                                               cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, uncomp_size),
+                                         host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
+                                         cur_stream);
       return uncomp_size;
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
@@ -699,8 +698,8 @@ void host_decompress(compression_type compression,
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
-  cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
-  cudf::detail::join_streams(streams, stream);
+
+  cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
 [[nodiscard]] bool host_decompression_supported(compression_type compression)
