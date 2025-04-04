@@ -101,7 +101,7 @@ std::unique_ptr<column> extract_all_record(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Returns a strings column where each column corresponds to the specified matching
+ * @brief Returns a strings column where each column corresponds to the specified
  * group in the given regex_program object
  *
  * Any null string entries return corresponding null output for that row.
