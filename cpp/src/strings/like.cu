@@ -187,8 +187,10 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
+template <typename PatternIterator>
 CUDF_KERNEL void like_kernel(column_device_view d_strings,
-                             string_view d_pattern,
+                             PatternIterator pattern_itr,
+                             // string_view d_pattern,
                              string_view d_escape,
                              bool* results)
 {
@@ -202,16 +204,17 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
   namespace cg    = cooperative_groups;
   auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
-  auto const d_str = d_strings.element<string_view>(str_idx);
-  auto target_itr  = d_str.data();
+  auto const d_str      = d_strings.element<string_view>(str_idx);
+  auto target_itr       = d_str.data();
+  auto const target_end = target_itr + d_str.size_bytes();
 
-  auto const target_end    = target_itr + d_str.size_bytes();
+  auto const d_pattern     = pattern_itr[str_idx];
   auto const pattern_begin = d_pattern.data();
   auto const pattern_end   = pattern_begin + d_pattern.size_bytes();
   auto const esc_char      = d_escape.empty() ? 0 : d_escape.data()[0];
   auto const lane_idx      = warp.thread_rank();
 
-  auto fn_wc = [p = pattern_begin, esc_char](auto const idx) {
+  auto count_wc_fn = [p = pattern_begin, esc_char](auto const idx) {
     return (p[idx] == multi_wildcard) && (idx == 0 || p[idx - 1] != esc_char);
   };
   auto find_next_wc = [pattern_begin, pattern_end, esc_char](size_type idx) {
@@ -224,15 +227,14 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
     return idx;
   };
 
-  auto wcs_idx  = 0;
-  auto next_wc  = 0;
-  auto wcs_size = esc_char == multi_wildcard
-                    ? 0
-                    : thrust::count_if(thrust::seq,
-                                       thrust::counting_iterator<size_type>(0),
-                                       thrust::counting_iterator<size_type>(d_pattern.size_bytes()),
-                                       fn_wc);
-  bool result   = true;
+  auto const itr_zero = thrust::counting_iterator<size_type>(0);
+  auto const itr_size = thrust::counting_iterator<size_type>(d_pattern.size_bytes());
+  auto const wcs_size =
+    esc_char == multi_wildcard ? 0 : thrust::count_if(thrust::seq, itr_zero, itr_size, count_wc_fn);
+
+  auto wcs_idx = 0;
+  auto next_wc = 0;
+  bool result  = true;
   if (wcs_size == 0 || *pattern_begin != multi_wildcard) {
     // pattern does not start with a wildcard; check for literal match
     next_wc       = wcs_size > 0 ? find_next_wc(0) : d_pattern.size_bytes();
@@ -255,7 +257,7 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
     next_wc          = find_next_wc(next_wc + 1);
     auto const end   = next_wc + pattern_begin;
     ++wcs_idx;
-    if (thrust::distance(begin, end) == 0) { continue; }
+    if (cuda::std::distance(begin, end) == 0) { continue; }
 
     auto const not_found = d_str.size_bytes();
     auto find_idx        = not_found;
@@ -330,11 +332,23 @@ std::unique_ptr<column> like(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    results->mutable_view().data<bool>(),
-                    like_fn{*d_strings, patterns_itr, d_escape});
+  // string per thread for smaller strings
+  auto [first_offset, last_offset] = get_first_and_last_offset(input, stream);
+  if ((input.size() == input.null_count()) ||
+      ((last_offset - first_offset) / (input.size() - input.null_count())) <
+        AVG_CHAR_BYTES_THRESHOLD) {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(input.size()),
+                      results->mutable_view().data<bool>(),
+                      like_fn{*d_strings, patterns_itr, d_escape});
+  } else {
+    // warp-parallel for longer strings
+    constexpr auto block_size = 512;
+    auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
+    like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+      *d_strings, patterns_itr, d_escape, results->mutable_view().data<bool>());
+  }
 
   results->set_null_count(input.null_count());
   return results;
@@ -353,38 +367,14 @@ std::unique_ptr<column> like(strings_column_view const& input,
                "Parameter escape_character must be valid",
                std::invalid_argument);
 
-  auto const d_pattern = pattern.value(stream);
-  auto const d_escape  = escape_character.value(stream);
-
+  auto const d_escape = escape_character.value(stream);
   CUDF_EXPECTS(d_escape.size_bytes() <= 1,
                "Parameter escape_character must be a single character",
                std::invalid_argument);
 
-  // handle small or empty or all-null input
-  auto [first_offset, last_offset] = get_first_and_last_offset(input, stream);
-  if ((input.size() == input.null_count()) ||
-      ((last_offset - first_offset) / (input.size() - input.null_count())) <
-        AVG_CHAR_BYTES_THRESHOLD) {
-    auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
-    return like(input, patterns_itr, d_escape, stream, mr);
-  }
-
-  auto results = make_numeric_column(data_type{type_id::BOOL8},
-                                     input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                     input.null_count(),
-                                     stream,
-                                     mr);
-
-  auto const d_strings = column_device_view::create(input.parent(), stream);
-
-  constexpr auto block_size = 512;
-  auto const grid = cudf::detail::grid_1d(input.size() * cudf::detail::warp_size, block_size);
-  like_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-    *d_strings, d_pattern, d_escape, results->mutable_view().data<bool>());
-
-  results->set_null_count(input.null_count());
-  return results;
+  auto const d_pattern    = pattern.value(stream);
+  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+  return like(input, patterns_itr, d_escape, stream, mr);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
@@ -403,14 +393,13 @@ std::unique_ptr<column> like(strings_column_view const& input,
                "Parameter escape_character must be valid",
                std::invalid_argument);
 
-  auto const d_patterns   = column_device_view::create(patterns.parent(), stream);
-  auto const patterns_itr = d_patterns->begin<string_view>();
-  auto const d_escape     = escape_character.value(stream);
-
+  auto const d_escape = escape_character.value(stream);
   CUDF_EXPECTS(d_escape.size_bytes() <= 1,
                "Parameter escape_character must be a single character",
                std::invalid_argument);
 
+  auto const d_patterns   = column_device_view::create(patterns.parent(), stream);
+  auto const patterns_itr = d_patterns->begin<string_view>();
   return like(input, patterns_itr, d_escape, stream, mr);
 }
 

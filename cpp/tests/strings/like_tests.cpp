@@ -293,14 +293,34 @@ TEST_F(StringsLikeTests, Escape)
 
 TEST_F(StringsLikeTests, MultiplePatterns)
 {
-  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
-  cudf::test::strings_column_wrapper patterns({"a%b%c", "a%c", "a__b", "b__c", "", "áéêú"});
+  auto input =
+    cudf::test::strings_column_wrapper({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
+  auto patterns = cudf::test::strings_column_wrapper({"a%b%c", "a%c", "a__b", "b__c", "", "áéêú"});
 
-  auto const sv_input    = cudf::strings_column_view(input);
-  auto const sv_patterns = cudf::strings_column_view(patterns);
-  auto const results     = cudf::strings::like(sv_input, sv_patterns);
+  auto sv_input    = cudf::strings_column_view(input);
+  auto sv_patterns = cudf::strings_column_view(patterns);
+  auto results     = cudf::strings::like(sv_input, sv_patterns);
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>({true, true, false, true, true, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  input = cudf::test::strings_column_wrapper(
+    {"abcdéfghijklmnopqrstuvwxyz0_2_4_6_8_ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú",
+     "1abcdefghijklmnopqrstuvwxyz%1%3%5%7%9ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú",
+     "abcdefghijklmnopqrstuvwxyz%1%3%5%7%9ABCDEFGHIJKLMNOPQRSTUVWXYZáéêú2",
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789"
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789"});
+  sv_input = cudf::strings_column_view(input);
+  patterns = cudf::test::strings_column_wrapper(
+    {"a%b%ú",
+     "1ab%",
+     "%áéêú2",
+     "01234567890123456789012345678901234567890123456789012345678901234567890123456789",
+     "abcdef"});
+  sv_patterns = cudf::strings_column_view(patterns);
+  results     = cudf::strings::like(sv_input, sv_patterns);
+  expected    = cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
