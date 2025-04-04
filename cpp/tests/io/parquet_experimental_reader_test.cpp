@@ -129,7 +129,8 @@ std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
   cudf::host_span<char const> host_buffer,
   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
   cudf::host_span<cudf::size_type const> /* chunk_source_map */,
-  rmm::cuda_stream_view stream = cudf::get_default_stream())
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   std::vector<rmm::device_buffer> column_chunk_buffers{};
   column_chunk_buffers.reserve(byte_ranges.size());
@@ -141,7 +142,7 @@ std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
     [&](auto const& byte_range) {
       auto const chunk_offset = host_buffer.data() + byte_range.offset();
       auto const chunk_size   = byte_range.size();
-      auto chunk_buffer       = rmm::device_buffer(chunk_size, stream);
+      auto chunk_buffer       = rmm::device_buffer(chunk_size, stream, mr);
       CUDF_CUDA_TRY(cudaMemcpyAsync(
         chunk_buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
       return chunk_buffer;
@@ -188,8 +189,8 @@ auto hybrid_scan(std::vector<char>& buffer,
   auto const reader =
     cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
 
-  // Get valid row groups from the reader - API # 2
-  auto input_row_groups = cudf::experimental::io::get_valid_row_groups(reader, options);
+  // Get all row groups from the reader - API # 2
+  auto input_row_groups = cudf::experimental::io::get_all_row_groups(reader, options);
 
   // Filter row groups with stats - API # 3
   auto stats_filtered_row_groups =
@@ -214,19 +215,19 @@ auto hybrid_scan(std::vector<char>& buffer,
   }
 
   // Filter data pages with `PageIndex` stats - API # 7
-  auto [predicate, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
+  auto [row_mask, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
     reader, stats_filtered_row_groups, options, stream, mr);
 
   EXPECT_EQ(data_page_validity.size(), num_filter_columns);
 
   // Get column chunk byte ranges from the reader - API # 8
-  auto [filter_column_chunk_byte_ranges, chunk_source_map] =
+  auto const filter_column_chunk_byte_ranges =
     cudf::experimental::io::get_filter_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
 
   // Fetch column chunk device buffers from the input buffer
   auto filter_column_chunk_buffers =
-    fetch_column_chunk_buffers(buffer, filter_column_chunk_byte_ranges, {}, stream);
+    fetch_column_chunk_buffers(buffer, filter_column_chunk_byte_ranges, {}, stream, mr);
 
   // Materialize the table with only the filter columns - API # 9
   auto [filter_table, filter_metadata] =
@@ -234,25 +235,25 @@ auto hybrid_scan(std::vector<char>& buffer,
                                                        data_page_validity,
                                                        stats_filtered_row_groups,
                                                        std::move(filter_column_chunk_buffers),
-                                                       predicate->mutable_view(),
+                                                       row_mask->mutable_view(),
                                                        options,
                                                        stream);
 
   // Get column chunk byte ranges from the reader - API # 10
-  auto [payload_column_chunk_byte_ranges, _] =
+  auto const payload_column_chunk_byte_ranges =
     cudf::experimental::io::get_payload_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
 
   // Fetch column chunk device buffers from the input buffer
   [[maybe_unused]] auto payload_column_chunk_buffers =
-    fetch_column_chunk_buffers(buffer, payload_column_chunk_byte_ranges, {}, stream);
+    fetch_column_chunk_buffers(buffer, payload_column_chunk_byte_ranges, {}, stream, mr);
 
   // Materialize the table with only the payload columns - API # 11
   [[maybe_unused]] auto [payload_table, payload_metadata] =
     cudf::experimental::io::materialize_payload_columns(reader,
                                                         stats_filtered_row_groups,
                                                         std::move(payload_column_chunk_buffers),
-                                                        predicate->mutable_view(),
+                                                        row_mask->view(),
                                                         options,
                                                         stream);
 
@@ -260,7 +261,7 @@ auto hybrid_scan(std::vector<char>& buffer,
                     std::move(payload_table),
                     std::move(filter_metadata),
                     std::move(payload_metadata),
-                    std::move(predicate)};
+                    std::move(row_mask)};
 }
 
 }  // namespace
@@ -286,16 +287,13 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Read parquet using the hybrid scan reader
-  auto [read_filter_table,
-        read_payload_table,
-        read_filter_meta,
-        read_payload_meta,
-        row_validity_col] = hybrid_scan(buffer,
-                                        num_filter_columns,
-                                        written_table.num_columns() - num_filter_columns,
-                                        filter_expression,
-                                        stream,
-                                        mr);
+  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+    hybrid_scan(buffer,
+                num_filter_columns,
+                written_table.num_columns() - num_filter_columns,
+                filter_expression,
+                stream,
+                mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
@@ -333,16 +331,13 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Read parquet using the hybrid scan reader
-  auto [read_filter_table,
-        read_payload_table,
-        read_filter_meta,
-        read_payload_meta,
-        row_validity_col] = hybrid_scan(buffer,
-                                        num_filter_columns,
-                                        written_table.num_columns() - num_filter_columns,
-                                        filter_expression,
-                                        stream,
-                                        mr);
+  auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+    hybrid_scan(buffer,
+                num_filter_columns,
+                written_table.num_columns() - num_filter_columns,
+                filter_expression,
+                stream,
+                mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");

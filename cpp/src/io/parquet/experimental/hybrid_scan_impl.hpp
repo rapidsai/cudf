@@ -45,83 +45,124 @@ namespace cudf::experimental::io::parquet::detail {
 class impl {
  public:
   /**
-   * @brief Constructor from a parquet file footer and page index.
+   * @brief Constructor for the experimental parquet reader implementation to optimally read
+   * Parquet files subject to highly selective filters
    *
-   * @param footer_bytes The parquet file footer
-   * @param page_index_bytes The parquet file page index
-   * @param options Settings for controlling reading behavior
+   * @param footer_bytes Host span of parquet file footer bytes
+   * @param page_index_bytes Host span of parquet file page index bytes
+   * @param options Parquet reader options
    */
   explicit impl(cudf::host_span<uint8_t const> footer_bytes,
                 cudf::host_span<uint8_t const> page_index_bytes,
                 cudf::io::parquet_reader_options const& options);
 
-  [[nodiscard]] std::vector<size_type> get_valid_row_groups(
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_all_row_groups
+   */
+  [[nodiscard]] std::vector<size_type> get_all_row_groups(
     cudf::io::parquet_reader_options const& options) const;
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
+   */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_secondary_filters
+   */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
   get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
                         cudf::io::parquet_reader_options const& options);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_dictionary_pages
+   */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
     std::vector<rmm::device_buffer>& dictionary_page_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_bloom_filters
+   */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
     std::vector<rmm::device_buffer>& bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
+   */
   [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                cudf::io::parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_filter_column_chunk_byte_ranges
+   */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
   get_filter_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
+   */
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> data_page_validity,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::mutable_column_view predicate,
+    cudf::mutable_column_view row_mask,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
-  static void update_predicate(cudf::column_view in_predicate,
-                               cudf::mutable_column_view out_predicate,
-                               rmm::cuda_stream_view stream);
-
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_payload_column_chunk_byte_ranges
+   */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
   get_payload_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::io::parquet_reader_options const& options);
 
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns
+   */
   [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
-    cudf::mutable_column_view predicate,
+    cudf::column_view row_mask,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Updates the output row mask such that such that out_row_mask[i] = true iff
+   * in_row_mask[i] is valid and true.
+   *
+   * Updates the output row mask to reflect the final valid and surviving rows from the input row
+   * mask. This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
+   *
+   * @param in_row_mask Input row mask column
+   * @param out_row_mask Output row mask column
+   * @param stream CUDA stream
+   */
+  static void update_row_mask(cudf::column_view in_row_mask,
+                              cudf::mutable_column_view out_row_mask,
+                              rmm::cuda_stream_view stream);
+
  private:
   using table_metadata = cudf::io::table_metadata;
-
   /**
-   * @brief The enum indicating whether we are reading the predicate columns or the payload columns.
+   * @brief The enum indicating whether we are reading the filter columns or the payload columns.
    */
   enum class read_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS };
 
@@ -297,16 +338,19 @@ class impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
+   * @tparam RowMaskType Type of the row mask column view
+   *
    * @param read_mode The read mode
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
-   * @param in_predicate The input row validity predicate
+   * @param row_mask Boolean column indicating rows that survived the row selection predicate
    * @return The output table along with columns' metadata
    */
+  template <typename RowMaskType>
   cudf::io::table_with_metadata finalize_output(read_mode read_mode,
                                                 table_metadata& out_metadata,
                                                 std::vector<std::unique_ptr<column>>& out_columns,
-                                                cudf::mutable_column_view in_predicate);
+                                                RowMaskType row_mask);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -351,6 +395,9 @@ class impl {
    */
   void compute_output_chunks_for_subpass();
 
+  /**
+   * @brief Check if there is more work to be done.
+   */
   [[nodiscard]] bool has_more_work() const
   {
     return _file_itm_data.num_passes() > 0 &&
@@ -363,11 +410,11 @@ class impl {
    * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param in_predicate The input row validity predicate
+   * @param row_mask Boolean column indicating rows that survived the row selection predicate
    * @return The output table along with columns' metadata
    */
-  cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode,
-                                                    cudf::mutable_column_view in_predicate = {});
+  template <typename RowMaskType>
+  cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskType row_mask);
 
   /**
    * @brief Check if the user has specified custom row bounds

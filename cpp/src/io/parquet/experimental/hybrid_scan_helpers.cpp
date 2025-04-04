@@ -376,7 +376,7 @@ std::
       int schema_idx;
     };
 
-    // Convert schema into a vector of all possible predicate column paths
+    // Convert schema into a vector of all possible payload column paths
     std::vector<path_info> payload_column_paths;
     std::vector<std::reference_wrapper<std::vector<std::string> const>> const filter_column_names{
       *filter_columns_names};

@@ -1397,26 +1397,28 @@ cudf::detail::host_vector<size_t> impl::calculate_page_string_offsets()
   return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
 }
 
-void impl::update_predicate(cudf::column_view in_predicate,
-                            cudf::mutable_column_view out_predicate,
-                            rmm::cuda_stream_view stream)
+void impl::update_row_mask(cudf::column_view in_row_mask,
+                           cudf::mutable_column_view out_row_mask,
+                           rmm::cuda_stream_view stream)
 {
-  auto const total_rows = static_cast<cudf::size_type>(in_predicate.size());
-  CUDF_EXPECTS(total_rows == out_predicate.size(),
-               "Input and output predicates must have the same number of rows");
-  CUDF_EXPECTS(out_predicate.type().id() == type_id::BOOL8,
-               "Output predicate must be a boolean column");
+  auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
-  // Update the output predicate with the input predicate
+  CUDF_EXPECTS(total_rows == out_row_mask.size(),
+               "Input and output row mask columns must have the same number of rows");
+  CUDF_EXPECTS(out_row_mask.type().id() == type_id::BOOL8,
+               "Output row mask column must be a boolean column");
+
+  // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
+  // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator(total_rows),
-                    out_predicate.begin<bool>(),
-                    [is_nullable  = in_predicate.nullable(),
-                     in_predicate = in_predicate.begin<bool>(),
-                     in_bitmask   = in_predicate.null_mask()] __device__(auto row_idx) {
+                    out_row_mask.begin<bool>(),
+                    [is_nullable = in_row_mask.nullable(),
+                     in_row_mask = in_row_mask.begin<bool>(),
+                     in_bitmask  = in_row_mask.null_mask()] __device__(auto row_idx) {
                       auto const is_valid = not is_nullable or bit_is_set(in_bitmask, row_idx);
-                      auto const is_true  = in_predicate[row_idx];
+                      auto const is_true  = in_row_mask[row_idx];
                       if (is_nullable) {
                         return is_valid and is_true;
                       } else {
@@ -1424,8 +1426,10 @@ void impl::update_predicate(cudf::column_view in_predicate,
                       }
                     });
 
-  // Make sure the null mask of the output predicate is all valid after the update
-  cudf::set_null_mask(out_predicate.null_mask(), 0, total_rows, true, stream);
+  // Make sure the null mask of the output row mask column is all valid after the update. This is
+  // to correctly assess if a payload column data page can be pruned. An invalid row in the row mask
+  // column means the corresponding data page cannot be pruned.
+  cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

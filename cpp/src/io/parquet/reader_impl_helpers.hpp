@@ -221,7 +221,7 @@ class aggregate_reader_metadata {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
-   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
+   * @return A flattened list of bloom filter bitset device buffers for each filter column across
    * row group
    */
   [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(

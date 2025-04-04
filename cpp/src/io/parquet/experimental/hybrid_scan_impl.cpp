@@ -578,7 +578,7 @@ void impl::reset_internal_state()
   _output_metadata.reset();
 }
 
-std::vector<size_type> impl::get_valid_row_groups(
+std::vector<size_type> impl::get_all_row_groups(
   cudf::io::parquet_reader_options const& options) const
 {
   auto const num_row_groups = _metadata->get_num_row_groups();
@@ -695,17 +695,17 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
   auto output_dtypes =
     get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
 
-  auto predicate = _metadata->filter_data_pages_with_stats(row_group_indices,
-                                                           output_dtypes,
-                                                           _output_column_schemas,
-                                                           expr_conv.get_converted_expr(),
-                                                           stream,
-                                                           mr);
+  auto row_mask = _metadata->filter_data_pages_with_stats(row_group_indices,
+                                                          output_dtypes,
+                                                          _output_column_schemas,
+                                                          expr_conv.get_converted_expr(),
+                                                          stream,
+                                                          mr);
 
   auto data_page_validity = _metadata->compute_data_page_validity(
-    predicate->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 
-  return {std::move(predicate), std::move(data_page_validity)};
+  return {std::move(row_mask), std::move(data_page_validity)};
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
@@ -777,7 +777,7 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   cudf::host_span<std::vector<bool> const> data_page_validity,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::mutable_column_view predicate,
+  cudf::mutable_column_view row_mask,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -798,13 +798,13 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
-  return read_chunk_internal(read_mode::FILTER_COLUMNS, predicate);
+  return read_chunk_internal(read_mode::FILTER_COLUMNS, row_mask);
 }
 
 cudf::io::table_with_metadata impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
-  cudf::mutable_column_view predicate,
+  cudf::column_view row_mask,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
@@ -817,14 +817,14 @@ cudf::io::table_with_metadata impl::materialize_payload_columns(
     get_output_types(_output_buffers_template, _expr_conv.get_converted_expr().has_value());
 
   auto data_page_validity = _metadata->compute_data_page_validity(
-    predicate, row_group_indices, output_dtypes, _output_column_schemas, stream);
+    row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
   set_page_validity(data_page_validity);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
-  return read_chunk_internal(read_mode::PAYLOAD_COLUMNS, predicate);
+  return read_chunk_internal(read_mode::PAYLOAD_COLUMNS, row_mask);
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -852,8 +852,8 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   _stream = stream;
 }
 
-cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
-                                                        cudf::mutable_column_view in_predicate)
+template <typename RowMaskType>
+cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskType row_mask)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -878,7 +878,7 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
     // Finalize output
-    return finalize_output(read_mode, out_metadata, out_columns, in_predicate);
+    return finalize_output(read_mode, out_metadata, out_columns, row_mask);
   }
 
   auto& pass            = *_pass_itm_data;
@@ -916,14 +916,15 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode,
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
-  return finalize_output(read_mode, out_metadata, out_columns, in_predicate);
+  return finalize_output(read_mode, out_metadata, out_columns, row_mask);
 }
 
+template <typename RowMaskType>
 cudf::io::table_with_metadata impl::finalize_output(
   read_mode read_mode,
   table_metadata& out_metadata,
   std::vector<std::unique_ptr<column>>& out_columns,
-  cudf::mutable_column_view in_predicate)
+  RowMaskType row_mask)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
@@ -954,26 +955,39 @@ cudf::io::table_with_metadata impl::finalize_output(
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
+  // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
   // If reading filter columns, compute the predicate, apply it to the table, and update the input
-  // row validity predicate. Otherwise, simply apply the input row validity predicate to the table.
-  if (read_mode == read_mode::FILTER_COLUMNS) {
-    auto predicate = cudf::detail::compute_column(*read_table,
-                                                  _expr_conv.get_converted_expr().value().get(),
-                                                  _stream,
-                                                  cudf::get_current_device_resource_ref());
-    CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
+  // row mask to reflect the final surviving rows.
+  if constexpr (std::is_same_v<RowMaskType, cudf::mutable_column_view>) {
+    CUDF_EXPECTS(read_mode == read_mode::FILTER_COLUMNS, "Invalid read mode");
+    // Apply the row selection predicate on the read table to get the final row mask
+    auto final_row_mask =
+      cudf::detail::compute_column(*read_table,
+                                   _expr_conv.get_converted_expr().value().get(),
+                                   _stream,
+                                   cudf::get_current_device_resource_ref());
+    CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
+
+    // Apply the final row mask to get the final output table
     auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), *predicate, _stream, _mr);
-    update_predicate(predicate->view(), in_predicate, _stream);
+      cudf::detail::apply_boolean_mask(read_table->view(), *final_row_mask, _stream, _mr);
+
+    // Update the input row mask to reflect the final row mask.
+    update_row_mask(final_row_mask->view(), row_mask, _stream);
+
+    // Return the final output table and metadata
     return {std::move(output_table), std::move(out_metadata)};
-  } else {
-    CUDF_EXPECTS(in_predicate.type().id() == type_id::BOOL8,
+  }
+  // Otherwise, simply apply the input row mask to the table.
+  else {
+    CUDF_EXPECTS(read_mode == read_mode::PAYLOAD_COLUMNS, "Invalid read mode");
+    CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
     auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), in_predicate, _stream, _mr);
+      cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
     return {std::move(output_table), std::move(out_metadata)};
   }
 }
@@ -1023,8 +1037,6 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
   auto const num_columns = _input_columns.size();
 
   CUDF_EXPECTS(pages.size() == _page_validity.size(), "Page validity size mismatch");
-
-  CUDF_EXPECTS(pages.size() == page_validity.size(), "Page validity size mismatch");
 
   thrust::for_each(
     thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_validity.begin())),

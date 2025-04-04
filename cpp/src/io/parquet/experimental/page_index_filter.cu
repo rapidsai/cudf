@@ -533,7 +533,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
 }
 
 std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_validity(
-  cudf::column_view predicate,
+  cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -542,10 +542,10 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
   // Return if no input row groups
   if (row_group_indices.empty()) { return {}; }
 
-  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+  CUDF_EXPECTS(row_mask.type().id() == cudf::type_id::BOOL8,
                "Input row bitmask should be of type BOOL8");
 
-  auto const total_rows  = predicate.size();
+  auto const total_rows  = row_mask.size();
   auto const num_columns = output_dtypes.size();
 
   // Compute the requirement of all pages across all filter columns.
@@ -605,14 +605,14 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
     return all_valid_data_pages;
   };
 
-  CUDF_EXPECTS(predicate.size() == total_rows, "Mismatch in total rows");
+  CUDF_EXPECTS(row_mask.size() == total_rows, "Mismatch in total rows");
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
 
   // Return if all pages are required or all are invalid.
-  if (predicate.null_count() == predicate.size() or thrust::all_of(rmm::exec_policy(stream),
-                                                                   predicate.begin<bool>(),
-                                                                   predicate.end<bool>(),
-                                                                   thrust::identity<bool>{})) {
+  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
+                                                                 row_mask.begin<bool>(),
+                                                                 row_mask.end<bool>(),
+                                                                 thrust::identity<bool>{})) {
     return all_valid_data_pages();
   }
 
@@ -650,9 +650,9 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
                       page_indices.end(),
                       thrust::counting_iterator<size_type>(0),
                       d_select_page_indices.begin(),
-                      [is_nullable     = predicate.nullable(),
-                       bitmask         = predicate.null_mask(),
-                       is_row_required = predicate.data<bool>()] __device__(size_type row_index) {
+                      [is_nullable     = row_mask.nullable(),
+                       bitmask         = row_mask.null_mask(),
+                       is_row_required = row_mask.data<bool>()] __device__(size_type row_index) {
                         auto const is_invalid = is_nullable and not bit_is_set(bitmask, row_index);
                         return is_invalid or is_row_required[row_index];
                       });

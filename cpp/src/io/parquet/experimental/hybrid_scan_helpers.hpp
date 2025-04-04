@@ -62,7 +62,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param dictionary_col_schemas schema indices of dictionary columns only
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A flattened list of `cuco::static_set_ref` device buffers for each predicate column
+   * @return A flattened list of `cuco::static_set_ref` device buffers for each filter column
    * across row groups
    */
   [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
