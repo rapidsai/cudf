@@ -53,15 +53,29 @@ def _get_cudf_schema_element_from_dtype(
 
 
 def _to_plc_compression(
-    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None],
+    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None],
 ) -> plc.io.types.CompressionType:
     if compression is not None:
-        if compression == "gzip":
+        if compression == "snappy":
+            return plc.io.types.CompressionType.SNAPPY
+        elif compression == "gzip":
             return plc.io.types.CompressionType.GZIP
         elif compression == "bz2":
             return plc.io.types.CompressionType.BZIP2
+        elif compression == "brotli":
+            return plc.io.types.CompressionType.BROTLI
         elif compression == "zip":
             return plc.io.types.CompressionType.ZIP
+        elif compression == "xz":
+            return plc.io.types.CompressionType.XZ
+        elif compression == "zlib":
+            return plc.io.types.CompressionType.ZLIB
+        elif compression == "lz4":
+            return plc.io.types.CompressionType.LZ4
+        elif compression == "lzo":
+            return plc.io.types.CompressionType.LZO
+        elif compression == "zstd":
+            return plc.io.types.CompressionType.ZSTD
         else:
             return plc.io.types.CompressionType.AUTO
     else:
@@ -283,11 +297,11 @@ def _plc_write_json(
     table: cudf.Series | cudf.DataFrame,
     colnames: list[tuple[abc.Hashable, Any]],
     path_or_buf,
+    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None] = None,
     na_rep: str = "null",
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
-    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None] = None,
 ) -> None:
     try:
         tbl_w_meta = plc.io.TableWithMetadata(
@@ -321,6 +335,7 @@ def _plc_write_json(
 def to_json(
     cudf_val: cudf.DataFrame | cudf.Series,
     path_or_buf=None,
+    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None] = None,
     engine: Literal["auto", "pandas", "cudf"] = "auto",
     orient=None,
     storage_options=None,
@@ -359,10 +374,10 @@ def to_json(
             with path_or_buf as file_obj:
                 file_obj = ioutils.get_IOBase_writer(file_obj)
                 _plc_write_json(
-                    cudf_val, colnames, path_or_buf, *args, **kwargs
+                    cudf_val, colnames, path_or_buf, compression, *args, **kwargs
                 )
         else:
-            _plc_write_json(cudf_val, colnames, path_or_buf, *args, **kwargs)
+            _plc_write_json(cudf_val, colnames, path_or_buf, compression, *args, **kwargs)
 
         if return_as_string:
             path_or_buf.seek(0)
