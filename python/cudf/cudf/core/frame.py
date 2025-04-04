@@ -48,14 +48,12 @@ if TYPE_CHECKING:
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable, Serializable):
-    """A collection of Column objects with an optional index.
+    """A collection of Column objects.
 
     Parameters
     ----------
     data : dict
         An dict mapping column names to Columns
-    index : Table
-        A Frame representing the (optional) index columns.
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS

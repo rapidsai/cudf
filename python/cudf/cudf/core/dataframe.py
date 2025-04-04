@@ -1265,7 +1265,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         super().__init__(col_accessor, index=index)
-        self._check_data_index_length_match()
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
