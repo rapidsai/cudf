@@ -226,7 +226,7 @@ rmm::device_buffer decompress_data(datasource& source,
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
       inflate_out.host_to_device_async(stream);
       gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
-      inflate_stats.device_to_host_sync(stream);
+      inflate_stats.device_to_host(stream);
 
       // Check if larger output is required, as it's not known ahead of time
       if (loop_cnt == 0) {
@@ -284,7 +284,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     cudf::detail::hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
     get_snappy_uncompressed_size(compressed_data, uncompressed_data_sizes, stream);
-    uncompressed_data_sizes.device_to_host_sync(stream);
+    uncompressed_data_sizes.device_to_host(stream);
 
     cudf::detail::hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
     std::exclusive_scan(uncompressed_data_sizes.begin(),
@@ -448,7 +448,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
                                     stream.value()));
     }
   }
-  schema_desc.device_to_host_sync(stream);
+  schema_desc.device_to_host(stream);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
     auto const col_idx          = selection[i].first;
