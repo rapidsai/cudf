@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ TEST_F(TextReplaceTest, NormalizeSpaces)
 TEST_F(TextReplaceTest, NormalizeCharacters)
 {
   auto input = cudf::test::strings_column_wrapper({"abc£def", "éè â îô\taeio", "\tĂĆĖÑ  Ü"});
-  nvtext::normalize_characters(
-    cudf::strings_column_view(input), false, cudf::test::get_default_stream());
+  auto sv = cudf::strings_column_view(input);
+  auto cn = nvtext::create_character_normalizer(false, sv, cudf::test::get_default_stream());
+  nvtext::normalize_characters(sv, *cn, cudf::test::get_default_stream());
 }
