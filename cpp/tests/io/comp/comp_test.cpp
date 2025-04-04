@@ -169,9 +169,9 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
                                      size_t uncompressed_size)
   {
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_uncompressed_size(
-                                        cudf::io::compression_type::GZIP, compressed),
+                                        cudf::io::compression_type::AUTO, compressed),
                  "Underestimating uncompressed size!");
-    return cudf::io::detail::decompress(cudf::io::compression_type::GZIP, compressed);
+    return cudf::io::detail::decompress(cudf::io::compression_type::AUTO, compressed);
   }
 };
 
@@ -183,9 +183,9 @@ struct ZstdDecompressTest : public DecompressTest<ZstdDecompressTest> {
                                      size_t uncompressed_size)
   {
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_uncompressed_size(
-                                        cudf::io::compression_type::ZSTD, compressed),
+                                        cudf::io::compression_type::AUTO, compressed),
                  "Underestimating uncompressed size!");
-    return cudf::io::detail::decompress(cudf::io::compression_type::ZSTD, compressed);
+    return cudf::io::detail::decompress(cudf::io::compression_type::AUTO, compressed);
   }
 };
 
@@ -204,9 +204,9 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
                                      size_t uncompressed_size)
   {
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_uncompressed_size(
-                                        cudf::io::compression_type::SNAPPY, compressed),
+                                        cudf::io::compression_type::AUTO, compressed),
                  "Underestimating uncompressed size!");
-    return cudf::io::detail::decompress(cudf::io::compression_type::SNAPPY, compressed);
+    return cudf::io::detail::decompress(cudf::io::compression_type::AUTO, compressed);
   }
 };
 

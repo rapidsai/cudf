@@ -485,6 +485,20 @@ source_properties get_source_properties(compression_type compression, host_span<
       if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
+    case compression_type::ZSTD: {
+      auto const ret =
+        ZSTD_findDecompressedSize(reinterpret_cast<const void*>(src.data()), src.size());
+      uncomp_len = static_cast<size_t>(ret);
+      if (compression != compression_type::AUTO) {
+        CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN,
+                     "Decompressed ZSTD size cannot be determined");
+        CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
+      } else if (ret != ZSTD_CONTENTSIZE_UNKNOWN && ret != ZSTD_CONTENTSIZE_ERROR) {
+        compression = compression_type::ZSTD;
+      }
+      if (compression != compression_type::AUTO) { break; }
+      [[fallthrough]];
+    }
     case compression_type::SNAPPY: {
       uncomp_len     = 0;
       auto cur       = src.begin();
@@ -507,20 +521,6 @@ source_properties get_source_properties(compression_type compression, host_span<
                        "Error in retrieving SNAPPY source properties");
         }
         if (uncomp_len != 0 && cur < end) { compression = compression_type::SNAPPY; }
-      }
-      if (compression != compression_type::AUTO) { break; }
-      [[fallthrough]];
-    }
-    case compression_type::ZSTD: {
-      auto const ret =
-        ZSTD_findDecompressedSize(reinterpret_cast<const void*>(src.data()), src.size());
-      uncomp_len = static_cast<size_t>(ret);
-      if (compression != compression_type::AUTO) {
-        CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN,
-                     "Decompressed ZSTD size cannot be determined");
-        CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_ERROR, "Error determining decompressed ZSTD size");
-      } else if (ret != ZSTD_CONTENTSIZE_UNKNOWN && ret != ZSTD_CONTENTSIZE_ERROR) {
-        compression = compression_type::ZSTD;
       }
       if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
@@ -568,13 +568,13 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
                                      // ~4:1 compression for initial size
   }
 
-  if (compression == compression_type::GZIP) {
+  if (srcprops.compression == compression_type::GZIP) {
     // INFLATE
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     decompress_gzip(src, dst);
     return dst;
   }
-  if (compression == compression_type::ZSTD) {
+  if (srcprops.compression == compression_type::ZSTD) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     auto const decompressed_bytes = decompress_zstd(src, dst);
     CUDF_EXPECTS(decompressed_bytes == srcprops.uncomp_len,
@@ -583,12 +583,12 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
     dst.resize(decompressed_bytes);
     return dst;
   }
-  if (compression == compression_type::ZIP) {
+  if (srcprops.compression == compression_type::ZIP) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     cpu_inflate_vector(dst, srcprops.comp_data, srcprops.comp_len);
     return dst;
   }
-  if (compression == compression_type::BZIP2) {
+  if (srcprops.compression == compression_type::BZIP2) {
     size_t src_ofs = 0;
     size_t dst_ofs = 0;
     int bz_err     = 0;
@@ -612,7 +612,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
     CUDF_EXPECTS(bz_err == 0, "Decompression: error in stream");
     return dst;
   }
-  if (compression == compression_type::SNAPPY) {
+  if (srcprops.compression == compression_type::SNAPPY) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     decompress_snappy(src, dst);
     return dst;
