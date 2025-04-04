@@ -386,19 +386,34 @@ std::
       int schema_idx;
     };
 
-    // Convert schema into a vector of all possible payload column paths
-    std::vector<path_info> payload_column_paths;
-    std::vector<std::reference_wrapper<std::vector<std::string> const>> const filter_column_names{
-      *filter_columns_names};
+    // Convert schema into a vector of the required payload column paths
+    std::vector<path_info> valid_selected_paths;
+    // vector reference pushback (*use_names).
+    std::vector<std::reference_wrapper<std::vector<std::string> const>> const column_names{
+      *use_names, *filter_columns_names};
+
     std::function<void(std::string, int)> add_path = [&](std::string path_till_now,
                                                          int schema_idx) {
-      auto const& schema_elem     = get_schema(schema_idx);
-      std::string const curr_path = path_till_now + schema_elem.name;
-      // Do not push to payload_column_paths if the current path is in filter_column_names
-      if (std::none_of(filter_column_names[0].get().cbegin(),
-                       filter_column_names[0].get().cend(),
-                       [&](auto const& name) { return name == curr_path; })) {
-        payload_column_paths.push_back({curr_path, schema_idx});
+      auto const& schema_elem          = get_schema(schema_idx);
+      std::string const curr_path      = path_till_now + schema_elem.name;
+      auto const& payload_column_names = column_names[0].get();
+      auto const& filter_column_names  = column_names[1].get();
+
+      auto const is_valid_selected_path = [&]() {
+        // Check if the current path is not a filter column
+        auto const is_not_filter_column =
+          std::none_of(filter_column_names.cbegin(),
+                       filter_column_names.cend(),
+                       [&](auto const& filter_col_path) { return filter_col_path == curr_path; });
+        // Check if the current path is a payload column if payload columns are specified
+        return is_not_filter_column and
+               (payload_column_names.empty() or
+                std::find(payload_column_names.cbegin(), payload_column_names.cend(), curr_path) !=
+                  payload_column_names.cend());
+      }();
+
+      if (is_valid_selected_path) {
+        valid_selected_paths.push_back({curr_path, schema_idx});
         for (auto const& child_idx : schema_elem.children_idx) {
           add_path(curr_path + ".", child_idx);
         }
@@ -410,8 +425,8 @@ std::
 
     // Now construct paths as vector of strings for further consumption
     std::vector<std::vector<std::string>> use_names3;
-    std::transform(payload_column_paths.cbegin(),
-                   payload_column_paths.cend(),
+    std::transform(valid_selected_paths.cbegin(),
+                   valid_selected_paths.cend(),
                    std::back_inserter(use_names3),
                    [&](path_info const& valid_path) {
                      auto schema_idx = valid_path.schema_idx;
