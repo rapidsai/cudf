@@ -564,7 +564,7 @@ class Scan(IR):
                 df = Scan.add_file_paths(
                     include_file_paths,
                     seen_paths,
-                    pa.array(t.num_rows() for t in tables),
+                    [t.num_rows() for t in tables],
                     df,
                 )
         elif typ == "parquet":
