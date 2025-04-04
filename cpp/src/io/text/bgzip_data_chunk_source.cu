@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -41,8 +40,6 @@
 
 namespace cudf::io::text {
 namespace {
-
-namespace nvcomp = cudf::io::detail::nvcomp;
 
 /**
  * @brief Transforms offset tuples of the form [compressed_begin, compressed_end,
@@ -151,23 +148,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         span_it,
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.data())});
-      if (decompressed_size() > 0) {
-        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
-          gpuinflate(d_compressed_spans,
-                     d_decompressed_spans,
-                     d_decompression_results,
-                     cudf::io::detail::gzip_header_included::NO,
-                     stream);
-        } else {
-          nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
-                                     d_compressed_spans,
-                                     d_decompressed_spans,
-                                     d_decompression_results,
-                                     max_decompressed_size,
-                                     decompressed_size(),
-                                     stream);
-        }
-      }
+
+      cudf::io::detail::decompress(cudf::io::compression_type::ZLIB,
+                                   d_compressed_spans,
+                                   d_decompressed_spans,
+                                   d_decompression_results,
+                                   max_decompressed_size,
+                                   decompressed_size(),
+                                   stream);
       is_decompressed = true;
     }
 
