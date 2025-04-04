@@ -87,9 +87,10 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
 
 cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
 {
-  auto& schema = per_file_metadata.front();
+  auto& schema     = per_file_metadata.front();
+  auto& row_groups = schema.row_groups;
 
-  if (schema.row_groups.size() and schema.row_groups.front().columns.size()) {
+  if (row_groups.size() and row_groups.front().columns.size()) {
     int64_t const min_offset = schema.row_groups.front().columns.front().column_index_offset;
     auto const& last_col     = schema.row_groups.back().columns.back();
     int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
@@ -101,36 +102,40 @@ cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes(
 
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
+  // Return early if empty page index buffer span
+  if (not page_index_bytes.size()) {
+    CUDF_LOG_WARN("Hybrid scan reader encountered empty `PageIndex` buffer");
+    return;
+  }
+
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
 
-  // Check if we have page_index buffer, and non-zero row groups and columnchunks
-  // MH: TODO: We will be passed a span of the page index buffer instead of the whole file, so we
-  // can uncomment the use of `min_offset`
-  if (page_index_bytes.size() and row_groups.size() and row_groups.front().columns.size()) {
-    CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
+  CUDF_EXPECTS(row_groups.size() and row_groups.front().columns.size(),
+               "No column chunks in Parquet schema to read PageIndex for");
 
-    // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    // now loop over row groups
-    for (auto& rg : row_groups) {
-      for (auto& col : rg.columns) {
-        // Read the ColumnIndex for this ColumnChunk
-        if (col.column_index_length > 0 && col.column_index_offset > 0) {
-          int64_t const offset = col.column_index_offset - min_offset;
-          cp.init(page_index_bytes.data() + offset, col.column_index_length);
-          ColumnIndex ci;
-          cp.read(&ci);
-          col.column_index = std::move(ci);
-        }
-        // Read the OffsetIndex for this ColumnChunk
-        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-          int64_t const offset = col.offset_index_offset - min_offset;
-          cp.init(page_index_bytes.data() + offset, col.offset_index_length);
-          OffsetIndex oi;
-          cp.read(&oi);
-          col.offset_index = std::move(oi);
-        }
+  CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
+
+  // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
+  int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+  // now loop over row groups
+  for (auto& rg : row_groups) {
+    for (auto& col : rg.columns) {
+      // Read the ColumnIndex for this ColumnChunk
+      if (col.column_index_length > 0 && col.column_index_offset > 0) {
+        int64_t const offset = col.column_index_offset - min_offset;
+        cp.init(page_index_bytes.data() + offset, col.column_index_length);
+        ColumnIndex ci;
+        cp.read(&ci);
+        col.column_index = std::move(ci);
+      }
+      // Read the OffsetIndex for this ColumnChunk
+      if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+        int64_t const offset = col.offset_index_offset - min_offset;
+        cp.init(page_index_bytes.data() + offset, col.offset_index_length);
+        OffsetIndex oi;
+        cp.read(&oi);
+        col.offset_index = std::move(oi);
       }
     }
   }
