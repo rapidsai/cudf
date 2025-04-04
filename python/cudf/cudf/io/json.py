@@ -53,7 +53,20 @@ def _get_cudf_schema_element_from_dtype(
 
 
 def _to_plc_compression(
-    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None],
+    compression: Literal[
+        "infer",
+        "snappy",
+        "gzip",
+        "bz2",
+        "brotli",
+        "zip",
+        "xz",
+        "zlib",
+        "lz4",
+        "lzo",
+        "zstd",
+        None,
+    ],
 ) -> plc.io.types.CompressionType:
     if compression is not None:
         if compression == "snappy":
@@ -297,7 +310,20 @@ def _plc_write_json(
     table: cudf.Series | cudf.DataFrame,
     colnames: list[tuple[abc.Hashable, Any]],
     path_or_buf,
-    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None] = None,
+    compression: Literal[
+        "infer",
+        "snappy",
+        "gzip",
+        "bz2",
+        "brotli",
+        "zip",
+        "xz",
+        "zlib",
+        "lz4",
+        "lzo",
+        "zstd",
+        None,
+    ] = None,
     na_rep: str = "null",
     include_nulls: bool = True,
     lines: bool = False,
@@ -335,7 +361,20 @@ def _plc_write_json(
 def to_json(
     cudf_val: cudf.DataFrame | cudf.Series,
     path_or_buf=None,
-    compression: Literal["infer", "snappy", "gzip", "bz2", "brotli", "zip", "xz", "zlib", "lz4", "lzo", "zstd", None] = None,
+    compression: Literal[
+        "infer",
+        "snappy",
+        "gzip",
+        "bz2",
+        "brotli",
+        "zip",
+        "xz",
+        "zlib",
+        "lz4",
+        "lzo",
+        "zstd",
+        None,
+    ] = None,
     engine: Literal["auto", "pandas", "cudf"] = "auto",
     orient=None,
     storage_options=None,
@@ -374,10 +413,17 @@ def to_json(
             with path_or_buf as file_obj:
                 file_obj = ioutils.get_IOBase_writer(file_obj)
                 _plc_write_json(
-                    cudf_val, colnames, path_or_buf, compression, *args, **kwargs
+                    cudf_val,
+                    colnames,
+                    path_or_buf,
+                    compression,
+                    *args,
+                    **kwargs,
                 )
         else:
-            _plc_write_json(cudf_val, colnames, path_or_buf, compression, *args, **kwargs)
+            _plc_write_json(
+                cudf_val, colnames, path_or_buf, compression, *args, **kwargs
+            )
 
         if return_as_string:
             path_or_buf.seek(0)
