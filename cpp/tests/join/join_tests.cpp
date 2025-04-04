@@ -2097,6 +2097,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
       [5, 6]     4
   */
   lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}, null_at(0)};
+  //lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}};
 
   /*
     [
@@ -2110,6 +2111,7 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     ]
   */
   lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}, null_at(2)};
+  //lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}};
 
   auto column_view_from_device_uvector(rmm::device_uvector<cudf::size_type> const& vector)
   {
@@ -2136,6 +2138,9 @@ struct JoinTestLists : public cudf::test::BaseFixture {
   {
     auto const build_tv = cudf::table_view{{build}};
     auto const probe_tv = cudf::table_view{{probe}};
+
+    cudf::test::print(build);
+    cudf::test::print(probe);
 
     auto const [left_result_map, right_result_map] =
       join_func(build_tv,

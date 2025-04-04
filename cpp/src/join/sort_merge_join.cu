@@ -19,6 +19,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join.hpp>
@@ -339,7 +340,7 @@ preprocess_tables(table_view const left,
   if (compare_nulls == null_equality::EQUAL) { return {left, right, std::nullopt, std::nullopt}; }
 
   auto preprocess_table = [stream, mr](table_view const& tbl) {
-#if SORT_MERGE_JOIN_DEBUG
+    /*
     auto print = [stream](column_view bool_mask) {
       stream.synchronize();
       std::vector<int> h_data(bool_mask.size());
@@ -355,8 +356,8 @@ preprocess_tables(table_view const left,
       std::cout << std::endl;
       return bool_mask;
     };
-#endif
 
+    std::cout << "tbl.num_rows = " << tbl.num_rows() << std::endl;
     auto bool_mask       = make_numeric_column(cudf::data_type{cudf::type_to_id<bool>()},
                                          tbl.num_rows(),
                                          mask_state::UNALLOCATED,
@@ -365,10 +366,13 @@ preprocess_tables(table_view const left,
     auto bool_mask_begin = bool_mask->mutable_view().template begin<bool>();
     thrust::fill(
       rmm::exec_policy(stream), bool_mask_begin, bool_mask_begin + bool_mask->size(), false);
+    print(bool_mask->view());
     for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
       auto col = tbl.column(col_idx);
       if (col.type().id() == type_id::LIST) {
+        std::cout << "col.size() = " << col.size() << std::endl;
         auto col_bool_mask = cudf::lists::contains_nulls(lists_column_view(col), stream, mr);
+        print(col_bool_mask->view());
         bool_mask          = binary_operation(bool_mask->view(),
                                      col_bool_mask->view(),
                                      binary_operator::LOGICAL_OR,
@@ -384,14 +388,26 @@ preprocess_tables(table_view const left,
                       bool_mask_begin,
                       [] __device__(auto val) { return !val; });
     auto non_list_nulls_tbl = cudf::apply_boolean_mask(tbl, *bool_mask, stream, mr);
+    */
 
-    std::vector<size_type> check_columns(tbl.num_columns());
-    std::iota(check_columns.begin(), check_columns.end(), 0);
-    auto non_null_tbl = drop_nulls(non_list_nulls_tbl->view(), check_columns, stream, mr);
+    // remove list rows that have nulls
+    for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
+      auto col = tbl.column(col_idx);
+      if (col.type().id() == type_id::LIST) {
+        auto lcv = lists_column_view(col);
+        std::printf("lcv stats: %d %d %d %d\n", lcv.null_count(), lcv.offsets().size(), lcv.child().null_count(), lcv.child().size());
+        auto [reduced_null_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), lcv.offsets_begin(), lcv.offsets_end(), lcv.offsets_begin() + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
+        std::cout << "num_nulls = " << num_nulls << std::endl;
+      }
+    }
+
+    // drop all null rows
+    auto non_null_tbl = drop_nulls(no_top_null_tbl->view(), check_columns, stream, mr);
     return non_null_tbl;
   };
 
   auto non_null_left  = preprocess_table(left);
+  std::cout << "===============\n";
   auto non_null_right = preprocess_table(right);
   auto nnlv           = non_null_left->view();
   auto nnrv           = non_null_right->view();
@@ -415,7 +431,7 @@ postprocess_indices(table_view const& left,
     return {std::move(larger_indices), std::move(smaller_indices)};
   }
   auto get_mapping = [stream, mr](table_view const& tbl) {
-    auto [tbl_result_mask, tbl_num_nulls] = bitmask_and(tbl, stream, mr);
+    auto [tbl_result_mask, tbl_num_nulls] = detail::bitmask_and(tbl, stream, mr);
     rmm::device_uvector<size_type> tbl_mapping(tbl.num_rows() - tbl_num_nulls, stream, mr);
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
