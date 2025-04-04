@@ -404,7 +404,7 @@ void host_compress(compression_type compression,
   auto const env_var = getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"});
   if (env_var == "AUTO") {
     auto const threshold =
-      getenv_or("LIBCUDF_HOST_COMPRESSION_THRESHOLD", host_compression_auto_threshold);
+      getenv_or("LIBCUDF_HOST_COMPRESSION_THRESHOLD", default_host_compression_auto_threshold);
     return inputs.size() < threshold;
   }
 

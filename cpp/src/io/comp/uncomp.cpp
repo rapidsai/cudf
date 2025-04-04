@@ -741,7 +741,7 @@ void host_decompress(compression_type compression,
   auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
   if (env_var == "AUTO") {
     auto const threshold =
-      getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", host_decompression_auto_threshold);
+      getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold);
     return num_buffers < threshold;
   }
 
