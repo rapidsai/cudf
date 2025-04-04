@@ -24,13 +24,22 @@ namespace cudf::experimental::io::parquet {
 hybrid_scan_reader::hybrid_scan_reader() = default;
 
 hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
-                                       cudf::host_span<uint8_t const> page_index_bytes,
                                        cudf::io::parquet_reader_options const& options)
-  : _impl{std::make_unique<detail::impl>(footer_bytes, page_index_bytes, options)}
+  : _impl{std::make_unique<detail::impl>(footer_bytes, options)}
 {
 }
 
 hybrid_scan_reader::~hybrid_scan_reader() = default;
+
+[[nodiscard]] cudf::io::text::byte_range_info hybrid_scan_reader::get_page_index_bytes() const
+{
+  return _impl->get_page_index_bytes();
+}
+
+void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
+{
+  return _impl->setup_page_index(page_index_bytes);
+}
 
 std::vector<std::vector<size_type>> hybrid_scan_reader::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,

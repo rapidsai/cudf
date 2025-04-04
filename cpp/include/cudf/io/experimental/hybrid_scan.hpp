@@ -64,17 +64,29 @@ class hybrid_scan_reader {
    * subject to highly selective filters
    *
    * @param footer_bytes Host span of parquet file footer bytes
-   * @param page_index_bytes Host span of parquet file page index bytes
    * @param options Parquet reader options
    */
   hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
-                     cudf::host_span<uint8_t const> page_index_bytes,
                      cudf::io::parquet_reader_options const& options);
 
   /**
    * @brief Destructor for the experimental parquet reader class
    */
   ~hybrid_scan_reader();
+
+  /**
+   * @brief Get the byte range of the `PageIndex` in the Parquet file
+   *
+   * @return Byte range of the `PageIndex`
+   */
+  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+
+  /**
+   * @brief Setup the PageIndex
+   *
+   * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
+   */
+  void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
 
   /**
    * @brief Get all available row groups from the parquet file
@@ -150,7 +162,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
-   * @return A pair of boolean column indicating rows that survive the row selection predicate at
+   * @return A pair of boolean column indicating rows that survive the filter predicate at
    *         page-level, and a list of boolean vectors indicating the corresponding surviving data
    *         pages, one per filter column.
    */
@@ -181,7 +193,7 @@ class hybrid_scan_reader {
    * @param valid_data_pages Boolean vectors indicating surviving data pages, one per filter column
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
-   * @param[in,out] row_mask Boolean column representing surviving rows after page pruning
+   * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized filter columns and metadata
@@ -213,7 +225,7 @@ class hybrid_scan_reader {
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
-   * @param row_mask Boolean column representing the final surviving rows mask
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized payload columns and metadata
@@ -235,14 +247,29 @@ class hybrid_scan_reader {
  * @brief Factory function to create a hybrid scan reader
  *
  * @param footer_bytes Host span of parquet file footer bytes
- * @param page_index_bytes Host span of parquet file page index bytes
  * @param options Parquet reader options
  * @return A unique pointer to the hybrid scan reader
  */
 [[nodiscard]] std::unique_ptr<parquet::hybrid_scan_reader> make_hybrid_scan_reader(
-  cudf::host_span<uint8_t const> footer_bytes,
-  cudf::host_span<uint8_t const> page_index_bytes,
-  cudf::io::parquet_reader_options const& options);
+  cudf::host_span<uint8_t const> footer_bytes, cudf::io::parquet_reader_options const& options);
+
+/**
+ * @brief Get the byte range of the `PageIndex` in the Parquet file
+ *
+ * @param reader Hybrid scan reader
+ * @return Byte range of the `PageIndex`
+ */
+[[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader);
+
+/**
+ * @brief Setup the PageIndex
+ *
+ * @param reader Hybrid scan reader
+ * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
+ */
+void setup_page_index(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
+                      cudf::host_span<uint8_t const> page_index_bytes);
 
 /**
  * @brief Get all row groups from the parquet file
@@ -256,7 +283,7 @@ class hybrid_scan_reader {
   cudf::io::parquet_reader_options const& options);
 
 /**
- * @brief Filter the row groups with statistics
+ * @brief Filter the row groups with statistics based on predicate filter
  *
  * @param reader Hybrid scan reader
  * @param row_group_indices Input row groups indices
@@ -285,7 +312,7 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
                       cudf::io::parquet_reader_options const& options);
 
 /**
- * @brief Filter the row groups with dictionary pages
+ * @brief Filter the row groups with dictionary pages based on predicate filter
  *
  * @param reader Hybrid scan reader
  * @param dictionary_page_data Device buffers containing per-column-chunk dictionary page data
@@ -302,7 +329,7 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
   rmm::cuda_stream_view stream);
 
 /**
- * @brief Filter the row groups with bloom filters
+ * @brief Filter the row groups with bloom filters based on predicate filter
  *
  * @param reader Hybrid scan reader
  * @param bloom_filter_data Device buffers containing per-column-chunk bloom filter data
@@ -320,6 +347,7 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
 
 /**
  * @brief Filter data pages of filter columns using statistics containing in `PageIndex` metadata
+ *        based on predicate filter
  *
  * @param reader Hybrid scan reader
  * @param row_group_indices Input row groups indices
@@ -357,7 +385,7 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
  * @param filtered_data_pages Boolean vectors indicating surviving data pages, one per filter column
  * @param row_group_indices Input row groups indices
  * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
- * @param[in,out] row_mask Mutable boolean column indicating surviving rows after page pruning
+ * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
  * @param options Parquet reader options
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Table of materialized filter columns and metadata
@@ -390,7 +418,7 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
  * @param reader Hybrid scan reader
  * @param row_group_indices Input row groups indices
  * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
- * @param row_mask Boolean column representing the final surviving rows mask
+ * @param row_mask Boolean column indicating which rows need to be read
  * @param options Parquet reader options
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Table of materialized payload columns and metadata

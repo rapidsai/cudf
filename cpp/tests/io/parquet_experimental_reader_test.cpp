@@ -181,29 +181,36 @@ auto hybrid_scan(std::vector<char>& buffer,
   // TODO: Currently, we are just using the entire buffer and figuring out bytes within the reader.
   auto const footer_bytes = get_footer_bytes(
     cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
-  auto const page_index_bytes = cudf::host_span<uint8_t const>(  // nullptr, 0);
-    reinterpret_cast<uint8_t const*>(buffer.data()),
-    buffer.size());
 
   // Create hybrid scan reader - API # 1
-  auto const reader =
-    cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, page_index_bytes, options);
+  auto const reader = cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, options);
 
-  // Get all row groups from the reader - API # 2
+  // Get page index bytes from the reader - API # 2
+  auto const page_index_bytes = cudf::experimental::io::get_page_index_bytes(reader);
+
+  // Get a span of page index bytes from the input buffer
+  auto const page_index_buffer = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
+    page_index_bytes.size());
+
+  // Setup page index - API # 3
+  cudf::experimental::io::setup_page_index(reader, page_index_buffer);
+
+  // Get all row groups from the reader - API # 4
   auto input_row_groups = cudf::experimental::io::get_all_row_groups(reader, options);
 
-  // Filter row groups with stats - API # 3
+  // Filter row groups with stats - API # 5
   auto stats_filtered_row_groups =
     cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
   auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
 
-  // Get bloom filter and dictionary page bytes from the reader - API # 4
+  // Get bloom filter and dictionary page bytes from the reader - API # 6
   auto [bloom_filter_bytes, dict_page_bytes] =
     cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
 
-  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 5
+  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 7
 
-  // Filter row groups with bloom filters - API # 6
+  // Filter row groups with bloom filters - API # 8
   std::vector<cudf::size_type> bloom_filtered_row_groups;
   bloom_filtered_row_groups.reserve(filtered_row_groups.size());
   if (bloom_filter_bytes.size()) {
@@ -214,13 +221,13 @@ auto hybrid_scan(std::vector<char>& buffer,
     filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
   }
 
-  // Filter data pages with `PageIndex` stats - API # 7
+  // Filter data pages with `PageIndex` stats - API # 9
   auto [row_mask, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
     reader, stats_filtered_row_groups, options, stream, mr);
 
   EXPECT_EQ(data_page_validity.size(), num_filter_columns);
 
-  // Get column chunk byte ranges from the reader - API # 8
+  // Get column chunk byte ranges from the reader - API # 10
   auto const filter_column_chunk_byte_ranges =
     cudf::experimental::io::get_filter_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
@@ -229,7 +236,7 @@ auto hybrid_scan(std::vector<char>& buffer,
   auto filter_column_chunk_buffers =
     fetch_column_chunk_buffers(buffer, filter_column_chunk_byte_ranges, {}, stream, mr);
 
-  // Materialize the table with only the filter columns - API # 9
+  // Materialize the table with only the filter columns - API # 11
   auto [filter_table, filter_metadata] =
     cudf::experimental::io::materialize_filter_columns(reader,
                                                        data_page_validity,
@@ -239,7 +246,7 @@ auto hybrid_scan(std::vector<char>& buffer,
                                                        options,
                                                        stream);
 
-  // Get column chunk byte ranges from the reader - API # 10
+  // Get column chunk byte ranges from the reader - API # 12
   auto const payload_column_chunk_byte_ranges =
     cudf::experimental::io::get_payload_column_chunk_byte_ranges(
       reader, stats_filtered_row_groups, options);
@@ -248,7 +255,7 @@ auto hybrid_scan(std::vector<char>& buffer,
   [[maybe_unused]] auto payload_column_chunk_buffers =
     fetch_column_chunk_buffers(buffer, payload_column_chunk_byte_ranges, {}, stream, mr);
 
-  // Materialize the table with only the payload columns - API # 11
+  // Materialize the table with only the payload columns - API # 13
   [[maybe_unused]] auto [payload_table, payload_metadata] =
     cudf::experimental::io::materialize_payload_columns(reader,
                                                         stats_filtered_row_groups,

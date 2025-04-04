@@ -744,7 +744,8 @@ void impl::prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_
 {
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->add_row_groups(row_group_indices, options.get_skip_rows(), options.get_num_rows());
+    _metadata->select_row_groups(
+      row_group_indices, options.get_skip_rows(), options.get_num_rows());
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),

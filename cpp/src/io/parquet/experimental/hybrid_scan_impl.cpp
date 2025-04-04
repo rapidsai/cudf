@@ -512,15 +512,23 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
 }
 
 impl::impl(cudf::host_span<uint8_t const> footer_bytes,
-           cudf::host_span<uint8_t const> page_index_bytes,
            cudf::io::parquet_reader_options const& options)
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
-    page_index_bytes,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+}
+
+cudf::io::text::byte_range_info impl::get_page_index_bytes() const
+{
+  return _metadata->get_page_index_bytes();
+}
+
+void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
+{
+  _metadata->setup_page_index(page_index_bytes);
 }
 
 void impl::select_columns(read_mode read_mode, cudf::io::parquet_reader_options const& options)
@@ -852,8 +860,8 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
   _stream = stream;
 }
 
-template <typename RowMaskType>
-cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskType row_mask)
+template <typename RowMaskView>
+cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskView row_mask)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -919,12 +927,12 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, Row
   return finalize_output(read_mode, out_metadata, out_columns, row_mask);
 }
 
-template <typename RowMaskType>
+template <typename RowMaskView>
 cudf::io::table_with_metadata impl::finalize_output(
   read_mode read_mode,
   table_metadata& out_metadata,
   std::vector<std::unique_ptr<column>>& out_columns,
-  RowMaskType row_mask)
+  RowMaskView row_mask)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
@@ -960,7 +968,7 @@ cudf::io::table_with_metadata impl::finalize_output(
 
   // If reading filter columns, compute the predicate, apply it to the table, and update the input
   // row mask to reflect the final surviving rows.
-  if constexpr (std::is_same_v<RowMaskType, cudf::mutable_column_view>) {
+  if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_mode == read_mode::FILTER_COLUMNS, "Invalid read mode");
     // Apply the row selection predicate on the read table to get the final row mask
     auto final_row_mask =

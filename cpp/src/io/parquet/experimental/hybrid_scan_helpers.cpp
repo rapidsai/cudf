@@ -47,72 +47,26 @@ using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
 using input_column_info              = cudf::io::parquet::detail::input_column_info;
 using size_type                      = cudf::size_type;
 
-metadata::metadata(cudf::host_span<uint8_t const> footer_bytes,
-                   cudf::host_span<uint8_t const> page_index_bytes)
+metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
-  // column index and offset index are encoded back to back.
-  // the first column of the first row group will have the first column index, the last
-  // column of the last row group will have the final offset index.
-
-  // FIXME: Remove this. Only temporary stuff to get PageIndex offsets.
-  if (page_index_bytes.empty() and row_groups.size() and row_groups.front().columns.size()) {
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
-    std::cout << "min_offset: " << min_offset << " max_offset: " << max_offset << std::endl;
-    CUDF_EXPECTS(!page_index_bytes.empty(), "Empty page index");
-  }
-
-  // Check if we have page_index buffer, and non-zero row groups and columnchunks
-  // MH: TODO: We will be passed a span of the page index buffer instead of the whole file, so we
-  // can uncomment the use of `min_offset`
-  if (page_index_bytes.size() and row_groups.size() and row_groups.front().columns.size()) {
-    // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
-    // int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    // now loop over row groups
-    for (auto& rg : row_groups) {
-      for (auto& col : rg.columns) {
-        // Read the ColumnIndex for this ColumnChunk
-        if (col.column_index_length > 0 && col.column_index_offset > 0) {
-          int64_t const offset = col.column_index_offset;  // - min_offset;
-          cp.init(page_index_bytes.data() + offset, col.column_index_length);
-          ColumnIndex ci;
-          cp.read(&ci);
-          col.column_index = std::move(ci);
-        }
-        // Read the OffsetIndex for this ColumnChunk
-        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-          int64_t const offset = col.offset_index_offset;  // - min_offset;
-          cp.init(page_index_bytes.data() + offset, col.offset_index_length);
-          OffsetIndex oi;
-          cp.read(&oi);
-          col.offset_index = std::move(oi);
-        }
-      }
-    }
-  }
-
   sanitize_schema();
 }
 
-aggregate_reader_metadata::aggregate_reader_metadata(
-  cudf::host_span<uint8_t const> footer_bytes,
-  cudf::host_span<uint8_t const> page_index_bytes,
-  bool use_arrow_schema,
-  bool has_cols_from_mismatched_srcs)
+aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t const> footer_bytes,
+                                                     bool use_arrow_schema,
+                                                     bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata_base({}, false, false)
 {
   // Re-initialize internal variables here as base class was initialized without a source
-  per_file_metadata =
-    std::vector<metadata_base>{metadata{footer_bytes, page_index_bytes}.get_file_metadata()};
-  keyval_maps     = collect_keyval_metadata();
-  schema_idx_maps = init_schema_idx_maps(has_cols_from_mismatched_srcs);
-  num_rows        = calc_num_rows();
-  num_row_groups  = calc_num_row_groups();
+  per_file_metadata = std::vector<metadata_base>{metadata{footer_bytes}.get_file_metadata()};
+  keyval_maps       = collect_keyval_metadata();
+  schema_idx_maps   = init_schema_idx_maps(has_cols_from_mismatched_srcs);
+  num_rows          = calc_num_rows();
+  num_row_groups    = calc_num_row_groups();
 
   // Force all columns to be nullable
   auto& schema = per_file_metadata.front().schema;
@@ -128,6 +82,57 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     std::for_each(keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) {
       pfm.erase(cudf::io::parquet::detail::ARROW_SCHEMA_KEY);
     });
+  }
+}
+
+cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
+{
+  auto& schema = per_file_metadata.front();
+
+  if (schema.row_groups.size() and schema.row_groups.front().columns.size()) {
+    int64_t const min_offset = schema.row_groups.front().columns.front().column_index_offset;
+    auto const& last_col     = schema.row_groups.back().columns.back();
+    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    return {min_offset, (max_offset - min_offset)};
+  }
+
+  return {};
+}
+
+void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
+{
+  auto& schema     = per_file_metadata.front();
+  auto& row_groups = schema.row_groups;
+
+  // Check if we have page_index buffer, and non-zero row groups and columnchunks
+  // MH: TODO: We will be passed a span of the page index buffer instead of the whole file, so we
+  // can uncomment the use of `min_offset`
+  if (page_index_bytes.size() and row_groups.size() and row_groups.front().columns.size()) {
+    CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
+
+    // Set the first ColumnChunk's offset of ColumnIndex as the adjusted zero offset
+    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+    // now loop over row groups
+    for (auto& rg : row_groups) {
+      for (auto& col : rg.columns) {
+        // Read the ColumnIndex for this ColumnChunk
+        if (col.column_index_length > 0 && col.column_index_offset > 0) {
+          int64_t const offset = col.column_index_offset - min_offset;
+          cp.init(page_index_bytes.data() + offset, col.column_index_length);
+          ColumnIndex ci;
+          cp.read(&ci);
+          col.column_index = std::move(ci);
+        }
+        // Read the OffsetIndex for this ColumnChunk
+        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+          int64_t const offset = col.offset_index_offset - min_offset;
+          cp.init(page_index_bytes.data() + offset, col.offset_index_length);
+          OffsetIndex oi;
+          cp.read(&oi);
+          col.offset_index = std::move(oi);
+        }
+      }
+    }
   }
 }
 
@@ -512,9 +517,10 @@ std::
 }
 
 std::tuple<int64_t, size_type, std::vector<row_group_info>>
-aggregate_reader_metadata::add_row_groups(host_span<std::vector<size_type> const> row_group_indices,
-                                          int64_t row_start,
-                                          std::optional<size_type> const& row_count)
+aggregate_reader_metadata::select_row_groups(
+  host_span<std::vector<size_type> const> row_group_indices,
+  int64_t row_start,
+  std::optional<size_type> const& row_count)
 {
   // Compute the number of rows to read and skip
   auto [rows_to_skip, rows_to_read] = [&]() {

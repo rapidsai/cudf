@@ -49,12 +49,20 @@ class impl {
    * Parquet files subject to highly selective filters
    *
    * @param footer_bytes Host span of parquet file footer bytes
-   * @param page_index_bytes Host span of parquet file page index bytes
    * @param options Parquet reader options
    */
   explicit impl(cudf::host_span<uint8_t const> footer_bytes,
-                cudf::host_span<uint8_t const> page_index_bytes,
                 cudf::io::parquet_reader_options const& options);
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_page_index_bytes
+   */
+  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan::setup_page_index
+   */
+  void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::get_all_row_groups
@@ -338,19 +346,20 @@ class impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
-   * @tparam RowMaskType Type of the row mask column view
+   * @tparam RowMaskView View type of the row mask column
    *
    * @param read_mode The read mode
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
-   * @param row_mask Boolean column indicating rows that survived the row selection predicate
+   * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
+   *                         for filter columns, or after materialize step for payload columns
    * @return The output table along with columns' metadata
    */
-  template <typename RowMaskType>
+  template <typename RowMaskView>
   cudf::io::table_with_metadata finalize_output(read_mode read_mode,
                                                 table_metadata& out_metadata,
                                                 std::vector<std::unique_ptr<column>>& out_columns,
-                                                RowMaskType row_mask);
+                                                RowMaskView row_mask);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -409,12 +418,14 @@ class impl {
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
+   * @tparam RowMaskView View type of the row mask column
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param row_mask Boolean column indicating rows that survived the row selection predicate
+   * @param[in,out] row_mask Boolean column indicating which rows need to be read after page-pruning
+   *                         for filter columns, or after materialize step for payload columns
    * @return The output table along with columns' metadata
    */
-  template <typename RowMaskType>
-  cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskType row_mask);
+  template <typename RowMaskView>
+  cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskView row_mask);
 
   /**
    * @brief Check if the user has specified custom row bounds
