@@ -30,7 +30,7 @@ def _(
     ):
         # TODO: Handle non-pointwise expressions.
         return _lower_ir_fallback(
-            ir, rec, msg=f"Selection {ir} does not support multiple partitions."
+            ir, rec, msg="This selection not support for multiple partitions."
         )
     new_node = ir.reconstruct([child])
     partition_info[new_node] = pi

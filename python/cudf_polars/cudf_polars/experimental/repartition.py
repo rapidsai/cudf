@@ -48,6 +48,6 @@ def _(
     return {
         (key_name, 0): (
             _concat,
-            *[(child_name, idx) for idx in range(partition_info[child].count)],
+            *((child_name, idx) for idx in range(partition_info[child].count)),
         )
     }

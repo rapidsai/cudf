@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -56,14 +55,14 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        fallback_mode = rec.state.get("config_options", ConfigOptions({})).get(
+        fallback_mode = rec.state["config_options"].get(
             "executor_options.fallback_mode", default="warn"
         )
         if fallback_mode == "warn":
             warnings.warn(msg, stacklevel=2)
         elif fallback_mode == "raise":
             raise NotImplementedError(msg)
-        elif fallback_mode != "silent":  # pragma: no cover
+        elif fallback_mode != "silent":
             raise ValueError(
                 f"{fallback_mode} is not a supported 'fallback_mode' option. "
                 "Please use 'warn', 'raise', or 'silent'."

@@ -205,7 +205,7 @@ def _(
         return _lower_ir_fallback(
             ir,
             rec,
-            msg=f"GroupBy does not support multiple partitions for keys:\n{ir.keys}",
+            msg="group_by does not support multiple partitions for non-pointwise keys.",
         )
 
     # Check if we are dealing with any high-cardinality columns
@@ -237,7 +237,7 @@ def _(
         )
     except NotImplementedError:
         return _lower_ir_fallback(
-            ir, rec, msg=f"Failed to decompose groupby aggs: {ir.agg_requests}."
+            ir, rec, msg="Failed to decompose groupby aggs for multiple partitions."
         )
 
     # Partition-wise groupby operation

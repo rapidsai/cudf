@@ -218,15 +218,15 @@ def _(
 def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
     # Check zlice
     if ir.zlice is not None:  # pragma: no cover
         return _lower_ir_fallback(
             ir, rec, msg="zlice is not supported for multiple partitions."
         )
+
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
 
     # Partition count is the sum of all child partitions
     count = sum(partition_info[c].count for c in children)
