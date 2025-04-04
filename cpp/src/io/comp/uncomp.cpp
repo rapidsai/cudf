@@ -683,7 +683,7 @@ void host_decompress(compression_type compression,
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
-      auto h_out = cudf::detail::make_pinned_vector_sync<uint8_t>(d_out.size(), cur_stream);
+      auto h_out             = cudf::detail::make_pinned_vector<uint8_t>(d_out.size(), cur_stream);
       auto const uncomp_size = decompress(compression, h_in, h_out);
       h_in.clear();  // Free pinned memory as soon as possible
 

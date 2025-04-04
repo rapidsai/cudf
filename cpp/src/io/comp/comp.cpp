@@ -358,7 +358,7 @@ void host_compress(compression_type compression,
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector_sync<compression_result>(num_chunks, stream);
+  auto h_results = cudf::detail::make_pinned_vector<compression_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
