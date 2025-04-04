@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, overload
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
 from distributed.utils import log_errors
+from rapidsmp.integrations.dask.spilling import register_dask_serialize
 
 import pylibcudf as plc
 import rmm
@@ -102,3 +103,6 @@ def register() -> None:
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
+
+    # Register serializer for spillable DataFrames.
+    register_dask_serialize()
