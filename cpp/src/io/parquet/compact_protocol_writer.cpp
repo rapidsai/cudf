@@ -115,17 +115,19 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 size_t CompactProtocolWriter::write(SchemaElement const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.type != UNDEFINED_TYPE) {
-    c.field_int(1, s.type);
+  if (s.type != Type::UNDEFINED_TYPE) {
+    c.field_int(1, static_cast<int32_t>(s.type));
     if (s.type_length != 0) { c.field_int(2, s.type_length); }
   }
-  if (s.repetition_type != NO_REPETITION_TYPE) { c.field_int(3, s.repetition_type); }
+  if (s.repetition_type != FieldRepetitionType::NO_REPETITION_TYPE) {
+    c.field_int(3, static_cast<int32_t>(s.repetition_type));
+  }
   c.field_string(4, s.name);
 
-  if (s.type == UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
+  if (s.type == Type::UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
   if (s.converted_type.has_value()) {
-    c.field_int(6, s.converted_type.value());
-    if (s.converted_type == DECIMAL) {
+    c.field_int(6, static_cast<int32_t>(s.converted_type.value()));
+    if (s.converted_type == ConvertedType::DECIMAL) {
       c.field_int(7, s.decimal_scale);
       c.field_int(8, s.decimal_precision);
     }
@@ -176,10 +178,10 @@ size_t CompactProtocolWriter::write(ColumnChunk const& s)
 size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, s.type);
+  c.field_int(1, static_cast<int32_t>(s.type));
   c.field_int_list(2, s.encodings);
   c.field_string_list(3, s.path_in_schema);
-  c.field_int(4, s.codec);
+  c.field_int(4, static_cast<int32_t>(s.codec));
   c.field_int(5, s.num_values);
   c.field_int(6, s.total_uncompressed_size);
   c.field_int(7, s.total_compressed_size);

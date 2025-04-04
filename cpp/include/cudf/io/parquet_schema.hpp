@@ -34,7 +34,7 @@ constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1'
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */
-enum Type : int8_t {
+enum class Type : int8_t {
   UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
   INT32                = 1,
@@ -49,7 +49,7 @@ enum Type : int8_t {
 /**
  * @brief High-level data types in Parquet, determines how data is logically interpreted
  */
-enum ConvertedType {
+enum class ConvertedType : int8_t {
   UNKNOWN = -1,  // No type information present
   UTF8    = 0,   // a BYTE_ARRAY may contain UTF8 encoded chars
   MAP     = 1,   // a map is converted as an optional field containing a repeated key/value pair
@@ -102,7 +102,7 @@ enum class Encoding : uint8_t {
 /**
  * @brief Compression codec used for compressed data pages
  */
-enum Compression {
+enum class Compression : uint8_t {
   UNCOMPRESSED = 0,
   SNAPPY       = 1,
   GZIP         = 2,
@@ -116,7 +116,7 @@ enum Compression {
 /**
  * @brief Compression codec used for compressed data pages
  */
-enum FieldRepetitionType {
+enum class FieldRepetitionType : int8_t {
   NO_REPETITION_TYPE = -1,
   REQUIRED = 0,  // This field is required (can not be null) and each record has exactly 1 value.
   OPTIONAL = 1,  // The field is optional (can be null) and each record has 0 or 1 values.
@@ -137,7 +137,7 @@ enum class PageType : uint8_t {
  * @brief Enum to annotate whether lists of min/max elements inside ColumnIndex
  * are ordered and if so, in which direction.
  */
-enum BoundaryOrder {
+enum class BoundaryOrder : uint8_t {
   UNORDERED  = 0,
   ASCENDING  = 1,
   DESCENDING = 2,
@@ -299,11 +299,11 @@ struct ColumnOrder {
  */
 struct SchemaElement {
   // 1: parquet physical type for output
-  Type type = UNDEFINED_TYPE;
+  Type type = Type::UNDEFINED_TYPE;
   // 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   int32_t type_length = 0;
   // 3: repetition of the field
-  FieldRepetitionType repetition_type = REQUIRED;
+  FieldRepetitionType repetition_type = FieldRepetitionType::REQUIRED;
   // 4: name of the field
   std::string name = "";
   // 5: nested fields
@@ -361,26 +361,31 @@ struct SchemaElement {
   //     required int32 num;
   //  };
   // }
-  [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  [[nodiscard]] bool is_stub() const
+  {
+    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1;
+  }
 
   // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
   // One-level LIST encoding: Only allows required lists with required cells:
   //   repeated value_type name
   [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
-    return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
+    return repetition_type == FieldRepetitionType::REPEATED and num_children == 0 and
+           not parent.is_list();
   }
 
   // returns true if the element is a list
-  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
+  [[nodiscard]] bool is_list() const { return converted_type == ConvertedType::LIST; }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
   [[nodiscard]] bool is_struct() const
   {
-    return type == UNDEFINED_TYPE &&
+    return type == Type::UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
+           ((repetition_type != FieldRepetitionType::REPEATED) ||
+            (repetition_type == FieldRepetitionType::REPEATED && num_children > 1));
   }
 };
 
@@ -490,14 +495,14 @@ struct SortingColumn {
  */
 struct ColumnChunkMetaData {
   // Type of this column
-  Type type = BOOLEAN;
+  Type type = Type::BOOLEAN;
   // Set of all encodings used for this column. The purpose is to validate
   // whether we can decode those pages.
   std::vector<Encoding> encodings;
   // Path in schema
   std::vector<std::string> path_in_schema;
   // Compression codec
-  Compression codec = UNCOMPRESSED;
+  Compression codec = Compression::UNCOMPRESSED;
   // Number of values in this column
   int64_t num_values = 0;
   // Total byte size of all uncompressed pages in this column chunk (including the headers)

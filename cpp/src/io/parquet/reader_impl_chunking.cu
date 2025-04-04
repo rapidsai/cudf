@@ -758,7 +758,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  * @brief Stores basic information about pages compressed with a specific codec.
  */
 struct codec_stats {
-  Compression compression_type  = UNCOMPRESSED;
+  Compression compression_type  = Compression::UNCOMPRESSED;
   size_t num_pages              = 0;
   int32_t max_decompressed_size = 0;
   size_t total_decomp_size      = 0;
@@ -803,14 +803,14 @@ struct codec_stats {
 {
   CUDF_FUNC_RANGE();
 
-  std::array codecs{codec_stats{BROTLI},
-                    codec_stats{GZIP},
-                    codec_stats{LZ4_RAW},
-                    codec_stats{SNAPPY},
-                    codec_stats{ZSTD}};
+  std::array codecs{codec_stats{Compression::BROTLI},
+                    codec_stats{Compression::GZIP},
+                    codec_stats{Compression::LZ4_RAW},
+                    codec_stats{Compression::SNAPPY},
+                    codec_stats{Compression::ZSTD}};
 
-  auto is_codec_supported = [&codecs](int8_t codec) {
-    if (codec == UNCOMPRESSED) return true;
+  auto is_codec_supported = [&codecs](Compression codec) {
+    if (codec == Compression::UNCOMPRESSED) return true;
     return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
              return codec == cstats.compression_type;
            }) != codecs.end();
@@ -1233,7 +1233,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     // Get the decompressed size of dictionary pages to help estimate memory usage
     auto const decomp_dict_data_size = std::accumulate(
       pass.pages.begin(), pass.pages.end(), size_t{0}, [&pass](size_t acc, auto const& page) {
-        if (pass.chunks[page.chunk_idx].codec != UNCOMPRESSED &&
+        if (pass.chunks[page.chunk_idx].codec != Compression::UNCOMPRESSED &&
             (page.flags & PAGEINFO_FLAGS_DICTIONARY)) {
           return acc + page.uncompressed_page_size;
         }
@@ -1543,7 +1543,7 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       schema.type == Type::BYTE_ARRAY and _strings_to_categorical,
                                        rg.source_index));
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
