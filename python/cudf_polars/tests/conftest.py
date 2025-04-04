@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import os
+
 import pytest
 
 DISTRIBUTED_CLUSTER_KEY = pytest.StashKey[dict]()
@@ -48,13 +50,15 @@ def pytest_sessionstart(session):
         and session.config.getoption("--executor") == "dask-experimental"
     ):
         from dask import config
-        from dask.distributed import Client, LocalCluster
+        from dask.distributed import Client
+        from dask_cuda import LocalCUDACluster
 
         # Avoid "Sending large graph of size ..." warnings
         # (We expect these for tests using literal/random arrays)
         config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
 
-        cluster = LocalCluster()
+        n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
+        cluster = LocalCUDACluster(n_workers=n_workers)
         client = Client(cluster)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
 
