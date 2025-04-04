@@ -4,11 +4,13 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
+from .utils cimport _get_stream
 
 __all__ = ["Table"]
 
@@ -45,7 +47,7 @@ cdef class Table:
         return table_view(c_columns)
 
     @staticmethod
-    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):
+    cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=None):
         """Create a Table from a libcudf table.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -55,8 +57,9 @@ cdef class Table:
         cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
+        stream = _get_stream(stream)
         return Table([
-            Column.from_libcudf(move(c_columns[i]))
+            Column.from_libcudf(move(c_columns[i]), stream)
             for i in range(c_columns.size())
         ])
 
