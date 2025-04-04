@@ -65,8 +65,8 @@ def _to_plc_compression(
         "lz4",
         "lzo",
         "zstd",
-        None,
-    ],
+    ]
+    | None,
 ) -> plc.io.types.CompressionType:
     if compression is not None:
         if compression == "snappy":
@@ -102,7 +102,15 @@ def read_json(
     orient=None,
     dtype=None,
     lines: bool = False,
-    compression="infer",
+    compression: Literal[
+        "infer",
+        "snappy",
+        "gzip",
+        "zstd",
+        "bz2",
+        "zip",
+    ]
+    | None = "infer",
     byte_range: None | list[int] = None,
     keep_quotes: bool = False,
     storage_options=None,
@@ -311,19 +319,11 @@ def _plc_write_json(
     colnames: list[tuple[abc.Hashable, Any]],
     path_or_buf,
     compression: Literal[
-        "infer",
         "snappy",
         "gzip",
-        "bz2",
-        "brotli",
-        "zip",
-        "xz",
-        "zlib",
-        "lz4",
-        "lzo",
         "zstd",
-        None,
-    ] = None,
+    ]
+    | None = None,
     na_rep: str = "null",
     include_nulls: bool = True,
     lines: bool = False,
@@ -362,19 +362,11 @@ def to_json(
     cudf_val: cudf.DataFrame | cudf.Series,
     path_or_buf=None,
     compression: Literal[
-        "infer",
         "snappy",
         "gzip",
-        "bz2",
-        "brotli",
-        "zip",
-        "xz",
-        "zlib",
-        "lz4",
-        "lzo",
         "zstd",
-        None,
-    ] = None,
+    ]
+    | None = None,
     engine: Literal["auto", "pandas", "cudf"] = "auto",
     orient=None,
     storage_options=None,
