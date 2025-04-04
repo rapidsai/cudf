@@ -3460,7 +3460,6 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{cudf::host_span<uint8_t>(cdata.data(), cdata.size())})
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
-      .compression(comptype)
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 

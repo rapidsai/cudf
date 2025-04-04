@@ -230,8 +230,6 @@ table_with_metadata read_json(json_reader_options options,
 {
   CUDF_FUNC_RANGE();
 
-  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
-
   auto datasources = make_datasources(options.get_source(),
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
