@@ -3430,6 +3430,7 @@ INSTANTIATE_TEST_SUITE_P(JsonCompressedIOTest,
                          JsonCompressedIOTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
                                            cudf::io::compression_type::SNAPPY,
+                                           cudf::io::compression_type::ZSTD,
                                            cudf::io::compression_type::NONE));
 
 TEST_P(JsonCompressedIOTest, BasicJsonLines)
@@ -3442,8 +3443,7 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
   if (comptype != cudf::io::compression_type::NONE) {
     cdata = cudf::io::detail::compress(
       comptype,
-      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()),
-      cudf::get_default_stream());
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()));
     auto decomp_out_buffer = cudf::io::detail::decompress(
       comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
     std::string const expected = R"({"0":1, "1":1.1}

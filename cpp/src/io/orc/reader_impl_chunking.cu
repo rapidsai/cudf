@@ -439,7 +439,7 @@ void reader_impl::preprocess_file(read_mode mode)
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
                          cumulative_size_plus{});
-  total_stripe_sizes.device_to_host_sync(_stream);
+  total_stripe_sizes.device_to_host(_stream);
 
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
@@ -679,7 +679,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
                                    decompressor.GetBlockSize(),
                                    decompressor.GetLog2MaxCompressionRatio(),
                                    _stream);
-      compinfo.device_to_host_sync(_stream);
+      compinfo.device_to_host(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info           = stream_info[stream_idx];
@@ -709,7 +709,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),
                          cumulative_size_plus{});
-  stripe_decomp_sizes.device_to_host_sync(_stream);
+  stripe_decomp_sizes.device_to_host(_stream);
 
   auto const decode_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *

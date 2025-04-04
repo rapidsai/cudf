@@ -263,6 +263,19 @@ TEST_F(StringsCaseTest, LongStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 
+TEST_F(StringsCaseTest, LongStringsSpecial)
+{
+  auto input = cudf::test::strings_column_wrapper{
+    "abcdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ȺßCDÉFGHİJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto results  = cudf::strings::to_lower(view);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ⱥßcdéfghi̇jklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsCaseTest, EmptyStringsColumn)
 {
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();

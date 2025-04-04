@@ -228,6 +228,8 @@ def _(
         # TODO: with versioning, rename on the rust side
         skip_rows, n_rows = n_rows
 
+    if file_options.include_file_paths is not None:
+        raise NotImplementedError("No support for including file path in scan")
     row_index = file_options.row_index
     return ir.Scan(
         schema,
@@ -301,38 +303,12 @@ def _(
     # Join key dtypes are dependent on the schema of the left and
     # right inputs, so these must be translated with the relevant
     # input active.
-    def adjust_literal_dtype(literal: expr.Literal) -> expr.Literal:  # pragma: no cover
-        if literal.dtype.id() == plc.types.TypeId.INT32:
-            plc_int64 = plc.types.DataType(plc.types.TypeId.INT64)
-            return expr.Literal(
-                plc_int64,
-                pa.scalar(literal.value.as_py(), type=plc.interop.to_arrow(plc_int64)),
-            )
-        return literal
-
-    def maybe_adjust_binop(e) -> expr.Expr:  # pragma: no cover
-        if isinstance(e.value, expr.BinOp):
-            left, right = e.value.children
-            if isinstance(left, expr.Col) and isinstance(right, expr.Literal):
-                e.value.children = (left, adjust_literal_dtype(right))
-            elif isinstance(left, expr.Literal) and isinstance(right, expr.Col):
-                e.value.children = (adjust_literal_dtype(left), right)
-        return e
-
-    def translate_expr_and_maybe_fix_binop_args(translator, exprs):
-        return [
-            maybe_adjust_binop(translate_named_expr(translator, n=e)) for e in exprs
-        ]
-
     with set_node(translator.visitor, node.input_left):
-        # TODO: There's bug in the polars type coercion phase.
-        # Use translate_named_expr directly once our minimum
-        # supported polars version is 1.22
         inp_left = translator.translate_ir(n=None)
-        left_on = translate_expr_and_maybe_fix_binop_args(translator, node.left_on)
+        left_on = [translate_named_expr(translator, n=e) for e in node.left_on]
     with set_node(translator.visitor, node.input_right):
         inp_right = translator.translate_ir(n=None)
-        right_on = translate_expr_and_maybe_fix_binop_args(translator, node.right_on)
+        right_on = [translate_named_expr(translator, n=e) for e in node.right_on]
 
     if (how := node.options[0]) in {
         "Inner",
@@ -343,7 +319,15 @@ def _(
         "Semi",
         "Anti",
     }:
-        return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
+        return ir.Join(
+            schema,
+            left_on,
+            right_on,
+            node.options,
+            translator.config_options,
+            inp_left,
+            inp_right,
+        )
     else:
         how, op1, op2 = node.options[0]
         if how != "IEJoin":
@@ -562,16 +546,19 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }:
             column, chars = (translator.translate_expr(n=n) for n in node.input)
             if isinstance(chars, expr.Literal):
-                if chars.value == pa.scalar(""):
-                    # No-op in polars, but libcudf uses empty string
-                    # as signifier to remove whitespace.
-                    return column
-                elif chars.value == pa.scalar(None):
+                # We check for null first because we want to use the
+                # chars pyarrow type, but it is invalid to try and
+                # produce a string scalar with a null dtype.
+                if chars.value == pa.scalar(None, type=pa.null()):
                     # Polars uses None to mean "strip all whitespace"
                     chars = expr.Literal(
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
+                elif chars.value == pa.scalar("", type=chars.value.type):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
             return expr.StringFunction(
                 dtype,
                 expr.StringFunction.Name.from_polars(name),
@@ -678,7 +665,9 @@ def _(node: pl_expr.Window, translator: Translator, dtype: plc.DataType) -> expr
 @_translate_expr.register
 def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        data = pl.Series._from_pyseries(node.value).to_arrow()
+        data = pl.Series._from_pyseries(node.value).to_arrow(
+            compat_level=dtypes.TO_ARROW_COMPAT_LEVEL
+        )
         return expr.LiteralColumn(
             dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
         )

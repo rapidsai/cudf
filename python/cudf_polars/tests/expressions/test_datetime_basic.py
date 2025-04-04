@@ -137,6 +137,37 @@ def test_date_extract(field):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize("format", ["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"])
+def test_strftime_timestamp(format):
+    ldf = pl.LazyFrame(
+        {
+            "dates": [
+                datetime.date(2024, 1, 1),
+                datetime.date(2024, 10, 11),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("dates").dt.strftime(format))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("format", ["iso", "polars"])
+def test_strftime_duration(format):
+    ldf = pl.LazyFrame(
+        {
+            "durations": [
+                datetime.timedelta(days=1, seconds=3600),
+                datetime.timedelta(days=2, seconds=7200),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("durations").dt.strftime(format))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
@@ -222,5 +253,46 @@ def test_ordinal_day(start_date, end_date):
     q = df.with_columns(
         pl.col("date").dt.ordinal_day().alias("day_of_year"),
     )
+
+    assert_gpu_result_equal(q)
+
+
+def test_isoweek():
+    df = pl.DataFrame(
+        {
+            "date": [
+                datetime.date(1999, 12, 27),
+                datetime.date(2000, 1, 3),
+                datetime.date(2000, 6, 15),
+                datetime.date(2000, 12, 31),
+                datetime.date(2001, 1, 1),
+                datetime.date(2001, 12, 30),
+                datetime.date(2002, 1, 1),
+            ]
+        }
+    ).lazy()
+
+    q = df.with_columns(pl.col("date").dt.week().alias("isoweek"))
+
+    assert_gpu_result_equal(q)
+
+
+def test_isoyear():
+    df = pl.DataFrame(
+        {
+            "date": [
+                datetime.date(1999, 12, 27),
+                datetime.date(2000, 1, 3),
+                datetime.date(2000, 2, 29),
+                datetime.date(2000, 6, 15),
+                datetime.date(2000, 12, 31),
+                datetime.date(2001, 1, 1),
+                datetime.date(2001, 12, 30),
+                datetime.date(2002, 1, 1),
+            ]
+        }
+    ).lazy()
+
+    q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
 
     assert_gpu_result_equal(q)
