@@ -68,6 +68,8 @@ compression_type infer_compression_type(compression_type compression, source_inf
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
   if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "zstd") { return compression_type::ZSTD; }
+  if (ext == "sz") { return compression_type::SNAPPY; }
   if (ext == "xz") { return compression_type::XZ; }
 
   return compression_type::NONE;
@@ -229,6 +231,8 @@ table_with_metadata read_json(json_reader_options options,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
 
   auto datasources = make_datasources(options.get_source(),
                                       options.get_byte_range_offset(),
