@@ -18,6 +18,7 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -131,7 +132,7 @@ class CompactProtocolReader {
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
   {
-    return 32 - CountLeadingZeros32(max_level);
+    return numeric::detail::count_significant_bits(max_level);
   }
   bool InitSchema(FileMetaData* md);
 

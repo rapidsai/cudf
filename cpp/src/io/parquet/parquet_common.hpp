@@ -42,22 +42,4 @@ constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 // if this column has a list parent anywhere above it in the hierarchy
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT = (1 << 25);
 
-/**
- * @brief Count the number of leading zeros in an unsigned integer
- */
-static inline int CountLeadingZeros32(uint32_t value)
-{
-#if defined(__clang__) || defined(__GNUC__)
-  if (value == 0) return 32;
-  return static_cast<int>(__builtin_clz(value));
-#else
-  int bitpos = 0;
-  while (value != 0) {
-    value >>= 1;
-    ++bitpos;
-  }
-  return 32 - bitpos;
-#endif
-}
-
 }  // namespace cudf::io::parquet::detail

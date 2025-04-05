@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -142,7 +143,8 @@ uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t 
     // Fits into a single tag byte
     *out_it++ = n << 2;
   } else {
-    auto const log2_n = 31 - __builtin_clz(n);
+    // log2(n) is 32 - 1 - __builtin_clz(n)
+    auto const log2_n = numeric::detail::count_significant_bits(static_cast<uint32_t>(n)) - 1;
     auto const count  = (log2_n >> 3) + 1;
     *out_it++         = (59 + count) << 2;
     std::memcpy(out_it, &n, count);
