@@ -225,11 +225,11 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
     chunk_nested_str_data.host_to_device_async(_stream);
   }
 
-  auto h_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
-  std::copy(_page_validity.cbegin(), _page_validity.cend(), h_page_validity.begin());
+  auto h_page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::copy(_page_mask.cbegin(), _page_mask.cend(), h_page_mask.begin());
 
-  auto page_validity = cudf::detail::make_device_uvector_async<bool>(
-    h_page_validity, _stream, cudf::get_current_device_resource_ref());
+  auto page_mask = cudf::detail::make_device_uvector_async<bool>(
+    h_page_mask, _stream, cudf::get_current_device_resource_ref());
 
   // create this before we fork streams
   cudf::io::parquet::kernel_error error_code(_stream);
@@ -247,7 +247,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    skip_rows,
                    level_type_size,
                    decoder_mask,
-                   page_validity,
+                   page_mask,
                    initial_str_offsets,
                    error_code.data(),
                    streams[s_idx++]);
@@ -305,7 +305,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         page_validity,
+                         page_mask,
                          initial_str_offsets,
                          error_code.data(),
                          streams[s_idx++]);
@@ -318,7 +318,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                                num_rows,
                                skip_rows,
                                level_type_size,
-                               page_validity,
+                               page_mask,
                                initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
@@ -331,7 +331,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                       num_rows,
                       skip_rows,
                       level_type_size,
-                      page_validity,
+                      page_mask,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -358,7 +358,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        page_validity,
+                        page_mask,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -415,7 +415,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
                    num_rows,
                    skip_rows,
                    level_type_size,
-                   page_validity,
+                   page_mask,
                    error_code.data(),
                    streams[s_idx++]);
   }
@@ -428,7 +428,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting_decode.device_to_host_async(_stream);
 
   // Invalidate output buffer nullmasks at row indices spanned by pruned pages
-  update_output_nullmasks_for_pruned_pages(h_page_validity);
+  update_output_nullmasks_for_pruned_pages(h_page_mask);
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_host_vector_async(initial_str_offsets, _stream);
@@ -582,7 +582,7 @@ void impl::reset_internal_state()
   _file_preprocessed = false;
   _has_page_index    = false;
   _pass_itm_data.reset();
-  _page_validity.clear();
+  _page_mask.clear();
   _output_metadata.reset();
 }
 
@@ -710,10 +710,10 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
                                                           stream,
                                                           mr);
 
-  auto data_page_validity = _metadata->compute_data_page_validity(
+  auto data_page_mask = _metadata->compute_data_page_mask(
     row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
 
-  return {std::move(row_mask), std::move(data_page_validity)};
+  return {std::move(row_mask), std::move(data_page_mask)};
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
@@ -782,7 +782,7 @@ impl::get_payload_column_chunk_byte_ranges(
 }
 
 cudf::io::table_with_metadata impl::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> data_page_validity,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
@@ -802,7 +802,8 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
-  set_page_validity(data_page_validity);
+  // Must be called after `prepare_data()`
+  set_page_mask(data_page_mask);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
@@ -824,11 +825,12 @@ cudf::io::table_with_metadata impl::materialize_payload_columns(
   auto output_dtypes =
     get_output_types(_output_buffers_template, _expr_conv.get_converted_expr().has_value());
 
-  auto data_page_validity = _metadata->compute_data_page_validity(
+  auto data_page_mask = _metadata->compute_data_page_mask(
     row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), options);
-  set_page_validity(data_page_validity);
+  // Must be called after `prepare_data()`
+  set_page_mask(data_page_mask);
 
   // Make sure we haven't gone past the input passes
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "");
@@ -1037,23 +1039,23 @@ void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_
   }
 }
 
-void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_validity)
+void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask)
 {
   auto const& subpass    = _pass_itm_data->subpass;
   auto const& pages      = subpass->pages;
   auto const& chunks     = _pass_itm_data->chunks;
   auto const num_columns = _input_columns.size();
 
-  CUDF_EXPECTS(pages.size() == _page_validity.size(), "Page validity size mismatch");
+  CUDF_EXPECTS(pages.size() == _page_mask.size(), "Page mask size mismatch");
 
   thrust::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_validity.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(pages.host_end(), page_validity.end())),
-    [&](auto const& page_and_validity_pair) {
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_end(), page_mask.end())),
+    [&](auto const& page_and_mask_pair) {
       // Return if the page is valid
-      if (thrust::get<1>(page_and_validity_pair)) { return; }
+      if (thrust::get<1>(page_and_mask_pair)) { return; }
 
-      auto const& page     = thrust::get<0>(page_and_validity_pair);
+      auto const& page     = thrust::get<0>(page_and_mask_pair);
       auto const chunk_idx = page.chunk_idx;
       auto const start_row = chunks[chunk_idx].start_row + page.chunk_row;
       auto const end_row   = start_row + page.num_rows;
@@ -1077,7 +1079,7 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
     });
 }
 
-void impl::set_page_validity(cudf::host_span<std::vector<bool> const> data_page_validity)
+void impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask)
 {
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "Invalid pass");
 
@@ -1087,28 +1089,27 @@ void impl::set_page_validity(cudf::host_span<std::vector<bool> const> data_page_
   CUDF_EXPECTS(pass->pages.size() == pass->subpass->pages.size(),
                "Page validity expects only one subpass per pass");
 
-  _page_validity.reserve(pass->pages.size());
+  _page_mask.reserve(pass->pages.size());
   auto const num_columns = _input_columns.size();
 
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(_input_columns.size()),
     [&](auto col_idx) {
-      auto const& col_page_validity = data_page_validity[col_idx];
-      size_t num_inserted_pages     = 0;
+      auto const& col_page_mask = data_page_mask[col_idx];
+      size_t num_inserted_pages = 0;
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
-        if (chunks[chunk_idx].num_dict_pages > 0) { _page_validity.emplace_back(true); }
-        CUDF_EXPECTS(
-          col_page_validity.size() >= num_inserted_pages + chunks[chunk_idx].num_data_pages,
-          "Encountered unavailable validity for data pages");
-        _page_validity.insert(
-          _page_validity.end(),
-          col_page_validity.begin() + num_inserted_pages,
-          col_page_validity.begin() + num_inserted_pages + chunks[chunk_idx].num_data_pages);
+        if (chunks[chunk_idx].num_dict_pages > 0) { _page_mask.emplace_back(true); }
+        CUDF_EXPECTS(col_page_mask.size() >= num_inserted_pages + chunks[chunk_idx].num_data_pages,
+                     "Encountered unavailable mask for data pages");
+        _page_mask.insert(
+          _page_mask.end(),
+          col_page_mask.begin() + num_inserted_pages,
+          col_page_mask.begin() + num_inserted_pages + chunks[chunk_idx].num_data_pages);
         num_inserted_pages += chunks[chunk_idx].num_data_pages;
       }
-      CUDF_EXPECTS(num_inserted_pages == col_page_validity.size(),
-                   "Encountered mismatch in data pages and validity sizes");
+      CUDF_EXPECTS(num_inserted_pages == col_page_mask.size(),
+                   "Encountered mismatch in data pages and mask sizes");
     });
 }
 

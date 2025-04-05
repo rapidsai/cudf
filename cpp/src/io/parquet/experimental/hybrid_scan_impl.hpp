@@ -126,7 +126,7 @@ class impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> data_page_validity,
+    cudf::host_span<std::vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
@@ -182,11 +182,11 @@ class impl {
                           rmm::cuda_stream_view stream);
 
   /**
-   * @brief Set the page validity for the current pass.
+   * @brief Set the mask for pages in the current pass.
    *
-   * @param data_page_validity The page validity for the current pass
+   * @param data_page_mask Input data page mask from page-pruning step for the current pass
    */
-  void set_page_validity(cudf::host_span<std::vector<bool> const> data_page_validity);
+  void set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
 
   /**
    * @brief Select the columns to be read.
@@ -208,11 +208,11 @@ class impl {
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Invalidate output buffer bitmasks at row indices spanned by pruned pages
+   * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
    *
-   * @param page_validity A boolean host vector indicating if a subpass page is valid
+   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
    */
-  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_validity);
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -487,7 +487,7 @@ class impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  std::vector<bool> _page_validity;
+  std::vector<bool> _page_mask;
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

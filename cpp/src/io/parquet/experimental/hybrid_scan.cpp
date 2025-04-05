@@ -116,7 +116,7 @@ hybrid_scan_reader::get_filter_column_chunk_byte_ranges(
 }
 
 cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> data_page_validity,
+  cudf::host_span<std::vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
@@ -124,12 +124,8 @@ cudf::io::table_with_metadata hybrid_scan_reader::materialize_filter_columns(
   rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(row_group_indices.size() == 1 and row_group_indices[0].size(), "");
-  return _impl->materialize_filter_columns(data_page_validity,
-                                           row_group_indices,
-                                           std::move(column_chunk_buffers),
-                                           row_mask,
-                                           options,
-                                           stream);
+  return _impl->materialize_filter_columns(
+    data_page_mask, row_group_indices, std::move(column_chunk_buffers), row_mask, options, stream);
 }
 
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>>

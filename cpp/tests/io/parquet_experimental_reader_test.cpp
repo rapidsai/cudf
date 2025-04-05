@@ -222,10 +222,10 @@ auto hybrid_scan(std::vector<char>& buffer,
   }
 
   // Filter data pages with `PageIndex` stats - API # 9
-  auto [row_mask, data_page_validity] = cudf::experimental::io::filter_data_pages_with_stats(
+  auto [row_mask, data_page_mask] = cudf::experimental::io::filter_data_pages_with_stats(
     reader, stats_filtered_row_groups, options, stream, mr);
 
-  EXPECT_EQ(data_page_validity.size(), num_filter_columns);
+  EXPECT_EQ(data_page_mask.size(), num_filter_columns);
 
   // Get column chunk byte ranges from the reader - API # 10
   auto const filter_column_chunk_byte_ranges =
@@ -239,7 +239,7 @@ auto hybrid_scan(std::vector<char>& buffer,
   // Materialize the table with only the filter columns - API # 11
   auto [filter_table, filter_metadata] =
     cudf::experimental::io::materialize_filter_columns(reader,
-                                                       data_page_validity,
+                                                       data_page_mask,
                                                        stats_filtered_row_groups,
                                                        std::move(filter_column_chunk_buffers),
                                                        row_mask->mutable_view(),

@@ -532,7 +532,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
-std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_validity(
+std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask(
   cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
@@ -625,8 +625,8 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
   auto mr = cudf::get_current_device_resource_ref();
 
   // Vector to hold vectors of byte ranges of filtered pages for each column
-  auto data_page_validity = std::vector<std::vector<bool>>();
-  data_page_validity.reserve(num_columns);
+  auto data_page_mask = std::vector<std::vector<bool>>();
+  data_page_mask.reserve(num_columns);
   auto total_filtered_pages = size_t{0};
 
   // For all columns, look up which pages contain at least one valid row. i.e.
@@ -678,13 +678,13 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_vali
                   h_select_page_indices.end(),
                   [&](auto const page_idx) { valid_pages[page_idx] = true; });
 
-    data_page_validity.emplace_back(std::move(valid_pages));
+    data_page_mask.emplace_back(std::move(valid_pages));
   }
 
   CUDF_EXPECTS(total_filtered_pages < total_pages,
                "Number of filtered pages must be smaller than total number of input pages");
 
-  return data_page_validity;
+  return data_page_mask;
 }
 
 }  // namespace cudf::experimental::io::parquet::detail

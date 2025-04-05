@@ -162,9 +162,9 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
-   * @return A pair of boolean column indicating rows that survive the filter predicate at
-   *         page-level, and a list of boolean vectors indicating the corresponding surviving data
-   *         pages, one per filter column.
+   * @return A pair of boolean column indicating rows corresponding to data pages after
+   *         page-pruning, and a list of boolean vectors indicating which data pages are not pruned,
+   *         one per filter column.
    */
   [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -190,7 +190,7 @@ class hybrid_scan_reader {
    * @brief Materializes filter columns, and updates the input row validity mask to only the rows
    *        that survive the row selection predicate at row level
    *
-   * @param valid_data_pages Boolean vectors indicating surviving data pages, one per filter column
+   * @param page_mask Boolean vectors indicating data pages are not pruned, one per filter column
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
    * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
@@ -199,7 +199,7 @@ class hybrid_scan_reader {
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> valid_data_pages,
+    cudf::host_span<std::vector<bool> const> page_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
@@ -353,9 +353,9 @@ get_secondary_filters(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
  * @param row_group_indices Input row groups indices
  * @param options Parquet reader options
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A pair of boolean column indicating rows that survive the row selection predicate at
- *         page-level, and a list of boolean vectors indicating the corresponding surviving data
- *         pages, one per filter column.
+ * @return A pair of boolean column indicating rows corresponding to data pages after
+ *         page-pruning, and a list of boolean vectors indicating which data pages are not pruned,
+ *         one per filter column.
  */
 [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
@@ -382,7 +382,7 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
  *        that survive the row selection predicate at row level
  *
  * @param reader Hybrid scan reader
- * @param filtered_data_pages Boolean vectors indicating surviving data pages, one per filter column
+ * @param page_mask Boolean vectors indicating data pages are not pruned, one per filter column
  * @param row_group_indices Input row groups indices
  * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
  * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
@@ -392,7 +392,7 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
  */
 [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
-  cudf::host_span<std::vector<bool> const> filtered_data_pages,
+  cudf::host_span<std::vector<bool> const> page_mask,
   cudf::host_span<size_type const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
