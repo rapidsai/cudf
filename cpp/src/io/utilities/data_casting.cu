@@ -38,6 +38,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
@@ -176,12 +177,12 @@ process_string(in_iterator_t in_begin,
                cudf::io::parse_options_view const& options)
 {
   int32_t bytes           = 0;
-  auto const num_in_chars = thrust::distance(in_begin, in_end);
+  auto const num_in_chars = cuda::std::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
   bool const is_string_value =
     num_in_chars >= 2LL &&
     (options.quotechar == '\0' ||
-     (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+     (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
 
   // Copy literal/numeric value
   if (not is_string_value) {
@@ -238,7 +239,7 @@ process_string(in_iterator_t in_begin,
 
     // Make sure that there's at least 4 characters left from the
     // input, which are expected to be hex digits
-    if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
+    if (cuda::std::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
       return {bytes, data_casting_result::PARSING_FAILURE};
     }
 
@@ -248,24 +249,24 @@ process_string(in_iterator_t in_begin,
     if (hex_val < 0) { return {bytes, data_casting_result::PARSING_FAILURE}; }
 
     // Skip over the four hex digits
-    thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+    cuda::std::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
 
     // If this may be a UTF-16 encoded surrogate pair:
     // we expect another \uXXXX sequence
     int32_t hex_low_val = 0;
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
-        thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
-        *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
+        cuda::std::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
+        *in_begin == backslash_char && *cuda::std::next(in_begin) == 'u') {
       // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
       // surrogate
-      hex_low_val = parse_unicode_hex(thrust::next(in_begin, 2));
+      hex_low_val = parse_unicode_hex(cuda::std::next(in_begin, 2));
     }
 
     // This is indeed a UTF16 surrogate pair
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
         hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
       // Skip over the second \uXXXX sequence
-      thrust::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
+      cuda::std::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
 
       // Compute UTF16-encoded code point
       uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
@@ -490,7 +491,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
     bool const is_string_value =
       num_in_chars >= 2LL &&
       (options.quotechar == '\0' ||
-       (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+       (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
     char* d_buffer = d_chars ? d_chars + d_offsets[istring] : nullptr;
 
     // Copy literal/numeric value
