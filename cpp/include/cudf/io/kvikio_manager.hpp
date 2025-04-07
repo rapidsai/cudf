@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include <cudf/utilities/export.hpp>
 
+#include <optional>
+
 namespace CUDF_EXPORT cudf {
+//! IO interfaces
 namespace io {
 
-namespace nvcomp_integration {
+class kvikio_manager {
+ public:
+  ~kvikio_manager() = default;
 
-/**
- * @brief Returns true if all nvCOMP uses are enabled.
- */
-bool is_all_enabled();
+  kvikio_manager(const kvikio_manager&)            = delete;
+  kvikio_manager& operator=(const kvikio_manager&) = delete;
+  kvikio_manager(kvikio_manager&&)                 = delete;
+  kvikio_manager& operator=(kvikio_manager&&)      = delete;
 
-/**
- * @brief Returns true if stable nvCOMP use is enabled.
- */
-bool is_stable_enabled();
+  static kvikio_manager& instance();
 
-}  // namespace nvcomp_integration
+  static void set_num_io_threads(unsigned int num_io_threads);
+
+  static unsigned int get_num_io_threads();
+
+ private:
+  kvikio_manager();
+  unsigned int _num_io_threads;
+};
+
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

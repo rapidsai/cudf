@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 from contextlib import redirect_stdout
 from io import StringIO
@@ -127,3 +127,20 @@ def test_options_context_error():
     with pytest.raises(ValueError):
         with cudf.option_context("mode.pandas_compatible", 1, 2):
             pass
+
+
+def test_num_io_threads():
+    old_setting = 8
+    cudf.set_option("num_io_threads", old_setting)
+
+    new_setting_1 = 16
+    new_setting_2 = 2
+    new_setting_3 = 20
+    with cudf.option_context("num_io_threads", new_setting_1):
+        with cudf.option_context("num_io_threads", new_setting_2):
+            with cudf.option_context("num_io_threads", new_setting_3):
+                assert cudf.get_option("num_io_threads") == new_setting_3
+            assert cudf.get_option("num_io_threads") == new_setting_2
+        assert cudf.get_option("num_io_threads") == new_setting_1
+
+    assert cudf.get_option("num_io_threads") == old_setting

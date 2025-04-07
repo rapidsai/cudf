@@ -365,6 +365,17 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "num_io_threads",
+    _env_get_bool("CUDF_NUM_IO_THREADS", 4),
+    textwrap.dedent(
+        """
+        Todo: Add comment here.
+    """
+    ),
+    _integer_validator,
+)
+
 
 class option_context(ContextDecorator):
     """
