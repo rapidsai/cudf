@@ -22,6 +22,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
@@ -57,7 +58,7 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
     delta_binary_decoder string_lengths;
     auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
     // distance is size of string data
-    return static_cast<size_type>(thrust::distance(string_start, s->data_end));
+    return static_cast<size_type>(cuda::std::distance(string_start, s->data_end));
   }
   return 0;
 }

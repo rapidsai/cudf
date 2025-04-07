@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -87,7 +87,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
                       return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
                     });
 
-  gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
+  gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
 }
 
