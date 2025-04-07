@@ -164,18 +164,15 @@ enum class FieldType : uint8_t {
  * @brief Struct that describes the Parquet file data header
  */
 struct file_header_s {
-  // Parquet 4-byte magic number "PAR1"
-  uint32_t magic;
+  uint32_t magic;  /// Parquet 4-byte magic number "PAR1"
 };
 
 /**
  * @brief Struct that describes the Parquet file data postscript
  */
 struct file_ender_s {
-  // Length of the Footer
-  uint32_t footer_len;
-  // Parquet 4-byte magic number "PAR1"
-  uint32_t magic;
+  uint32_t footer_len;  /// Length of the Footer
+  uint32_t magic;       /// Parquet 4-byte magic number "PAR1"
 };
 
 /**
@@ -184,10 +181,9 @@ struct file_ender_s {
  * Allowed for physical types: INT32, INT64, FIXED_LEN_BYTE_ARRAY, and BYTE_ARRAY.
  */
 struct DecimalType {
-  // Scale must be zero or a positive integer less than or equal to the precision.
-  int32_t scale = 0;
-  // Precision must be a non-zero positive integer.
-  int32_t precision = 0;
+  int32_t scale =
+    0;  /// Scale must be zero or a positive integer less than or equal to the precision.
+  int32_t precision = 0;  /// Precision must be a non-zero positive integer.
 };
 
 /**
@@ -195,8 +191,7 @@ struct DecimalType {
  */
 struct TimeUnit {
   enum Type { UNDEFINED, MILLIS, MICROS, NANOS };
-  // Time unit type
-  Type type;
+  Type type;  /// Time unit type
 };
 
 /**
@@ -205,11 +200,9 @@ struct TimeUnit {
  * Allowed for physical types: INT32 (millis), INT64 (micros, nanos)
  */
 struct TimeType {
-  // Default to true because the timestamps are implicitly in UTC.
-  // Writer option overrides this default
-  bool isAdjustedToUTC = true;
-  // Time unit
-  TimeUnit unit = {TimeUnit::MILLIS};
+  bool isAdjustedToUTC = true;  /// Default to true because the timestamps are implicitly in UTC.
+                                /// Writer option overrides this default
+  TimeUnit unit = {TimeUnit::MILLIS};  /// Time unit
 };
 
 /**
@@ -218,11 +211,9 @@ struct TimeType {
  * Allowed for physical types: INT64
  */
 struct TimestampType {
-  // Default to true because the timestamps are implicitly in UTC.
-  // Writer option overrides this default
-  bool isAdjustedToUTC = true;
-  // Timestamp's time unit
-  TimeUnit unit = {TimeUnit::MILLIS};
+  bool isAdjustedToUTC = true;  /// Default to true because the timestamps are implicitly in UTC.
+                                /// Writer option overrides this default
+  TimeUnit unit = {TimeUnit::MILLIS};  /// Timestamp's time unit
 };
 
 /**
@@ -231,10 +222,8 @@ struct TimestampType {
  * Allowed for physical types: INT32, INT64
  */
 struct IntType {
-  // bitWidth must be 8, 16, 32, or 64.
-  int8_t bitWidth = 0;
-  // Whether the integer is signed
-  bool isSigned = false;
+  int8_t bitWidth = 0;      /// bitWidth must be 8, 16, 32, or 64.
+  bool isSigned   = false;  /// Whether the integer is signed
 };
 
 /**
@@ -258,40 +247,52 @@ struct LogicalType {
     BSON
   };
 
-  // Logical type
-  Type type;
-  // Decimal type
-  cuda::std::optional<DecimalType> decimal_type;
-  // Time type
-  cuda::std::optional<TimeType> time_type;
-  // Timestamp type
-  cuda::std::optional<TimestampType> timestamp_type;
-  // Integer type
-  cuda::std::optional<IntType> int_type;
+  Type type;                                          /// Logical type
+  cuda::std::optional<DecimalType> decimal_type;      /// Decimal type
+  cuda::std::optional<TimeType> time_type;            /// Time type
+  cuda::std::optional<TimestampType> timestamp_type;  /// Timestamp type
+  cuda::std::optional<IntType> int_type;              /// Integer type
 
   /**
    * @brief Default constructor
+   *
+   * @param tp Logical type
+   * @return LogicalType object
    */
   LogicalType(Type tp = UNDEFINED) : type(tp) {}  // Constructor
   /**
    * @brief Constructor for Decimal logical type
+   *
+   * @param dt Decimal type
+   * @return LogicalType object
    */
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
   /**
    * @brief Constructor for Time logical type
+   *
+   * @param tt Time type
+   * @return LogicalType object
    */
   LogicalType(TimeType&& tt) : type(TIME), time_type(tt) {}
   /**
    * @brief Constructor for Timestamp logical type
+   *
+   * @param tst Timestamp type
+   * @return LogicalType object
    */
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
   /**
    * @brief Constructor for Integer logical type
+   *
+   * @param it Integer type
+   * @return LogicalType object
    */
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
   /**
    * @brief Check if the time is in milliseconds
+   *
+   * @return True if the time is in milliseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_millis() const
   {
@@ -300,6 +301,8 @@ struct LogicalType {
 
   /**
    * @brief Check if the time is in microseconds
+   *
+   * @return True if the time is in microseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_micros() const
   {
@@ -308,6 +311,8 @@ struct LogicalType {
 
   /**
    * @brief Check if the time is in nanoseconds
+   *
+   * @return True if the time is in nanoseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_nanos() const
   {
@@ -316,6 +321,8 @@ struct LogicalType {
 
   /**
    * @brief Check if the timestamp is in milliseconds
+   *
+   * @return True if the timestamp is in milliseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_millis() const
   {
@@ -324,6 +331,8 @@ struct LogicalType {
 
   /**
    * @brief Check if the timestamp is in microseconds
+   *
+   * @return True if the timestamp is in microseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_micros() const
   {
@@ -332,6 +341,8 @@ struct LogicalType {
 
   /**
    * @brief Check if the timestamp is in nanoseconds
+   *
+   * @return True if the timestamp is in nanoseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_nanos() const
   {
@@ -340,6 +351,8 @@ struct LogicalType {
 
   /**
    * @brief Get the bit width of the integer type
+   *
+   * @return The bit width of the integer type, or -1 if the type is not an integer
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr int8_t bit_width() const
   {
@@ -348,11 +361,15 @@ struct LogicalType {
 
   /**
    * @brief Check if the integer is signed
+   *
+   * @return True if the integer is signed, false otherwise
    */
   [[nodiscard]] constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
 
   /**
    * @brief Get the scale of the decimal type
+   *
+   * @return The scale of the decimal type, or -1 if the type is not a decimal
    */
   [[nodiscard]] constexpr int32_t scale() const
   {
@@ -361,6 +378,8 @@ struct LogicalType {
 
   /**
    * @brief Get the precision of the decimal type
+   *
+   * @return The precision of the decimal type, or -1 if the type is not a decimal
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t precision() const
   {
@@ -373,8 +392,7 @@ struct LogicalType {
  */
 struct ColumnOrder {
   enum Type { UNDEFINED, TYPE_ORDER };
-  // Column order type
-  Type type;
+  Type type;  /// Column order type
 };
 
 /**
@@ -384,46 +402,49 @@ struct ColumnOrder {
  * as a schema tree.
  */
 struct SchemaElement {
-  // 1: parquet physical type for output
+  /// 1: parquet physical type for output
   Type type = UNDEFINED_TYPE;
-  // 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
+  /// 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   int32_t type_length = 0;
-  // 3: repetition of the field
+  /// 3: repetition of the field
   FieldRepetitionType repetition_type = REQUIRED;
-  // 4: name of the field
+  /// 4: name of the field
   std::string name = "";
-  // 5: nested fields
+  /// 5: nested fields
   int32_t num_children = 0;
-  // 6: DEPRECATED: record the original type before conversion to parquet type
+  /// 6: DEPRECATED: record the original type before conversion to parquet type
   std::optional<ConvertedType> converted_type;
-  // 7: DEPRECATED: record the scale for DECIMAL converted type
+  /// 7: DEPRECATED: record the scale for DECIMAL converted type
   int32_t decimal_scale = 0;
-  // 8: DEPRECATED: record the precision for DECIMAL converted type
+  /// 8: DEPRECATED: record the precision for DECIMAL converted type
   int32_t decimal_precision = 0;
-  // 9: save field_id from original schema
+  /// 9: save field_id from original schema
   std::optional<int32_t> field_id;
-  // 10: replaces converted type
+  /// 10: replaces converted type
   std::optional<LogicalType> logical_type;
 
-  // extra cudf specific fields
+  /// extra cudf specific fields
   bool output_as_byte_array = false;
 
-  // cudf type determined from arrow:schema
+  /// cudf type determined from arrow:schema
   std::optional<type_id> arrow_type;
 
   // The following fields are filled in later during schema initialization
 
-  // Maximum definition level
+  /// Maximum definition level
   int max_definition_level = 0;
-  // Maximum repetition level
+  /// Maximum repetition level
   int max_repetition_level = 0;
-  // Parent index
+  /// Parent index
   size_type parent_idx = 0;
-  // Children indices
+  /// Children indices
   std::vector<size_type> children_idx;
 
   /**
    * @brief Check if two schema elements are equal
+   *
+   * @param other The other schema element to compare to
+   * @return True if the two schema elements are equal, false otherwise
    */
   bool operator==(SchemaElement const& other) const
   {
@@ -455,21 +476,44 @@ struct SchemaElement {
   //     required int32 num;
   //  };
   // }
+
+  /**
+   * @brief Check if the schema element is a stub
+   *
+   * @return True if the schema element is a stub, false otherwise
+   */
   [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
 
-  // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
-  // One-level LIST encoding: Only allows required lists with required cells:
-  //   repeated value_type name
+  /**
+   * @brief Check if the schema element is a one-level list
+   *
+   * https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
+   * One-level LIST encoding: Only allows required lists with required cells: repeated value_type
+   * name
+   *
+   * @param parent The parent schema element
+   * @return True if the schema element is a one-level list, false otherwise
+   */
   [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
     return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
   }
 
-  // returns true if the element is a list
+  /**
+   * @brief Check if the schema element is a list
+   *
+   * @return True if the schema element is a list, false otherwise
+   */
   [[nodiscard]] bool is_list() const { return converted_type == LIST; }
 
-  // in parquet terms, a group is a level of nesting in the schema. a group
-  // can be a struct or a list
+  /**
+   * @brief Check if the schema element is a struct
+   *
+   * In parquet terms, a group is a level of nesting in the schema. a group can be a struct or a
+   * list
+   *
+   * @return True if the schema element is a struct, false otherwise
+   */
   [[nodiscard]] bool is_struct() const
   {
     return type == UNDEFINED_TYPE &&
@@ -482,21 +526,21 @@ struct SchemaElement {
  * @brief Thrift-derived struct describing column chunk statistics
  */
 struct Statistics {
-  // deprecated max value in signed comparison order
+  /// deprecated max value in signed comparison order
   std::optional<std::vector<uint8_t>> max;
-  // deprecated min value in signed comparison order
+  /// deprecated min value in signed comparison order
   std::optional<std::vector<uint8_t>> min;
-  // count of null values in the column
+  /// count of null values in the column
   std::optional<int64_t> null_count;
-  // count of distinct values occurring
+  /// count of distinct values occurring
   std::optional<int64_t> distinct_count;
-  // max value for column determined by ColumnOrder
+  /// max value for column determined by ColumnOrder
   std::optional<std::vector<uint8_t>> max_value;
-  // min value for column determined by ColumnOrder
+  /// min value for column determined by ColumnOrder
   std::optional<std::vector<uint8_t>> min_value;
-  // If true, max_value is the actual maximum value for a column
+  /// If true, max_value is the actual maximum value for a column
   std::optional<bool> is_max_value_exact;
-  // If true, min_value is the actual minimum value for a column
+  /// If true, min_value is the actual minimum value for a column
   std::optional<bool> is_min_value_exact;
 };
 
@@ -504,8 +548,8 @@ struct Statistics {
  * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
  */
 struct SizeStatistics {
-  // Number of variable-width bytes stored for the page/chunk. Should not be set for anything
-  // but the BYTE_ARRAY physical type.
+  /// Number of variable-width bytes stored for the page/chunk. Should not be set for anything
+  /// but the BYTE_ARRAY physical type.
   std::optional<int64_t> unencoded_byte_array_data_bytes;
   /**
    * When present, there is expected to be one element corresponding to each
@@ -530,19 +574,20 @@ struct SizeStatistics {
  * in the offsets index.
  */
 struct PageLocation {
-  int64_t offset;                // Offset of the page in the file
-  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
-  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
-                            // 0 at the beginning of each column chunk
+  int64_t offset;                /// Offset of the page in the file
+  int32_t compressed_page_size;  /// Compressed page size in bytes plus the heeader length
+  int64_t first_row_index;  /// Index within the column chunk of the first row of the page. reset to
+                            /// 0 at the beginning of each column chunk
 };
 
 /**
  * @brief Thrift-derived struct describing the offset index.
  */
 struct OffsetIndex {
-  std::vector<PageLocation> page_locations;  // Page locations
-  // per-page size info. see description of the same field in SizeStatistics. only present for
-  // columns with a BYTE_ARRAY physical type.
+  /// Page locations
+  std::vector<PageLocation> page_locations;
+  /// per-page size info. see description of the same field in SizeStatistics. only present for
+  /// columns with a BYTE_ARRAY physical type.
   std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
 };
 
@@ -550,115 +595,97 @@ struct OffsetIndex {
  * @brief Thrift-derived struct describing the column index.
  */
 struct ColumnIndex {
-  // Boolean used to determine if a page contains only null values
-  std::vector<bool> null_pages;
-  // lower bound for values in each page
-  std::vector<std::vector<uint8_t>> min_values;
-  // upper bound for values in each page
-  std::vector<std::vector<uint8_t>> max_values;
-  // Indicates if min and max values are ordered
-  BoundaryOrder boundary_order = BoundaryOrder::UNORDERED;
-  // Optional count of null values per page
-  std::optional<std::vector<int64_t>> null_counts;
-  // Repetition level histogram for the column chunk
-  std::optional<std::vector<int64_t>> repetition_level_histogram;
-  // Definition level histogram for the column chunk
-  std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::vector<bool> null_pages;  /// Boolean used to determine if a page contains only null values
+  std::vector<std::vector<uint8_t>> min_values;  /// Lower bound for values in each page
+  std::vector<std::vector<uint8_t>> max_values;  /// Upper bound for values in each page
+  BoundaryOrder boundary_order =
+    BoundaryOrder::UNORDERED;                       /// Indicates if min and max values are ordered
+  std::optional<std::vector<int64_t>> null_counts;  /// Optional count of null values per page
+  std::optional<std::vector<int64_t>>
+    repetition_level_histogram;  /// Repetition level histogram for the column chunk
+  std::optional<std::vector<int64_t>>
+    definition_level_histogram;  /// Definition level histogram for the column chunk
 };
 
 /**
  * @brief Thrift-derived struct describing page encoding statistics
  */
 struct PageEncodingStats {
-  // The page type (data/dic/...)
-  PageType page_type;
-  // Encoding of the page
-  Encoding encoding;
-  // Number of pages of this type with this encoding
-  int32_t count;
+  PageType page_type;  /// The page type (data/dic/...)
+  Encoding encoding;   /// Encoding of the page
+  int32_t count;       /// Number of pages of this type with this encoding
 };
 
 /**
  * @brief Thrift-derived struct describing column sort order
  */
 struct SortingColumn {
-  // The column index (in this row group)
-  int32_t column_idx;
-  // If true, indicates this column is sorted in descending order
-  bool descending;
-  // If true, nulls will come before non-null values
-  bool nulls_first;
+  int32_t column_idx;  /// The column index (in this row group)
+  bool descending;     /// If true, indicates this column is sorted in descending order
+  bool nulls_first;    /// If true, nulls will come before non-null values
 };
 
 /**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
-  // Type of this column
-  Type type = BOOLEAN;
-  // Set of all encodings used for this column. The purpose is to validate
-  // whether we can decode those pages.
-  std::vector<Encoding> encodings;
-  // Path in schema
-  std::vector<std::string> path_in_schema;
-  // Compression codec
-  Compression codec = UNCOMPRESSED;
-  // Number of values in this column
-  int64_t num_values = 0;
-  // Total byte size of all uncompressed pages in this column chunk (including the headers)
-  int64_t total_uncompressed_size = 0;
-  // Total byte size of all compressed pages in this column chunk (including the headers)
-  int64_t total_compressed_size = 0;
-  // Byte offset from beginning of file to first data page
-  int64_t data_page_offset = 0;
-  // Byte offset from beginning of file to root index page
-  int64_t index_page_offset = 0;
-  // Byte offset from the beginning of file to first (only) dictionary page
-  int64_t dictionary_page_offset = 0;
-  // Optional statistics for this column chunk
-  Statistics statistics;
-  // Set of all encodings used for pages in this column chunk. This information can be used to
-  // determine if all data pages are dictionary encoded for example.
-  std::optional<std::vector<PageEncodingStats>> encoding_stats;
-  // Byte offset from beginning of file to Bloom filter data.
-  std::optional<int64_t> bloom_filter_offset;
-  // Size of Bloom filter data including the serialized header, in bytes. Added in 2.10 so readers
-  // may not read this field from old files and it can be obtained after the BloomFilterHeader has
-  // been deserialized. Writers should write this field so readers can read the bloom filter in a
-  // single I/O.
-  std::optional<int32_t> bloom_filter_length;
-  // Optional statistics to help estimate total memory when converted to in-memory representations.
-  // The histograms contained in these statistics can also be useful in some cases for more
-  // fine-grained nullability/list length filter pushdown.
-  std::optional<SizeStatistics> size_statistics;
+  Type type = BOOLEAN;  /// Type of this column
+
+  std::vector<Encoding> encodings;  /// Set of all encodings used for this column. The purpose is to
+                                    /// validate whether we can decode those pages.
+  std::vector<std::string> path_in_schema;  /// Path in schema
+  Compression codec  = UNCOMPRESSED;        /// Compression codec
+  int64_t num_values = 0;                   /// Number of values in this column
+  int64_t total_uncompressed_size =
+    0;  /// Total byte size of all uncompressed pages in this column chunk (including the headers)
+  int64_t total_compressed_size =
+    0;  /// Total byte size of all compressed pages in this column chunk (including the headers)
+  int64_t data_page_offset  = 0;  /// Byte offset from beginning of file to first data page
+  int64_t index_page_offset = 0;  /// Byte offset from beginning of file to root index page
+  int64_t dictionary_page_offset =
+    0;                    /// Byte offset from the beginning of file to first (only) dictionary page
+  Statistics statistics;  /// Optional statistics for this column chunk
+  std::optional<std::vector<PageEncodingStats>>
+    encoding_stats;  /// Set of all encodings used for pages in this column chunk. This information
+                     /// can be used to determine if all data pages are dictionary encoded for
+                     /// example.
+  std::optional<int64_t>
+    bloom_filter_offset;  /// Byte offset from beginning of file to Bloom filter data.
+  std::optional<int32_t>
+    bloom_filter_length;  /// Size of Bloom filter data including the serialized header, in bytes.
+                          /// Added in 2.10 so readers may not read this field from old files and it
+                          /// can be obtained after the BloomFilterHeader has been deserialized.
+                          /// Writers should write this field so readers can read the bloom filter
+                          /// in a single I/O.
+  std::optional<SizeStatistics>
+    size_statistics;  /// Optional statistics to help estimate total memory when converted to
+                      /// in-memory representations. The histograms contained in these statistics
+                      /// can also be useful in some cases for more fine-grained nullability/list
+                      /// length filter pushdown.
 };
 
 /**
  * @brief The algorithm used in bloom filter
  */
 struct BloomFilterAlgorithm {
-  // Block-based Bloom filter.
-  enum class Algorithm { UNDEFINED, SPLIT_BLOCK };
-  // Bloom filter algorithm: Split block
-  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
+  enum class Algorithm { UNDEFINED, SPLIT_BLOCK };  /// Block-based Bloom filter.
+  Algorithm algorithm{Algorithm::SPLIT_BLOCK};      /// Bloom filter algorithm
 };
 
 /**
  * @brief The hash function used in Bloom filter
  */
 struct BloomFilterHash {
-  enum class Hash { UNDEFINED, XXHASH };
-  // Bloom filter hasher: xxHash_64
-  Hash hash{Hash::XXHASH};
+  enum class Hash { UNDEFINED, XXHASH };  /// xxHash64 hasher
+  Hash hash{Hash::XXHASH};                /// Bloom filter hasher
 };
 
 /**
  * @brief The compression used in the bloom filter
  */
 struct BloomFilterCompression {
-  enum class Compression { UNDEFINED, UNCOMPRESSED };
-  // Bloom filter compression type: Uncompressed
-  Compression compression{Compression::UNCOMPRESSED};
+  enum class Compression { UNDEFINED, UNCOMPRESSED };  /// Uncompressed bloom filter
+  Compression compression{Compression::UNCOMPRESSED};  /// Bloom filter compression type
 };
 
 /**
@@ -668,14 +695,10 @@ struct BloomFilterCompression {
  * following by the filter bitset.
  */
 struct BloomFilterHeader {
-  // The size of bitset in bytes
-  int32_t num_bytes;
-  // The algorithm for setting bits
-  BloomFilterAlgorithm algorithm;
-  // The hash function used for bloom filter
-  BloomFilterHash hash;
-  // The compression used in the bloom filter
-  BloomFilterCompression compression;
+  int32_t num_bytes;                   /// The size of bitset in bytes
+  BloomFilterAlgorithm algorithm;      /// The algorithm for setting bits
+  BloomFilterHash hash;                /// The hash function used for bloom filter
+  BloomFilterCompression compression;  /// The compression used in the bloom filter
 };
 
 /**
@@ -687,34 +710,30 @@ struct BloomFilterHeader {
  * reading.
  */
 struct ColumnChunk {
-  // File where column data is stored.  If not set, assumed to be same file as metadata. This path
-  // is relative to the current file.
-  std::string file_path = "";
-  // Deprecated: Byte offset in file_path to the ColumnMetaData
-  int64_t file_offset = 0;
-  // Column metadata for this chunk. Some writers may also replicate this at the location
-  // pointed to by file_path/file_offset.
-  ColumnChunkMetaData meta_data;
-  // File offset of ColumnChunk's OffsetIndex
-  int64_t offset_index_offset = 0;
-  // Size of ColumnChunk's OffsetIndex, in bytes
-  int32_t offset_index_length = 0;
-  // File offset of ColumnChunk's ColumnIndex
-  int64_t column_index_offset = 0;
-  // Size of ColumnChunk's ColumnIndex, in bytes
-  int32_t column_index_length = 0;
+  std::string file_path = "";  /// File where column data is stored.  If not set, assumed to be same
+                               /// file as metadata. This path is relative to the current file.
+
+  int64_t file_offset = 0;  /// Deprecated: Byte offset in file_path to the ColumnMetaData
+
+  ColumnChunkMetaData
+    meta_data;  /// Column metadata for this chunk. Some writers may also replicate this at the
+                /// locationpointed to by file_path/file_offset.
+
+  int64_t offset_index_offset = 0;  /// File offset of ColumnChunk's OffsetIndex
+
+  int32_t offset_index_length = 0;  /// Size of ColumnChunk's OffsetIndex, in bytes
+
+  int64_t column_index_offset = 0;  /// File offset of ColumnChunk's ColumnIndex
+
+  int32_t column_index_length = 0;  /// Size of ColumnChunk's ColumnIndex, in bytes
 
   // Following fields are derived from other fields
-
-  // Index in flattened schema (derived from path_in_schema)
-  int schema_idx = -1;
+  int schema_idx = -1;  /// Index in flattened schema (derived from path_in_schema)
 
   // The indexes don't really live here, but it's a convenient place to hang them.
 
-  // `OffsetIndex` for this column chunk
-  std::optional<OffsetIndex> offset_index;
-  // `ColumnIndex` for this column chunk
-  std::optional<ColumnIndex> column_index;
+  std::optional<OffsetIndex> offset_index;  /// `OffsetIndex` for this column chunk
+  std::optional<ColumnIndex> column_index;  /// `ColumnIndex` for this column chunk
 };
 
 /**
@@ -724,31 +743,26 @@ struct ColumnChunk {
  * consisting of a column chunk for each column.
  */
 struct RowGroup {
-  // Metadata for each column chunk in this row group.
-  std::vector<ColumnChunk> columns;
-  // Total byte size of all the uncompressed column data in this row group
-  int64_t total_byte_size = 0;
-  // Number of rows in this row group
-  int64_t num_rows = 0;
-  // If set, specifies a sort ordering of the rows in this RowGroup.
-  // The sorting columns can be a subset of all the columns.
-  std::optional<std::vector<SortingColumn>> sorting_columns;
-  // Byte offset from beginning of file to first page (data or dictionary) in this row group
-  std::optional<int64_t> file_offset;
-  // Total byte size of all compressed (and potentially encrypted) column data in this row group
-  std::optional<int64_t> total_compressed_size;
-  // Row group ordinal in the file
-  std::optional<int16_t> ordinal;
+  std::vector<ColumnChunk> columns;  /// Metadata for each column chunk in this row group
+  int64_t total_byte_size =
+    0;                   /// Total byte size of all the uncompressed column data in this row group
+  int64_t num_rows = 0;  /// Number of rows in this row group
+  std::optional<std::vector<SortingColumn>>
+    sorting_columns;  /// If set, specifies a sort ordering of the rows in this RowGroup.
+  std::optional<int64_t> file_offset;  /// Byte offset from beginning of file to first page (data or
+                                       /// dictionary) in this row group
+  std::optional<int64_t>
+    total_compressed_size;  /// Total byte size of all compressed (and potentially encrypted) column
+                            /// data in this row group
+  std::optional<int16_t> ordinal;  /// Row group ordinal in the file
 };
 
 /**
  * @brief Thrift-derived struct describing a key-value pair, for user metadata
  */
 struct KeyValue {
-  // string key
-  std::string key;
-  // string value
-  std::string value;
+  std::string key;    /// string key
+  std::string value;  /// string value
 };
 
 /**
@@ -759,24 +773,24 @@ struct KeyValue {
  * prior to conversion to Parquet.
  */
 struct FileMetaData {
-  // Version of this file
+  /// Version of this file
   int32_t version = 0;
-  // Parquet schema for this file.  This schema contains metadata for all the columns. The schema is
-  // represented as a tree with a single root. The nodes of the tree are flattened to a list by
-  // doing a depth-first traversal. The column metadata contains the path in the schema for that
-  // column which can be used to map columns to nodes in the schema. The first element is the root
+  /// Parquet schema for this file.  This schema contains metadata for all the columns. The schema
+  /// is represented as a tree with a single root. The nodes of the tree are flattened to a list by
+  /// doing a depth-first traversal. The column metadata contains the path in the schema for that
+  /// column which can be used to map columns to nodes in the schema. The first element is the root
   std::vector<SchemaElement> schema;
-  // Number of rows in this file
+  /// Number of rows in this file
   int64_t num_rows = 0;
-  // Row groups in this file
+  /// Row groups in this file
   std::vector<RowGroup> row_groups;
-  // Optional key/value metadata
+  /// Optional key/value metadata
   std::vector<KeyValue> key_value_metadata;
-  // String for application that wrote this file.  This should be in the format <Application>
-  // version <App Version> (build <App Build Hash>).
+  /// String for application that wrote this file.  This should be in the format <Application>
+  /// version <App Version> (build <App Build Hash>).
   std::string created_by = "";
-  // Sort order used for the min_value and max_value fields in the Statistics objects and the
-  // min_values and max_values fields in the ColumnIndex objects of each column in this file.
+  /// Sort order used for the min_value and max_value fields in the Statistics objects and the
+  /// min_values and max_values fields in the ColumnIndex objects of each column in this file.
   std::optional<std::vector<ColumnOrder>> column_orders;
 };
 
@@ -784,44 +798,32 @@ struct FileMetaData {
  * @brief Thrift-derived struct describing the header for a data page
  */
 struct DataPageHeader {
-  // Number of values, including NULLs, in this data page.
-  int32_t num_values = 0;
-  // Encoding used for this data page
-  Encoding encoding = Encoding::PLAIN;
-  // Encoding used for definition levels
-  Encoding definition_level_encoding = Encoding::PLAIN;
-  // Encoding used for repetition levels
-  Encoding repetition_level_encoding = Encoding::PLAIN;
+  int32_t num_values                 = 0;  /// Number of values, including NULLs, in this data page.
+  Encoding encoding                  = Encoding::PLAIN;  /// Encoding used for this data page
+  Encoding definition_level_encoding = Encoding::PLAIN;  /// Encoding used for definition levels
+  Encoding repetition_level_encoding = Encoding::PLAIN;  /// Encoding used for repetition levels
 };
 
 /**
  * @brief Thrift-derived struct describing the header for a V2 data page
  */
 struct DataPageHeaderV2 {
-  // Number of values, including NULLs, in this data page.
-  int32_t num_values = 0;
-  // Number of NULL values, in this data page.
-  int32_t num_nulls = 0;
-  // Number of rows in this data page. which means pages change on record boundaries (r = 0)
-  int32_t num_rows = 0;
-  // Encoding used for this data page
-  Encoding encoding = Encoding::PLAIN;
-  // length of the definition levels
-  int32_t definition_levels_byte_length = 0;
-  // length of the repetition levels
-  int32_t repetition_levels_byte_length = 0;
-  // whether the values are compressed.
-  bool is_compressed = true;
+  int32_t num_values = 0;  /// Number of values, including NULLs, in this data page.
+  int32_t num_nulls  = 0;  /// Number of NULL values, in this data page.
+  int32_t num_rows   = 0;  /// Number of rows in this data page. which means pages change on record
+                           /// boundaries (r = 0)
+  Encoding encoding                     = Encoding::PLAIN;  /// Encoding used for this data page
+  int32_t definition_levels_byte_length = 0;                /// length of the definition levels
+  int32_t repetition_levels_byte_length = 0;                /// length of the repetition levels
+  bool is_compressed                    = true;             /// whether the values are compressed.
 };
 
 /**
  * @brief Thrift-derived struct describing the header for a dictionary page
  */
 struct DictionaryPageHeader {
-  // Number of values in the dictionary
-  int32_t num_values = 0;
-  // Encoding using this dictionary page
-  Encoding encoding = Encoding::PLAIN;
+  int32_t num_values = 0;                /// Number of values in the dictionary
+  Encoding encoding  = Encoding::PLAIN;  /// Encoding using this dictionary page
 };
 
 /**
@@ -834,21 +836,15 @@ struct DictionaryPageHeader {
  * skipped during reading.
  */
 struct PageHeader {
-  // The type of the page: indicates which of the *_header fields is set
-  PageType type = PageType::DATA_PAGE;
-  // Uncompressed page size in bytes (not including the header)
-  int32_t uncompressed_page_size = 0;
-  // Compressed page size in bytes (not including the header)
-  int32_t compressed_page_size = 0;
-
+  PageType type =
+    PageType::DATA_PAGE;  /// The type of the page: indicates which of the *_header fields is set
+  int32_t uncompressed_page_size =
+    0;                               /// Uncompressed page size in bytes (not including the header)
+  int32_t compressed_page_size = 0;  /// Compressed page size in bytes (not including the header)
   // Headers for page specific data.  One only will be set.
-
-  // Data page header
-  DataPageHeader data_page_header;
-  // Dictionary page header
-  DictionaryPageHeader dictionary_page_header;
-  // V2 data page header
-  DataPageHeaderV2 data_page_header_v2;
+  DataPageHeader data_page_header;              /// Data page header
+  DictionaryPageHeader dictionary_page_header;  /// Dictionary page header
+  DataPageHeaderV2 data_page_header_v2;         /// V2 data page header
 };
 
 }  // namespace io::parquet
