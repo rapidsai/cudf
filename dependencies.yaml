@@ -880,6 +880,10 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+        # TODO: remove this temporary fix when conda-forge sorts out breaking ABI in libxml2
+      - output_types: conda
+        packages:
+          - libxml2<2.14
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -940,8 +944,6 @@ dependencies:
           - aiobotocore>=2.2.0
           - boto3>=1.21.21
           - botocore>=1.24.21
-          # TODO: remove this temporary fix when conda-forge sorts out breaking ABI in libxml2
-          - libxml2<2.14
           - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
