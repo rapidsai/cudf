@@ -42,9 +42,11 @@ cdef class Column:
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
     @staticmethod
-    cdef Column _column_from_array_interface(
-        dict iface,
-        gpumemoryview data_view
+    cdef Column from_gpumemoryview(
+        gpumemoryview data,
+        tuple shape,
+        tuple strides,
+        DataType dtype,
     )
 
     cpdef DataType type(self)

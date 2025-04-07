@@ -34,6 +34,22 @@ class _Ravelled:
         self.__cuda_array_interface__ = cai
 
 
+def _parse_array_interface(iface: dict) -> tuple[tuple, tuple | None, DataType]:
+    """
+    Parse and validate a CUDA or NumPy array interface dict.
+    """
+    typestr = iface["typestr"]
+    if typestr[0] == ">":
+        raise ValueError("Big-endian data is not supported")
+    elif typestr[0] not in ("<", "|"):
+        raise ValueError(f"Unsupported endianness prefix: {typestr[0]}")
+
+    dtype = _datatype_from_dtype_desc(typestr[1:])
+    shape = iface["shape"]
+    strides = iface.get("strides")
+    return shape, strides, dtype
+
+
 cdef class Column:
     """A container of nullable device data as a column of elements.
 
@@ -331,37 +347,36 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
-    cdef Column _column_from_array_interface(
-        dict iface,
-        gpumemoryview data_view
+    cdef Column from_gpumemoryview(
+        gpumemoryview data,
+        tuple shape,
+        tuple strides,
+        DataType dtype,
     ):
         """
-        Construct a Column from array interface and associated device data.
+        Construct a Column from a gpumemoryview and array metadata.
 
         Parameters
         ----------
-        iface : dict
-            The parsed ``__array_interface__`` or ``__cuda_array_interface__`` dict.
-        data_view : gpumemoryview
-            A ``gpumemoryview`` referencing the data buffer.
+        data : gpumemoryview
+            The data buffer.
+        shape : tuple
+            The shape of the array.
+        strides : tuple or None
+            The strides of the array, or None if C-contiguous.
+        dtype : DataType
+            The element type of the array.
 
         Returns
         -------
         Column
         """
-        if iface.get("mask") is not None:
-            raise NotImplementedError("mask not yet supported")
-
-        typestr = iface["typestr"][1:]
-        data_type = _datatype_from_dtype_desc(typestr)
-        shape = iface["shape"]
-
-        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
+        if not is_c_contiguous(shape, strides, size_of(dtype)):
             raise ValueError("Data must be C-contiguous")
 
         if len(shape) == 1:
             size = shape[0]
-            return Column(data_type, size, data_view, None, 0, 0, [])
+            return Column(dtype, size, data, None, 0, 0, [])
 
         elif len(shape) == 2:
             num_rows, num_cols = shape
@@ -380,9 +395,9 @@ cdef class Column:
             flat_size = num_rows * num_cols
 
             data_col = Column(
-                data_type=data_type,
+                data_type=dtype,
                 size=flat_size,
-                data=data_view,
+                data=data,
                 mask=None,
                 null_count=0,
                 offset=0,
@@ -437,18 +452,20 @@ cdef class Column:
         except AttributeError:
             raise TypeError("Object does not implement __array_interface__")
 
-        arr = np.asarray(obj)
+        shape, strides, dtype = _parse_array_interface(iface)
+
         # ravel() is needed here because even though the array
         # is C-contiguous, viewing it as np.uint8 retains its
         # original shape. DeviceBuffer.to_device expects a 1D buffer,
         # so we call ravel() to ensure the data is flattened. This
         # doesn't copy the data for C-contiguous arrays, just creates
         # a flat view.
+        arr = np.asarray(obj)
         flat_data_view = memoryview(arr.ravel().view(np.uint8))
         device_buffer = DeviceBuffer.to_device(flat_data_view)
         data = gpumemoryview(device_buffer)
 
-        return Column._column_from_array_interface(iface, data)
+        return Column.from_gpumemoryview(data, shape, strides, dtype)
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -480,11 +497,13 @@ cdef class Column:
         except AttributeError:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
-        if len(iface["shape"]) == 2:
+        shape, strides, dtype = _parse_array_interface(iface)
+
+        if len(shape) == 2:
             obj = _Ravelled(obj)
 
         data = gpumemoryview(obj)
-        return Column._column_from_array_interface(iface, data)
+        return Column.from_gpumemoryview(data, shape, strides, dtype)
 
     @classmethod
     def from_array(cls, obj):
