@@ -41,8 +41,6 @@ def _parse_array_interface(iface: dict) -> tuple[tuple, tuple | None, DataType]:
     typestr = iface["typestr"]
     if typestr[0] == ">":
         raise ValueError("Big-endian data is not supported")
-    elif typestr[0] not in ("<", "|"):
-        raise ValueError(f"Unsupported endianness prefix: {typestr[0]}")
 
     dtype = _datatype_from_dtype_desc(typestr[1:])
     shape = iface["shape"]
