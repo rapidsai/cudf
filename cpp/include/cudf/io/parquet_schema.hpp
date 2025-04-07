@@ -194,7 +194,7 @@ struct DecimalType {
  * @brief Time units for temporal logical types
  */
 struct TimeUnit {
-  // Available time units
+  /// Available time units
   enum Type { UNDEFINED, MILLIS, MICROS, NANOS };
   /// Time unit type
   Type type;
@@ -275,7 +275,6 @@ struct LogicalType {
    * @brief Default constructor
    *
    * @param tp Logical type
-   * @return LogicalType object
    */
   LogicalType(Type tp = UNDEFINED) : type(tp) {}
 
@@ -283,7 +282,6 @@ struct LogicalType {
    * @brief Constructor for Decimal logical type
    *
    * @param dt Decimal type
-   * @return LogicalType object
    */
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
 
@@ -291,7 +289,6 @@ struct LogicalType {
    * @brief Constructor for Time logical type
    *
    * @param tt Time type
-   * @return LogicalType object
    */
   LogicalType(TimeType&& tt) : type(TIME), time_type(tt) {}
 
@@ -299,7 +296,6 @@ struct LogicalType {
    * @brief Constructor for Timestamp logical type
    *
    * @param tst Timestamp type
-   * @return LogicalType object
    */
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
 
@@ -307,7 +303,6 @@ struct LogicalType {
    * @brief Constructor for Integer logical type
    *
    * @param it Integer type
-   * @return LogicalType object
    */
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
@@ -687,7 +682,8 @@ struct ColumnChunkMetaData {
   int64_t index_page_offset = 0;
   /// Byte offset from the beginning of file to first (only) dictionary page
   int64_t dictionary_page_offset = 0;
-  Statistics statistics;  /// Optional statistics for this column chunk
+  /// Optional statistics for this column chunk
+  Statistics statistics;
   /// Set of all encodings used for pages in this column chunk. This information can be used to
   /// determine if all data pages are dictionary encoded for example.
   std::optional<std::vector<PageEncodingStats>> encoding_stats;
