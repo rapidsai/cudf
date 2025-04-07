@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
+#include <cuda/std/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -189,7 +190,7 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
   Type const dtype      = s->col.physical_type;
-  auto const data_len   = thrust::distance(s->data_start, s->data_end);
+  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;

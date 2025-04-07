@@ -21,6 +21,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -81,7 +82,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  auto const data_len    = thrust::distance(s->data_start, s->data_end);
+  auto const data_len    = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values  = data_len / s->dtype_len_in;
   auto const out_thread0 = warp_size;
 
