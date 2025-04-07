@@ -964,6 +964,25 @@ class NumericalColumn(NumericalBaseColumn):
             )
         )
 
+    def __dlpack__(
+        self,
+        /,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ):
+        return self.to_pylibcudf(mode="read").__dlpack__(
+            stream=stream,
+            max_version=max_version,
+            dl_device=dl_device,
+            copy=copy,
+        )
+
+    def __dlpack_device__(self):
+        return plc.interop._get_dlpack_device()
+
 
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list

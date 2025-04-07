@@ -453,7 +453,6 @@ dependencies:
           - c-compiler
           - cuda-nvcc
           - cxx-compiler
-          - dlpack>=0.8,<1.0
           - zlib>=1.2.13
     specific:
       - output_types: conda

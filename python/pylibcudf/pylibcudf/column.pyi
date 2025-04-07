@@ -3,6 +3,8 @@
 from collections.abc import Sequence
 from typing import Any, Protocol, TypedDict
 
+from typing_extensions import CapsuleType
+
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
@@ -43,6 +45,16 @@ class Column:
         offset: int,
         children: list[Column],
     ) -> None: ...
+    def __dlpack__(
+        self,
+        /,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ) -> CapsuleType: ...
+    def __dlpack_device__(self, /) -> tuple[int, int]: ...
     def type(self) -> DataType: ...
     def child(self, index: int) -> Column: ...
     def size(self) -> int: ...

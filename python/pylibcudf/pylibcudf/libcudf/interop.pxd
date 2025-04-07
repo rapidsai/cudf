@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.optional cimport optional
@@ -17,7 +18,10 @@ from rmm.librmm.memory_resource cimport device_memory_resource
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
-        void(*deleter)(DLManagedTensor*) except +libcudf_exception_handler
+        void(*deleter)(DLManagedTensor*) noexcept
+
+    ctypedef struct DLManagedTensorVersioned:
+        void(*deleter)(DLManagedTensorVersioned*) noexcept
 
 
 # The Arrow structs are not namespaced.
@@ -57,6 +61,15 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         optional[int32_t] precision
         vector[column_metadata] children_meta
 
+cdef extern from "cudf/detail/interop.hpp" nogil:
+    DLManagedTensorVersioned* to_dlpack_versioned (
+        const column_view& col,
+        bool copy,
+        bool to_cpu,
+        cuda_stream_view sync_stream,
+        void (*delete_func)(void *),
+        void *delete_ctx
+    ) except +libcudf_exception_handler
 
 cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
         nogil:
