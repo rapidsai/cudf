@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,6 +104,29 @@ enum class flip_endianness : bool { NO, YES };
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
   flip_endianness endian_configuration,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Copies a table into a contiguous column-major device array.
+ *
+ * This function converts a table_view with columns of the same type
+ * into a 2D device array in column-major order. The output buffer must be
+ * preallocated and large enough to hold `num_rows * num_columns` values of `output_dtype`.
+ *
+ * @throws cudf::logic_error if column types do not match `output_dtype`
+ * @throws cudf::logic_error if `output_dtype` is not fixed-width or is a fixed-point type
+ *
+ * @param input A table with fixed-width, non-nullable columns of the same type
+ * @param output Pointer to device memory large enough to hold `num_rows * num_columns` values
+ * @param output_dtype The logical data type of the output array
+ * @param stream CUDA stream used for memory operations
+ * @param mr Memory resource used for device allocations (currently unused)
+ */
+void table_to_device_array(
+  table_view const& input,
+  void* output,
+  cudf::data_type output_dtype,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
