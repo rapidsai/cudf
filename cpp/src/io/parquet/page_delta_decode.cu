@@ -493,8 +493,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     page->num_valids = 0;
 
     // Update string offsets or write string sizes for small and large strings respectively
-    update_string_offsets_for_pruned_pages<decode_block_size>(
-      s, initial_str_offsets, pages[page_idx], has_repetition);
+    if (has_repetition) {
+      update_string_offsets_for_pruned_pages<decode_block_size, true>(
+        s, initial_str_offsets, pages[page_idx]);
+    } else {
+      update_string_offsets_for_pruned_pages<decode_block_size, false>(
+        s, initial_str_offsets, pages[page_idx]);
+    }
 
     return;
   }
@@ -612,9 +617,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
     auto const chunks_per_rowgroup = initial_str_offsets.size();
     auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-    compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
+    if (has_repetition) {
+      compute_initial_large_strings_offset<true>(s, initial_str_offsets[input_col_idx]);
+    } else {
+      compute_initial_large_strings_offset<false>(s, initial_str_offsets[input_col_idx]);
+    }
   } else {
-    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
+    if (has_repetition) {
+      convert_small_string_lengths_to_offsets<decode_block_size, true>(s);
+    } else {
+      convert_small_string_lengths_to_offsets<decode_block_size, false>(s);
+    }
   }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -676,8 +689,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     page->num_valids = 0;
 
     // Update string offsets or write string sizes for small and large strings respectively
-    update_string_offsets_for_pruned_pages<decode_block_size>(
-      s, initial_str_offsets, pages[page_idx], has_repetition);
+    if (has_repetition) {
+      update_string_offsets_for_pruned_pages<decode_block_size, true>(
+        s, initial_str_offsets, pages[page_idx]);
+    } else {
+      update_string_offsets_for_pruned_pages<decode_block_size, false>(
+        s, initial_str_offsets, pages[page_idx]);
+    }
 
     return;
   }
@@ -788,9 +806,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
     auto const chunks_per_rowgroup = initial_str_offsets.size();
     auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-    compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_repetition);
+    if (has_repetition) {
+      compute_initial_large_strings_offset<true>(s, initial_str_offsets[input_col_idx]);
+    } else {
+      compute_initial_large_strings_offset<false>(s, initial_str_offsets[input_col_idx]);
+    }
   } else {
-    convert_small_string_lengths_to_offsets<decode_block_size>(s, has_repetition);
+    // convert string sizes to offsets
+    if (has_repetition) {
+      convert_small_string_lengths_to_offsets<decode_block_size, true>(s);
+    } else {
+      convert_small_string_lengths_to_offsets<decode_block_size, false>(s);
+    }
   }
 
   // finally, copy the string data into place

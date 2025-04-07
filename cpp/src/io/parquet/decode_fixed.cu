@@ -1039,8 +1039,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
-      update_string_offsets_for_pruned_pages<decode_block_size_t>(
-        s, initial_str_offsets, pages[page_idx], has_lists_t);
+      update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
+        s, initial_str_offsets, pages[page_idx]);
     }
     return;
   }
@@ -1222,9 +1222,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
       auto const chunks_per_rowgroup = initial_str_offsets.size();
       auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-      compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_lists_t);
+      compute_initial_large_strings_offset<has_lists_t>(s, initial_str_offsets[input_col_idx]);
     } else {
-      convert_small_string_lengths_to_offsets<decode_block_size_t>(s, has_lists_t);
+      convert_small_string_lengths_to_offsets<decode_block_size_t, has_lists_t>(s);
     }
   }
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }

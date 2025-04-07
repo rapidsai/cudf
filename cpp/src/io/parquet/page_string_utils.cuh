@@ -103,9 +103,8 @@ __device__ inline void block_excl_sum(size_type* arr, size_type length, size_typ
 /**
  * @brief Converts string sizes to offsets if this is not a large string column.
  */
-template <int block_size>
-__device__ void convert_small_string_lengths_to_offsets(page_state_s const* const state,
-                                                        bool has_lists)
+template <int block_size, bool has_lists>
+__device__ void convert_small_string_lengths_to_offsets(page_state_s const* const state)
 {
   // If this is a large string column. In the
   // latter case, offsets will be computed during string column creation.
@@ -114,7 +113,7 @@ __device__ void convert_small_string_lengths_to_offsets(page_state_s const* cons
 
   // if no repetition we haven't calculated start/end bounds and instead just skipped
   // values until we reach first_row. account for that here.
-  if (not has_lists) { value_count -= state->first_row; }
+  if constexpr (not has_lists) { value_count -= state->first_row; }
 
   // Convert the array of lengths into offsets
   if (value_count > 0) {
@@ -128,16 +127,16 @@ __device__ void convert_small_string_lengths_to_offsets(page_state_s const* cons
  * @brief Atomically update the initial string offset to be used during large string column
  * construction
  */
+template <bool has_lists>
 inline __device__ void compute_initial_large_strings_offset(page_state_s const* const state,
-                                                            size_t& initial_str_offset,
-                                                            bool has_lists)
+                                                            size_t& initial_str_offset)
 {
   // Values decoded by this page.
   int value_count = state->nesting_info[state->col.max_nesting_depth - 1].value_count;
 
   // if no repetition we haven't calculated start/end bounds and instead just skipped
   // values until we reach first_row. account for that here.
-  if (not has_lists) { value_count -= state->first_row; }
+  if constexpr (not has_lists) { value_count -= state->first_row; }
 
   // Atomically update the initial string offset if this is a large string column. This initial
   // offset will be used to compute (64-bit) offsets during large string column construction.
@@ -153,12 +152,9 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
  * @brief Write `initial_value` to offsets if this is not a large string column. Otherwise, fill
  * zeros at offsets and atomically update the initial string offset to build large string column
  */
-template <int block_size>
+template <int block_size, bool has_lists>
 __device__ void update_string_offsets_for_pruned_pages(
-  page_state_s* state,
-  cudf::device_span<size_t> initial_str_offsets,
-  PageInfo const& page,
-  bool has_lists)
+  page_state_s* state, cudf::device_span<size_t> initial_str_offsets, PageInfo const& page)
 {
   namespace cg = cooperative_groups;
 
@@ -181,11 +177,11 @@ __device__ void update_string_offsets_for_pruned_pages(
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
     auto const chunks_per_rowgroup = initial_str_offsets.size();
     auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
-    compute_initial_large_strings_offset(state, initial_str_offsets[input_col_idx], has_lists);
+    compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
   } else {
     // if no repetition we haven't calculated start/end bounds and instead just skipped
     // values until we reach first_row. account for that here.
-    if (not has_lists) { value_count -= state->first_row; }
+    if constexpr (not has_lists) { value_count -= state->first_row; }
 
     // Write the initial offset at all positions to indicate zero sized strings
     for (int idx = tid; idx < value_count; idx += block_size) {
