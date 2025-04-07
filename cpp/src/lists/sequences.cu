@@ -30,8 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -67,7 +67,7 @@ struct tabulator {
   auto __device__ operator()(size_type idx) const
   {
     auto const list_idx_end = thrust::upper_bound(thrust::seq, offsets, offsets + n_lists, idx);
-    auto const list_idx     = thrust::distance(offsets, list_idx_end) - 1;
+    auto const list_idx     = cuda::std::distance(offsets, list_idx_end) - 1;
     auto const list_offset  = offsets[list_idx];
     auto const list_step    = steps ? steps[list_idx] : T{1};
     return starts[list_idx] + multiply(list_step, idx - list_offset);
