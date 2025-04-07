@@ -4443,6 +4443,7 @@ def test_parquet_bloom_filters(
         expected_len,
     )
 
+
 def test_parquet_reader_unsupported_compression(datadir):
     fname = datadir / "hadoop_lz4_compressed.parquet"
 
