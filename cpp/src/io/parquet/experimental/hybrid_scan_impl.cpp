@@ -1046,7 +1046,7 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
   auto const& chunks     = _pass_itm_data->chunks;
   auto const num_columns = _input_columns.size();
 
-  CUDF_EXPECTS(pages.size() == _page_mask.size(), "Page mask size mismatch");
+  CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size mismatch");
 
   thrust::for_each(
     thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin())),

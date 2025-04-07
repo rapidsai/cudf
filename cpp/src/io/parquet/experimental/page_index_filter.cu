@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -450,6 +451,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
+
   // Return if empty row group indices
   if (row_group_indices.empty()) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
 
