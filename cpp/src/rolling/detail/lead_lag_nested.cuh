@@ -31,9 +31,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -180,7 +180,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                     scatter_map.begin(),
                     is_null_index_predicate(input.size(), gather_map.begin<size_type>()));
 
-  scatter_map.resize(thrust::distance(scatter_map.begin(), scatter_map_end), stream);
+  scatter_map.resize(cuda::std::distance(scatter_map.begin(), scatter_map_end), stream);
   // Bail early, if all LEAD/LAG computations succeeded. No defaults need be substituted.
   if (scatter_map.is_empty()) { return std::move(output_with_nulls->release()[0]); }
 

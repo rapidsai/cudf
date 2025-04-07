@@ -28,9 +28,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
@@ -496,7 +496,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
 
   // The number of tokens selected will be double the number of words since we
   // select from both the start and end index arrays.
-  uint32_t const num_words = thrust::distance(device_word_indices.begin(), itr_end) / 2;
+  uint32_t const num_words = cuda::std::distance(device_word_indices.begin(), itr_end) / 2;
 
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
