@@ -49,7 +49,7 @@ void _table_to_device_array(cudf::table_view const& input,
 
   for (int i = 0; i < num_columns; ++i) {
     auto const& col = input.column(i);
-    CUDF_EXPECTS(col.type().id() == cudf::type_to_id<T>(), "Mismatched column type");
+    CUDF_EXPECTS(col.type() == input.column(0).type(), "All columns must have the same dtype");
 
     auto* src_ptr = static_cast<void const*>(col.data<T>());
     auto* dst_ptr = base_ptr + i * item_size * num_rows;
@@ -62,19 +62,17 @@ void _table_to_device_array(cudf::table_view const& input,
   attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
   std::vector<cudaMemcpyAttributes> attrs{attr};
   std::vector<size_t> attr_idxs{0};
+  size_t fail_idx = SIZE_MAX;
 
-  size_t fail_index = SIZE_MAX;
-  cudaError_t err   = cudaMemcpyBatchAsync(dsts.data(),
-                                         const_cast<void**>(srcs.data()),
-                                         sizes.data(),
-                                         num_columns,
-                                         attrs.data(),
-                                         attr_idxs.data(),
-                                         attrs.size(),
-                                         &fail_index,
-                                         stream.value());
-
-  CUDF_CUDA_TRY(err);
+  CUDF_CUDA_TRY(cudaMemcpyBatchAsync(dsts.data(),
+                                     const_cast<void**>(srcs.data()),
+                                     sizes.data(),
+                                     num_columns,
+                                     attrs.data(),
+                                     attr_idxs.data(),
+                                     attrs.size(),
+                                     &fail_idx,
+                                     stream.value()));
 }
 
 struct TableToArrayDispatcher {
@@ -82,13 +80,18 @@ struct TableToArrayDispatcher {
   void* output;
   rmm::cuda_stream_view stream;
 
-  template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>() && !is_fixed_point<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>() || is_fixed_point<T>())>
   void operator()() const
   {
-    _table_to_device_array<T>(input, output, stream);
+    if constexpr (is_fixed_point<T>()) {
+      using StorageType = cudf::device_storage_type_t<T>;
+      _table_to_device_array<StorageType>(input, output, stream);
+    } else {
+      _table_to_device_array<T>(input, output, stream);
+    }
   }
 
-  template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>() || is_fixed_point<T>())>
+  template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>() && !is_fixed_point<T>())>
   void operator()() const
   {
     CUDF_FAIL("Unsupported dtype");
