@@ -21,6 +21,9 @@
 
 namespace cudf::io::parquet::detail {
 
+// Parquet 4-byte magic number "PAR1"
+constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
+
 // Max decimal precisions according to the parquet spec:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
 auto constexpr MAX_DECIMAL32_PRECISION  = 9;

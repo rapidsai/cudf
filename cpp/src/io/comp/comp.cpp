@@ -143,7 +143,6 @@ uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t 
     // Fits into a single tag byte
     *out_it++ = n << 2;
   } else {
-    // log2(n) is 32 - 1 - __builtin_clz(n)
     auto const log2_n = numeric::detail::count_significant_bits(static_cast<uint32_t>(n)) - 1;
     auto const count  = (log2_n >> 3) + 1;
     *out_it++         = (59 + count) << 2;
