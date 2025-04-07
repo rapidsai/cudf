@@ -55,7 +55,7 @@ namespace {
 #if defined(PREPROCESS_DEBUG)
 void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
-  pages.device_to_host_sync(_stream);
+  pages.device_to_host(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto const& p = pages[idx];
     // skip dictionary pages
@@ -304,7 +304,7 @@ void generate_depth_remappings(
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
   // so that we can actually compile a list of all the unsupported encodings found
@@ -781,7 +781,7 @@ void reader::impl::build_string_dict_indices()
 
   // compute the indices
   BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  pass.chunks.device_to_host_sync(_stream);
+  pass.chunks.device_to_host(_stream);
 }
 
 void reader::impl::allocate_nesting_info()
@@ -1677,7 +1677,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       key_start += num_keys_this_iter;
     }
 
-    sizes.device_to_host_sync(_stream);
+    sizes.device_to_host(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
       auto const& input_col = _input_columns[idx];
       auto* cols            = &_output_buffers;

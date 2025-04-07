@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -217,7 +218,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                       return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
                     });
 
-  gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
+  gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
 }
 

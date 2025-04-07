@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 import time
 from functools import cache
 from pathlib import Path
@@ -34,12 +35,14 @@ from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Sequence
     from typing import Literal
+
+    from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import Schema, Slice as Zlice
+    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -184,9 +187,7 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
-    ) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -668,37 +669,59 @@ class Cache(IR):
     Used for CSE at the plan level.
     """
 
-    __slots__ = ("key",)
-    _non_child = ("schema", "key")
+    __slots__ = ("key", "refcount")
+    _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
+    refcount: int
+    """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
         self.schema = schema
         self.key = key
+        self.refcount = refcount
         self.children = (value,)
-        self._non_child_args = (key,)
+        self._non_child_args = (key, refcount)
+
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        # Polars arranges that the keys are unique across all cache
+        # nodes that reference the same child, so we don't need to
+        # hash the child.
+        return (type(self), self.key, self.refcount)
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        if self.key == other.key and self.refcount == other.refcount:
+            self.children = other.children
+            return True
+        return False
 
     @classmethod
     def do_evaluate(
-        cls, key: int, df: DataFrame
+        cls, key: int, refcount: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
-    ) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
         try:
-            return cache[self.key]
+            (result, hits) = cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache, timer=timer))
+            result = value.evaluate(cache=cache, timer=timer)
+            cache[self.key] = (result, 0)
+            return result
+        else:
+            hits += 1
+            if hits == self.refcount:
+                del cache[self.key]
+            else:
+                cache[self.key] = (result, hits)
+            return result
 
 
 class DataFrameScan(IR):
@@ -708,10 +731,10 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars LazyFrame object."""
+    """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     config_options: ConfigOptions
@@ -734,19 +757,21 @@ class DataFrameScan(IR):
             self.projection,
         )
         self.children = ()
+        self._id_for_hash = random.randint(0, 2**64 - 1)
 
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
 
-        The (heavy) dataframe object is hashed as its id, so this is
-        not stable across runs, or repeat instances of the same equal dataframes.
+        The (heavy) dataframe object is not hashed. No two instances of
+        ``DataFrameScan`` will have the same hash, even if they have the
+        same schema, projection, and config options, and data.
         """
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
             schema_hash,
-            id(self.df),
+            self._id_for_hash,
             self.projection,
             self.config_options,
         )
