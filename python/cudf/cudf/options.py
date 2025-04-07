@@ -367,7 +367,7 @@ _register_option(
 
 _register_option(
     "num_io_threads",
-    _env_get_bool("CUDF_NUM_IO_THREADS", 4),
+    _env_get_bool("KVIKIO_NTHREADS", 4),
     textwrap.dedent(
         """
         Todo: Add comment here.

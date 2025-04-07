@@ -18,8 +18,6 @@
 
 #include <cudf/utilities/export.hpp>
 
-#include <nvml.h>
-
 namespace CUDF_EXPORT cudf {
 
 bool is_c2c_available();
