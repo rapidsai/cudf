@@ -13,7 +13,6 @@ from cuda.bindings.cyruntime cimport (
     cudaError_t,
     cudaMemcpyAsync,
     cudaMemcpyKind,
-    cudaStream_t,
 )
 
 from pylibcudf.libcudf.contiguous_split cimport (
@@ -26,6 +25,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.utilities.span cimport device_span
 
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
@@ -129,7 +129,7 @@ cdef class PackedColumns:
 
 cdef class ChunkedPack:
     """
-    A chunked version of `pack`.
+    A chunked version of :func:`pack`.
 
     This object can be used to pack (and therefore serialize) a table
     piece-by-piece through a user-provided staging buffer. This is
@@ -206,12 +206,18 @@ cdef class ChunkedPack:
         Parameters
         ----------
         buf
-            The device buffer to pack into, must be the same size as
-            the `user_buffer_size` used to construct the packer.
+            The device buffer to use as a staging buffer, must be at
+            least as large as the `user_buffer_size` used to construct the
+            packer.
 
         Returns
         -------
         Number of bytes packed.
+
+        Notes
+        -----
+        This is stream-ordered with respect to the stream used when
+        creating the `ChunkedPack`.
         """
         cdef device_span[uint8_t] d_span = device_span[uint8_t](
             <uint8_t *>buf.c_data(), buf.c_size()
@@ -239,8 +245,8 @@ cdef class ChunkedPack:
         Parameters
         ----------
         buf
-           The device buffer to use as a staging buffer, must be the
-           same size as the `user_buffer_size` used to construct the
+           The device buffer to use as a staging buffer, must be at
+           least as large as the `user_buffer_size` used to construct the
            packer.
 
         Returns
@@ -251,6 +257,12 @@ cdef class ChunkedPack:
         -----
         This is stream-ordered with respect to the stream used when
         creating the `ChunkedPack` and syncs that stream before returning.
+
+        Raises
+        ------
+        RuntimeError
+            If the copy to host fails or an incorrectly sized buffer
+            is provided.
         """
         cdef size_t offset = 0
         cdef size_t size
@@ -263,7 +275,7 @@ cdef class ChunkedPack:
                 dereference(self.c_obj).get_total_contiguous_size()
             )
         )
-        cdef cudaStream_t stream = self.stream.view().value()
+        cdef cuda_stream_view stream = self.stream.view()
         with nogil:
             while dereference(self.c_obj).has_next():
                 size = dereference(self.c_obj).next(d_span)
@@ -272,14 +284,15 @@ cdef class ChunkedPack:
                     d_span.data(),
                     size,
                     cudaMemcpyKind.cudaMemcpyDeviceToHost,
-                    stream,
+                    stream.value(),
                 )
                 offset += size
                 if err != cudaError.cudaSuccess:
+                    stream.synchronize()
                     raise RuntimeError(
                         f"Memcpy in pack_to_host failed error: {err}"
                     )
-        self.stream.synchronize()
+        stream.synchronize()
         return (
             self.build_metadata(),
             memoryview(HostBuffer.from_unique_ptr(move(h_buf))),
