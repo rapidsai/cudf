@@ -514,7 +514,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                   {true, true, true, true, true, true, false, false},
+                                        {true, true, true, true, true, true, false, false},
                                    scale_type{scale});
     auto const expected = cudf::table_view({col});
 

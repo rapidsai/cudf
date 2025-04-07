@@ -45,7 +45,7 @@ class DataFrame:
         columns = list(columns)
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
-        self.columns = [cast(NamedColumn, c) for c in columns]
+        self.columns = [cast("NamedColumn", c) for c in columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
 

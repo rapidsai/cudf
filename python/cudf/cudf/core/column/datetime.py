@@ -601,12 +601,12 @@ class DatetimeColumn(column.ColumnBase):
             offset=self.offset,
             size=self.size,
         )
-        return cast(cudf.core.column.NumericalColumn, col.astype(dtype))
+        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
     def strftime(self, format: str) -> cudf.core.column.StringColumn:
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
@@ -745,7 +745,7 @@ class DatetimeColumn(column.ColumnBase):
         all_nan: bool = False,
     ) -> DatetimeColumn:
         return cast(
-            DatetimeColumn,
+            "DatetimeColumn",
             _datetime_timedelta_find_and_replace(
                 original_column=self,
                 to_replace=to_replace,

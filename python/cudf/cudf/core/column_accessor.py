@@ -307,7 +307,7 @@ class ColumnAccessor(abc.MutableMapping):
                     )
                 elif cudf.api.types.infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
-                        start = cast(int, self.names[0])
+                        start = cast("int", self.names[0])
                         return pd.RangeIndex(
                             start=start, stop=start + 1, step=1, name=self.name
                         )
@@ -315,8 +315,8 @@ class ColumnAccessor(abc.MutableMapping):
                     if len(uniques) == 1 and uniques[0] != 0:
                         diff = uniques[0]
                         new_range = range(
-                            cast(int, self.names[0]),
-                            cast(int, self.names[-1]) + diff,
+                            cast("int", self.names[0]),
+                            cast("int", self.names[-1]) + diff,
                             diff,
                         )
                         return pd.RangeIndex(new_range, name=self.name)

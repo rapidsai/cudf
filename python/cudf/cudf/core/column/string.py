@@ -1067,11 +1067,11 @@ class StringMethods(ColumnMethods):
             else:
                 result = self._column.replace_multiple(
                     cast(
-                        StringColumn,
+                        "StringColumn",
                         column.as_column(pat, dtype=CUDF_STRING_DTYPE),
                     ),
                     cast(
-                        StringColumn,
+                        "StringColumn",
                         column.as_column(repl, dtype=CUDF_STRING_DTYPE),
                     ),
                 )
@@ -3891,7 +3891,7 @@ class StringMethods(ColumnMethods):
             # mypy can't deduce that the return value of
             # StringColumn.__eq__ is ColumnBase because the binops are
             # dynamically added by a mixin class
-            cast(ColumnBase, self._column == "").fillna(False)
+            cast("ColumnBase", self._column == "").fillna(False)
         )
 
     def isspace(self) -> SeriesOrIndex:
@@ -6242,7 +6242,7 @@ class StringColumn(column.ColumnBase):
             if op == "__add__":
                 if isinstance(other, pa.Scalar):
                     other = cast(
-                        StringColumn,
+                        "StringColumn",
                         column.as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
@@ -6608,7 +6608,7 @@ class StringColumn(column.ColumnBase):
         Helper function for methods that modify characters e.g. to_lower
         """
         plc_column = method(self.to_pylibcudf(mode="read"))
-        return cast(Self, ColumnBase.from_pylibcudf(plc_column))
+        return cast("Self", ColumnBase.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
         return self._modify_characters(plc.strings.case.to_lower)
@@ -6635,7 +6635,7 @@ class StringColumn(column.ColumnBase):
             pattern.to_pylibcudf(mode="read"),
             replacements.to_pylibcudf(mode="read"),
         )
-        return cast(Self, ColumnBase.from_pylibcudf(plc_result))
+        return cast("Self", ColumnBase.from_pylibcudf(plc_result))
 
     @acquire_spill_lock()
     def is_hex(self) -> NumericalColumn:
@@ -6695,7 +6695,7 @@ class StringColumn(column.ColumnBase):
             ),
             maxsplit,
         )
-        return cast(Self, ColumnBase.from_pylibcudf(plc_column))
+        return cast("Self", ColumnBase.from_pylibcudf(plc_column))
 
     def split_record_re(self, pattern: str, maxsplit: int) -> Self:
         return self._split_record_re(

@@ -935,7 +935,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             return cast(
-                Self,
+                "Self",
                 build_column(
                     data=self.base_data
                     if self.base_data is None
@@ -1023,7 +1023,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
-            return cast(Self, column_empty(0, self.dtype))
+            return cast("Self", column_empty(0, self.dtype))
         # compute mask slice
         if stride == 1:
             with acquire_spill_lock():
@@ -1119,7 +1119,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         # step != 1, create a scatter map with arange
         scatter_map = cast(
-            cudf.core.column.NumericalColumn,
+            "cudf.core.column.NumericalColumn",
             as_column(
                 rng,
                 dtype=np.dtype(np.int32),
@@ -1423,7 +1423,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         # Handle zero size
         if indices.size == 0:
-            return cast(Self, column_empty(row_count=0, dtype=self.dtype))
+            return cast("Self", column_empty(row_count=0, dtype=self.dtype))
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
@@ -1732,13 +1732,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             not ascending and self.is_monotonic_decreasing
         ):
             return cast(
-                cudf.core.column.NumericalColumn, as_column(range(len(self)))
+                "cudf.core.column.NumericalColumn", as_column(range(len(self)))
             )
         elif (ascending and self.is_monotonic_decreasing) or (
             not ascending and self.is_monotonic_increasing
         ):
             return cast(
-                cudf.core.column.NumericalColumn,
+                "cudf.core.column.NumericalColumn",
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
@@ -3174,9 +3174,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     if all(isinstance(o.dtype, CategoricalDtype) for o in objs):
         return cudf.core.column.categorical.CategoricalColumn._concat(
             cast(
-                MutableSequence[
-                    cudf.core.column.categorical.CategoricalColumn
-                ],
+                "MutableSequence[cudf.core.column.categorical.CategoricalColumn]",
                 objs,
             )
         )

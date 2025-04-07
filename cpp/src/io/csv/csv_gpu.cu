@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -522,8 +522,8 @@ inline __device__ void ctx_unmerge(
 {
   rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
   ctxb_sum   = get_row_context(ctxtree[base], *ctx);
-  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], *ctx);
-  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3);
+  ctxb_left  = get_row_context(ctxtree[(base) * 2 + 0], *ctx);
+  ctxb_right = get_row_context(ctxtree[(base) * 2 + 1], ctxb_left & 3);
   if (t & (rmask)) {
     *brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);
     *ctx = ctxb_left & 3;

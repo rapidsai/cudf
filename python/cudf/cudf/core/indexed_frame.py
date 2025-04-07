@@ -3031,7 +3031,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        NumericalColumn,
+                        "NumericalColumn",
                         as_column(
                             range(start, stop, stride),
                             dtype=SIZE_TYPE_DTYPE,
@@ -4850,7 +4850,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    NumericalColumn,
+                    "NumericalColumn",
                     cudf.core.column.as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
@@ -5398,7 +5398,7 @@ class IndexedFrame(Frame):
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
         element_type = cast(
-            ListDtype, self._columns[column_index].dtype
+            "ListDtype", self._columns[column_index].dtype
         ).element_type
         exploded = [
             column._with_type_metadata(element_type)

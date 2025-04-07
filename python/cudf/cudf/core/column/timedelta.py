@@ -375,7 +375,7 @@ class TimeDeltaColumn(ColumnBase):
     def strftime(self, format: str) -> cudf.core.column.StringColumn:
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         else:
@@ -401,7 +401,7 @@ class TimeDeltaColumn(ColumnBase):
         all_nan: bool = False,
     ) -> TimeDeltaColumn:
         return cast(
-            TimeDeltaColumn,
+            "TimeDeltaColumn",
             _datetime_timedelta_find_and_replace(
                 original_column=self,
                 to_replace=to_replace,

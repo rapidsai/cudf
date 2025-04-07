@@ -72,7 +72,9 @@ def _match_join_keys(
     right_is_categorical = isinstance(rtype, CategoricalDtype)
     if left_is_categorical and right_is_categorical:
         return _match_categorical_dtypes_both(
-            cast(CategoricalColumn, lcol), cast(CategoricalColumn, rcol), how
+            cast("CategoricalColumn", lcol),
+            cast("CategoricalColumn", rcol),
+            how,
         )
     elif left_is_categorical or right_is_categorical:
         if left_is_categorical:

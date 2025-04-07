@@ -56,9 +56,9 @@ struct minmax_pair {
   T max_val;
 
   __host__ __device__ minmax_pair()
-    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()){};
-  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val){};
-  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_){};
+    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()) {};
+  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val) {};
+  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_) {};
 };
 
 /**
