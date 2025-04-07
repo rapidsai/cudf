@@ -18,8 +18,6 @@
 
 #include <cudf/utilities/export.hpp>
 
-#include <optional>
-
 namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
