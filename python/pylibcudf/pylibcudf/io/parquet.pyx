@@ -272,14 +272,14 @@ cdef class ChunkedParquetReader:
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
-        cdef Stream s = _get_stream(stream)
+        self.stream = _get_stream(stream)
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
                     chunk_read_limit,
                     pass_read_limit,
                     options.c_obj,
-                    s.view(),
+                    self.stream.view(),
                 )
             )
 
@@ -312,7 +312,7 @@ cdef class ChunkedParquetReader:
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result)
+        return TableWithMetadata.from_libcudf(c_result, self.stream)
 
 
 cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
@@ -335,7 +335,7 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     with nogil:
         c_result = move(cpp_read_parquet(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, stream)
 
 
 cdef class ParquetChunkedWriter:
