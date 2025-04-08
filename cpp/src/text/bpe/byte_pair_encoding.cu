@@ -37,8 +37,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -141,7 +141,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
   auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
 
   auto const d_str  = d_strings.element<cudf::string_view>(str_idx);
-  auto const offset = thrust::distance(d_input_chars, d_str.data());
+  auto const offset = cuda::std::distance(d_input_chars, d_str.data());
 
   auto const d_spaces   = d_spaces_data + offset;
   auto const end_spaces = d_spaces + d_str.size_bytes();
@@ -167,7 +167,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
   }
   // init all spaces to 1 as appropriate
   for (auto itr = d_spaces + lane_idx; itr < end_spaces; itr += block_size) {
-    auto const index = thrust::distance(d_spaces, itr);
+    auto const index = cuda::std::distance(d_spaces, itr);
     *itr = static_cast<int8_t>(cudf::strings::detail::is_begin_utf8_char(d_str.data()[index]));
   }
   __syncthreads();
@@ -175,8 +175,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
   // for finding the next half of a pair
   auto next_substr = [d_str, d_spaces, end = end_spaces](int8_t* begin) {
     auto const next = thrust::find(thrust::seq, begin + 1, end, 1);
-    auto const size = static_cast<cudf::size_type>(thrust::distance(begin, next));
-    return cudf::string_view(d_str.data() + thrust::distance(d_spaces, begin), size);
+    auto const size = static_cast<cudf::size_type>(cuda::std::distance(begin, next));
+    return cudf::string_view(d_str.data() + cuda::std::distance(d_spaces, begin), size);
   };
   // for locating adjacent pairs after merging a pair
   auto find_prev = [begin = d_spaces](int8_t* ptr) {
@@ -205,9 +205,9 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
       if (!rhs.empty()) {
         auto rank          = max_rank;
         auto const mp      = merge_pair_type{lhs, rhs};
-        auto const map_itr = d_map.find(mp);                     // lookup pair in merges table;
-        if (map_itr != d_map.end()) { rank = map_itr->second; }  // found a match;
-        d_ranks[thrust::distance(d_spaces, next_itr)] = rank;    // store the rank
+        auto const map_itr = d_map.find(mp);                      // lookup pair in merges table;
+        if (map_itr != d_map.end()) { rank = map_itr->second; }   // found a match;
+        d_ranks[cuda::std::distance(d_spaces, next_itr)] = rank;  // store the rank
         if (rank < min_rank) { min_rank = rank; }
       }
     }
@@ -231,7 +231,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
         // using example string above, the min-rank is 1 at position 5
         // string: abcdefghij
         // spaces: 1111101111  (set position 5 to 0)
-        if (*ptr != block_min_rank) { d_spaces[thrust::distance(d_ranks, itr)] = 0; }
+        if (*ptr != block_min_rank) { d_spaces[cuda::std::distance(d_ranks, itr)] = 0; }
       }
     }
     __syncthreads();
@@ -242,14 +242,14 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     // spaces: 1111101111 (pair 'e,f' is now merged)
     // rerank: 0000101000 ('ef' and 'fg' need re-ranking as 'd,ef' and 'ef,g'
     for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += block_size) {
-      auto const index = thrust::distance(d_ranks, itr);
+      auto const index = cuda::std::distance(d_ranks, itr);
       if (*itr == block_min_rank && d_spaces[index] == 0) {
         // find previous pair mid-point
         auto ptr = find_prev(d_spaces + index - 1);
-        if (ptr > d_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        if (ptr > d_spaces) { d_rerank[cuda::std::distance(d_spaces, ptr)] = 1; }
         // find next pair mid-point
         ptr = thrust::find(thrust::seq, d_spaces + index + 1, end_spaces, 1);
-        if (ptr < end_spaces) { d_rerank[thrust::distance(d_spaces, ptr)] = 1; }
+        if (ptr < end_spaces) { d_rerank[cuda::std::distance(d_spaces, ptr)] = 1; }
         *itr = max_rank;  // reset this rank
       }
     }
@@ -258,16 +258,16 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     // compute the ranks for the newly created pairs
     min_rank = max_rank;  // and record the new minimum along the way
     for (auto itr = d_rerank + lane_idx; itr < end_rerank; itr += block_size) {
-      auto const index = thrust::distance(d_rerank, itr);
+      auto const index = cuda::std::distance(d_rerank, itr);
       auto rank        = d_ranks[index];
       if (*itr) {
         *itr = 0;  // reset re-rank
         // build lhs of pair
         auto const ptr  = find_prev(d_spaces + index - 1);
-        auto const size = static_cast<cudf::size_type>(thrust::distance(ptr, d_spaces + index));
-        auto const lhs  = cudf::string_view(d_str.data() + thrust::distance(d_spaces, ptr), size);
-        auto const rhs  = next_substr(d_spaces + index);  // retrieve rhs of pair
-        rank            = max_rank;
+        auto const size = static_cast<cudf::size_type>(cuda::std::distance(ptr, d_spaces + index));
+        auto const lhs = cudf::string_view(d_str.data() + cuda::std::distance(d_spaces, ptr), size);
+        auto const rhs = next_substr(d_spaces + index);  // retrieve rhs of pair
+        rank           = max_rank;
         if (!rhs.empty()) {
           auto const mp      = merge_pair_type{lhs, rhs};
           auto const map_itr = d_map.find(mp);                     // lookup rank for this pair;
@@ -318,7 +318,7 @@ CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
     return;
   }
 
-  auto const offset = thrust::distance(d_input_chars, d_str.data());
+  auto const offset = cuda::std::distance(d_input_chars, d_str.data());
 
   auto const d_spaces   = d_spaces_data + offset;
   auto const end_spaces = d_spaces + d_str.size_bytes();
@@ -384,7 +384,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
     auto const up_end =  // remove all but the unpairable offsets
       thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0L);
-    auto const unpairables = thrust::distance(d_up_offsets, up_end);  // number of unpairables
+    auto const unpairables = cuda::std::distance(d_up_offsets, up_end);  // number of unpairables
 
     // new string boundaries created by combining unpairable offsets with the existing offsets
     auto tmp_offsets = rmm::device_uvector<int64_t>(unpairables + input.size() + 1, stream);
@@ -400,7 +400,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const offsets_end =
       thrust::unique(rmm::exec_policy_nosync(stream), tmp_offsets.begin(), tmp_offsets.end());
     auto const offsets_total =
-      static_cast<cudf::size_type>(thrust::distance(tmp_offsets.begin(), offsets_end));
+      static_cast<cudf::size_type>(cuda::std::distance(tmp_offsets.begin(), offsets_end));
     tmp_offsets.resize(offsets_total, stream);
 
     // temp column created with the merged offsets and the original chars data
