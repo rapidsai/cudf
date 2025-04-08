@@ -69,7 +69,7 @@ def _to_plc_compression(
     | None,
 ) -> plc.io.types.CompressionType:
     compression_map = {
-        None: plc.io.CompressionType.NONE,
+        None: plc.io.types.CompressionType.NONE,
         "brotli": plc.io.types.CompressionType.BROTLI,
         "bz2": plc.io.types.CompressionType.BZIP2,
         "gzip": plc.io.types.CompressionType.GZIP,
