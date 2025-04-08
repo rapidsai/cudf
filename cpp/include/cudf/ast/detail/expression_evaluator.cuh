@@ -38,7 +38,6 @@ namespace ast {
 
 namespace detail {
 
-// TODO: duplicate
 CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
 {
   // TODO: only decimals? impact of dictionary types, strings?
@@ -535,7 +534,7 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        if (has_complex_type) {
+        if constexpr (has_complex_type) {
           type_dispatcher(input.data_type,
                           *this,
                           output_object,
@@ -564,7 +563,7 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        if (has_complex_type) {
+        if constexpr (has_complex_type) {
           type_dispatcher(lhs.data_type,
                           detail::single_dispatch_binary_operator{},
                           *this,

@@ -38,16 +38,6 @@
 
 namespace cudf {
 namespace detail {
-
-CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
-{
-  // TODO: only decimals? impact of dictionary types, strings?
-  return type == cudf::type_id::STRUCT || type == cudf::type_id::LIST ||
-         type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
-         type == cudf::type_id::DECIMAL128 || type == cudf::type_id::STRING ||
-         type == cudf::type_id::DICTIONARY32;
-}
-
 /**
  * @brief Kernel for evaluating an expression on a table to produce a new column.
  *
@@ -63,7 +53,7 @@ CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
  * expression.
  * @param output_column The destination for the results of evaluating the expression.
  */
-template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type = true>
+template <cudf::size_type max_block_size, bool has_nulls, bool has_complex_type>
 __launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
@@ -103,7 +93,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
   // TODO: only checking the output type not sufficient, need to check the expression tree?
-  auto const has_complex_type = is_complex_type(parser.output_type().id());
+  auto const has_complex_type = ast::detail::is_complex_type(parser.output_type().id());
 
   auto const output_column_mask_state =
     has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
@@ -129,25 +119,30 @@ std::unique_ptr<column> compute_column(table_view const& table,
   auto const config          = cudf::detail::grid_1d{table.num_rows(), block_size};
   auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
-  // Execute the kernel
-  // TODO: problematic branching?
   auto table_device = table_device_view::create(table, stream);
-  if (has_nulls && has_complex_type) {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true, true>
+  // Use template metaprogramming to select the appropriate kernel based on has_nulls and
+  // has_complex_type
+  auto launch_kernel = [&](auto has_nulls_tag, auto has_complex_type_tag) {
+    using HasNulls       = decltype(has_nulls_tag);
+    using HasComplexType = decltype(has_complex_type_tag);
+
+    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, HasNulls::value, HasComplexType::value>
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
-  } else if (has_nulls) {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, true, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-        *table_device, device_expression_data, *mutable_output_device);
-  } else if (has_complex_type) {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false, true>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-        *table_device, device_expression_data, *mutable_output_device);
+  };
+  // Execute the kernel
+  if (has_nulls) {
+    if (has_complex_type) {
+      launch_kernel(std::true_type{}, std::true_type{});
+    } else {
+      launch_kernel(std::true_type{}, std::false_type{});
+    }
   } else {
-    cudf::detail::compute_column_kernel<MAX_BLOCK_SIZE, false, false>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-        *table_device, device_expression_data, *mutable_output_device);
+    if (has_complex_type) {
+      launch_kernel(std::false_type{}, std::true_type{});
+    } else {
+      launch_kernel(std::false_type{}, std::false_type{});
+    }
   }
 
   CUDF_CHECK_CUDA(stream.value());
