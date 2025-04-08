@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 import polars as pl
@@ -80,12 +82,31 @@ def test_groupby_agg_config_options(df, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_raises(df, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_groupby_fallback(df, engine, fallback_mode):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="dask-experimental",
+        executor_options={
+            "fallback_mode": fallback_mode,
+            "max_rows_per_partition": 4,
+        },
+    )
+    match = "Failed to decompose groupby aggs"
+
     q = df.group_by("y").median()
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+
+    if fallback_mode == "silent":
+        ctx = contextlib.nullcontext()
+    elif fallback_mode == "raise":
+        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+    elif fallback_mode == "foo":
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError, match="not a supported 'fallback_mode' option"
+        )
+    else:
+        ctx = pytest.warns(UserWarning, match=match)
+    with ctx:
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
