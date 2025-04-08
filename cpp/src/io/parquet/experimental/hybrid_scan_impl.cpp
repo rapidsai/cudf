@@ -1048,10 +1048,11 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
 
   CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size mismatch");
 
+  auto page_and_mask_begin =
+    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin()));
+
   thrust::for_each(
-    thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(pages.host_end(), page_mask.end())),
-    [&](auto const& page_and_mask_pair) {
+    page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
       // Return if the page is valid
       if (thrust::get<1>(page_and_mask_pair)) { return; }
 
