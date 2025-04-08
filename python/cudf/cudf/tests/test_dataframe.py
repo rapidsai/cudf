@@ -11341,3 +11341,27 @@ def test_construct_empty_listlike_index_and_columns(columns, index):
     result = cudf.DataFrame([], columns=columns, index=index)
     expected = pd.DataFrame([], columns=columns, index=index)
     assert_eq(result, expected)
+
+
+def test_rename_reset_label_dtype():
+    data = {1: [2]}
+    col_mapping = {1: "a"}
+    result = cudf.DataFrame(data).rename(columns=col_mapping)
+    expected = pd.DataFrame(data).rename(columns=col_mapping)
+    assert_eq(result, expected)
+
+
+def test_insert_reset_label_dtype():
+    result = cudf.DataFrame({1: [2]})
+    expected = pd.DataFrame({1: [2]})
+    result.insert(1, "a", [2])
+    expected.insert(1, "a", [2])
+    assert_eq(result, expected)
+
+
+def test_setitem_reset_label_dtype():
+    result = cudf.DataFrame({1: [2]})
+    expected = pd.DataFrame({1: [2]})
+    result["a"] = [2]
+    expected["a"] = [2]
+    assert_eq(result, expected)
