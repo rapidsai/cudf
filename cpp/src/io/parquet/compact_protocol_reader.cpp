@@ -16,9 +16,7 @@
 
 #include "compact_protocol_reader.hpp"
 
-#include "parquet.hpp"
-#include "parquet_common.hpp"
-
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
