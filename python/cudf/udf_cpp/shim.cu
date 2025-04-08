@@ -723,7 +723,65 @@ make_definition_corr(BlockCorr, int64, int64_t);
 #undef make_definition_corr
 }
 
-/*
+class udf_group {
+ public:
+  int64_t* data;
+  size_t size;
+
+  __device__ udf_group(int64_t* data_ptr, size_t size_val)
+      : data(data_ptr), size(size_val) {}
+
+  __device__ udf_group() : data(nullptr), size(0) {}
+
+  // utilities
+  __device__ void* block_alloc(size_t size) {
+      __shared__ void* ptr;
+
+      if (threadIdx.x == 0) {
+          ptr = malloc(size * sizeof(int64_t));
+      }
+
+      __syncthreads();  // all threads wait for ptr to be written
+
+      return ptr;  // all threads return the same pointer
+  }
+
+  __device__ void block_free(void* ptr) {
+      if (threadIdx.x == 0) {
+          free(ptr);
+      }
+  }
+
+  __device__ udf_group binary_add(udf_group other) {
+      int64_t* ptr = (int64_t*)block_alloc(size * sizeof(int64_t));
+      ptr[threadIdx.x] = this->data[threadIdx.x] + other.data[threadIdx.x];
+      __syncthreads();
+      udf_group result;
+      result.data = ptr;
+      result.size = size;
+      printf("I am being called!\n");
+      return result;
+  }
+};
+
+
+
+extern "C" 
+__device__ int group_sum_binaryop(                                                 
+    int64_t* numba_return_value, int64_t* lhs, int64_t* rhs, int64_t* out, int64_t size) 
+{
+  auto lhs_ptr = reinterpret_cast<udf_group*>(lhs);
+  auto rhs_ptr = reinterpret_cast<udf_group*>(rhs);
+  auto udf_group_ptr   = new (out) udf_group;
+
+  *udf_group_ptr = lhs_ptr->binary_add(*rhs_ptr);
+
+  return 0;
+}
+
+
+
+/*/*
 NRT CUDA functions
 */
 

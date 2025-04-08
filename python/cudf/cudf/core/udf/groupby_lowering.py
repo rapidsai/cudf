@@ -7,6 +7,7 @@ from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower
+from numba import cuda
 
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
@@ -15,6 +16,7 @@ from cudf.core.udf.groupby_typing import (
     call_cuda_functions,
     group_size_type,
     index_default_type,
+    call_group_sum
 )
 
 
@@ -188,3 +190,33 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
         cuda_Group_idxmin
     )
     cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
+
+
+import operator
+@cuda_lower(operator.add, GroupType(types.int64), GroupType(types.int64))
+def cuda_lower_add(context, builder, sig, args):
+    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
+        context, builder, value=args[1]
+    )
+
+    output = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    _ = context.compile_internal(
+        builder,
+        call_group_sum,
+        types.void(
+            sig.return_type.group_data_type,
+            sig.args[0].group_data_type,
+            sig.args[1].group_data_type,
+            group_size_type,
+        ),
+        (
+            output.group_data,
+            lhs_grp.group_data,
+            rhs_grp.group_data,
+            lhs_grp.size,
+        ),
+    )
+    return output._getvalue()

@@ -110,17 +110,22 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # needed here.
     with _CUDFNumbaConfig():
         ptx, output_type = cudautils.compile_udf(func, compile_sig)
+    
+    # TODO
+    from cudf.core.udf.groupby_typing import GroupType
 
-    if not isinstance(output_type, MaskedType):
+    if not isinstance(output_type, (MaskedType, GroupType)):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
         numba_output_type = output_type
 
-    result = (
-        numba_output_type
-        if not isinstance(numba_output_type, MaskedType)
-        else numba_output_type.value_type
-    )
+    if isinstance(numba_output_type, MaskedType):
+        result = numba_output_type.value_type
+    elif isinstance(numba_output_type, GroupType):
+        result = numba_output_type.group_scalar_type
+    else:
+        result = numba_output_type
+
     result = result if result.is_internal else result.return_type
 
     # _get_udf_return_type will throw a TypingError if the user tries to use

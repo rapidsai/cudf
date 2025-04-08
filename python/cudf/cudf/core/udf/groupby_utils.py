@@ -112,7 +112,7 @@ def _get_groupby_apply_kernel(frame, func, args):
     )
 
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
-
+    breakpoint()
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
         "cuda": cuda,

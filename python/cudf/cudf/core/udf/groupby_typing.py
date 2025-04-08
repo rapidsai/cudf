@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+import operator
 
 import numba
 from numba import cuda, types
@@ -390,5 +391,28 @@ for attr in ("group_data", "index", "size"):
     make_attribute_wrapper(GroupType, attr, attr)
 
 
-for op in arith_ops + comparison_ops + unary_ops:
-    cuda_registry.register_global(op)(GroupOpBase)
+#for op in arith_ops + comparison_ops + unary_ops:
+#    cuda_registry.register_global(op)(GroupOpBase)
+
+_group_sum_binaryop = cuda.declare_device(
+    "group_sum_binaryop",
+    types.void(
+        types.CPointer(types.int64),
+        types.CPointer(types.int64), 
+        types.CPointer(types.int64),
+        group_size_type,
+    )
+)
+def call_group_sum(lhs, rhs, out, size):
+    return _group_sum_binaryop(lhs, rhs, out, size)
+
+
+
+class GroupAdd(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], GroupType) and isinstance(
+            args[1], GroupType
+        ):
+            return nb_signature(GroupType(types.int64), args[0], args[1])
+
+cuda_registry.register_global(operator.add)(GroupAdd)
