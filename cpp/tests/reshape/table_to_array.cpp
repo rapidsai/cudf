@@ -59,40 +59,42 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
 {
   using T     = TypeParam;
   auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
 
   auto const dtype = cudf::data_type{cudf::type_to_id<T>()};
 
-  auto const col0 = cudf::test::make_type_param_vector<T>({1, 2, 3});
-  auto const col1 = cudf::test::make_type_param_vector<T>({4, 5, 6});
-  auto const col2 = cudf::test::make_type_param_vector<T>({7, 8, 9});
-  auto const col3 = cudf::test::make_type_param_vector<T>({10, 11, 12});
+  int nrows = 3;
+  int ncols = 4;
 
   std::vector<std::unique_ptr<cudf::column>> cols;
-  auto make_col = [&](auto const& data) {
-    return std::make_unique<cudf::column>(
-      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end()));
-  };
+  std::vector<T> expected;
 
-  cols.push_back(make_col(col0));
-  cols.push_back(make_col(col1));
-  cols.push_back(make_col(col2));
-  cols.push_back(make_col(col3));
+  for (int col = 0; col < ncols; ++col) {
+    std::vector<T> data(nrows);
+    for (int row = 0; row < nrows; ++row) {
+      auto val = col * nrows + row + 1;
+      if constexpr (cudf::is_chrono<T>()) {
+        data[row] = T(typename T::duration{val});
+      } else {
+        data[row] = static_cast<T>(val);
+      }
+      expected.push_back(data[row]);
+    }
+    cols.push_back(std::make_unique<cudf::column>(
+      cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end())));
+  }
 
-  cudf::table_view input({cols[0]->view(), cols[1]->view(), cols[2]->view(), cols[3]->view()});
-  size_t num_elements = 3 * 4;
-  rmm::device_buffer output(num_elements * sizeof(T), stream);
+  std::vector<cudf::column_view> views;
+  for (auto const& col : cols) {
+    views.push_back(col->view());
+  }
+  cudf::table_view input{views};
 
-  cudf::table_to_device_array(
-    input, output.data(), dtype, stream, rmm::mr::get_current_device_resource());
+  auto output = cudf::detail::make_zeroed_device_uvector_sync<T>(nrows * ncols, stream, *mr);
 
-  std::vector<T> host_result(num_elements);
-  CUDF_CUDA_TRY(cudaMemcpy(
-    host_result.data(), output.data(), num_elements * sizeof(T), cudaMemcpyDeviceToHost));
+  cudf::table_to_array(input, output.data(), dtype, stream);
 
-  auto const expected_data =
-    cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
-  std::vector<T> expected(expected_data.begin(), expected_data.end());
-
+  auto host_result = cudf::detail::make_std_vector_sync(output, stream);
   EXPECT_EQ(host_result, expected);
 }
 
@@ -108,6 +110,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
   auto scale  = numeric::scale_type{-2};
   auto dtype  = cudf::data_type{cudf::type_to_id<decimalXX>(), scale};
 
@@ -115,16 +118,13 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   fp_wrapper col1({321, 654, 987}, scale);
 
   cudf::table_view input({col0, col1});
-  rmm::device_buffer output(2 * 3 * sizeof(RepType), stream);
+  size_t num_elements = input.num_rows() * input.num_columns();
 
-  cudf::table_to_device_array(
-    input, output.data(), dtype, stream, rmm::mr::get_current_device_resource());
+  auto output = cudf::detail::make_zeroed_device_uvector_sync<RepType>(num_elements, stream, *mr);
 
-  std::vector<RepType> host_result(6);
-  CUDF_CUDA_TRY(cudaMemcpy(host_result.data(),
-                           output.data(),
-                           host_result.size() * sizeof(RepType),
-                           cudaMemcpyDeviceToHost));
+  cudf::table_to_array(input, output.data(), dtype, stream);
+
+  auto host_result = cudf::detail::make_std_vector_sync(output, stream);
 
   std::vector<RepType> expected{123, 456, 789, 321, 654, 987};
   EXPECT_EQ(host_result, expected);
@@ -139,10 +139,21 @@ TEST(TableToDeviceArrayTest, UnsupportedStringType)
   cudf::table_view input_table({col});
   rmm::device_buffer output(3 * sizeof(int32_t), stream);
 
-  EXPECT_THROW(cudf::table_to_device_array(input_table,
-                                           output.data(),
-                                           cudf::data_type{cudf::type_id::STRING},
-                                           stream,
-                                           rmm::mr::get_current_device_resource()),
+  EXPECT_THROW(cudf::table_to_array(
+                 input_table, output.data(), cudf::data_type{cudf::type_id::STRING}, stream),
                cudf::logic_error);
+}
+
+TEST(TableToDeviceArrayTest, FailsWithNullValues)
+{
+  auto stream = cudf::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3}, {true, false, true});
+
+  cudf::table_view input_table({col});
+  rmm::device_buffer output(3 * sizeof(int32_t), stream);
+
+  EXPECT_THROW(
+    cudf::table_to_array(input_table, output.data(), cudf::data_type{cudf::type_id::INT32}, stream),
+    cudf::logic_error);
 }

@@ -115,20 +115,17 @@ std::unique_ptr<column> byte_cast(
  * preallocated and large enough to hold `num_rows * num_columns` values of `output_dtype`.
  *
  * @throws cudf::logic_error if column types do not match `output_dtype`
- * @throws cudf::logic_error if `output_dtype` is not fixed-width or is a fixed-point type
+ * @throws cudf::logic_error if `output_dtype` is not a fixed-width type
  *
  * @param input A table with fixed-width, non-nullable columns of the same type
- * @param output Pointer to device memory large enough to hold `num_rows * num_columns` values
- * @param output_dtype The logical data type of the output array
+ * @param output Pointer to device memory sized to hold `num_rows * num_columns` values
+ * @param output_dtype The data type of the output array
  * @param stream CUDA stream used for memory operations
- * @param mr Memory resource used for device allocations (currently unused)
  */
-void table_to_device_array(
-  table_view const& input,
-  void* output,
-  cudf::data_type output_dtype,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void table_to_array(table_view const& input,
+                    void* output,
+                    cudf::data_type output_dtype,
+                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 

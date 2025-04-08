@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,14 @@ std::unique_ptr<table> tile(table_view const& input,
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::table_to_array
+ */
+void table_to_array(table_view const& input,
+                    void* output,
+                    data_type output_dtype,
+                    rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

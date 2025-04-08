@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -24,62 +25,75 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_memcpy.cuh>
+#include <cuda/functional>
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
+namespace detail {
 namespace {
 
 template <typename T>
-void _table_to_device_array(cudf::table_view const& input,
-                            void* output,
-                            rmm::cuda_stream_view stream)
+void _table_to_array(table_view const& input, void* output, rmm::cuda_stream_view stream)
 {
   auto const num_columns = input.num_columns();
   auto const num_rows    = input.num_rows();
   auto const item_size   = sizeof(T);
+  auto* base_ptr         = static_cast<cuda::std::byte*>(output);
 
-  std::vector<void*> dsts(num_columns);
-  std::vector<void const*> srcs(num_columns);
-  std::vector<size_t> sizes(num_columns, item_size * num_rows);
+  CUDF_EXPECTS(num_columns > 0, "Must have at least one column.");
+  CUDF_EXPECTS(output != nullptr, "Output pointer cannot be null.");
 
-  auto* base_ptr = static_cast<uint8_t*>(output);
+  rmm::device_uvector<void*> d_srcs(num_columns, stream);
+  rmm::device_uvector<void*> d_dsts(num_columns, stream);
+
+  std::vector<void const*> h_srcs(num_columns);
+  std::vector<void*> h_dsts(num_columns);
 
   for (int i = 0; i < num_columns; ++i) {
     auto const& col = input.column(i);
     CUDF_EXPECTS(col.type() == input.column(0).type(), "All columns must have the same dtype");
+    CUDF_EXPECTS(col.null_count() == 0, "All columns must be non-nullable or contain no nulls");
 
-    auto* src_ptr = static_cast<void const*>(col.data<T>());
-    auto* dst_ptr = base_ptr + i * item_size * num_rows;
-
-    srcs[i] = src_ptr;
-    dsts[i] = dst_ptr;
+    h_srcs[i] = static_cast<void const*>(col.data<T>());
+    h_dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
   }
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 12080
-  cudaMemcpyAttributes attr{};
-  attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
-  std::vector<cudaMemcpyAttributes> attrs{attr};
-  std::vector<size_t> attr_idxs{0};
-  size_t fail_idx = SIZE_MAX;
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_srcs.data(),
+                                h_srcs.data(),
+                                sizeof(void*) * num_columns,
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_dsts.data(),
+                                h_dsts.data(),
+                                sizeof(void*) * num_columns,
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
 
-  CUDF_CUDA_TRY(cudaMemcpyBatchAsync(dsts.data(),
-                                     const_cast<void**>(srcs.data()),
-                                     sizes.data(),
-                                     num_columns,
-                                     attrs.data(),
-                                     attr_idxs.data(),
-                                     attrs.size(),
-                                     &fail_idx,
-                                     stream.value()));
-#else
-  for (int i = 0; i < num_columns; ++i) {
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
-  }
-#endif
+  thrust::constant_iterator<size_t> sizes(static_cast<size_t>(item_size * num_rows));
+
+  void* d_temp_storage      = nullptr;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceMemcpy::Batched(d_temp_storage,
+                             temp_storage_bytes,
+                             d_srcs.begin(),
+                             d_dsts.begin(),
+                             sizes,
+                             num_columns,
+                             stream.value());
+
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+
+  cub::DeviceMemcpy::Batched(temp_storage.data(),
+                             temp_storage_bytes,
+                             d_srcs.begin(),
+                             d_dsts.begin(),
+                             sizes,
+                             num_columns,
+                             stream.value());
 }
 
 struct TableToArrayDispatcher {
@@ -92,9 +106,9 @@ struct TableToArrayDispatcher {
   {
     if constexpr (is_fixed_point<T>()) {
       using StorageType = cudf::device_storage_type_t<T>;
-      _table_to_device_array<StorageType>(input, output, stream);
+      _table_to_array<StorageType>(input, output, stream);
     } else {
-      _table_to_device_array<T>(input, output, stream);
+      _table_to_array<T>(input, output, stream);
     }
   }
 
@@ -107,14 +121,26 @@ struct TableToArrayDispatcher {
 
 }  // namespace
 
-void table_to_device_array(table_view const& input,
-                           void* output,
-                           data_type output_dtype,
-                           rmm::cuda_stream_view stream,
-                           rmm::device_async_resource_ref)
+void table_to_array(table_view const& input,
+                    void* output,
+                    data_type output_dtype,
+                    rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(output != nullptr, "Output pointer cannot be null.");
+  CUDF_EXPECTS(input.num_columns() > 0, "Input must have at least one column.");
+
+  cudf::type_dispatcher(output_dtype, TableToArrayDispatcher{input, output, stream});
+}
+
+}  // namespace detail
+
+void table_to_array(table_view const& input,
+                    void* output,
+                    data_type output_dtype,
+                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  cudf::type_dispatcher(output_dtype, TableToArrayDispatcher{input, output, stream});
+  cudf::detail::table_to_array(input, output, output_dtype, stream);
 }
 
 }  // namespace cudf
