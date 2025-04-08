@@ -227,7 +227,7 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
 
   // checks for valid header, footer, and file length
   ASSERT_GT(len, header_len + ender_len);
-  ASSERT_TRUE(header->magic == parquet_magic && ender->magic == parquet_magic);
+  ASSERT_TRUE(header->magic == detail::parquet_magic && ender->magic == detail::parquet_magic);
   ASSERT_TRUE(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len));
 
   // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
