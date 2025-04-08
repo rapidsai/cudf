@@ -486,7 +486,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // Exit early if the page does not need to be decoded
-  // MH: What to do if `has_repetition` is true?
   if (not page_mask[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
