@@ -54,45 +54,38 @@ def _get_cudf_schema_element_from_dtype(
 
 def _to_plc_compression(
     compression: Literal[
-        "infer",
-        "snappy",
-        "gzip",
-        "bz2",
         "brotli",
-        "zip",
-        "xz",
-        "zlib",
+        "bz2",
+        "gzip",
+        "infer",
         "lz4",
         "lzo",
+        "snappy",
+        "xz",
+        "zib",
+        "zip",
         "zstd",
     ]
     | None,
 ) -> plc.io.types.CompressionType:
-    if compression is not None:
-        if compression == "snappy":
-            return plc.io.types.CompressionType.SNAPPY
-        elif compression == "gzip":
-            return plc.io.types.CompressionType.GZIP
-        elif compression == "bz2":
-            return plc.io.types.CompressionType.BZIP2
-        elif compression == "brotli":
-            return plc.io.types.CompressionType.BROTLI
-        elif compression == "zip":
-            return plc.io.types.CompressionType.ZIP
-        elif compression == "xz":
-            return plc.io.types.CompressionType.XZ
-        elif compression == "zlib":
-            return plc.io.types.CompressionType.ZLIB
-        elif compression == "lz4":
-            return plc.io.types.CompressionType.LZ4
-        elif compression == "lzo":
-            return plc.io.types.CompressionType.LZO
-        elif compression == "zstd":
-            return plc.io.types.CompressionType.ZSTD
-        else:
-            return plc.io.types.CompressionType.AUTO
-    else:
-        return plc.io.types.CompressionType.NONE
+    compression_map = {
+        None: plc.io.CompressionType.NONE,
+        "brotli": plc.io.types.CompressionType.BROTLI,
+        "bz2": plc.io.types.CompressionType.BZIP2,
+        "gzip": plc.io.types.CompressionType.GZIP,
+        "infer": plc.io.types.CompressionType.AUTO,
+        "lz4": plc.io.types.CompressionType.LZ4,
+        "lzo": plc.io.types.CompressionType.LZO,
+        "snappy": plc.io.types.CompressionType.SNAPPY,
+        "xz": plc.io.types.CompressionType.XZ,
+        "zip": plc.io.types.CompressionType.ZIP,
+        "zlib": plc.io.types.CompressionType.ZLIB,
+        "zstd": plc.io.types.CompressionType.ZSTD,
+    }
+    try:
+        return compression_map[compression]
+    except KeyError:
+        raise ValueError(f"Unsupported compression type: {compression}")
 
 
 @ioutils.doc_read_json()
