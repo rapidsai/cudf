@@ -1664,7 +1664,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
-            col = col._with_type_metadata(objs[0].dtype)
+            col = col._with_type_metadata(
+                objs[0].dtype, dtype_enum=objs[0]._column.dtype_enum
+            )
 
         return cls._from_column(col, name=name, index=result_index)
 

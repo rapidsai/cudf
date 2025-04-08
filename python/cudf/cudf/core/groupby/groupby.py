@@ -982,6 +982,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             func, **kwargs
         )
         orig_dtypes = tuple(c.dtype for c in columns)
+        orig_dtype_enums = tuple(c.dtype_enum for c in columns)
 
         # Note: When there are no key columns, the below produces
         # an Index with float64 dtype, while Pandas returns
@@ -999,11 +1000,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         multilevel = _is_multi_agg(func)
         data = {}
-        for col_name, aggs, cols, orig_dtype in zip(
+        for col_name, aggs, cols, orig_dtype, orig_dtype_enum in zip(
             column_names,
             included_aggregations,
             result_columns,
             orig_dtypes,
+            orig_dtype_enums,
         ):
             for agg_tuple, col in zip(aggs, cols):
                 agg, agg_kind = agg_tuple
@@ -1017,7 +1019,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     and orig_dtype != col.dtype.element_type
                 ):
                     # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
+                    col = col._with_type_metadata(
+                        cudf.ListDtype(orig_dtype), dtype_enum=orig_dtype_enum
+                    )
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(np.dtype(np.int64))

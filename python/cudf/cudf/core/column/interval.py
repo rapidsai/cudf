@@ -28,6 +28,7 @@ class IntervalColumn(StructColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[ColumnBase, ColumnBase] = (),  # type: ignore[assignment]
+        dtype_enum: int | None = None,
     ):
         if len(children) != 2:
             raise ValueError(
@@ -41,6 +42,7 @@ class IntervalColumn(StructColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @staticmethod

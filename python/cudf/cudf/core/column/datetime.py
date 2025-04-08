@@ -228,6 +228,7 @@ class DatetimeColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")
@@ -247,6 +248,7 @@ class DatetimeColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @staticmethod
@@ -910,15 +912,16 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _with_type_metadata(self, dtype):
+    def _with_type_metadata(self, dtype, dtype_enum: int | None = None):
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
-                data=self.base_data,
+                data=self.base_data,  # type: ignore[arg-type]
                 dtype=dtype,
                 mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
+                dtype_enum=dtype_enum,
             )
         return self
 
@@ -1064,6 +1067,7 @@ class DatetimeTZColumn(DatetimeColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         super().__init__(
             data=data,
@@ -1073,6 +1077,7 @@ class DatetimeTZColumn(DatetimeColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @staticmethod
@@ -1144,7 +1149,9 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
-                casted = self._with_type_metadata(dtype)
+                casted = self._with_type_metadata(
+                    dtype, dtype_enum=self.dtype_enum
+                )
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))

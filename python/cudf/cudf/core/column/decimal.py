@@ -51,6 +51,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(size, int):
             raise ValueError("Must specify an integer size")
@@ -64,6 +65,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @property
@@ -270,6 +272,7 @@ class Decimal32Column(DecimalBaseColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(dtype, Decimal32Dtype):
             raise ValueError(f"{dtype=} must be a Decimal32Dtype instance")
@@ -281,6 +284,7 @@ class Decimal32Column(DecimalBaseColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @classmethod
@@ -333,10 +337,14 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal32Column", dtype: Dtype
+        self: "cudf.core.column.Decimal32Column",
+        dtype: Dtype,
+        dtype_enum: int | None = None,
     ) -> "cudf.core.column.Decimal32Column":
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
+        if dtype_enum is not None:
+            self.dtype_enum = dtype_enum
 
         return self
 
@@ -351,6 +359,7 @@ class Decimal128Column(DecimalBaseColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(dtype, Decimal128Dtype):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
@@ -362,6 +371,7 @@ class Decimal128Column(DecimalBaseColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @classmethod
@@ -374,11 +384,14 @@ class Decimal128Column(DecimalBaseColumn):
         return super().to_arrow().cast(self.dtype.to_arrow())
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal128Column", dtype: Dtype
+        self: "cudf.core.column.Decimal128Column",
+        dtype: Dtype,
+        dtype_enum: int | None = None,
     ) -> "cudf.core.column.Decimal128Column":
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
-
+        if dtype_enum is not None:
+            self.dtype_enum = dtype_enum
         return self
 
 
@@ -392,6 +405,7 @@ class Decimal64Column(DecimalBaseColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(dtype, Decimal64Dtype):
             raise ValueError(f"{dtype=} must be a Decimal64Dtype instance")
@@ -403,6 +417,7 @@ class Decimal64Column(DecimalBaseColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     @classmethod
@@ -449,11 +464,14 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     def _with_type_metadata(
-        self: "cudf.core.column.Decimal64Column", dtype: Dtype
+        self: "cudf.core.column.Decimal64Column",
+        dtype: Dtype,
+        dtype_enum: int | None = None,
     ) -> "cudf.core.column.Decimal64Column":
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
-
+        if dtype_enum is not None:
+            self.dtype_enum = dtype_enum
         return self
 
 

@@ -5400,8 +5400,11 @@ class IndexedFrame(Frame):
         element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+        element_dtype_enum = self._columns[column_index].dtype_enum
         exploded = [
-            column._with_type_metadata(element_type)
+            column._with_type_metadata(
+                element_type, dtype_enum=element_dtype_enum
+            )
             if i == column_index
             else column
             for i, column in enumerate(exploded, start=-len(idx_cols))

@@ -52,6 +52,7 @@ from cudf.core.dtypes import (
     IntervalDtype,
     ListDtype,
     StructDtype,
+    get_dtype_enum,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.core.scalar import pa_scalar_to_plc_scalar
@@ -122,6 +123,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[ColumnBase, ...] = (),
+        dtype_enum=None,
     ) -> None:
         if size < 0:
             raise ValueError("size must be >=0")
@@ -137,6 +139,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
+        self.dtype_enum = dtype_enum
 
     @property
     def base_size(self) -> int:
@@ -319,6 +322,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             size=self.size,
             offset=0,
             children=self.children,
+            dtype_enum=self.dtype_enum,
         )
 
     @property
@@ -358,9 +362,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dtypes = (
                     base_child.dtype for base_child in self.base_children
                 )
+                dtype_enums = (
+                    base_child.dtype_enum for base_child in self.base_children
+                )
                 self._children = tuple(  # type: ignore[assignment]
-                    child._with_type_metadata(dtype)
-                    for child, dtype in zip(children, dtypes)
+                    child._with_type_metadata(dtype, dtype_enum=dtype_enum)
+                    for child, dtype, dtype_enum in zip(
+                        children, dtypes, dtype_enums
+                    )
                 )
         return self._children  # type: ignore[return-value]
 
@@ -475,6 +484,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def from_pylibcudf(
         cls, col: plc.Column, data_ptr_exposed: bool = False
     ) -> Self:
+        # TODO: PREM
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
@@ -729,7 +739,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             return ColumnBase.from_pylibcudf(
                 stream_compaction.drop_nulls([self])[0]
-            )._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            )._with_type_metadata(self.dtype, dtype_enum=self.dtype_enum)  # type: ignore[return-value]
         else:
             return self.copy()
 
@@ -932,7 +942,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = type(self).from_pylibcudf(
                     self.to_pylibcudf(mode="read").copy()
                 )
-            return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            return result._with_type_metadata(
+                self.dtype, dtype_enum=self.dtype_enum
+            )  # type: ignore[return-value]
         else:
             return cast(
                 Self,
@@ -949,6 +961,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     children=tuple(
                         col.copy(deep=False) for col in self.base_children
                     ),
+                    dtype_enum=self.dtype_enum,
                 ),
             )
 
@@ -964,6 +977,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dtype : Dtype object
             The dtype to view the data as
         """
+        # TODO: PREM
         if dtype.kind in ("o", "u", "s"):
             raise TypeError(
                 "Bytes viewed as str without metadata is ambiguous"
@@ -1034,7 +1048,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         [start, stop],
                     )
                 ]
-            return result[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
+            return result[0]._with_type_metadata(
+                self.dtype, dtype_enum=self.dtype_enum
+            )  # type: ignore[return-value]
         else:
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
@@ -1171,14 +1187,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return (
                     type(self)  # type: ignore[return-value]
                     .from_pylibcudf(plc_table.columns()[0])
-                    ._with_type_metadata(self.dtype)
+                    ._with_type_metadata(
+                        self.dtype, dtype_enum=self.dtype_enum
+                    )
                 )
         else:
             return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
                 copying.scatter(
                     [value], key, [self], bounds_check=bounds_check
                 )[0]
-            )._with_type_metadata(self.dtype)
+            )._with_type_metadata(self.dtype, dtype_enum=self.dtype_enum)
 
     def _check_scatter_key_length(
         self, num_keys: int, value: plc.Scalar | ColumnBase
@@ -1262,7 +1280,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc_replace,
             )
             result = type(self).from_pylibcudf(plc_column)
-        return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        return result._with_type_metadata(
+            self.dtype, dtype_enum=self.dtype_enum
+        )  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def is_valid(self) -> ColumnBase:
@@ -1433,7 +1453,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         gathered = ColumnBase.from_pylibcudf(
             copying.gather([self], indices, nullify=nullify)[0]  # type: ignore[arg-type]
         )
-        return gathered._with_type_metadata(self.dtype)  # type: ignore[return-value]
+        return gathered._with_type_metadata(
+            self.dtype, dtype_enum=self.dtype_enum
+        )  # type: ignore[return-value]
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -1721,7 +1743,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         return ColumnBase.from_pylibcudf(
             stream_compaction.apply_boolean_mask([self], mask)[0]
-        )._with_type_metadata(self.dtype)
+        )._with_type_metadata(self.dtype, dtype_enum=self.dtype_enum)
 
     def argsort(
         self,
@@ -1815,7 +1837,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 stream_compaction.drop_duplicates([self], keep="first")[  # type: ignore[return-value]
                     0
                 ]
-            )._with_type_metadata(self.dtype)
+            )._with_type_metadata(self.dtype, dtype_enum=self.dtype_enum)
 
     def serialize(self) -> tuple[dict, list]:
         # data model:
@@ -1835,10 +1857,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         try:
             dtype, dtype_frames = self.dtype.device_serialize()
             header["dtype"] = dtype
+            header["dtype_enum"] = self.dtype_enum
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
             header["dtype"] = self.dtype.str
+            header["dtype_enum"] = self.dtype_enum
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
@@ -1895,6 +1919,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             mask=mask,
             size=header.get("size", None),
             children=tuple(children),
+            dtype_enum=header.get("dtype_enum", None),
         )
 
     def unary_operator(self, unaryop: str):
@@ -1965,7 +1990,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return np.dtype(np.bool_)
         return self.dtype
 
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(
+        self: ColumnBase, dtype: Dtype, dtype_enum: int | None = None
+    ) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
@@ -2287,7 +2314,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             other, inplace
         )
         return casted_col.copy_if_else(casted_other, cond)._with_type_metadata(  # type: ignore[arg-type]
-            self.dtype
+            self.dtype, dtype_enum=self.dtype_enum
         )
 
 
@@ -2321,6 +2348,7 @@ def column_empty(
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
     """
+    # TODO: PREM
     children: tuple[ColumnBase, ...] = ()
 
     if isinstance(dtype, StructDtype):
@@ -2375,6 +2403,7 @@ def build_column(
     offset: int = 0,
     null_count: int | None = None,
     children: tuple[ColumnBase, ...] = (),
+    dtype_enum: int | None = None,
 ) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
@@ -2401,6 +2430,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return cudf.core.column.datetime.DatetimeTZColumn(
@@ -2410,6 +2440,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            dtype_enum=dtype_enum,
         )
     elif dtype.kind == "M":
         return cudf.core.column.DatetimeColumn(
@@ -2419,6 +2450,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            dtype_enum=dtype_enum,
         )
     elif dtype.kind == "m":
         return cudf.core.column.TimeDeltaColumn(
@@ -2428,6 +2460,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            dtype_enum=dtype_enum,
         )
     elif dtype == CUDF_STRING_DTYPE:
         return cudf.core.column.StringColumn(
@@ -2438,6 +2471,7 @@ def build_column(
             offset=offset,
             children=children,  # type: ignore[arg-type]
             null_count=null_count,
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, ListDtype):
         return cudf.core.column.ListColumn(
@@ -2448,6 +2482,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, IntervalDtype):
         return cudf.core.column.IntervalColumn(
@@ -2458,6 +2493,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, StructDtype):
         return cudf.core.column.StructColumn(
@@ -2468,6 +2504,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
             children=children,  # type: ignore[arg-type]
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, cudf.Decimal64Dtype):
         return cudf.core.column.Decimal64Column(
@@ -2478,6 +2515,7 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, cudf.Decimal32Dtype):
         return cudf.core.column.Decimal32Column(
@@ -2488,6 +2526,7 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
     elif isinstance(dtype, cudf.Decimal128Dtype):
         return cudf.core.column.Decimal128Column(
@@ -2498,6 +2537,7 @@ def build_column(
             mask=mask,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
     elif dtype.kind in "iufb":
         return cudf.core.column.NumericalColumn(
@@ -2507,6 +2547,7 @@ def build_column(
             size=size,
             offset=offset,
             null_count=null_count,
+            dtype_enum=dtype_enum,
         )
     else:
         raise TypeError(f"Unrecognized dtype: {dtype}")
@@ -2618,7 +2659,12 @@ def as_column(
         if not arbitrary.dtype.isnative:
             arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
-        col = build_column(data, dtype=arbitrary.dtype, mask=mask)
+        col = build_column(
+            data,
+            dtype=arbitrary.dtype,
+            mask=mask,
+            dtype_enum=get_dtype_enum(arbitrary.dtype),
+        )
         if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
         if dtype is not None:
@@ -2897,7 +2943,12 @@ def as_column(
                 # but maintain NaT as a value
                 mask = as_column(~is_nat).as_mask()
             buffer = as_buffer(arbitrary.view("|u1"))
-            col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
+            col = build_column(
+                data=buffer,
+                mask=mask,
+                dtype=arbitrary.dtype,
+                dtype_enum=get_dtype_enum(arbitrary.dtype),
+            )
             if dtype:
                 col = col.astype(dtype)
             return col

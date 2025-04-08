@@ -67,6 +67,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer instance.")
@@ -80,6 +81,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
@@ -278,7 +280,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
+            self.dtype, dtype_enum=self.dtype_enum
         )
 
     def unary_operator(self, unaryop: str | Callable) -> ColumnBase:

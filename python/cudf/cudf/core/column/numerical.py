@@ -73,6 +73,7 @@ class NumericalColumn(NumericalBaseColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
             raise ValueError(
@@ -91,6 +92,7 @@ class NumericalColumn(NumericalBaseColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     def _clear_cache(self):
@@ -667,7 +669,11 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(
+        self: Self,
+        dtype: Dtype,
+        dtype_enum: int | None = None,
+    ) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             codes = cudf.core.column.categorical.as_unsigned_codes(
                 len(dtype.categories), self
@@ -680,7 +686,10 @@ class NumericalColumn(NumericalBaseColumn):
                 offset=self.offset,
                 null_count=self.null_count,
                 children=(codes,),
+                dtype_enum=dtype_enum,
             )
+        if dtype_enum is not None:
+            self.dtype_enum = dtype_enum
         return self
 
     def to_pandas(

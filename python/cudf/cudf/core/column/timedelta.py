@@ -115,6 +115,7 @@ class TimeDeltaColumn(ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
+        dtype_enum: int | None = None,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")
@@ -136,6 +137,7 @@ class TimeDeltaColumn(ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:

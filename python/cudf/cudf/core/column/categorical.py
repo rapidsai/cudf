@@ -532,6 +532,7 @@ class CategoricalColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
+        dtype_enum: int | None = None,
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
@@ -554,6 +555,7 @@ class CategoricalColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
+            dtype_enum=dtype_enum,
         )
         self._codes = self.children[0].set_mask(self.mask)
 
@@ -1173,7 +1175,12 @@ class CategoricalColumn(column.ColumnBase):
                 categories=self.categories.copy(),
                 ordered=self.ordered,
             )
-            result_col = cast(Self, result_col._with_type_metadata(dtype_copy))
+            result_col = cast(
+                Self,
+                result_col._with_type_metadata(
+                    dtype_copy, dtype_enum=self.dtype_enum
+                ),
+            )
         return result_col
 
     @cached_property
@@ -1235,7 +1242,9 @@ class CategoricalColumn(column.ColumnBase):
             children=(codes_col,),  # type: ignore[arg-type]
         )
 
-    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+    def _with_type_metadata(
+        self: Self, dtype: Dtype, dtype_enum: int | None = None
+    ) -> Self:
         if isinstance(dtype, CategoricalDtype):
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]
@@ -1245,6 +1254,7 @@ class CategoricalColumn(column.ColumnBase):
                 offset=self.codes.offset,
                 null_count=self.codes.null_count,
                 children=(self.codes,),
+                dtype_enum=dtype_enum,
             )
         return self
 

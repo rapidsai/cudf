@@ -1639,7 +1639,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     def repeat(self, repeats, axis=None) -> Self:
         result = super()._repeat([self._column], repeats, axis)[0]
-        result = result._with_type_metadata(self.dtype)
+        result = result._with_type_metadata(
+            self.dtype, dtype=self._column.dtype_enum
+        )
         return type(self)._from_column(result, name=self.name)
 
     @property
