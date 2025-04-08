@@ -74,7 +74,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
   // page does not need to be decoded
-  // MH: What to do if `has_repetition` is true?
   if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
@@ -255,7 +254,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   // Exit early if the page does not need to be decoded
-  // MH: How to handle all types in this decoder? Also what to do if `has_repetition` is true?
   if (not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;

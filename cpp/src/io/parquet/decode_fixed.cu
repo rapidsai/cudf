@@ -571,8 +571,17 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
   return valid_count;
 }
 
-template <int decode_block_size, typename state_buf>
-static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s, state_buf* sb)
+/**
+ * @brief Updates nesting level offsets for pruned pages of a list column
+ *
+ * This function iterates through the nesting levels of a column and updates the offsets for a list
+ * column. The offset for the current nesting level equals the length of the next nesting level
+ *
+ * @tparam decode_block_size The size of the block used for decoding.
+ * @param s Pointer to page state containing column and nesting information.
+ */
+template <int decode_block_size>
+static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s)
 {
   namespace cg = cooperative_groups;
 
@@ -581,12 +590,12 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* s, sta
   int const in_nesting_bounds = (0 >= start_depth && 0 <= max_depth);
   auto const t                = cg::this_thread_block().thread_rank();
 
-  // iterate by depth and store offset to the list location
+  // Iterate by depth and store offset(s) to the list location(s)
   for (int d_idx = t; d_idx <= max_depth; d_idx += decode_block_size) {
     auto& ni = s->nesting_info[d_idx];
-    // if we're -not- at a leaf column and we're within nesting/row bounds
-    // and we have a valid data_out pointer, it implies this is a list column, so
-    // emit an offset.
+    // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
+    // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
+    // level equal to current length of the next nesting level
     if (in_nesting_bounds && ni.data_out != nullptr) {
       auto const& next_ni          = s->nesting_info[d_idx + 1];
       int const idx                = ni.value_count;
@@ -1034,9 +1043,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     pp->num_nulls  = pp->num_rows;
     pp->num_valids = 0;
     // Update offsets for all list depth levels
-    if constexpr (has_lists_t) {
-      update_list_offsets_for_pruned_pages<decode_block_size_t, state_buf_t>(s, sb);
-    }
+    if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
     // Update string offsets or write string sizes for small and large strings respectively
     if constexpr (has_strings_t) {
       update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
