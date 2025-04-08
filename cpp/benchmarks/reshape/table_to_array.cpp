@@ -31,9 +31,9 @@ static void bench_table_to_array(nvbench::state& state)
     state.skip("Input size exceeds cudf::size_type limit");
   }
 
-  data_profile profile =
-    data_profile_builder().distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 1000);
-  profile.set_null_probability(0.0);
+  data_profile profile = data_profile_builder()
+                           .distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 1000)
+                           .no_validity();
   std::vector<cudf::type_id> types(num_cols, cudf::type_id::INT32);
   auto input_table = create_random_table(types, row_count{num_rows}, profile);
 
