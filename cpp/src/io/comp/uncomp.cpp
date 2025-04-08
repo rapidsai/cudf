@@ -542,8 +542,7 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst,
-                  rmm::cuda_stream_view stream)
+                  host_span<uint8_t> dst)
 {
   switch (compression) {
     case compression_type::GZIP: return decompress_gzip(src, dst);
@@ -684,13 +683,13 @@ void host_decompress(compression_type compression,
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
-      auto h_out = cudf::detail::make_pinned_vector_async<uint8_t>(d_out.size(), cur_stream);
-      auto const uncomp_size = decompress(compression, h_in, h_out, cur_stream);
+      auto h_out = cudf::detail::make_pinned_vector_sync<uint8_t>(d_out.size(), cur_stream);
+      auto const uncomp_size = decompress(compression, h_in, h_out);
       h_in.clear();  // Free pinned memory as soon as possible
 
-      cudf::detail::cuda_memcpy_async<uint8_t>(d_out.subspan(0, uncomp_size),
-                                               host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
-                                               cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, uncomp_size),
+                                         host_span<uint8_t>{h_out}.subspan(0, uncomp_size),
+                                         cur_stream);
       return uncomp_size;
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
@@ -699,8 +698,8 @@ void host_decompress(compression_type compression,
   for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
   }
-  cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
-  cudf::detail::join_streams(streams, stream);
+
+  cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
 [[nodiscard]] bool host_decompression_supported(compression_type compression)
@@ -730,20 +729,31 @@ void host_decompress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool use_host_decompression(compression_type compression)
+[[nodiscard]] bool use_host_decompression(compression_type compression, size_t num_buffers)
 {
   CUDF_EXPECTS(
     host_decompression_supported(compression) or device_decompression_supported(compression),
     "Unsupported compression type: " + compression_type_name(compression));
   if (not host_decompression_supported(compression)) { return false; }
   if (not device_decompression_supported(compression)) { return true; }
-  // If both host and device compression are supported, use the host if the env var is set
-  return getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"}) == "ON";
+  // If both host and device compression are supported, dispatch based on the environment variable
+
+  auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
+  if (env_var == "AUTO") {
+    auto const threshold =
+      getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold);
+    return num_buffers < threshold;
+  }
+
+  return env_var == "ON";
 }
 
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di)
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
+                                                    size_t num_buffers)
 {
-  if (di.type == compression_type::NONE or use_host_decompression(di.type)) { return 0; }
+  if (di.type == compression_type::NONE or use_host_decompression(di.type, num_buffers)) {
+    return 0;
+  }
 
   auto const nvcomp_type = to_nvcomp_compression(di.type);
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_decompression_disabled(*nvcomp_type)
@@ -768,7 +778,7 @@ void decompress(compression_type compression,
 {
   CUDF_FUNC_RANGE();
   if (inputs.empty()) { return; }
-  if (use_host_decompression(compression)) {
+  if (use_host_decompression(compression, inputs.size())) {
     return host_decompress(compression, inputs, outputs, results, stream);
   } else {
     return device_decompress(
