@@ -35,6 +35,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -948,7 +949,7 @@ void scatter_offsets(tree_meta_t const& tree,
     });
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
   // parent's null mask to null. Setting mixed type list rows to null.
-  auto const num_list_children = thrust::distance(
+  auto const num_list_children = cuda::std::distance(
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()), list_children_end);
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),

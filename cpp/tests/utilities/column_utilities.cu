@@ -38,9 +38,9 @@
 
 #include <cuda/functional>
 #include <cuda/std/cmath>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/generate.h>
@@ -556,7 +556,7 @@ struct column_comparator_impl {
                                      differences.begin(),
                                      cuda::std::identity{});
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter),
+    differences.resize(cuda::std::distance(differences.begin(), diff_iter),
                        cudf::test::get_default_stream());  // shrink back down
 
     if (not differences.is_empty()) {
@@ -680,7 +680,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         return false;
       });
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter),
+    differences.resize(cuda::std::distance(differences.begin(), diff_iter),
                        cudf::test::get_default_stream());  // shrink back down
 
     if (not differences.is_empty()) {

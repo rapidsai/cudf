@@ -30,7 +30,7 @@
 
 #include <cub/device/device_reduce.cuh>
 #include <cuda/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
@@ -87,7 +87,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                             int num_items)
   {
     InputIterator d_in_last = d_in + num_items;
-    EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
+    EXPECT_EQ(cuda::std::distance(d_in, d_in_last), num_items);
     auto dev_expected = cudf::detail::make_device_uvector(
       expected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 

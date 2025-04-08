@@ -39,6 +39,7 @@
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -267,7 +268,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       thrust::find(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
     auto error_index = cudf::detail::make_host_vector<SymbolOffsetT>(
       device_span<SymbolOffsetT const>{
-        token_indices.data() + thrust::distance(tokens.begin(), error_location), 1},
+        token_indices.data() + cuda::std::distance(tokens.begin(), error_location), 1},
       stream);
 
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +
@@ -297,7 +298,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                                             node_levels.begin(),
                                                             is_node,
                                                             stream);
-    CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
+    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
 
@@ -1010,7 +1011,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
                       thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
                       d_tree.parent_node_ids.begin(),
                       is_non_list_parent);
-  auto const num_list_parent = thrust::distance(
+  auto const num_list_parent = cuda::std::distance(
     thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
 
   thrust::stable_sort_by_key(rmm::exec_policy(stream),
