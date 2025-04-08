@@ -371,7 +371,6 @@ struct LogicalType {
    *
    * @return The bit width of the integer type, or -1 if the type is not an integer
    */
-
   [[nodiscard]] CUDF_HOST_DEVICE constexpr int8_t bit_width() const
   {
     return type == INTEGER ? int_type->bitWidth : -1;
@@ -423,11 +422,11 @@ struct ColumnOrder {
  */
 struct SchemaElement {
   /// 1: parquet physical type for output
-  Type type = UNDEFINED_TYPE;
+  Type type = Type::UNDEFINED_TYPE;
   /// 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   int32_t type_length = 0;
   /// 3: repetition of the field
-  FieldRepetitionType repetition_type = REQUIRED;
+  FieldRepetitionType repetition_type = FieldRepetitionType::REQUIRED;
   /// 4: name of the field
   std::string name = "";
   /// 5: nested fields
@@ -502,7 +501,10 @@ struct SchemaElement {
    *
    * @return True if the schema element is a stub, false otherwise
    */
-  [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  [[nodiscard]] bool is_stub() const
+  {
+    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1;
+  }
 
   /**
    * @brief Check if the schema element is a one-level list
@@ -516,7 +518,8 @@ struct SchemaElement {
    */
   [[nodiscard]] bool is_one_level_list(SchemaElement const& parent) const
   {
-    return repetition_type == REPEATED and num_children == 0 and not parent.is_list();
+    return repetition_type == FieldRepetitionType::REPEATED and num_children == 0 and
+           not parent.is_list();
   }
 
   /**
@@ -524,7 +527,7 @@ struct SchemaElement {
    *
    * @return True if the schema element is a list, false otherwise
    */
-  [[nodiscard]] bool is_list() const { return converted_type == LIST; }
+  [[nodiscard]] bool is_list() const { return converted_type == ConvertedType::LIST; }
 
   /**
    * @brief Check if the schema element is a struct
@@ -536,9 +539,10 @@ struct SchemaElement {
    */
   [[nodiscard]] bool is_struct() const
   {
-    return type == UNDEFINED_TYPE &&
+    return type == Type::UNDEFINED_TYPE &&
            // this assumption might be a little weak.
-           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children > 1));
+           ((repetition_type != FieldRepetitionType::REPEATED) ||
+            (repetition_type == FieldRepetitionType::REPEATED && num_children > 1));
   }
 };
 
@@ -663,14 +667,14 @@ struct SortingColumn {
  */
 struct ColumnChunkMetaData {
   /// Type of this column
-  Type type = BOOLEAN;
+  Type type = Type::BOOLEAN;
   /// Set of all encodings used for this column. The purpose is to validate whether we can decode
   /// those pages.
   std::vector<Encoding> encodings;
   /// Path in schema
   std::vector<std::string> path_in_schema;
   /// Compression codec
-  Compression codec = UNCOMPRESSED;
+  Compression codec = Compression::UNCOMPRESSED;
   /// Number of values in this column
   int64_t num_values = 0;
   /// Total byte size of all uncompressed pages in this column chunk (including the headers)
