@@ -252,7 +252,9 @@ def _(
 def _(
     node: pl_ir.Cache, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Cache(schema, node.id_, translator.translate_ir(n=node.input))
+    return ir.Cache(
+        schema, node.id_, node.cache_hits, translator.translate_ir(n=node.input)
+    )
 
 
 @_translate_ir.register
