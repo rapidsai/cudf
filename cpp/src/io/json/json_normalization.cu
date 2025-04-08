@@ -31,8 +31,8 @@
 #include <cub/device/device_copy.cuh>
 #include <cuda/atomic>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -427,7 +427,7 @@ std::
      inbuf_offsets_end   = inbuf_offsets.end(),
      inbuf_lengths       = inbuf_lengths.begin()] __device__(size_type idx) {
       auto it  = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
-      auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
+      auto pos = cuda::std::distance(inbuf_offsets_begin, it) - 1;
       cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(inbuf_lengths + pos)};
       ref.fetch_add(-1, cuda::std::memory_order_relaxed);
     });
