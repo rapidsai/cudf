@@ -263,7 +263,9 @@ def _lower_ir_pwise(
     # Check that child partitioning is supported
     if len(counts) > 1:  # pragma: no cover
         return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support unbalanced partitions."
+            ir,
+            rec,
+            msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
         )
 
     # Return reconstructed node and partition-info dict
