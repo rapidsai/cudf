@@ -1,25 +1,27 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
+from functools import cache, reduce
+import operator
+
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-
-from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
+from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr, _get_stream
-
-from functools import cache
+from .utils cimport _get_stream, int_to_bitmask_ptr, int_to_void_ptr
 
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
@@ -34,7 +36,9 @@ class _Ravelled:
         self.__cuda_array_interface__ = cai
 
 
-def _parse_array_interface(iface: dict) -> tuple[tuple, tuple | None, DataType]:
+def _parse_array_interface(
+    iface: dict
+) -> tuple[tuple[int, bool] | None | object, tuple, tuple | None, DataType, int]:
     """
     Parse and validate a CUDA or NumPy array interface dict.
     """
@@ -42,10 +46,14 @@ def _parse_array_interface(iface: dict) -> tuple[tuple, tuple | None, DataType]:
     if typestr[0] == ">":
         raise ValueError("Big-endian data is not supported")
 
+    data = iface.get("data")
     dtype = _datatype_from_dtype_desc(typestr[1:])
     shape = iface["shape"]
     strides = iface.get("strides")
-    return shape, strides, dtype
+    itemsize = size_of(dtype)
+    if not is_c_contiguous(shape, strides, itemsize):
+        raise ValueError("Data must be C-contiguous")
+    return data, shape, strides, dtype, itemsize
 
 
 cdef class Column:
@@ -420,6 +428,10 @@ cdef class Column:
         """
         Create a Column from an object implementing the NumPy Array Interface.
 
+        If the object provides a raw memory pointer via the "data" field,
+        we use that pointer directly and avoid copying. Otherwise, a ValueError
+        is raised.
+
         Parameters
         ----------
         obj : object
@@ -432,38 +444,40 @@ cdef class Column:
 
         Raises
         ------
-        ImportError
-            If NumPy is not installed.
         TypeError
-            If the object does not implement ``__array_interface__``
+            If the object does not implement ``__array_interface__``.
         ValueError
-            If the host array is not 1D or 2D, or is not C-contiguous.
+            If the array is not 1D or 2D, or is not C-contiguous.
             If the number of rows exceeds size_type limit.
+            If the 'data' field is invalid.
         NotImplementedError
             If the object has a mask.
         """
         try:
-            import numpy as np
             iface = obj.__array_interface__
-        except ImportError:
-            raise ImportError("NumPy must be installed to use this method on 2D data")
         except AttributeError:
             raise TypeError("Object does not implement __array_interface__")
 
-        shape, strides, dtype = _parse_array_interface(iface)
+        data, shape, strides, dtype, itemsize = _parse_array_interface(iface)
 
-        # ravel() is needed here because even though the array
-        # is C-contiguous, viewing it as np.uint8 retains its
-        # original shape. DeviceBuffer.to_device expects a 1D buffer,
-        # so we call ravel() to ensure the data is flattened. This
-        # doesn't copy the data for C-contiguous arrays, just creates
-        # a flat view.
-        arr = np.asarray(obj)
-        flat_data_view = memoryview(arr.ravel().view(np.uint8))
-        device_buffer = DeviceBuffer.to_device(flat_data_view)
-        data = gpumemoryview(device_buffer)
+        if isinstance(data, tuple) and isinstance(data[0], int):
+            data_ptr = <uintptr_t>data[0]
+            nbytes = reduce(operator.mul, shape, 1) * itemsize
 
-        return Column.from_gpumemoryview(data, shape, strides, dtype)
+            dbuf = DeviceBuffer.to_device(
+                # Converts the uintptr_t integer to a memoryview.
+                # We need the two casts: first to a pointer type,
+                # then to a typed memoryview. This allows us to reinterpret
+                # the raw memory as a 1D array of bytes.
+                <const unsigned char[:nbytes:1]><const unsigned char*>data_ptr
+            )
+        else:
+            raise ValueError(
+                "Expected a data field with an integer pointer in the array interface. "
+                "Objects with data set to None or a buffer object are not supported."
+            )
+
+        return Column.from_gpumemoryview(gpumemoryview(dbuf), shape, strides, dtype)
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -495,13 +509,12 @@ cdef class Column:
         except AttributeError:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
-        shape, strides, dtype = _parse_array_interface(iface)
+        _, shape, strides, dtype, _ = _parse_array_interface(iface)
 
         if len(shape) == 2:
             obj = _Ravelled(obj)
 
-        data = gpumemoryview(obj)
-        return Column.from_gpumemoryview(data, shape, strides, dtype)
+        return Column.from_gpumemoryview(gpumemoryview(obj), shape, strides, dtype)
 
     @classmethod
     def from_array(cls, obj):

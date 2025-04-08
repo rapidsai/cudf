@@ -115,3 +115,24 @@ def test_from_ndarray_invalid_obj(obj):
         match="Cannot convert object of type .* to a pylibcudf Column",
     ):
         plc.Column.from_array(obj)
+
+
+def test_array_interface_with_data_none():
+    class ArrayInterfaceWithNone:
+        def __init__(self):
+            pass
+
+        @property
+        def __array_interface__(self):
+            return {
+                "shape": (4,),
+                "typestr": "<i4",
+                "data": None,
+                "version": 3,
+            }
+
+    with pytest.raises(
+        ValueError,
+        match="Expected a data field .* the array interface.",
+    ):
+        plc.Column.from_array(ArrayInterfaceWithNone())
