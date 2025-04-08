@@ -16,8 +16,11 @@
 
 #pragma once
 
+#include <cudf/io/types.hpp>
+
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace cudf::io::detail {
 
@@ -52,5 +55,7 @@ struct compression_result {
   uint64_t bytes_written;
   compression_status status;
 };
+
+[[nodiscard]] std::string compression_type_name(compression_type compression);
 
 }  // namespace cudf::io::detail

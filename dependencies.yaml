@@ -96,7 +96,6 @@ files:
   test_java:
     output: none
     includes:
-      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -389,6 +388,7 @@ files:
       - test_python_cudf
       - depends_on_cudf
       - depends_on_cudf_polars
+      - depends_on_narwhals
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -458,7 +458,7 @@ dependencies:
       - output_types: conda
         packages:
           - flatbuffers==24.3.25
-          - librdkafka>=2.5.0,<2.6.0a0
+          - librdkafka>=2.8.0,<2.9.0a0
   depends_on_nvcomp:
     common:
       - output_types: conda
@@ -813,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.26
+          - polars>=1.24,<1.27
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -829,13 +829,13 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - python-confluent-kafka>=2.5.0,<2.6.0a0
+          - python-confluent-kafka>=2.8.0,<2.9.0a0
       - output_types: [conda, requirements, pyproject]
         packages:
           - streamz
       - output_types: [requirements, pyproject]
         packages:
-          - confluent-kafka>=2.5.0,<2.6.0a0
+          - confluent-kafka>=2.8.0,<2.9.0a0
   test_cpp:
     common:
       - output_types: conda
@@ -867,7 +867,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - *cmake_ver
+          - cmake>=3.30.4,<4.0.0
+          - ninja
           - maven
           - openjdk=8.*
           - boost
@@ -954,7 +955,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
       - output_types: conda
@@ -979,13 +983,17 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
   test_python_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - dask-cuda==25.6.*,>=0.0.0a0
           - *numpy
   depends_on_libcudf:
     common:
@@ -1226,3 +1234,8 @@ dependencies:
       - output_types: conda
         packages:
           - cudf-polars==25.6.*,>=0.0.0a0
+  depends_on_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - narwhals==1.33
