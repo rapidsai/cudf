@@ -727,11 +727,18 @@ class ColumnAccessor(abc.MutableMapping):
             if len(new_col_names) != len(set(new_col_names)):
                 raise ValueError("Duplicate column names are not allowed")
 
+        label_dtype = self.label_dtype
+        if len(self) > 0 and label_dtype is not None:
+            old_type = type(next(iter(self.keys())))
+            if not all(isinstance(label, old_type) for label in new_col_names):
+                label_dtype = None
+
         data = dict(zip(new_col_names, self.values()))
         return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
+            label_dtype=label_dtype,
             verify=False,
         )
 
