@@ -86,7 +86,7 @@ void table_to_array_iml(table_view const& input, void* output, rmm::cuda_stream_
                              stream.value());
 }
 
-struct TableToArrayDispatcher {
+struct table_to_array_dispatcher {
   table_view const& input;
   void* output;
   rmm::cuda_stream_view stream;
@@ -115,8 +115,8 @@ void table_to_array(table_view const& input,
   CUDF_EXPECTS(
     input.num_columns() > 0, "Input must have at least one column.", std::invalid_argument);
 
-  cudf::type_dispatcher<cudf::dispatch_storage_type>(output_dtype,
-                                                     TableToArrayDispatcher{input, output, stream});
+  cudf::type_dispatcher<cudf::dispatch_storage_type>(
+    output_dtype, table_to_array_dispatcher{input, output, stream});
 }
 
 }  // namespace detail
