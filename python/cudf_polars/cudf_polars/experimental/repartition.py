@@ -19,7 +19,18 @@ if TYPE_CHECKING:
 
 
 class Repartition(IR):
-    """Repartition a DataFrame."""
+    """
+    Repartition a DataFrame.
+
+    Notes
+    -----
+    Repartitioning means that we are not modifying any
+    data, nor are we reordering or shuffling rows. We
+    are only changing the overall partition count. For
+    now, we only support an N -> 1 repartitioning. The
+    new partition count is tracked outside the object
+    (using PartitionInfo).
+    """
 
     __slots__ = ()
     _non_child = ("schema",)

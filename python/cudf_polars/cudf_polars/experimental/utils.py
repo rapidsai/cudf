@@ -37,13 +37,13 @@ def _lower_ir_fallback(
     from cudf_polars.experimental.repartition import Repartition
 
     # Lower children
-    _children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
     # Ensure all children are single-partitioned
     children = []
     fallback = False
-    for c in _children:
+    for c in lowered_children:
         child = c
         if partition_info[c].count > 1:
             # Fall-back logic
@@ -55,18 +55,20 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        fallback_mode = rec.state["config_options"].get(
+        match fallback_mode := rec.state["config_options"].get(
             "executor_options.fallback_mode", default="warn"
-        )
-        if fallback_mode == "warn":
-            warnings.warn(msg, stacklevel=2)
-        elif fallback_mode == "raise":
-            raise NotImplementedError(msg)
-        elif fallback_mode != "silent":
-            raise ValueError(
-                f"{fallback_mode} is not a supported 'fallback_mode' option. "
-                "Please use 'warn', 'raise', or 'silent'."
-            )
+        ):
+            case "warn":
+                warnings.warn(msg, stacklevel=2)
+            case "raise":
+                raise NotImplementedError(msg)
+            case "silent":
+                pass
+            case _:
+                raise ValueError(
+                    f"{fallback_mode} is not a supported 'fallback_mode' "
+                    "option. Please use 'warn', 'raise', or 'silent'."
+                )
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
