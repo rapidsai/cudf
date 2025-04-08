@@ -47,6 +47,7 @@ namespace detail {
  * @tparam max_block_size The size of the thread block, used to set launch
  * bounds and minimize register usage.
  * @tparam has_nulls whether or not the output column may contain nulls.
+ * @tparam has_complex_type whether or not the output column may contain complex types.
  *
  * @param table The table device view used for evaluation.
  * @param device_expression_data Container of device data required to evaluate the desired
