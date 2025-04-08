@@ -41,7 +41,8 @@ def decompose_select(
         child,
     )
     expr_partition_info = extract_partition_counts(
-        named_exprs, partition_info[child].count
+        [ne.value for ne in named_exprs],
+        partition_info[child].count,
     )
     partition_info[new_node] = PartitionInfo(
         count=max(expr_partition_info[ne.value] for ne in named_exprs)
@@ -88,7 +89,7 @@ def build_fusedexpr_select_graph(
         assert isinstance(ne.value, FusedExpr), f"{ne.value} is not a FusedExpr"
         roots.append(ne)
         expr_partition_counts = extract_partition_counts(
-            [ne],
+            [ne.value],
             child_count,
             update=expr_partition_counts,
         )

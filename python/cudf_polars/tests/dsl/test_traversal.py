@@ -52,6 +52,12 @@ def test_traversal_unique():
     assert set(unique_exprs) == {expr.Col(dt, "a"), expr.Col(dt, "b"), e3}
     assert unique_exprs == [e3, expr.Col(dt, "b"), expr.Col(dt, "a")]
 
+    e4 = make_expr(dt, "b", "a")
+    unique_exprs = list(traversal([e4], cutoff_types=(expr.BinOp,)))
+
+    assert len(unique_exprs) == 1
+    assert unique_exprs == [e4]
+
 
 def rename(e, rec):
     mapping = rec.state["mapping"]
