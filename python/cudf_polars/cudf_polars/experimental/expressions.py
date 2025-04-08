@@ -35,6 +35,21 @@ if TYPE_CHECKING:
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
 
 
+def _check_sub_expr(sub_expr: Expr) -> None:
+    """Check that a multi-partition expression is supported."""
+    if sub_expr.is_pointwise:
+        # Pointwise expressions are always supported.
+        return
+    elif isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
+        # This is a supported Agg expression.
+        return
+    else:
+        # This is an un-supported expression - raise.
+        raise NotImplementedError(
+            f"{type(sub_expr)} not supported for multiple partitions."
+        )
+
+
 class FusedExpr(Expr):
     """
     A single fused component of a decomposed Expr graph.
@@ -193,6 +208,7 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
                 sub_expr_children.append(child)
         # Reconstruct and return the new FusedExpr
         sub_expr = expr.reconstruct(sub_expr_children)
+        _check_sub_expr(sub_expr)
         return FusedExpr(sub_expr.dtype, sub_expr, *fused_children)
     else:
         # Leaf node.
@@ -346,7 +362,7 @@ def make_agg_graph(
     assert isinstance(expr, FusedExpr)
     agg = expr.sub_expr
     assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
-    assert agg.name in _SUPPORTED_AGGS, f"Agg {agg} not supported"
+    _check_sub_expr(agg)
 
     # NOTE: This algorithm assumes we are doing nested
     # aggregations, or we are only aggregating a single
@@ -463,12 +479,7 @@ def make_fusedexpr_graph(
         return make_pointwise_graph(named_expr, expr_partition_counts, child)
     else:
         # Non-pointwise expressions require a reduction or a shuffle
-        sub_expr = expr.sub_expr
-        if isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
-            return make_agg_graph(
-                named_expr, expr_partition_counts, child, child_partition_info
-            )
-        else:
-            raise NotImplementedError(
-                f"{type(sub_expr)} not supported for multiple partitions."
-            )
+        _check_sub_expr(expr.sub_expr)
+        return make_agg_graph(
+            named_expr, expr_partition_counts, child, child_partition_info
+        )

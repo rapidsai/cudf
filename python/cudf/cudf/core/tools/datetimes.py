@@ -750,11 +750,13 @@ def _isin_datetimelike(
     """
     rhs = None
     try:
-        rhs = cudf.core.column.as_column(values)
+        rhs = column.as_column(values)
         was_string = len(rhs) and rhs.dtype.kind == "O"
 
         if rhs.dtype.kind in {"f", "i", "u"}:
-            return column.as_column(False, length=len(lhs), dtype="bool")
+            return column.as_column(
+                False, length=len(lhs), dtype=np.dtype(np.bool_)
+            )
         rhs = rhs.astype(lhs.dtype)
         if was_string:
             warnings.warn(
@@ -771,7 +773,9 @@ def _isin_datetimelike(
     except ValueError:
         # pandas functionally returns all False when cleansing via
         # typecasting fails
-        return column.as_column(False, length=len(lhs), dtype="bool")
+        return column.as_column(
+            False, length=len(lhs), dtype=np.dtype(np.bool_)
+        )
 
     res = lhs._obtain_isin_result(rhs)
     return res

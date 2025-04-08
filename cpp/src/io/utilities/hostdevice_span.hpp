@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ class hostdevice_span {
     cudf::detail::cuda_memcpy_async<T>(device_span<T>{device_ptr(), size()}, _host_data, stream);
   }
 
-  void host_to_device_sync(rmm::cuda_stream_view stream) const
+  void host_to_device(rmm::cuda_stream_view stream) const
   {
     host_to_device_async(stream);
     stream.synchronize();
@@ -182,7 +182,7 @@ class hostdevice_span {
       _host_data, device_span<T const>{device_ptr(), size()}, stream);
   }
 
-  void device_to_host_sync(rmm::cuda_stream_view stream) const
+  void device_to_host(rmm::cuda_stream_view stream) const
   {
     device_to_host_async(stream);
     stream.synchronize();

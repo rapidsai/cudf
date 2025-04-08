@@ -359,7 +359,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      continue-on-error: true
       container_image: "rapidsai/ci-conda:latest"
       run_script: ci/test_narwhals.sh
   spark-rapids-jni:

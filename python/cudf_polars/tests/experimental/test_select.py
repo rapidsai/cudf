@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 import polars as pl
@@ -37,16 +39,35 @@ def test_select(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_unsupported_raises(df, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_select_reduce_fallback(df, fallback_mode):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="dask-experimental",
+        executor_options={
+            "fallback_mode": fallback_mode,
+            "max_rows_per_partition": 3,
+        },
+    )
+    match = "This selection is not supported for multiple partitions."
+
     query = df.select(
         (pl.col("a") + pl.col("b")).max(),
         # NOTE: We don't support `median` yet
         (pl.col("a") * 2 + pl.col("b")).alias("d").median(),
     )
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+
+    if fallback_mode == "silent":
+        ctx = contextlib.nullcontext()
+    elif fallback_mode == "raise":
+        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+    elif fallback_mode == "foo":
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError, match="not a supported 'fallback_mode'"
+        )
+    else:
+        ctx = pytest.warns(UserWarning, match=match)
+    with ctx:
         assert_gpu_result_equal(query, engine=engine)
 
 

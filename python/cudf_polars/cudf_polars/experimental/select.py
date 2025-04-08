@@ -17,6 +17,7 @@ from cudf_polars.experimental.expressions import (
     extract_partition_counts,
     make_fusedexpr_graph,
 )
+from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -57,8 +58,14 @@ def _(
     if pi.count > 1 and not all(
         expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
     ):
-        # Try decomposing the underlying expressions
-        return decompose_select(ir, child, partition_info)
+        try:
+            # Try decomposing the underlying expressions
+            return decompose_select(ir, child, partition_info)
+        except NotImplementedError:
+            # TODO: Handle more non-pointwise expressions.
+            return _lower_ir_fallback(
+                ir, rec, msg="This selection is not supported for multiple partitions."
+            )
 
     new_node = ir.reconstruct([child])
     partition_info[new_node] = pi
