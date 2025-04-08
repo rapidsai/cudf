@@ -35,10 +35,10 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -90,7 +90,7 @@ struct replace_parallel_chars_fn {
         (d_tgt.compare(d_chars, d_tgt.size_bytes()) == 0)) {
       auto const idx_itr =
         thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_strings.size(), idx);
-      auto str_idx = static_cast<size_type>(thrust::distance(d_offsets, idx_itr) - 1);
+      auto str_idx = static_cast<size_type>(cuda::std::distance(d_offsets, idx_itr) - 1);
       auto d_str   = get_string(str_idx);
       if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return true; }
     }
@@ -140,7 +140,7 @@ struct replace_parallel_chars_fn {
     for (std::size_t i = 0; (i < targets_size) && (max_n > 0); ++i) {
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { count++; }  // don't bother counting empty strings
         if (!d_replacement.empty()) { count++; }
         str_ptr += keep_size + d_target.size_bytes();
@@ -191,7 +191,7 @@ struct replace_parallel_chars_fn {
     for (std::size_t i = 0; (i < targets_size) && (max_n > 0); ++i) {
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { d_output[output_idx++] = string_index_pair{str_ptr, keep_size}; }
         output_size += keep_size;
 
@@ -207,7 +207,7 @@ struct replace_parallel_chars_fn {
     }
     // include any leftover parts of the string
     if (str_ptr <= d_str_end) {
-      auto const left_size = static_cast<size_type>(thrust::distance(str_ptr, d_str_end));
+      auto const left_size = static_cast<size_type>(cuda::std::distance(str_ptr, d_str_end));
       d_output[output_idx] = string_index_pair{str_ptr, left_size};
       output_size += left_size;
     }
