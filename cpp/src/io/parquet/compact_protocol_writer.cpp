@@ -52,8 +52,10 @@ size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
   switch (time_unit.type) {
     case TimeUnit::MILLIS:
     case TimeUnit::MICROS:
-    case TimeUnit::NANOS: c.field_empty_struct(time_unit.type); break;
-    default: CUDF_FAIL("Trying to write an invalid TimeUnit " + std::to_string(time_unit.type));
+    case TimeUnit::NANOS: c.field_empty_struct(static_cast<int>(time_unit.type)); break;
+    default:
+      CUDF_FAIL("Trying to write an invalid TimeUnit " +
+                std::to_string(static_cast<int>(time_unit.type)));
   }
   return c.value();
 }
@@ -93,18 +95,18 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::DATE:
     case LogicalType::UNKNOWN:
     case LogicalType::JSON:
-    case LogicalType::BSON: c.field_empty_struct(logical_type.type); break;
+    case LogicalType::BSON: c.field_empty_struct(static_cast<int>(logical_type.type)); break;
     case LogicalType::DECIMAL:
-      c.field_struct(LogicalType::DECIMAL, logical_type.decimal_type.value());
+      c.field_struct(static_cast<int>(LogicalType::DECIMAL), logical_type.decimal_type.value());
       break;
     case LogicalType::TIME:
-      c.field_struct(LogicalType::TIME, logical_type.time_type.value());
+      c.field_struct(static_cast<int>(LogicalType::TIME), logical_type.time_type.value());
       break;
     case LogicalType::TIMESTAMP:
-      c.field_struct(LogicalType::TIMESTAMP, logical_type.timestamp_type.value());
+      c.field_struct(static_cast<int>(LogicalType::TIMESTAMP), logical_type.timestamp_type.value());
       break;
     case LogicalType::INTEGER:
-      c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
+      c.field_struct(static_cast<int>(LogicalType::INTEGER), logical_type.int_type.value());
       break;
     default:
       CUDF_FAIL("Trying to write an invalid LogicalType " + std::to_string(logical_type.type));
@@ -246,8 +248,10 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
   switch (co.type) {
-    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
-    default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(static_cast<int>(co.type)); break;
+    default:
+      CUDF_FAIL("Trying to write an invalid ColumnOrder " +
+                std::to_string(static_cast<int>(co.type)));
   }
   return c.value();
 }

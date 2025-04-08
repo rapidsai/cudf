@@ -538,8 +538,8 @@ struct ColumnChunkMetaData {
  */
 struct BloomFilterAlgorithm {
   // Block-based Bloom filter.
-  enum class Algorithm { UNDEFINED, SPLIT_BLOCK };
-  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
+  enum Algorithm { UNDEFINED, SPLIT_BLOCK };
+  Algorithm algorithm{SPLIT_BLOCK};
 };
 
 /**
@@ -547,16 +547,16 @@ struct BloomFilterAlgorithm {
  */
 struct BloomFilterHash {
   // xxHash_64
-  enum class Hash { UNDEFINED, XXHASH };
-  Hash hash{Hash::XXHASH};
+  enum Hash { UNDEFINED, XXHASH };
+  Hash hash{XXHASH};
 };
 
 /**
  * @brief The compression used in the bloom filter
  */
 struct BloomFilterCompression {
-  enum class Compression { UNDEFINED, UNCOMPRESSED };
-  Compression compression{Compression::UNCOMPRESSED};
+  enum Compression { UNDEFINED, UNCOMPRESSED };
+  Compression compression{UNCOMPRESSED};
 };
 
 /**
