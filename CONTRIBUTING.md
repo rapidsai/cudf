@@ -154,7 +154,7 @@ cd $CUDF_HOME
 #### Building for development
 
 To build Python packages for development purposes, add the `--pydevelop` flag.
-To build C++ tests, you can also request that build.sh build the `test` target.
+To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
