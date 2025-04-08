@@ -174,12 +174,29 @@ __host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_
   return {compression_type::NONE, false};
 }
 
+/**
+ * @brief Returns the string name of the Parquet compression type.
+ */
+[[nodiscard]] std::string parquet_compression_name(Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return "BROTLI";
+    case Compression::GZIP: return "GZIP";
+    case Compression::LZ4_RAW: return "LZ4_RAW";
+    case Compression::LZ4: return "LZ4";
+    case Compression::LZO: return "LZO";
+    case Compression::SNAPPY: return "SNAPPY";
+    case Compression::ZSTD: return "ZSTD";
+    case Compression::UNCOMPRESSED: return "UNCOMPRESSED";
+  }
+  CUDF_FAIL("Unsupported Parquet compression type");
+}
+
 compression_type from_parquet_compression(Compression compression)
 {
   auto const [type, supported] = parquet_compression_support(compression);
   CUDF_EXPECTS(supported,
-               "Unsupported compression type: " +
-                 cudf::io::detail::compression_type_name(from_parquet_compression(compression)));
+               "Unsupported Parquet compression type: " + parquet_compression_name(compression));
   return type;
 }
 
@@ -818,8 +835,7 @@ struct codec_stats {
 
   for (auto const& chunk : chunks) {
     CUDF_EXPECTS(is_codec_supported(chunk.codec),
-                 "Unsupported compression type: " +
-                   cudf::io::detail::compression_type_name(from_parquet_compression(chunk.codec)));
+                 "Unsupported Parquet compression type: " + parquet_compression_name(chunk.codec));
   }
 
   size_t total_pass_decomp_size = 0;
