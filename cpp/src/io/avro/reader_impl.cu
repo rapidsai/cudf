@@ -323,8 +323,8 @@ rmm::device_buffer decompress_data(datasource& source,
                decompressed_data_size,
                stream);
     CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                               decompressed_offsets.d_begin(),
-                               decompressed_offsets.d_end(),
+                               decompressed_sizes.d_begin(),
+                               decompressed_sizes.d_end(),
                                decomp_results.begin(),
                                [] __device__(auto const& size, auto const& result) {
                                  return size == result.bytes_written and
