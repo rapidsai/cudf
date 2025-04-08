@@ -35,14 +35,14 @@ if TYPE_CHECKING:
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
 
 
-def _check_sub_expr(sub_expr: Expr) -> None:
+def _valid_sub_expr(sub_expr: Expr) -> Expr:
     """Check that a multi-partition expression is supported."""
     if sub_expr.is_pointwise:
         # Pointwise expressions are always supported.
-        return
+        return sub_expr
     elif isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
         # This is a supported Agg expression.
-        return
+        return sub_expr
     else:
         # This is an un-supported expression - raise.
         raise NotImplementedError(
@@ -207,8 +207,7 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
                 fused_children.append(child)
                 sub_expr_children.append(child)
         # Reconstruct and return the new FusedExpr
-        sub_expr = expr.reconstruct(sub_expr_children)
-        _check_sub_expr(sub_expr)
+        sub_expr = _valid_sub_expr(expr.reconstruct(sub_expr_children))
         return FusedExpr(sub_expr.dtype, sub_expr, *fused_children)
     else:
         # Leaf node.
@@ -362,7 +361,6 @@ def make_agg_graph(
     assert isinstance(expr, FusedExpr)
     agg = expr.sub_expr
     assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
-    _check_sub_expr(agg)
 
     # NOTE: This algorithm assumes we are doing nested
     # aggregations, or we are only aggregating a single
@@ -418,10 +416,10 @@ def make_agg_graph(
             (child_name, i),
             chunk_aggs,
             expr.children,
-            *[
+            *(
                 (name, 0) if bcast else (name, i)
                 for name, bcast in zip(expr_child_names, expr_bcast, strict=True)
-            ],
+            ),
         )
 
     # Combine and finalize
@@ -456,10 +454,10 @@ def make_pointwise_graph(
             (child_name, i),
             sub_expr,
             expr.children,
-            *[
+            *(
                 (name, 0) if bcast else (name, i)
                 for name, bcast in zip(expr_child_names, expr_bcast, strict=True)
-            ],
+            ),
         )
         for i in range(count)
     }
@@ -479,7 +477,6 @@ def make_fusedexpr_graph(
         return make_pointwise_graph(named_expr, expr_partition_counts, child)
     else:
         # Non-pointwise expressions require a reduction or a shuffle
-        _check_sub_expr(expr.sub_expr)
         return make_agg_graph(
             named_expr, expr_partition_counts, child, child_partition_info
         )
