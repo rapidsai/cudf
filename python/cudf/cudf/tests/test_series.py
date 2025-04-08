@@ -1800,6 +1800,7 @@ def test_series_truncate_datetimeindex():
         [],
         [np.nan, None, -1, 2, 3],
         [1.0, 12.0, None, None, 120],
+        [0.1, 12.1, 14.1],
         [0, 14, 12, 12, 3, 10, 12, 14, None],
         [None, None, None],
         ["0", "12", "14"],

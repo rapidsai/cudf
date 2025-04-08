@@ -410,14 +410,17 @@ class NumericalColumn(NumericalBaseColumn):
         try:
             lhs, rhs = super()._process_values_for_isin(values)
         except TypeError:
-            # dask.dataframe attempts to pass np.ndarray[object]
-            # https://github.com/rapidsai/cudf/issues/15768#issuecomment-2116129685
+            # Can remove once dask 25.04 is the minimum version
+            # https://github.com/dask/dask/pull/11869
             if isinstance(values, np.ndarray) and values.dtype.kind == "O":
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if isinstance(rhs, NumericalColumn):
-            rhs = rhs.astype(self.dtype)
+        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+            if rhs.can_cast_safely(lhs.dtype):
+                rhs = rhs.astype(lhs.dtype)
+            elif lhs.can_cast_safely(rhs.dtype):
+                lhs = lhs.astype(rhs.dtype)
         return lhs, rhs
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
