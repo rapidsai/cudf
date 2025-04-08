@@ -96,12 +96,12 @@ def read_json(
     dtype=None,
     lines: bool = False,
     compression: Literal[
+        "bz2",
+        "gzip",
         "infer",
         "snappy",
-        "gzip",
-        "zstd",
-        "bz2",
         "zip",
+        "zstd",
     ]
     | None = "infer",
     byte_range: None | list[int] = None,
@@ -354,12 +354,7 @@ def _plc_write_json(
 def to_json(
     cudf_val: cudf.DataFrame | cudf.Series,
     path_or_buf=None,
-    compression: Literal[
-        "snappy",
-        "gzip",
-        "zstd",
-    ]
-    | None = None,
+    compression: Literal["gzip", "snappy", "zstd"] | None = None,
     engine: Literal["auto", "pandas", "cudf"] = "auto",
     orient=None,
     storage_options=None,
