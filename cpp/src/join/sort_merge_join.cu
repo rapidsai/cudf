@@ -340,69 +340,74 @@ preprocess_tables(table_view const left,
   if (compare_nulls == null_equality::EQUAL) { return {left, right, std::nullopt, std::nullopt}; }
 
   auto preprocess_table = [stream, mr](table_view const& tbl) {
-    /*
-    auto print = [stream](column_view bool_mask) {
+    auto print_bitmask = [=](std::string s, bitmask_type const *dptr) {
+      auto num_bitmasks      = num_bitmask_words(tbl.num_rows());
+      std::vector<bitmask_type> hmask(num_bitmasks);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(hmask.data(), dptr, sizeof(bitmask_type) * num_bitmasks, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
-      std::vector<int> h_data(bool_mask.size());
-      CUDF_CUDA_TRY(cudaMemcpyAsync(h_data.data(),
-                                    bool_mask.data<bool>(),
-                                    bool_mask.size() * sizeof(std::byte),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
-      stream.synchronize();
-      std::cout << "bool_mask = ";
-      for (auto e : h_data)
-        std::cout << e << " ";
-      std::cout << std::endl;
-      return bool_mask;
-    };
-
-    std::cout << "tbl.num_rows = " << tbl.num_rows() << std::endl;
-    auto bool_mask       = make_numeric_column(cudf::data_type{cudf::type_to_id<bool>()},
-                                         tbl.num_rows(),
-                                         mask_state::UNALLOCATED,
-                                         stream,
-                                         mr);
-    auto bool_mask_begin = bool_mask->mutable_view().template begin<bool>();
-    thrust::fill(
-      rmm::exec_policy(stream), bool_mask_begin, bool_mask_begin + bool_mask->size(), false);
-    print(bool_mask->view());
-    for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
-      auto col = tbl.column(col_idx);
-      if (col.type().id() == type_id::LIST) {
-        std::cout << "col.size() = " << col.size() << std::endl;
-        auto col_bool_mask = cudf::lists::contains_nulls(lists_column_view(col), stream, mr);
-        print(col_bool_mask->view());
-        bool_mask          = binary_operation(bool_mask->view(),
-                                     col_bool_mask->view(),
-                                     binary_operator::LOGICAL_OR,
-                                     cudf::data_type{cudf::type_to_id<bool>()},
-                                     stream,
-                                     mr);
+      std::cout << s << " = ";
+      for (int idx = tbl.num_rows() - 1; idx >= 0; idx--) {
+        std::cout << (cudf::bit_is_set(hmask.data(), idx) ? "1" : "0");
       }
-    }
-    bool_mask_begin = bool_mask->mutable_view().template begin<bool>();
-    thrust::transform(rmm::exec_policy(stream),
-                      bool_mask_begin,
-                      bool_mask_begin + bool_mask->size(),
-                      bool_mask_begin,
-                      [] __device__(auto val) { return !val; });
-    auto non_list_nulls_tbl = cudf::apply_boolean_mask(tbl, *bool_mask, stream, mr);
-    */
-
-    // remove list rows that have nulls
+      std::cout << std::endl;
+    };
+    auto print_column = [=](std::string s, column_view col) {
+      std::vector<int32_t> hmask(col.size());
+      CUDF_CUDA_TRY(cudaMemcpyAsync(hmask.data(), col.data<int32_t>(), sizeof(int32_t) * col.size(), cudaMemcpyDefault, stream.value()));
+      stream.synchronize();
+      std::cout << s << " = ";
+      for(auto m : hmask)
+        std::cout << m << " ";
+      std::cout << std::endl;
+    };
+    // remove rows that have nulls at any nesting level
+    // step 1: identify nulls at root level
+    auto [validity_mask, num_nulls] = cudf::bitmask_or(tbl, stream, mr);
+    print_bitmask("Root level mask", static_cast<bitmask_type*>(validity_mask.data()));
+    // step 2: identify nulls at non-root levels
     for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
       auto col = tbl.column(col_idx);
       if (col.type().id() == type_id::LIST) {
         auto lcv = lists_column_view(col);
-        std::printf("lcv stats: %d %d %d %d\n", lcv.null_count(), lcv.offsets().size(), lcv.child().null_count(), lcv.child().size());
-        auto [reduced_null_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), lcv.offsets_begin(), lcv.offsets_end(), lcv.offsets_begin() + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
+        std::printf("lcv stats: null_count = %d, offsets_size = %d, child_null_count = %d, child_size = %d\n", lcv.null_count(), lcv.offsets().size(), lcv.child().null_count(), lcv.child().size());
+        print_bitmask("list child mask", lcv.child().null_mask());
+        print_column("offsets col", lcv.offsets());
+
+        rmm::device_uvector<int32_t> offsets_subset(lcv.child().size(), stream, mr);
+        auto offsets_subset_end = thrust::unique_copy(rmm::exec_policy(stream), lcv.offsets_begin(), lcv.offsets_end(), offsets_subset.begin());
+        offsets_subset.resize(thrust::distance(offsets_subset.begin(), offsets_subset_end), stream);
+        stream.synchronize();
+        std::cout << "subset offsets col: ";
+        auto h_offsets_subset = cudf::detail::make_host_vector_sync(offsets_subset, stream);
+        for(auto o : h_offsets_subset)
+          std::cout << o << " ";
+        std::cout << std::endl;
+
+        auto [reduced_validity_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), offsets_subset.data(), offsets_subset.data() + offsets_subset.size() - 1, offsets_subset.data() + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
+        print_bitmask("reduced_validity_mask", static_cast<bitmask_type*>(reduced_validity_mask.data()));
         std::cout << "num_nulls = " << num_nulls << std::endl;
+
+        std::vector<bitmask_type*> masks{static_cast<bitmask_type*>(validity_mask.data()), static_cast<bitmask_type*>(reduced_validity_mask.data())};
+        std::vector<size_type> offsets{0, 0};
+        auto tup = detail::bitmask_binop(
+            [] __device__(bitmask_type left, bitmask_type right) { return left | right; },
+            masks,
+            offsets,
+            tbl.num_rows(),
+            stream,
+            mr);
+        validity_mask = std::move(tup.first);
+        num_nulls = tup.second;
       }
     }
-
-    // drop all null rows
-    auto non_null_tbl = drop_nulls(no_top_null_tbl->view(), check_columns, stream, mr);
+    // step 3: construct bool column to apply mask
+    auto bool_mask       = make_numeric_column(cudf::data_type{cudf::type_to_id<bool>()},
+                                         tbl.num_rows(),
+                                         std::move(validity_mask),
+                                         num_nulls,
+                                         stream,
+                                         mr);
+    auto non_null_tbl = apply_boolean_mask(tbl, *bool_mask, stream, mr);
     return non_null_tbl;
   };
 

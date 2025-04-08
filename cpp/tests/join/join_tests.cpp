@@ -889,6 +889,7 @@ TEST_P(JoinParameterizedTest, InnerJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
+// TODO: add unequal nulls case here
 TEST_P(JoinParameterizedTest, InnerJoinWithStructsAndNulls)
 {
   auto algo = GetParam();
@@ -2097,7 +2098,6 @@ struct JoinTestLists : public cudf::test::BaseFixture {
       [5, 6]     4
   */
   lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}, null_at(0)};
-  //lcw build{{{0}, {1}, {{2, 0}, null_at(1)}, {}, {5, 6}}};
 
   /*
     [
@@ -2111,7 +2111,6 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     ]
   */
   lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}, null_at(2)};
-  //lcw probe{{{1}, {3}, {0}, {}, {{2, 0}, null_at(1)}, {5}, {6}}};
 
   auto column_view_from_device_uvector(rmm::device_uvector<cudf::size_type> const& vector)
   {
