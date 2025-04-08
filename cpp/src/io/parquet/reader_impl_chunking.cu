@@ -84,9 +84,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
-  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
-  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -699,7 +699,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -746,7 +746,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -1109,7 +1109,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
   std::transform(h_decomp_info.begin(),
                  h_decomp_info.end(),
@@ -1282,7 +1282,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
     auto const num_columns    = _input_columns.size();
-    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
+    auto const h_page_offsets = cudf::detail::make_host_vector(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1456,7 +1456,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
