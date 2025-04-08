@@ -212,7 +212,8 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
     else:
         # Leaf node.
         # Convert to simple FusedExpr with no children
-        return FusedExpr(expr.dtype, expr)
+        sub_expr = _valid_sub_expr(expr)
+        return FusedExpr(sub_expr.dtype, sub_expr)
 
 
 def decompose_expr_graph(expr: Expr) -> Expr:
