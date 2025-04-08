@@ -32,6 +32,49 @@
 namespace cudf {
 namespace {
 
+// template <typename T>
+// void _table_to_device_array(cudf::table_view const& input,
+//                             void* output,
+//                             rmm::cuda_stream_view stream)
+// {
+//   auto const num_columns = input.num_columns();
+//   auto const num_rows    = input.num_rows();
+//   auto const item_size   = sizeof(T);
+
+//   std::vector<void*> dsts(num_columns);
+//   std::vector<void const*> srcs(num_columns);
+//   std::vector<size_t> sizes(num_columns, item_size * num_rows);
+
+//   auto* base_ptr = static_cast<uint8_t*>(output);
+
+//   for (int i = 0; i < num_columns; ++i) {
+//     auto const& col = input.column(i);
+//     CUDF_EXPECTS(col.type() == input.column(0).type(), "All columns must have the same dtype");
+
+//     auto* src_ptr = static_cast<void const*>(col.data<T>());
+//     auto* dst_ptr = base_ptr + i * item_size * num_rows;
+
+//     srcs[i] = src_ptr;
+//     dsts[i] = dst_ptr;
+//   }
+
+//   cudaMemcpyAttributes attr{};
+//   attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
+//   std::vector<cudaMemcpyAttributes> attrs{attr};
+//   std::vector<size_t> attr_idxs{0};
+//   size_t fail_idx = SIZE_MAX;
+
+//   CUDF_CUDA_TRY(cudaMemcpyBatchAsync(dsts.data(),
+//                                      const_cast<void**>(srcs.data()),
+//                                      sizes.data(),
+//                                      num_columns,
+//                                      attrs.data(),
+//                                      attr_idxs.data(),
+//                                      attrs.size(),
+//                                      &fail_idx,
+//                                      stream.value()));
+// }
+
 template <typename T>
 void _table_to_device_array(cudf::table_view const& input,
                             void* output,
@@ -58,6 +101,7 @@ void _table_to_device_array(cudf::table_view const& input,
     dsts[i] = dst_ptr;
   }
 
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 12080
   cudaMemcpyAttributes attr{};
   attr.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
   std::vector<cudaMemcpyAttributes> attrs{attr};
@@ -73,7 +117,13 @@ void _table_to_device_array(cudf::table_view const& input,
                                      attrs.size(),
                                      &fail_idx,
                                      stream.value()));
+#else
+  for (int i = 0; i < num_columns; ++i) {
+    CUDF_CUDA_TRY(cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
+  }
+#endif
 }
+
 
 struct TableToArrayDispatcher {
   table_view const& input;
