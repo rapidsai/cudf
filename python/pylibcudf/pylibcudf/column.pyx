@@ -51,8 +51,7 @@ def _parse_array_interface(
     shape = iface["shape"]
     strides = iface.get("strides")
     itemsize = size_of(dtype)
-    if not is_c_contiguous(shape, strides, itemsize):
-        raise ValueError("Data must be C-contiguous")
+
     return data, shape, strides, dtype, itemsize
 
 
@@ -535,8 +534,6 @@ cdef class Column:
         ------
         TypeError
             If the input does not implement a supported array interface.
-        ImportError
-            If NumPy is not installed.
 
         Notes
         -----
