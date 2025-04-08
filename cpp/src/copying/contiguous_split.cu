@@ -1547,7 +1547,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
                              offsets.begin());
 
       // the next part is working on the CPU, so we want to synchronize here
-      return detail::make_host_vector_sync(offsets, stream);
+      return detail::make_host_vector(offsets, stream);
     }();
 
     std::vector<std::size_t> num_batches_per_iteration;
