@@ -22,13 +22,15 @@ def test_join_rapidsmp(max_rows_per_partition: int) -> None:
         pytest.skip(reason="Requires distributed execution.")
 
     # check that we have a rapidsmp cluster running
-    rapidsmp = pytest.importorskip("rapidsmp")
+    pytest.importorskip("rapidsmp")
     try:
         # This will result in a ValueError if the
         # scheduler isn't compatible with rapidsmp.
         # Otherwise, it's a no-op if the cluster
         # was already bootstrapped.
-        rapidsmp.integrations.dask.bootstrap_dask_cluster(client)
+        from rapidsmp.integrations.dask import bootstrap_dask_cluster
+
+        bootstrap_dask_cluster(client)
     except ValueError:
         pytest.skip(reason="Requires rapidsmp cluster.")
 

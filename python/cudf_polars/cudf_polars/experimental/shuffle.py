@@ -265,6 +265,8 @@ def _(
                 RMPIntegration,
             )
         except (ImportError, ValueError) as err:
+            # ImportError: rapidsmp is not installed
+            # ValueError: rapidsmp couldn't find a distributed client
             if shuffle_method == "rapidsmp":
                 # Only raise an error if the user specifically
                 # set the shuffle method to "rapidsmp"
