@@ -23,7 +23,6 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "io/comp/comp.hpp"
-#include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -38,6 +37,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/logger.hpp>
@@ -1134,7 +1134,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
   auto d_partitions = cudf::detail::make_device_uvector_async(
     partitions, stream, cudf::get_current_device_resource_ref());
   InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
-  frag.device_to_host_sync(stream);
+  frag.device_to_host(stream);
 }
 
 /**
@@ -1202,7 +1202,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    nullptr,
                    stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   int num_pages = 0;
   for (auto& chunk : chunks.host_view().flat_view()) {
@@ -1227,7 +1227,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    nullptr,
                    stream);
-  page_sizes.device_to_host_sync(stream);
+  page_sizes.device_to_host(stream);
 
   // Get per-page max compressed size
   cudf::detail::hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
@@ -1251,7 +1251,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    nullptr,
                    stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
   return comp_page_sizes;
 }
 
@@ -1332,7 +1332,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   // Populate the hash map for each chunk
   populate_chunk_hash_maps(map_storage_data, frags, stream);
   // Synchronize again
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   // Make decision about which chunks have dictionary
   bool cannot_honor_request = false;

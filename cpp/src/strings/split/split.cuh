@@ -32,6 +32,7 @@
 
 #include <cuda/atomic>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -202,7 +203,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
 
       // store the token into the output vector
       d_tokens[token_idx++] =
-        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, end_ptr))};
+        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, end_ptr))};
 
       // setup for next token
       str_ptr = end_ptr + delim_size;
@@ -210,7 +211,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
     // include anything leftover
     if (token_idx < token_count) {
       d_tokens[token_idx] =
-        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, str_end))};
+        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, str_end))};
     }
   }
 
@@ -257,8 +258,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
       auto const start_ptr = (token_idx + 1 < token_count) ? prev_delim : str_begin;
 
       // store the token into the output vector right-to-left
-      d_tokens[token_count - token_idx - 1] =
-        string_index_pair{start_ptr, static_cast<size_type>(thrust::distance(start_ptr, str_ptr))};
+      d_tokens[token_count - token_idx - 1] = string_index_pair{
+        start_ptr, static_cast<size_type>(cuda::std::distance(start_ptr, str_ptr))};
 
       // setup for next token
       str_ptr = start_ptr - delim_size;
@@ -266,8 +267,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
     }
     // include anything leftover (rightover?)
     if (token_idx < token_count) {
-      d_tokens[0] =
-        string_index_pair{str_begin, static_cast<size_type>(thrust::distance(str_begin, str_ptr))};
+      d_tokens[0] = string_index_pair{
+        str_begin, static_cast<size_type>(cuda::std::distance(str_begin, str_ptr))};
     }
   }
 
