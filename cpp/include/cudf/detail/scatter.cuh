@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/count.h>
-#include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_traits.h>
@@ -122,7 +122,7 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   auto const out_of_bounds_begin =
     thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
-    out_of_bounds_begin + thrust::distance(scatter_map_begin, scatter_map_end);
+    out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   out_of_bounds_begin,
                   out_of_bounds_end,
