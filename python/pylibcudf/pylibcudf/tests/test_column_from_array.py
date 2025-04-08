@@ -119,9 +119,6 @@ def test_from_ndarray_invalid_obj(obj):
 
 def test_array_interface_with_data_none():
     class ArrayInterfaceWithNone:
-        def __init__(self):
-            pass
-
         @property
         def __array_interface__(self):
             return {
