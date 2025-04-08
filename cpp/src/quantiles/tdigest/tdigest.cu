@@ -33,9 +33,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
@@ -114,7 +113,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     }
 
     // determine what centroid this weighted quantile falls within.
-    size_type const centroid_index = static_cast<size_type>(thrust::distance(
+    size_type const centroid_index = static_cast<size_type>(cuda::std::distance(
       cumulative_weight,
       thrust::lower_bound(
         thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
@@ -207,9 +206,9 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
     cuda::proclaim_return_type<std::ptrdiff_t>(
       [offsets_begin = offsets.begin<size_type>(),
        offsets_end   = offsets.end<size_type>()] __device__(size_type i) {
-        return thrust::distance(
+        return cuda::std::distance(
           offsets_begin,
-          thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
+          cuda::std::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
       }));
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
