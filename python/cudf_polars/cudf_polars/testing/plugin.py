@@ -48,6 +48,8 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
+    # Needs https://github.com/pola-rs/polars/issues/22003
+    "tests/unit/functions/as_datatype/test_duration.py::test_duration_time_units[ns-expected2]": "pl.duration(...) loses nanosecond precision when using GPU backend",
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -203,6 +205,11 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
+    # Remove when polars supports Pydantic V3
+    "tests/unit/constructors/test_constructors.py::test_init_structured_objects": "pydantic deprecation warning",
+    "tests/unit/constructors/test_constructors.py::test_init_pydantic_2x": "pydantic deprecation warning",
+    "tests/unit/constructors/test_constructors.py::test_init_structured_objects_nested[_TestFooPD-_TestBarPD-_TestBazPD]": "pydantic deprecation warning",
+    "tests/unit/series/test_series.py::test_init_structured_objects": "pydantic deprecation warning",
 }
 
 

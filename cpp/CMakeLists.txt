@@ -884,7 +884,7 @@ target_include_directories(
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
-          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}"
+          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
