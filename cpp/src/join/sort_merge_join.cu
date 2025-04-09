@@ -38,6 +38,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -363,56 +364,51 @@ preprocess_tables(table_view const left,
     // remove rows that have nulls at any nesting level
     // step 1: identify nulls at root level
     auto [validity_mask, num_nulls] = cudf::bitmask_or(tbl, stream, mr);
-    print_bitmask("Root level mask", static_cast<bitmask_type*>(validity_mask.data()));
     // step 2: identify nulls at non-root levels
     for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
       auto col = tbl.column(col_idx);
       if (col.type().id() == type_id::LIST) {
         auto lcv = lists_column_view(col);
-        std::printf("lcv stats: null_count = %d, offsets_size = %d, child_null_count = %d, child_size = %d\n", lcv.null_count(), lcv.offsets().size(), lcv.child().null_count(), lcv.child().size());
-        print_bitmask("list child mask", lcv.child().null_mask());
-        print_column("offsets col", lcv.offsets());
+        auto offsets = lcv.offsets();
+        auto child = lcv.child();
 
-        rmm::device_uvector<int32_t> offsets_subset(lcv.child().size(), stream, mr);
-        auto offsets_subset_end = thrust::unique_copy(rmm::exec_policy(stream), lcv.offsets_begin(), lcv.offsets_end(), offsets_subset.begin());
-        offsets_subset.resize(thrust::distance(offsets_subset.begin(), offsets_subset_end), stream);
-        stream.synchronize();
-        std::cout << "subset offsets col: ";
-        auto h_offsets_subset = cudf::detail::make_host_vector_sync(offsets_subset, stream);
-        for(auto o : h_offsets_subset)
-          std::cout << o << " ";
-        std::cout << std::endl;
+        rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, mr);
+        rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, mr);
+        auto unique_end = thrust::unique_by_key_copy(
+            rmm::exec_policy(stream), 
+            thrust::make_reverse_iterator(lcv.offsets_end()),
+            thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
+            thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
+            thrust::make_reverse_iterator(offsets_subset.end()),
+            thrust::make_reverse_iterator(child_positions.end()));
+        auto subset_size = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()), thrust::get<0>(unique_end));
+        auto subset_offset = offsets.size() - subset_size;
 
-        auto [reduced_validity_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), offsets_subset.data(), offsets_subset.data() + offsets_subset.size() - 1, offsets_subset.data() + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
-        print_bitmask("reduced_validity_mask", static_cast<bitmask_type*>(reduced_validity_mask.data()));
-        std::cout << "num_nulls = " << num_nulls << std::endl;
+        auto [reduced_validity_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), offsets_subset.data() + subset_offset, offsets_subset.data() + offsets_subset.size() - 1, offsets_subset.data() + subset_offset + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
 
-        std::vector<bitmask_type*> masks{static_cast<bitmask_type*>(validity_mask.data()), static_cast<bitmask_type*>(reduced_validity_mask.data())};
-        std::vector<size_type> offsets{0, 0};
-        auto tup = detail::bitmask_binop(
-            [] __device__(bitmask_type left, bitmask_type right) { return left | right; },
-            masks,
-            offsets,
-            tbl.num_rows(),
-            stream,
-            mr);
-        validity_mask = std::move(tup.first);
-        num_nulls = tup.second;
+        thrust::for_each(rmm::exec_policy(stream),
+            thrust::make_counting_iterator(0),
+            thrust::make_counting_iterator(0) + subset_size,
+            [validity_mask = static_cast<bitmask_type*>(validity_mask.data()),
+              reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
+              child_positions = child_positions.begin() + subset_offset] 
+              __device__ (auto idx) {
+              if(!bit_is_set(reduced_validity_mask, idx))
+                clear_bit(validity_mask, child_positions[idx]);
+            });
       }
     }
     // step 3: construct bool column to apply mask
-    auto bool_mask       = make_numeric_column(cudf::data_type{cudf::type_to_id<bool>()},
-                                         tbl.num_rows(),
-                                         std::move(validity_mask),
-                                         num_nulls,
-                                         stream,
-                                         mr);
+    cudf::scalar_type_t<bool> true_scalar(true);
+    auto bool_mask = cudf::make_column_from_scalar(true_scalar, tbl.num_rows(), stream, mr);
+    num_nulls = null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
+    bool_mask->set_null_mask(std::move(validity_mask), num_nulls);
+
     auto non_null_tbl = apply_boolean_mask(tbl, *bool_mask, stream, mr);
     return non_null_tbl;
   };
 
   auto non_null_left  = preprocess_table(left);
-  std::cout << "===============\n";
   auto non_null_right = preprocess_table(right);
   auto nnlv           = non_null_left->view();
   auto nnrv           = non_null_right->view();
@@ -436,7 +432,48 @@ postprocess_indices(table_view const& left,
     return {std::move(larger_indices), std::move(smaller_indices)};
   }
   auto get_mapping = [stream, mr](table_view const& tbl) {
-    auto [tbl_result_mask, tbl_num_nulls] = detail::bitmask_and(tbl, stream, mr);
+    auto preprocess_table = [stream, mr](table_view const& tbl) {
+      // remove rows that have nulls at any nesting level
+      // step 1: identify nulls at root level
+      auto [validity_mask, num_nulls] = cudf::bitmask_or(tbl, stream, mr);
+      // step 2: identify nulls at non-root levels
+      for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
+        auto col = tbl.column(col_idx);
+        if (col.type().id() == type_id::LIST) {
+          auto lcv = lists_column_view(col);
+          auto offsets = lcv.offsets();
+          auto child = lcv.child();
+          rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, mr);
+          rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, mr);
+          auto unique_end = thrust::unique_by_key_copy(
+              rmm::exec_policy(stream), 
+              thrust::make_reverse_iterator(lcv.offsets_end()),
+              thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
+              thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
+              thrust::make_reverse_iterator(offsets_subset.end()),
+              thrust::make_reverse_iterator(child_positions.end()));
+          auto subset_size = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()), thrust::get<0>(unique_end));
+          auto subset_offset = offsets.size() - subset_size;
+
+          auto [reduced_validity_mask, num_nulls] = detail::segmented_null_mask_reduction(lcv.child().null_mask(), offsets_subset.data() + subset_offset, offsets_subset.data() + offsets_subset.size() - 1, offsets_subset.data() + subset_offset + 1, null_policy::INCLUDE, std::nullopt, stream, mr);
+
+          thrust::for_each(rmm::exec_policy(stream),
+              thrust::make_counting_iterator(0),
+              thrust::make_counting_iterator(0) + subset_size,
+              [validity_mask = static_cast<bitmask_type*>(validity_mask.data()),
+                reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
+                child_positions = child_positions.begin() + subset_offset] 
+                __device__ (auto idx) {
+                if(!bit_is_set(reduced_validity_mask, idx))
+                  clear_bit(validity_mask, child_positions[idx]);
+              });
+        }
+      }
+      num_nulls = null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
+      return std::pair{std::move(validity_mask), num_nulls};
+    };
+    //auto [tbl_result_mask, tbl_num_nulls] = detail::bitmask_and(tbl, stream, mr);
+    auto [tbl_result_mask, tbl_num_nulls] = preprocess_table(tbl);
     rmm::device_uvector<size_type> tbl_mapping(tbl.num_rows() - tbl_num_nulls, stream, mr);
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
