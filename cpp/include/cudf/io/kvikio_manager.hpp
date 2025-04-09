@@ -19,9 +19,18 @@
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
-//! IO interfaces
+//! KvikIO manager
 namespace io {
 
+/**
+ * @addtogroup io_kvikio_manager
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Singleton class to control the KvikIO library.
+ */
 class kvikio_manager {
  public:
   ~kvikio_manager() = default;
@@ -31,16 +40,40 @@ class kvikio_manager {
   kvikio_manager(kvikio_manager&&)                 = delete;
   kvikio_manager& operator=(kvikio_manager&&)      = delete;
 
+  /**
+   * @brief Get the singleton instance of KvikIO manager.
+   *
+   * @return KvikIO manager instance.
+   */
   static kvikio_manager& instance();
 
+  /**
+   * @brief Set the number of IO threads used by the KvikIO library.
+   *
+   * If the new value is different from the previous value, then this method will block the calling
+   * thread until KvikIO completes all existing I/O tasks, destroys the previous thread pool, and
+   * creates a new one with the specified value. Otherwise, the existing thread pool will be used
+   * for subsequent I/O operations.
+   *
+   */
   static void set_num_io_threads(unsigned int num_io_threads);
 
+  /**
+   * @brief Get the number of IO threads used by the KvikIO library.
+   *
+   * @return The number of IO threads used by the KvikIO library.
+   */
   static unsigned int get_num_io_threads();
 
  private:
+  /**
+   * @brief Constructor of kvikio_manager.
+   */
   kvikio_manager();
+
   unsigned int _num_io_threads;
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf

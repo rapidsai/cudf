@@ -17,6 +17,7 @@
 #include "getenv_or.hpp"
 
 #include <cudf/io/kvikio_manager.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <kvikio/defaults.hpp>
 
@@ -30,7 +31,7 @@ kvikio_manager::kvikio_manager()
   // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
   // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
   // initialized.
-  cudaFree(nullptr);
+  CUDF_CUDA_TRY(cudaFree(nullptr));
 
   auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
   kvikio::defaults::set_compat_mode(compat_mode);
@@ -47,6 +48,7 @@ kvikio_manager& kvikio_manager::instance()
 
 void kvikio_manager::set_num_io_threads(unsigned int num_io_threads)
 {
+  if (num_io_threads == instance()._num_io_threads) { return; }
   instance()._num_io_threads = num_io_threads;
   kvikio::defaults::set_thread_pool_nthreads(num_io_threads);
 }

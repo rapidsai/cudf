@@ -397,10 +397,15 @@ def _num_io_threads_get_callback():
 
 _register_option(
     "num_io_threads",
-    _env_get_bool("KVIKIO_NTHREADS", 4),
+    4,
     textwrap.dedent(
         """
-        Todo: Add comment here.
+        Set the number of IO threads used by the KvikIO library.
+        If the new value is different from the previous value, then
+        setting this option will block the calling thread until KvikIO
+        completes all existing I/O tasks, destroys the previous thread pool,
+        and creates a new one with the specified value. Otherwise, the existing
+        thread pool will be used for subsequent I/O operations.
     """
     ),
     _integer_validator,
