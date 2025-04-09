@@ -319,6 +319,14 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 {
 }
 
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       null_equality compare_nulls,
+                                       double load_factor,
+                                       rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type>(build, compare_nulls, load_factor, stream)}
+{
+}
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join::inner_join(cudf::table_view const& probe,

@@ -615,6 +615,16 @@ hash_join::hash_join(cudf::table_view const& build,
 {
 }
 
+hash_join::hash_join(cudf::table_view const& build,
+                     nullable_join has_nulls,
+                     null_equality compare_nulls,
+                     double load_factor,
+                     rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type const>(
+      build, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream)}
+{
+}
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::inner_join(cudf::table_view const& probe,
