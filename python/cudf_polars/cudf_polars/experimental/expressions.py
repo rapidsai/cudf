@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.binaryop import BinOp
@@ -25,7 +25,6 @@ from cudf_polars.utils.config import ConfigOptions
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.base import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
@@ -346,7 +345,7 @@ def evaluate_chunk_multi_agg(
 def combine_chunks_multi_agg(
     column_chunks: Sequence[tuple[Column, ...]],
     combine_aggs: Sequence[Agg],
-    finalize: tuple[plc.DataType, str] | None,
+    finalize: Expr,
     name: str,
 ) -> Column:
     """Aggregate Column chunks."""
@@ -362,13 +361,13 @@ def combine_chunks_multi_agg(
         for agg, column_chunk_list in zip(combine_aggs, column_chunk_lists, strict=True)
     ]
 
-    if finalize:
-        # Perform optional BinOp on combined columns
-        dt, op_name = finalize
-        op = getattr(plc.binaryop.BinaryOperator, op_name)
-        col = Column(plc.binaryop.binary_operation(*(c.obj for c in combined), op, dt))
-    else:
+    if isinstance(finalize, NoOp):
         (col,) = combined
+    else:
+        col = finalize.evaluate(
+            DataFrame([]),  # Placeholder DataFrame
+            mapping=dict(zip(finalize.children, combined, strict=True)),
+        )
 
     return col.rename(name)
 
@@ -426,8 +425,7 @@ def make_agg_graph(
         combine_chunks_multi_agg,
         pointwise_keys,
         combine_exprs,
-        # TODO: Evaluate final_expr directly
-        None if isinstance(final_expr, NoOp) else (final_expr.dtype, "DIV"),
+        final_expr,
         named_expr.name,
     )
 
