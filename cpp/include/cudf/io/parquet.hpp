@@ -208,12 +208,14 @@ class parquet_reader_options {
    * @brief Sets the names of columns to be read from all input sources.
    *
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
-   * which allows per-source configuration, `set_columns` applies globally. All input sources
-   * must contain the specified columns.
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Columns that do not exist in the input files will be ignored silently.
+   * The output table will only include the columns that are actually found.
    *
    * @note This function does not currently support per-source column selection.
    *
-   * @param col_names A vector of column names to read from each input source.
+   * @param col_names A vector of column names to attempt to read from each input source.
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
