@@ -2147,7 +2147,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
-          auto const stats_blob = cudf::detail::make_host_vector_sync(
+          auto const stats_blob = cudf::detail::make_host_vector(
             device_span<uint8_t const>(dev_bfr, ck.ck_stat_size), stream);
           CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
           cp.read(&column_chunk_meta.statistics);
@@ -2448,7 +2448,7 @@ void writer::impl::write_parquet_data_to_sink(
 
   if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
     // need pages on host to create offset_indexes
-    auto const h_pages = cudf::detail::make_host_vector_sync(pages, _stream);
+    auto const h_pages = cudf::detail::make_host_vector(pages, _stream);
 
     // add column and offset indexes to metadata
     if (num_rowgroups != 0) {
