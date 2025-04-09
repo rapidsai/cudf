@@ -235,7 +235,7 @@ void metadata::sanitize_schema()
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
-    if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED_TYPE) {
+    if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
       if (schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
@@ -251,7 +251,7 @@ void metadata::sanitize_schema()
         struct_elem.name            = "struct_node";
         struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
-        struct_elem.type            = Type::UNDEFINED_TYPE;
+        struct_elem.type            = Type::UNDEFINED;
         struct_elem.converted_type  = std::nullopt;
 
         // swap children

@@ -3214,18 +3214,18 @@ __device__ bool is_descending(statistics_chunk const* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-__device__ int32_t calculate_boundary_order(statistics_chunk const* s,
-                                            Type ptype,
-                                            ConvertedType ctype,
-                                            uint32_t num_pages)
+__device__ BoundaryOrder calculate_boundary_order(statistics_chunk const* s,
+                                                  Type ptype,
+                                                  ConvertedType ctype,
+                                                  uint32_t num_pages)
 {
-  if (not is_comparable(ptype, ctype)) { return static_cast<int32_t>(BoundaryOrder::UNORDERED); }
+  if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
   if (is_ascending(s, ptype, ctype, num_pages)) {
-    return static_cast<int32_t>(BoundaryOrder::ASCENDING);
+    return BoundaryOrder::ASCENDING;
   } else if (is_descending(s, ptype, ctype, num_pages)) {
-    return static_cast<int32_t>(BoundaryOrder::DESCENDING);
+    return BoundaryOrder::DESCENDING;
   }
-  return static_cast<int32_t>(BoundaryOrder::UNORDERED);
+  return BoundaryOrder::UNORDERED;
 }
 
 // align ptr to an 8-byte boundary. address returned will be <= ptr.
@@ -3300,11 +3300,12 @@ CUDF_KERNEL void __launch_bounds__(1)
   }
   encoder.field_list_end(3);
   // boundary_order
-  encoder.field_int32(4,
-                      calculate_boundary_order(&column_stats[first_data_page + pageidx],
-                                               col_g.physical_type,
-                                               col_g.converted_type,
-                                               num_pages - first_data_page));
+  encoder.field_int32(
+    4,
+    static_cast<int32_t>(calculate_boundary_order(&column_stats[first_data_page + pageidx],
+                                                  col_g.physical_type,
+                                                  col_g.converted_type,
+                                                  num_pages - first_data_page)));
   // null_counts
   encoder.field_list_begin(5, num_data_pages, FieldType::I64);
   for (uint32_t page = first_data_page; page < num_pages; page++) {

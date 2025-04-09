@@ -385,7 +385,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     // everything
     if (is_base_pass) {
       s->first_row             = 0;
-      s->num_rows              = std::numeric_limits<int>::max();
+      s->num_rows              = std::numeric_limits<int32_t>::max();
       s->row_index_lower_bound = -1;
     }
   }

@@ -33,7 +33,7 @@ namespace io::parquet {
  * @brief Basic data types in Parquet, determines how data is physically stored
  */
 enum class Type : int8_t {
-  UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
+  UNDEFINED            = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
   INT32                = 1,
   INT64                = 2,
@@ -115,10 +115,10 @@ enum class Compression : uint8_t {
  * @brief Compression codec used for compressed data pages
  */
 enum class FieldRepetitionType : int8_t {
-  NO_REPETITION_TYPE = -1,
-  REQUIRED = 0,  // This field is required (can not be null) and each record has exactly 1 value.
-  OPTIONAL = 1,  // The field is optional (can be null) and each record has 0 or 1 values.
-  REPEATED = 2,  // The field is repeated and can contain 0 or more values
+  UNSPECIFIED = -1,
+  REQUIRED    = 0,  // This field is required (can not be null) and each record has exactly 1 value.
+  OPTIONAL    = 1,  // The field is optional (can be null) and each record has 0 or 1 values.
+  REPEATED    = 2,  // The field is repeated and can contain 0 or more values
 };
 
 /**
@@ -422,7 +422,7 @@ struct ColumnOrder {
  */
 struct SchemaElement {
   /// 1: parquet physical type for output
-  Type type = Type::UNDEFINED_TYPE;
+  Type type = Type::UNDEFINED;
   /// 2: byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   int32_t type_length = 0;
   /// 3: repetition of the field
@@ -539,7 +539,7 @@ struct SchemaElement {
    */
   [[nodiscard]] bool is_struct() const
   {
-    return type == Type::UNDEFINED_TYPE &&
+    return type == Type::UNDEFINED &&
            // this assumption might be a little weak.
            ((repetition_type != FieldRepetitionType::REPEATED) ||
             (repetition_type == FieldRepetitionType::REPEATED && num_children > 1));
@@ -710,7 +710,7 @@ struct ColumnChunkMetaData {
  */
 struct BloomFilterAlgorithm {
   /// Available bloom filter algorithms
-  enum Algorithm { UNDEFINED, SPLIT_BLOCK };
+  enum Algorithm : uint8_t { UNDEFINED, SPLIT_BLOCK };
   /// Bloom filter algorithm
   Algorithm algorithm{SPLIT_BLOCK};
 };
@@ -720,7 +720,7 @@ struct BloomFilterAlgorithm {
  */
 struct BloomFilterHash {
   /// Available bloom filter hashers
-  enum Hash { UNDEFINED, XXHASH };
+  enum Hash : uint8_t { UNDEFINED, XXHASH };
   /// Bloom filter hasher
   Hash hash{XXHASH};
 };
@@ -730,7 +730,7 @@ struct BloomFilterHash {
  */
 struct BloomFilterCompression {
   /// Available bloom filter compression types
-  enum Compression { UNDEFINED, UNCOMPRESSED };
+  enum Compression : uint8_t { UNDEFINED, UNCOMPRESSED };
   /// Bloom filter compression type
   Compression compression{UNCOMPRESSED};
 };

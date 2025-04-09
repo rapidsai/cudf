@@ -117,16 +117,16 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 size_t CompactProtocolWriter::write(SchemaElement const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.type != Type::UNDEFINED_TYPE) {
+  if (s.type != Type::UNDEFINED) {
     c.field_int(1, static_cast<int32_t>(s.type));
     if (s.type_length != 0) { c.field_int(2, s.type_length); }
   }
-  if (s.repetition_type != FieldRepetitionType::NO_REPETITION_TYPE) {
+  if (s.repetition_type != FieldRepetitionType::UNSPECIFIED) {
     c.field_int(3, static_cast<int32_t>(s.repetition_type));
   }
   c.field_string(4, s.name);
 
-  if (s.type == Type::UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
+  if (s.type == Type::UNDEFINED) { c.field_int(5, s.num_children); }
   if (s.converted_type.has_value()) {
     c.field_int(6, static_cast<int32_t>(s.converted_type.value()));
     if (s.converted_type == ConvertedType::DECIMAL) {

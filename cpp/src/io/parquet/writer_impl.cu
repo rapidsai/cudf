@@ -632,8 +632,8 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
-  root.type            = Type::UNDEFINED_TYPE;
-  root.repetition_type = FieldRepetitionType::NO_REPETITION_TYPE;
+  root.type            = Type::UNDEFINED;
+  root.repetition_type = FieldRepetitionType::UNSPECIFIED;
   root.name            = "schema";
   root.num_children    = linked_columns.size();
   root.parent_idx      = -1;  // root schema has no parent
