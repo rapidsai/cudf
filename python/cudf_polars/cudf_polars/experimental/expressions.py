@@ -121,7 +121,7 @@ class ShuffleColumn(Expr):
 
 def extract_partition_counts(
     exprs: Sequence[Expr],
-    child_ir_count: int,
+    input_ir_count: int,
     *,
     update: MutableMapping[Expr, int] | None = None,
     skip_fused_exprs: bool = False,
@@ -134,7 +134,7 @@ def extract_partition_counts(
     exprs
         Sequence of root expressions to traverse and
         get partition counts.
-    child_ir_count
+    input_ir_count
         Partition count for the child-IR node.
     update
         Existing mapping to update.
@@ -155,7 +155,7 @@ def extract_partition_counts(
                 # Process the fused sub-expression graph first
                 expr_partition_counts = extract_partition_counts(
                     [node.sub_expr],
-                    child_ir_count,
+                    input_ir_count,
                     update=expr_partition_counts,
                     skip_fused_exprs=True,
                 )
@@ -172,7 +172,7 @@ def extract_partition_counts(
                     )
                 else:
                     # If no children, we are preserving the child-IR partition count
-                    expr_partition_counts[node] = child_ir_count
+                    expr_partition_counts[node] = input_ir_count
             else:  # pragma: no cover
                 raise NotImplementedError(
                     f"{type(node)} not supported for multiple partitions."
@@ -375,7 +375,7 @@ def combine_chunks_multi_agg(
 def make_agg_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
-    child_ir: IR,
+    input_ir: IR,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph."""
     expr = named_expr.value
@@ -405,13 +405,13 @@ def make_agg_graph(
     # Pointwise stage
     pointwise_keys = []
     key_name = get_key_name(expr)
-    child_name = get_key_name(child_ir)
+    inpit_ir_name = get_key_name(input_ir)
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
         pointwise_keys.append((chunk_name, i))
         graph[pointwise_keys[-1]] = (
             evaluate_chunk_multi_agg,
-            (child_name, i),
+            (inpit_ir_name, i),
             chunkwise_exprs,
             expr.children,
             *(
@@ -435,8 +435,8 @@ def make_agg_graph(
 def make_shuffle_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
-    child_ir: IR,
-    child_ir_partition_info: PartitionInfo,
+    input_ir: IR,
+    input_ir_partition_info: PartitionInfo,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph for shuffling."""
     # TODO: Add shuffle graph logic
@@ -446,11 +446,11 @@ def make_shuffle_graph(
 def make_pointwise_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
-    child: IR,
+    input_ir: IR,
 ) -> MutableMapping[Any, Any]:
     """Build simple pointwise FusedExpr graph."""
     expr = named_expr.value
-    child_name = get_key_name(child)
+    input_ir_name = get_key_name(input_ir)
     key_name = get_key_name(expr)
     expr_child_names = [get_key_name(c) for c in expr.children]
     expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
@@ -460,7 +460,7 @@ def make_pointwise_graph(
     return {
         (key_name, i): (
             evaluate_chunk,
-            (child_name, i),
+            (input_ir_name, i),
             sub_expr,
             expr.children,
             *(
@@ -475,19 +475,19 @@ def make_pointwise_graph(
 def make_fusedexpr_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
-    child: IR,
-    child_partition_info: PartitionInfo,
+    input_ir: IR,
+    input_ir_partition_info: PartitionInfo,
 ) -> MutableMapping[Any, Any]:
     """Build task graph for a FusedExpr node."""
     expr = named_expr.value
     assert isinstance(expr, FusedExpr)
     if expr.kind == "pointwise":
-        return make_pointwise_graph(named_expr, expr_partition_counts, child)
+        return make_pointwise_graph(named_expr, expr_partition_counts, input_ir)
     elif expr.kind == "shuffle":
         return make_shuffle_graph(
-            named_expr, expr_partition_counts, child, child_partition_info
+            named_expr, expr_partition_counts, input_ir, input_ir_partition_info
         )
     elif expr.kind == "aggregation":
-        return make_agg_graph(named_expr, expr_partition_counts, child)
+        return make_agg_graph(named_expr, expr_partition_counts, input_ir)
     else:
         raise ValueError()
