@@ -184,6 +184,16 @@ def extract_partition_counts(
 def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
     # Used by `decompose_expr_graph`
 
+    # We are translating our original expression graph to
+    # comprise only of FusedExpr nodes. We use a depth-first
+    # traversal, so that we start with FusedExpr leaf nodes.
+    # As we work our way back towards the root node, the
+    # existing FusedExpr nodes will "absorb" their parents
+    # as long as all sub-expression nodes are "pointwise".
+    # As soon as a FusedExpr object contains a non-pointwise
+    # sub-expression node, that object may no-longer absorb
+    # its parents.
+
     # Transform child expressions first
     new_children = tuple(map(rec, expr.children))
     fused_children: list[FusedExpr] = []
