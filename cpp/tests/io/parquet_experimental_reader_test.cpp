@@ -237,7 +237,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Filter row groups with stats - API # 5
   auto stats_filtered_row_group_indices = cudf::experimental::io::filter_row_groups_with_stats(
-    reader, input_row_group_indices, options, stream);
+    reader, current_row_group_indices, options, stream);
 
   // Update current row group indices
   current_row_group_indices = cudf::host_span<cudf::size_type>(stats_filtered_row_group_indices);

@@ -111,14 +111,12 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Fetches byte ranges of secondary filters for further row group pruning
-   *
-   * Fetches a pair of vectors of byte ranges corresponding to available per-column-chunk dictionary
-   * pages and bloom filters (called secondary filters) for further row group pruning
+   * @brief Fetches byte ranges of bloom filters and dictionary pages (secondary filters) for
+   * further row group pruning
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
-   * @return Pair of vectors of byte ranges to per-column-chunk dictionary pages and bloom filters
+   * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
@@ -298,12 +296,13 @@ void setup_page_index(std::unique_ptr<parquet::hybrid_scan_reader> const& reader
   rmm::cuda_stream_view stream);
 
 /**
- * @brief Fetches byte ranges of secondary filters for further row group pruning
+ * @brief Fetches byte ranges of bloom filters and dictionary pages (secondary filters) for further
+ *        row group pruning
  *
  * @param reader Hybrid scan reader
  * @param row_group_indices Input row groups indices
  * @param options Parquet reader options
- * @return Pair of vectors of byte ranges to per-column-chunk dictionary pages and bloom filters
+ * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
  */
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                         std::vector<cudf::io::text::byte_range_info>>
