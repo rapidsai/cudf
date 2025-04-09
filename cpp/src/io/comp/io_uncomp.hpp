@@ -43,14 +43,12 @@ namespace io::detail {
  * @param compression Type of compression of the input data
  * @param src         Compressed host buffer
  * @param dst         Destination host span to place decompressed buffer
- * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Size of decompressed output
  */
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst,
-                  rmm::cuda_stream_view stream);
+                  host_span<uint8_t> dst);
 
 /**
  * @brief Decompresses device memory buffers.
@@ -101,7 +99,8 @@ struct decompression_info {
  * data.
  *
  */
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
+                                                    size_t num_buffers);
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

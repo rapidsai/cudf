@@ -157,7 +157,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if target.value == pa.scalar("", type=pa.string()):  # type: ignore[attr-defined]
+            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -174,7 +174,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if pc.any(pc.equal(target.value, "")).as_py():  # type: ignore[attr-defined]
+            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"

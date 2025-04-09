@@ -15,7 +15,6 @@
  */
 
 #include "compact_protocol_reader.hpp"
-#include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>

@@ -15,7 +15,8 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest narwhals"
-git clone https://github.com/narwhals-dev/narwhals --depth=1 -b stable
+NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
+git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals || exit 1
 rapids-pip-retry install -U -e . pytest-env hypothesis
 

@@ -21,13 +21,13 @@
 
 #pragma once
 
-#include "parquet.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
