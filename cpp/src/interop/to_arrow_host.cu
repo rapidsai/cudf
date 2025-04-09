@@ -379,6 +379,12 @@ unique_device_array_t to_arrow_host(cudf::column_view const& col,
   return create_device_array(std::move(tmp));
 }
 
+/**
+ * @brief Builds the ArrayBinaryView for each row in the d_strings column
+ *
+ * Smaller strings may fit inline in the ArrayBinaryItem object while
+ * longer strings identify a buffer and offset to their character data.
+ */
 struct strings_to_binary_view {
   cudf::column_device_view d_strings;
   input_offsetalator d_offsets;
@@ -462,21 +468,59 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
   auto [first, last]    = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
   auto const chars_size = last - first;
 
+  d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(longer_strings.offsets());
+
   // copy the character bytes into an Arrow variadic buffer
   if (chars_size > 0) {
-    auto const chars_data = longer_strings.chars_begin(stream) + first;
-    NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), 1));
-    auto private_data = static_cast<struct ArrowArrayPrivateData*>(out->private_data);
-    auto variadic_buf = &private_data->variadic_buffers[0];
-    NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, chars_size));
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      variadic_buf->data, chars_data, chars_size, cudaMemcpyDefault, stream.value()));
-    private_data->variadic_buffer_sizes[0] = chars_size;
+    constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
+    if (chars_size < max_size) {
+      auto const chars_data = longer_strings.chars_begin(stream) + first;
+      NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), 1));
+      auto private_data = static_cast<struct ArrowArrayPrivateData*>(out->private_data);
+      auto variadic_buf = &private_data->variadic_buffers[0];
+      NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, chars_size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        variadic_buf->data, chars_data, chars_size, cudaMemcpyDefault, stream.value()));
+      private_data->variadic_buffer_sizes[0] = chars_size;
+    } else {
+      CUDF_FAIL("large strings not yet supported");
+      // auto num_buffers    = (chars_size + max_size - 1) / max_size;  // use safe div util
+      // auto buffer_indices = rmm::device_uvector<int64_t>(num_buffers, stream);
+      // auto const begin    = make_counting_transform_iterator(
+      //   0, cuda::proclaim_return_type<int64_t>([] __device__(auto idx) {
+      //     return (idx + 1) * max_size;
+      //   }));
+      // thrust::upper_bound(rmm::exec_policy(stream),
+      //                     d_offsets,
+      //                     d_offsets + longer_strings.size() + 1,
+      //                     begin,
+      //                     begin + num_buffers,
+      //                     buffer_indices.begin());
+      // auto buffer_offsets = rmm::device_uvector<int64_t>(num_buffers + 1, stream);
+      // thrust::transform(rmm::exec_policy(stream),
+      //                   buffer_indices.begin() + 1,
+      //                   buffer_indices.end(),
+      //                   buffer_offsets.begin() + 1,
+      //                   [d_offsets] __device__(auto idx) { return d_offsets[idx - 1]; });
+      // auto h_offsets    = make_std_vector_async(buffer_offsets, stream);
+      // h_offsets.front() = 0;
+      // NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), num_buffers));
+      // auto private_data     = static_cast<struct ArrowArrayPrivateData*>(out->private_data);
+      // auto const chars_data = longer_strings.chars_begin(stream);
+      // for (auto i = 0L; num_buffers; ++i) {
+      //   auto variadic_buf = &private_data->variadic_buffers[i];
+      //   auto const size   = h_offsets[i + 1] - h_offsets[i];
+      //   NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, size));
+      //   CUDF_CUDA_TRY(cudaMemcpyAsync(
+      //     variadic_buf->data, chars_data + h_offsets[i], size, cudaMemcpyDefault,
+      //     stream.value()));
+      //   private_data->variadic_buffer_sizes[i] = size;
+      // }
+    }
   }
 
   // now build BinaryView objects from the strings in device memory
   auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream);
-  d_offsets    = cudf::detail::offsetalator_factory::make_input_iterator(longer_strings.offsets());
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::counting_iterator<cudf::size_type>(0),
                      col.size(),

@@ -640,9 +640,10 @@ unique_device_array_t to_arrow_host(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Copy strings column view data to host and create `ArrowDeviceArray` for it
+ * @brief Copy strings column data to host and create `ArrowDeviceArray` for it
+ * using the ArrowBinaryView format
  *
- * Populates the C struct ArrowDeviceArray, copying the cudf data to the host. The
+ * Populates the ArrowDeviceArray, copying the cudf data to the host. The
  * returned ArrowDeviceArray will have a device_type of CPU and will have no ties
  * to the memory referenced by the column view passed in. The deleter for the
  * returned unique_ptr will call the release callback on the ArrowDeviceArray

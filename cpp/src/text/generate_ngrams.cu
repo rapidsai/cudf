@@ -40,6 +40,7 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -346,7 +347,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
     if (itr < end && cudf::strings::detail::is_begin_utf8_char(*itr)) {
       // resolve ngram substring
       auto const sub_str =
-        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+        cudf::string_view(itr, static_cast<cudf::size_type>(cuda::std::distance(itr, end)));
       auto const [bytes, left] =
         cudf::strings::detail::bytes_to_character_position(sub_str, ngrams);
       if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
