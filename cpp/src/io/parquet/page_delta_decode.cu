@@ -327,15 +327,17 @@ CUDF_KERNEL void __launch_bounds__(96)
 
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Since only used for int32 and int64, we can simply skip decoding if the page does not need to
-  // be decoded
-  if (not page_mask[page_idx]) {
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Exit super early for simple types if the page does not need to be decoded
+  if (not has_repetition and not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
     return;
   }
 
+  // Setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
                           chunks,
@@ -346,7 +348,15 @@ CUDF_KERNEL void __launch_bounds__(96)
     return;
   }
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  // Write list offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    // Update offsets for all list depth levels
+    if (has_repetition) { update_list_offsets_for_pruned_pages<96>(s); }
+    return;
+  }
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -485,17 +495,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // Exit early if the page does not need to be decoded
+  // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
 
-    // Update string offsets or write string sizes for small and large strings respectively
+    // Update list offsets and string offsets or sizes depending on the large-string property
     if (has_repetition) {
+      // Update list offsets
+      update_list_offsets_for_pruned_pages<decode_block_size>(s);
+      // Update string offsets or sizes
       update_string_offsets_for_pruned_pages<decode_block_size, true>(
         s, initial_str_offsets, pages[page_idx]);
     } else {
+      // Update string offsets or sizes
       update_string_offsets_for_pruned_pages<decode_block_size, false>(
         s, initial_str_offsets, pages[page_idx]);
     }
@@ -680,17 +694,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // Exit early if the page does not need to be decoded
+  // Write list/string offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
     auto page        = &pages[page_idx];
     page->num_nulls  = page->num_rows;
     page->num_valids = 0;
 
-    // Update string offsets or write string sizes for small and large strings respectively
+    // Update list offsets and string offsets or sizes depending on the large-string property
     if (has_repetition) {
+      // Update list offsets
+      update_list_offsets_for_pruned_pages<decode_block_size>(s);
+      // Update string offsets or sizes
       update_string_offsets_for_pruned_pages<decode_block_size, true>(
         s, initial_str_offsets, pages[page_idx]);
     } else {
+      // Update string offsets or sizes
       update_string_offsets_for_pruned_pages<decode_block_size, false>(
         s, initial_str_offsets, pages[page_idx]);
     }

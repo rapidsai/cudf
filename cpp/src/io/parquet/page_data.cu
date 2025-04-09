@@ -73,15 +73,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Since only used for INT32, INT64, FLOAT, DOUBLE and FLBA, we can simply skip decoding if the
-  // page does not need to be decoded
-  if (not page_mask[page_idx]) {
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Exit super early for simple types if the page does not need to be decoded
+  if (not has_repetition and not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
     return;
   }
 
+  // Setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
                           chunks,
@@ -92,7 +94,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  // Write list offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    // Update offsets for all list depth levels
+    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+    return;
+  }
 
   auto const data_len    = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values  = data_len / s->dtype_len_in;
@@ -254,14 +264,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  // Exit early if the page does not need to be decoded
-  if (not page_mask[page_idx]) {
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Exit super early for simple types if the page does not need to be decoded
+  if (not has_repetition and not page_mask[page_idx]) {
     auto& page      = pages[page_idx];
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
     return;
   }
 
+  // setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
                           chunks,
@@ -272,7 +285,38 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  // Write list offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+
+    // Update offsets for all list depth levels
+    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+
+    // Write empty string index pairs for BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY types.
+    Type const dtype = s->col.physical_type;
+    auto const is_decimal =
+      s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+    if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
+      auto const leaf_level_index = s->col.max_nesting_depth - 1;
+      auto const data_out_base    = nesting_info_base[leaf_level_index].data_out;
+      auto const dtype_len        = s->dtype_len;
+      auto const value_count      = s->page.num_input_values;
+      for (int32_t offset = t; offset < value_count; offset += decode_block_size) {
+        // For flat hierarchies, we need to adjust our starting position
+        if (not has_repetition and offset < s->first_row) { continue; }
+        // Write out an empty string index pair
+        auto data_out = static_cast<void*>(data_out_base + static_cast<size_t>(offset) * dtype_len);
+        auto string_index_ptr    = static_cast<string_index_pair*>(data_out);
+        string_index_ptr->first  = nullptr;
+        string_index_ptr->second = 0;
+      }
+    }
+    return;
+  }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
@@ -284,8 +328,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       default: out_thread0 = 32;
     }
   }
-
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
   __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
@@ -352,19 +394,19 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-      // before first_row) in the flat hierarchy case.
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
+      // (values before first_row) in the flat hierarchy case.
       if (src_pos < target_pos && dst_pos >= 0) {
         // src_pos represents the logical row position we want to read from. But in the case of
-        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read position
-        // has to take into account the # of values we have to skip in the page to get to the
-        // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
+        // position has to take into account the # of values we have to skip in the page to get to
+        // the desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
         uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
         // nesting level that is storing actual leaf values
-        int leaf_level_index = s->col.max_nesting_depth - 1;
+        int const leaf_level_index = s->col.max_nesting_depth - 1;
 
-        uint32_t dtype_len = s->dtype_len;
+        uint32_t const dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         auto const is_decimal =

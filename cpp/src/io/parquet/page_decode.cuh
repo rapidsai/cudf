@@ -691,6 +691,41 @@ inline __device__ void get_nesting_bounds(int& start_depth,
 }
 
 /**
+ * @brief Updates nesting level offsets for pruned pages of a list column
+ *
+ * This function iterates through the nesting levels of a column and updates the offsets for a list
+ * column. The offset for the current nesting level equals the length of the next nesting level
+ *
+ * @tparam decode_block_size The size of the block used for decoding.
+ * @param[in,out] state Pointer to page state containing column and nesting information.
+ */
+template <int block_size>
+static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
+{
+  namespace cg = cooperative_groups;
+
+  int constexpr start_depth    = 0;
+  int const max_depth          = state->col.max_nesting_depth - 1;
+  bool const in_nesting_bounds = (0 >= start_depth and 0 <= max_depth);
+  auto const tid               = cg::this_thread_block().thread_rank();
+
+  // Iterate by depth and store offset(s) to the list location(s)
+  for (int depth = tid; depth <= max_depth; depth += block_size) {
+    auto& nesting_info = state->nesting_info[depth];
+    // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
+    // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
+    // level equal to current length of the next nesting level
+    if (in_nesting_bounds and nesting_info.data_out != nullptr) {
+      auto const& next_nesting_info = state->nesting_info[depth + 1];
+      int const idx                 = nesting_info.value_count;
+      cudf::size_type const offset =
+        next_nesting_info.value_count + next_nesting_info.page_start_value;
+      (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
+    }
+  }
+}
+
+/**
  * @brief Process a batch of incoming repetition/definition level values and generate
  *        validity, nested column offsets (where appropriate) and decoding indices.
  *
