@@ -7,6 +7,8 @@ from contextlib import ContextDecorator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Container
 
@@ -17,6 +19,8 @@ class Option:
     value: Any
     description: str
     validator: Callable
+    set_callback: Callable | None = None
+    get_callback: Callable | None = None
 
 
 _OPTIONS: dict[str, Option] = {}
@@ -43,7 +47,12 @@ def _env_get_bool(name, default):
 
 
 def _register_option(
-    name: str, default_value: Any, description: str, validator: Callable
+    name: str,
+    default_value: Any,
+    description: str,
+    validator: Callable,
+    set_callback: Callable | None = None,
+    get_callback: Callable | None = None,
 ):
     """Register an option.
 
@@ -66,7 +75,12 @@ def _register_option(
     """
     validator(default_value)
     _OPTIONS[name] = Option(
-        default_value, default_value, description, validator
+        default_value,
+        default_value,
+        description,
+        validator,
+        set_callback,
+        get_callback,
     )
 
 
@@ -88,7 +102,10 @@ def get_option(name: str) -> Any:
         If option ``name`` does not exist.
     """
     try:
-        return _OPTIONS[name].value
+        option_obj = _OPTIONS[name]
+        if option_obj.get_callback is not None:
+            option_obj.get_callback()
+        return option_obj.value
     except KeyError:
         raise KeyError(f'"{name}" does not exist.')
 
@@ -111,11 +128,13 @@ def set_option(name: str, val: Any):
         Raised by validator if the value is invalid.
     """
     try:
-        option = _OPTIONS[name]
+        option_obj = _OPTIONS[name]
+        option_obj.validator(val)
+        option_obj.value = val
+        if option_obj.set_callback is not None:
+            option_obj.set_callback()
     except KeyError:
         raise KeyError(f'"{name}" does not exist.')
-    option.validator(val)
-    option.value = val
 
 
 def _build_option_description(name, opt):
@@ -365,6 +384,17 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+
+def _num_io_threads_set_callback():
+    plc.io.kvikio_manager.set_num_io_threads(_OPTIONS["num_io_threads"].value)
+
+
+def _num_io_threads_get_callback():
+    actual_result = plc.io.kvikio_manager.get_num_io_threads()
+    expected_result = _OPTIONS["num_io_threads"].value
+    assert actual_result == expected_result
+
+
 _register_option(
     "num_io_threads",
     _env_get_bool("KVIKIO_NTHREADS", 4),
@@ -374,6 +404,8 @@ _register_option(
     """
     ),
     _integer_validator,
+    _num_io_threads_set_callback,
+    _num_io_threads_get_callback,
 )
 
 

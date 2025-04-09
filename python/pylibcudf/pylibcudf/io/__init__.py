@@ -1,10 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2025, NVIDIA CORPORATION.
 
 from . import (
     avro,
     csv,
     datasource,
     json,
+    kvikio_manager,
     orc,
     parquet,
     parquet_metadata,
@@ -22,6 +23,7 @@ __all__ = [
     "csv",
     "datasource",
     "json",
+    "kvikio_manager",
     "orc",
     "parquet",
     "parquet_metadata",
