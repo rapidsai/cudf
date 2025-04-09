@@ -149,8 +149,17 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
 }
 
 /**
- * @brief Write `initial_value` to offsets if this is not a large string column. Otherwise, fill
- * zeros at offsets and atomically update the initial string offset to build large string column
+ * @brief Update offsets with either zeros if this is a large string column, `initial_value`
+ * otherwise.
+ *
+ * Fill zeros at all offsets and atomically update the initial string offset to build large string
+ * column. Otherwise, `initial_value` at all offsets.
+ *
+ * @tparam block_size Thread block size
+ * @tparam has_lists Whether the column is a list column
+ * @param[in,out] state page state
+ * @param[out] initial_str_offsets Initial string offsets
+ * @param[in] page Page information
  */
 template <int block_size, bool has_lists>
 __device__ void update_string_offsets_for_pruned_pages(

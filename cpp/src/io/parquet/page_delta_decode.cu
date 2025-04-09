@@ -324,7 +324,6 @@ CUDF_KERNEL void __launch_bounds__(96)
   int const t           = threadIdx.x;
   int const lane_id     = t % warp_size;
   auto* const db        = &db_state;
-
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
