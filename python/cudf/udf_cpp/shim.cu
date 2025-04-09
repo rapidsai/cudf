@@ -765,14 +765,14 @@ class udf_group {
       }
   }
   __device__ udf_group binary_add(udf_group const& other) {
-      int gid = threadIdx.x + (blockIdx.x * blockDim.x);
 
       int64_t* ptr = (int64_t*)block_alloc(size * sizeof(int64_t));
 
       __syncthreads(); // may help clarify if block_alloc uses shared memory
 
-      if (threadIdx.x < other.size) {
-          ptr[threadIdx.x] = this->data[threadIdx.x] + other.data[threadIdx.x];
+
+      for (int i = threadIdx.x; i < size; i += blockDim.x) {
+          ptr[i] = this->data[i] + other.data[i];
       }
       udf_group result(ptr, size);
       return result;
