@@ -294,23 +294,28 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     // Update offsets for all list depth levels
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
 
-    // Write empty string descriptors for BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY types.
+    // Fill offsets with the initial `str_offset` to indicate empty strings for BYTE_ARRAY and
+    // FIXED_LEN_BYTE_ARRAY types. These types are now decoded by `gpuDecodePageDataGeneric()`
+    // anyway so the following code should never be reached. Also note that this decoder does not
+    // handle large strings either and should eventually be removed.
     Type const dtype = s->col.physical_type;
     auto const is_decimal =
       s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
     if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
-      auto const leaf_level_index = s->col.max_nesting_depth - 1;
-      auto const data_out_base    = nesting_info_base[leaf_level_index].data_out;
-      auto const value_count      = s->page.num_input_values;
-      for (int32_t offset = t; offset < value_count; offset += decode_block_size) {
-        // For flat hierarchies, we need to adjust our starting position
-        if (not has_repetition and offset < s->first_row) { continue; }
-        // Write out an empty string descriptor
-        auto data_out =
-          static_cast<void*>(data_out_base + static_cast<size_t>(offset) * s->dtype_len);
-        auto string_index_desc    = static_cast<string_index_pair*>(data_out);
-        string_index_desc->first  = nullptr;
-        string_index_desc->second = 0;
+      // Initial string offset
+      auto const initial_value = s->page.str_offset;
+
+      // If no repetition we haven't calculated start/end bounds and instead just skipped
+      // values until we reach first_row. account for that here.
+      auto value_count = s->page.num_input_values;
+      if (not has_repetition) { value_count -= s->first_row; }
+
+      auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
+      auto offptr = reinterpret_cast<size_type*>(ni.data_out);
+
+      // Write the initial string offset at all positions to indicate empty strings
+      for (int idx = t; idx < value_count; idx += decode_block_size) {
+        offptr[idx] = initial_value;
       }
     }
     return;
