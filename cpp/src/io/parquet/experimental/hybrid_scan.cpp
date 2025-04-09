@@ -36,6 +36,12 @@ hybrid_scan_reader::~hybrid_scan_reader() = default;
   return _impl->get_page_index_bytes();
 }
 
+[[nodiscard]] cudf::io::parquet::FileMetaData const& hybrid_scan_reader::get_parquet_metadata()
+  const
+{
+  return _impl->get_parquet_metadata();
+}
+
 void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
   return _impl->setup_page_index(page_index_bytes);

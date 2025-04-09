@@ -55,6 +55,11 @@ class impl {
                 cudf::io::parquet_reader_options const& options);
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::get_parquet_metadata
+   */
+  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::get_page_index_bytes
    */
   [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;

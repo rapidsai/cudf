@@ -22,6 +22,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -38,6 +39,7 @@ namespace cudf::experimental::io::parquet::detail {
 using byte_range_info       = cudf::io::text::byte_range_info;
 using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
 using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
+using FileMetaData          = cudf::io::parquet::FileMetaData;
 using LogicalType           = cudf::io::parquet::LogicalType;
 using PageInfo              = cudf::io::parquet::detail::PageInfo;
 using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
@@ -520,6 +522,8 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
     options.is_enabled_use_arrow_schema(),
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 }
+
+FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_parquet_metadata(); }
 
 cudf::io::text::byte_range_info impl::get_page_index_bytes() const
 {

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
@@ -73,6 +74,13 @@ class hybrid_scan_reader {
    * @brief Destructor for the experimental parquet reader class
    */
   ~hybrid_scan_reader();
+
+  /**
+   * @brief Get the Parquet file footer metadata
+   *
+   * @return Parquet file footer metadata
+   */
+  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
 
   /**
    * @brief Get the byte range of the `PageIndex` in the Parquet file
@@ -250,6 +258,15 @@ class hybrid_scan_reader {
  */
 [[nodiscard]] std::unique_ptr<parquet::hybrid_scan_reader> make_hybrid_scan_reader(
   cudf::host_span<uint8_t const> footer_bytes, cudf::io::parquet_reader_options const& options);
+
+/**
+ * @brief Get the Parquet file footer metadata
+ *
+ * @param reader Hybrid scan reader
+ * @return Parquet file footer metadata
+ */
+[[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata(
+  std::unique_ptr<parquet::hybrid_scan_reader> const& reader);
 
 /**
  * @brief Get the byte range of the `PageIndex` in the Parquet file

@@ -29,27 +29,34 @@ std::unique_ptr<hybrid_scan_reader> make_hybrid_scan_reader(
 }
 
 // API # 2
+[[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata(
+  std::unique_ptr<hybrid_scan_reader> const& reader)
+{
+  return reader->get_parquet_metadata();
+}
+
+// API # 3
 [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes(
   std::unique_ptr<hybrid_scan_reader> const& reader)
 {
   return reader->get_page_index_bytes();
 }
 
-// API # 3
+// API # 4
 void setup_page_index(std::unique_ptr<hybrid_scan_reader> const& reader,
                       cudf::host_span<uint8_t const> page_index_bytes)
 {
   return reader->setup_page_index(page_index_bytes);
 }
 
-// API # 4
+// API # 5
 std::vector<size_type> get_all_row_groups(std::unique_ptr<hybrid_scan_reader> const& reader,
                                           cudf::io::parquet_reader_options const& options)
 {
   return reader->get_all_row_groups(options);
 }
 
-// API # 5
+// API # 6
 std::vector<size_type> filter_row_groups_with_stats(
   std::unique_ptr<hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
@@ -61,7 +68,7 @@ std::vector<size_type> filter_row_groups_with_stats(
   return reader->filter_row_groups_with_stats(input_row_group_indices, options, stream)[0];
 }
 
-// API # 6
+// API # 7
 [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                         std::vector<cudf::io::text::byte_range_info>>
 get_secondary_filters(std::unique_ptr<hybrid_scan_reader> const& reader,
@@ -73,7 +80,7 @@ get_secondary_filters(std::unique_ptr<hybrid_scan_reader> const& reader,
   return reader->get_secondary_filters(input_row_group_indices, options);
 }
 
-// API # 7
+// API # 8
 std::vector<size_type> filter_row_groups_with_dictionary_pages(
   std::unique_ptr<hybrid_scan_reader> const& reader,
   std::vector<rmm::device_buffer>& dictionary_page_data,
@@ -87,7 +94,7 @@ std::vector<size_type> filter_row_groups_with_dictionary_pages(
     dictionary_page_data, input_row_group_indices, options, stream)[0];
 }
 
-// API # 8
+// API # 9
 std::vector<size_type> filter_row_groups_with_bloom_filters(
   std::unique_ptr<hybrid_scan_reader> const& reader,
   std::vector<rmm::device_buffer>& bloom_filter_data,
@@ -101,7 +108,7 @@ std::vector<size_type> filter_row_groups_with_bloom_filters(
     bloom_filter_data, input_row_group_indices, options, stream)[0];
 }
 
-// API # 9
+// API # 10
 std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
                              cudf::host_span<size_type const> row_group_indices,
@@ -114,7 +121,7 @@ filter_data_pages_with_stats(std::unique_ptr<parquet::hybrid_scan_reader> const&
   return reader->filter_data_pages_with_stats(input_row_group_indices, options, stream, mr);
 }
 
-// API # 10
+// API # 11
 std::vector<cudf::io::text::byte_range_info> get_filter_column_chunk_byte_ranges(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
@@ -125,7 +132,7 @@ std::vector<cudf::io::text::byte_range_info> get_filter_column_chunk_byte_ranges
   return reader->get_filter_column_chunk_byte_ranges(input_row_group_indices, options).first;
 }
 
-// API # 11
+// API # 12
 cudf::io::table_with_metadata materialize_filter_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<std::vector<bool> const> filtered_data_pages,
@@ -145,7 +152,7 @@ cudf::io::table_with_metadata materialize_filter_columns(
                                             stream);
 }
 
-// API # 12
+// API # 13
 std::vector<cudf::io::text::byte_range_info> get_payload_column_chunk_byte_ranges(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,
@@ -156,7 +163,7 @@ std::vector<cudf::io::text::byte_range_info> get_payload_column_chunk_byte_range
   return reader->get_payload_column_chunk_byte_ranges(input_row_group_indices, options).first;
 }
 
-// API # 13
+// API # 14
 cudf::io::table_with_metadata materialize_payload_columns(
   std::unique_ptr<parquet::hybrid_scan_reader> const& reader,
   cudf::host_span<size_type const> row_group_indices,

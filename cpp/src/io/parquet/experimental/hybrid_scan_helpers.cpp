@@ -98,6 +98,11 @@ cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes(
   return {};
 }
 
+FileMetadata const& aggregate_reader_metadata::get_parquet_metadata() const
+{
+  return per_file_metadata.front();
+}
+
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
   // Return early if empty page index buffer span

@@ -35,6 +35,7 @@ namespace cudf::experimental::io::parquet::detail {
 
 using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
 using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+using FileMetadata                   = cudf::io::parquet::FileMetaData;
 using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
 using input_column_info              = cudf::io::parquet::detail::input_column_info;
 using metadata_base                  = cudf::io::parquet::detail::metadata;
@@ -112,6 +113,11 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Fetch the byte range of the `PageIndex` in the Parquet file
    */
   [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+
+  /**
+   * @brief Get the Parquet file metadata
+   */
+  [[nodiscard]] FileMetadata const& get_parquet_metadata() const;
 
   /**
    * @brief Setup the PageIndex
