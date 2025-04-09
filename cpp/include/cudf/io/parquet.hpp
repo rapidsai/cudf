@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,16 +205,34 @@ class parquet_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Sets names of the columns to be read.
+   * @brief Sets the names of columns to be read from all input sources.
    *
-   * @param col_names Vector of column names
+   * Applies the same list of column names across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally. All input sources
+   * must contain the specified columns.
+   *
+   * @note This function does not currently support per-source column selection.
+   *
+   * @param col_names A vector of column names to read from each input source.
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Sets vector of individual row groups to read.
+   * @brief Specifies which row groups to read for each input source.
    *
-   * @param row_groups Vector of row groups to read
+   * When reading from multiple sources (e.g., multiple files), this function allows selecting
+   * specific row groups for each source individually. The outer vector corresponds to the list
+   * of input sources, and each inner vector contains the row group indices to read from the
+   * respective source.
+   *
+   * If no row groups should be read from a given source, its entry should be an empty vector.
+   *
+   * Example:
+   * To read row groups [0, 2] from the first input and [1] from the second input, call:
+   *   set_row_groups({{0, 2}, {1}});
+   *
+   * @param row_groups A vector of vectors, one per input source, each specifying the
+   *                   row group indices to read from that source.
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups);
 
