@@ -196,7 +196,6 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     # Launch kernel
     with _CUDFNumbaConfig():
-        breakpoint()
         specialized[ngroups, tpb](*launch_args)
 
     return output

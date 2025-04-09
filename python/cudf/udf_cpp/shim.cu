@@ -770,7 +770,6 @@ class udf_group {
 
       __syncthreads(); // may help clarify if block_alloc uses shared memory
 
-
       for (int i = threadIdx.x; i < size; i += blockDim.x) {
           ptr[i] = this->data[i] + other.data[i];
       }
