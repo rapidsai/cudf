@@ -301,13 +301,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
       auto const leaf_level_index = s->col.max_nesting_depth - 1;
       auto const data_out_base    = nesting_info_base[leaf_level_index].data_out;
-      auto const dtype_len        = s->dtype_len;
       auto const value_count      = s->page.num_input_values;
       for (int32_t offset = t; offset < value_count; offset += decode_block_size) {
         // For flat hierarchies, we need to adjust our starting position
         if (not has_repetition and offset < s->first_row) { continue; }
         // Write out an empty string descriptor
-        auto data_out = static_cast<void*>(data_out_base + static_cast<size_t>(offset) * dtype_len);
+        auto data_out =
+          static_cast<void*>(data_out_base + static_cast<size_t>(offset) * s->dtype_len);
         auto string_index_desc    = static_cast<string_index_pair*>(data_out);
         string_index_desc->first  = nullptr;
         string_index_desc->second = 0;
