@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ TEST_F(CountBitmaskTest, NullMask)
 rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fill_valid = false)
 {
   if (!fill_valid) {
-    return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
+    return cudf::detail::make_zeroed_device_uvector<cudf::bitmask_type>(
       size, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());

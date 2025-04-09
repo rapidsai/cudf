@@ -124,6 +124,7 @@ class ConfigOptions:
         executor = config.get("executor", "pylibcudf")
         if executor == "dask-experimental":
             unsupported = config.get("executor_options", {}).keys() - {
+                "fallback_mode",
                 "max_rows_per_partition",
                 "parquet_blocksize",
                 "cardinality_factor",
