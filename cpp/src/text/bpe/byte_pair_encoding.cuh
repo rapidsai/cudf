@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_map.cuh>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>

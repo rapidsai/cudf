@@ -26,7 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/scan.h>
 
 #include <stdexcept>
@@ -187,7 +187,7 @@ struct sizes_to_offsets_iterator {
    * Use the make_sizes_to_offsets_iterator() to create an instance of this class
    */
   sizes_to_offsets_iterator(ScanIterator begin, ScanIterator end, LastType* last)
-    : itr_{begin}, end_{thrust::prev(end)}, last_{last}
+    : itr_{begin}, end_{cuda::std::prev(end)}, last_{last}
   {
   }
 
