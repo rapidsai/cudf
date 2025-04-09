@@ -32,20 +32,18 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
-using CompactProtocolReader          = cudf::io::parquet::detail::CompactProtocolReader;
-using ColumnIndex                    = cudf::io::parquet::detail::ColumnIndex;
-using OffsetIndex                    = cudf::io::parquet::detail::OffsetIndex;
-using row_group_info                 = cudf::io::parquet::detail::row_group_info;
 using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
-using metadata_base                  = cudf::io::parquet::detail::metadata;
-using input_column_info              = cudf::io::parquet::detail::input_column_info;
-using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
-using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
-using SchemaElement                  = cudf::io::parquet::detail::SchemaElement;
+using ColumnIndex                    = cudf::io::parquet::ColumnIndex;
 using column_name_info               = cudf::io::column_name_info;
+using CompactProtocolReader          = cudf::io::parquet::detail::CompactProtocolReader;
+using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+using FieldRepetitionType            = cudf::io::parquet::FieldRepetitionType;
 using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
 using input_column_info              = cudf::io::parquet::detail::input_column_info;
-using size_type                      = cudf::size_type;
+using metadata_base                  = cudf::io::parquet::detail::metadata;
+using OffsetIndex                    = cudf::io::parquet::OffsetIndex;
+using row_group_info                 = cudf::io::parquet::detail::row_group_info;
+using SchemaElement                  = cudf::io::parquet::SchemaElement;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -71,7 +69,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   // Force all columns to be nullable
   auto& schema = per_file_metadata.front().schema;
   std::for_each(schema.begin(), schema.end(), [](auto& col) {
-    col.repetition_type = cudf::io::parquet::detail::OPTIONAL;
+    col.repetition_type = FieldRepetitionType::OPTIONAL;
   });
 
   // Collect and apply arrow:schema from Parquet's key value metadata section
@@ -141,14 +139,15 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   }
 }
 
-std::
-  tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
-  aggregate_reader_metadata::select_payload_columns(
-    std::optional<std::vector<std::string>> const& use_names,
-    std::optional<std::vector<std::string>> const& filter_columns_names,
-    bool include_index,
-    bool strings_to_categorical,
-    type_id timestamp_type_id)
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<cudf::size_type>>
+aggregate_reader_metadata::select_payload_columns(
+  std::optional<std::vector<std::string>> const& use_names,
+  std::optional<std::vector<std::string>> const& filter_columns_names,
+  bool include_index,
+  bool strings_to_categorical,
+  type_id timestamp_type_id)
 {
   auto const find_schema_child =
     [&](SchemaElement const& schema_elem, std::string const& name, int const pfm_idx = 0) {
@@ -158,7 +157,7 @@ std::
         [&](size_t col_schema_idx) { return get_schema(col_schema_idx, pfm_idx).name == name; });
 
       return (col_schema_idx != schema_elem.children_idx.end())
-               ? static_cast<size_type>(*col_schema_idx)
+               ? static_cast<cudf::size_type>(*col_schema_idx)
                : -1;
     };
 
@@ -192,11 +191,12 @@ std::
       // if we're at the root, this is a new output column
       auto const col_type = one_level_list
                               ? type_id::LIST
-                              : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
-      auto const dtype    = to_data_type(col_type, schema_elem);
+                              : cudf::io::parquet::detail::to_type_id(
+                                  schema_elem, strings_to_categorical, timestamp_type_id);
+      auto const dtype    = cudf::io::parquet::detail::to_data_type(col_type, schema_elem);
 
       cudf::io::detail::inline_column_buffer output_col(
-        dtype, schema_elem.repetition_type == cudf::io::parquet::detail::OPTIONAL);
+        dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
       if (has_list_parent) {
         output_col.user_data |=
           cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
@@ -234,12 +234,13 @@ std::
         // set up child output column for one-level encoding list
         if (one_level_list) {
           // determine the element data type
-          auto const element_type =
-            to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
-          auto const element_dtype = to_data_type(element_type, schema_elem);
+          auto const element_type = cudf::io::parquet::detail::to_type_id(
+            schema_elem, strings_to_categorical, timestamp_type_id);
+          auto const element_dtype =
+            cudf::io::parquet::detail::to_data_type(element_type, schema_elem);
 
           cudf::io::detail::inline_column_buffer element_col(
-            element_dtype, schema_elem.repetition_type == cudf::io::parquet::detail::OPTIONAL);
+            element_dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |=
               cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
@@ -520,13 +521,14 @@ std::
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
 }
 
-std::
-  tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
-  aggregate_reader_metadata::select_filter_columns(
-    std::optional<std::vector<std::string>> const& filter_columns_names,
-    bool include_index,
-    bool strings_to_categorical,
-    type_id timestamp_type_id)
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<cudf::size_type>>
+aggregate_reader_metadata::select_filter_columns(
+  std::optional<std::vector<std::string>> const& filter_columns_names,
+  bool include_index,
+  bool strings_to_categorical,
+  type_id timestamp_type_id)
 {
   // Only extract filter columns
   return select_columns(filter_columns_names,
@@ -536,21 +538,22 @@ std::
                         timestamp_type_id);
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>>
+std::tuple<int64_t, cudf::size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
-  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
   int64_t row_start,
-  std::optional<size_type> const& row_count)
+  std::optional<cudf::size_type> const& row_count)
 {
   // Compute the number of rows to read and skip
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
+    if (not row_group_indices.empty()) { return std::pair<int64_t, cudf::size_type>{}; }
     auto const from_opts =
       cudf::io::detail::skip_rows_num_rows_from_options(row_start, row_count, get_num_rows());
-    CUDF_EXPECTS(from_opts.second <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-                 "Number of reading rows exceeds cudf's column size limit.");
+    CUDF_EXPECTS(
+      from_opts.second <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Number of reading rows exceeds cudf's column size limit.");
     return std::pair{static_cast<int64_t>(from_opts.first),
-                     static_cast<size_type>(from_opts.second)};
+                     static_cast<cudf::size_type>(from_opts.second)};
   }();
 
   // Vector to hold the `row_group_info` of selected row groups
@@ -566,7 +569,7 @@ aggregate_reader_metadata::select_row_groups(
     auto const& fmd = per_file_metadata[src_idx];
     for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
       CUDF_EXPECTS(
-        rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
+        rowgroup_idx >= 0 && rowgroup_idx < static_cast<cudf::size_type>(fmd.row_groups.size()),
         "Invalid rowgroup index");
       total_row_groups++;
       selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
@@ -583,19 +586,19 @@ aggregate_reader_metadata::select_row_groups(
   return {rows_to_skip, rows_to_read, std::move(selection)};
 }
 
-std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
-  host_span<std::vector<size_type> const> row_group_indices,
+std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<size_type>> all_row_group_indices;
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
   std::transform(per_file_metadata.cbegin(),
                  per_file_metadata.cend(),
                  std::back_inserter(all_row_group_indices),
                  [](auto const& file_meta) {
-                   std::vector<size_type> rg_idx(file_meta.row_groups.size());
+                   std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
                    std::iota(rg_idx.begin(), rg_idx.end(), 0);
                    return rg_idx;
                  });
@@ -603,7 +606,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups
   if (not filter.has_value()) { return all_row_group_indices; }
 
   // Compute total number of input row groups
-  size_type total_row_groups = [&]() {
+  cudf::size_type total_row_groups = [&]() {
     if (not row_group_indices.empty()) {
       size_t const total_row_groups =
         std::accumulate(row_group_indices.begin(),
@@ -613,25 +616,25 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups
 
       // Check if we have less than 2B total row groups.
       CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-                   "Total number of row groups exceed the size_type's limit");
-      return static_cast<size_type>(total_row_groups);
+                   "Total number of row groups exceed the cudf::size_type's limit");
+      return static_cast<cudf::size_type>(total_row_groups);
     } else {
       return num_row_groups;
     }
   }();
 
   // Span of input row group indices for predicate pushdown
-  host_span<std::vector<size_type> const> input_row_group_indices;
+  host_span<std::vector<cudf::size_type> const> input_row_group_indices;
   if (row_group_indices.empty()) {
     std::transform(per_file_metadata.cbegin(),
                    per_file_metadata.cend(),
                    std::back_inserter(all_row_group_indices),
                    [](auto const& file_meta) {
-                     std::vector<size_type> rg_idx(file_meta.row_groups.size());
+                     std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
                      std::iota(rg_idx.begin(), rg_idx.end(), 0);
                      return rg_idx;
                    });
-    input_row_group_indices = host_span<std::vector<size_type> const>(all_row_group_indices);
+    input_row_group_indices = host_span<std::vector<cudf::size_type> const>(all_row_group_indices);
   } else {
     input_row_group_indices = row_group_indices;
   }
@@ -648,7 +651,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups
 }
 
 std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
@@ -657,7 +660,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
   auto const total_row_groups = std::accumulate(
     row_group_indices.begin(),
     row_group_indices.end(),
-    size_type{0},
+    cudf::size_type{0},
     [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
@@ -715,7 +718,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
 }
 
 std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
@@ -724,7 +727,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   auto const total_row_groups = std::accumulate(
     row_group_indices.begin(),
     row_group_indices.end(),
-    size_type{0},
+    cudf::size_type{0},
     [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
@@ -810,21 +813,21 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   return dictionary_page_bytes;
 }
 
-std::vector<std::vector<size_type>>
+std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   std::vector<rmm::device_buffer>& dictionary_page_data,
-  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<size_type>> all_row_group_indices;
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
   std::transform(row_group_indices.begin(),
                  row_group_indices.end(),
                  std::back_inserter(all_row_group_indices),
                  [](auto const& row_group) {
-                   std::vector<size_type> rg_idx(row_group.size());
+                   std::vector<cudf::size_type> rg_idx(row_group.size());
                    std::iota(rg_idx.begin(), rg_idx.end(), 0);
                    return rg_idx;
                  });
@@ -833,7 +836,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   auto const total_row_groups = std::accumulate(
     row_group_indices.begin(),
     row_group_indices.end(),
-    size_type{0},
+    cudf::size_type{0},
     [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect literals and operators for dictionary page filtering for each input table column
@@ -873,20 +876,21 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   return dictionary_filtered_row_groups.value_or(all_row_group_indices);
 }
 
-std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
+std::vector<std::vector<cudf::size_type>>
+aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
-  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<size_type>> all_row_group_indices;
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
   std::transform(row_group_indices.begin(),
                  row_group_indices.end(),
                  std::back_inserter(all_row_group_indices),
                  [](auto const& row_group) {
-                   std::vector<size_type> rg_idx(row_group.size());
+                   std::vector<cudf::size_type> rg_idx(row_group.size());
                    std::iota(rg_idx.begin(), rg_idx.end(), 0);
                    return rg_idx;
                  });
@@ -895,7 +899,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::filter_row_groups
   auto const total_row_groups = std::accumulate(
     row_group_indices.begin(),
     row_group_indices.end(),
-    size_type{0},
+    cudf::size_type{0},
     [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column

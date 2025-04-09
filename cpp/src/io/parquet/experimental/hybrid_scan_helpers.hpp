@@ -33,12 +33,12 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
-using metadata_base                  = cudf::io::parquet::detail::metadata;
 using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
-using row_group_info                 = cudf::io::parquet::detail::row_group_info;
-using input_column_info              = cudf::io::parquet::detail::input_column_info;
-using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
 using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
+using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
+using input_column_info              = cudf::io::parquet::detail::input_column_info;
+using metadata_base                  = cudf::io::parquet::detail::metadata;
+using row_group_info                 = cudf::io::parquet::detail::row_group_info;
 
 /**
  * @brief Class for parsing dataset metadata

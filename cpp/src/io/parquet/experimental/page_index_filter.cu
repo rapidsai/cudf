@@ -51,11 +51,11 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
+using ColumnChunk       = cudf::io::parquet::ColumnChunk;
+using metadata_base     = cudf::io::parquet::detail::metadata;
 using stats_caster_base = cudf::io::parquet::detail::stats_caster_base;
 using string_index_pair = cudf::io::parquet::detail::string_index_pair;
-using Type              = cudf::io::parquet::detail::Type;
-using metadata_base     = cudf::io::parquet::detail::metadata;
-using ColumnChunk       = cudf::io::parquet::detail::ColumnChunk;
+using Type              = cudf::io::parquet::Type;
 
 namespace {
 
@@ -671,7 +671,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
     total_filtered_pages += num_filtered_pages;
 
     // Copy the filtered page indices for this column to host
-    auto h_select_page_indices = cudf::detail::make_host_vector_sync(
+    auto h_select_page_indices = cudf::detail::make_host_vector(
       cudf::device_span<cudf::size_type const>{d_select_page_indices.data(), num_filtered_pages},
       stream);
 

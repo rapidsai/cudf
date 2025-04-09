@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -59,21 +60,21 @@ namespace cudf::experimental::io::parquet::detail {
 
 namespace {
 
-using PageInfo               = cudf::io::parquet::detail::PageInfo;
+using chunk_page_info        = cudf::io::parquet::detail::chunk_page_info;
 using ColumnChunkDesc        = cudf::io::parquet::detail::ColumnChunkDesc;
-using SchemaElement          = cudf::io::parquet::detail::SchemaElement;
-using LogicalType            = cudf::io::parquet::detail::LogicalType;
-using Type                   = cudf::io::parquet::detail::Type;
-using Compression            = cudf::io::parquet::detail::Compression;
-using string_index_pair      = cudf::io::parquet::detail::string_index_pair;
+using Compression            = cudf::io::parquet::Compression;
 using decode_error           = cudf::io::parquet::detail::decode_error;
+using Encoding               = cudf::io::parquet::Encoding;
 using kernel_error           = cudf::io::parquet::kernel_error;
 using level_type             = cudf::io::parquet::detail::level_type;
-using PageNestingInfo        = cudf::io::parquet::detail::PageNestingInfo;
+using LogicalType            = cudf::io::parquet::LogicalType;
+using PageInfo               = cudf::io::parquet::detail::PageInfo;
 using PageNestingDecodeInfo  = cudf::io::parquet::detail::PageNestingDecodeInfo;
-using Encoding               = cudf::io::parquet::detail::Encoding;
+using PageNestingInfo        = cudf::io::parquet::detail::PageNestingInfo;
 using pass_intermediate_data = cudf::io::parquet::detail::pass_intermediate_data;
-using chunk_page_info        = cudf::io::parquet::detail::chunk_page_info;
+using SchemaElement          = cudf::io::parquet::SchemaElement;
+using string_index_pair      = cudf::io::parquet::detail::string_index_pair;
+using Type                   = cudf::io::parquet::Type;
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
@@ -318,7 +319,7 @@ void generate_depth_remappings(
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
   // so that we can actually compile a list of all the unsupported encodings found
@@ -557,7 +558,9 @@ std::string encoding_to_string(Encoding encoding)
   for (size_t i = 0; i < bits.size(); ++i) {
     if (bits.test(i)) {
       auto const current = static_cast<Encoding>(i);
-      if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
+      if (!cudf::io::parquet::detail::is_supported_encoding(current)) {
+        result.append(encoding_to_string(current) + " ");
+      }
     }
   }
   return result;
@@ -574,7 +577,9 @@ std::string encoding_to_string(Encoding encoding)
                                                      rmm::cuda_stream_view stream)
 {
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
-    return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
+    return cudf::io::parquet::detail::is_supported_encoding(page.encoding)
+             ? 0U
+             : cudf::io::parquet::detail::encoding_to_mask(page.encoding);
   });
   uint32_t const unsupported = thrust::transform_reduce(
     rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
@@ -832,7 +837,7 @@ void impl::build_string_dict_indices()
 
   // compute the indices
   BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  pass.chunks.device_to_host_sync(_stream);
+  pass.chunks.device_to_host(_stream);
 }
 
 void impl::allocate_nesting_info()
@@ -976,7 +981,7 @@ void impl::allocate_nesting_info()
           pni[cur_depth].type                   = cudf::io::parquet::detail::to_type_id(
             actual_cur_schema, _strings_to_categorical, _timestamp_type.id());
           pni[cur_depth].nullable =
-            cur_schema.repetition_type == cudf::io::parquet::detail::OPTIONAL;
+            cur_schema.repetition_type == cudf::io::parquet::FieldRepetitionType::OPTIONAL;
         }
 
         // move up the hierarchy
@@ -1325,7 +1330,7 @@ void impl::allocate_columns(size_t skip_rows, size_t num_rows)
       key_start += num_keys_this_iter;
     }
 
-    sizes.device_to_host_sync(_stream);
+    sizes.device_to_host(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
       auto const& input_col = _input_columns[idx];
       auto* cols            = &_output_buffers;
@@ -1395,7 +1400,7 @@ cudf::detail::host_vector<size_t> impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
+  return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
 void impl::update_row_mask(cudf::column_view in_row_mask,

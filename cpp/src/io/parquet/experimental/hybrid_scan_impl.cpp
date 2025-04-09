@@ -35,13 +35,13 @@
 
 namespace cudf::experimental::io::parquet::detail {
 
-using LogicalType           = cudf::io::parquet::detail::LogicalType;
-using Type                  = cudf::io::parquet::detail::Type;
+using byte_range_info       = cudf::io::text::byte_range_info;
 using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
+using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
+using LogicalType           = cudf::io::parquet::LogicalType;
 using PageInfo              = cudf::io::parquet::detail::PageInfo;
 using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
-using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
-using byte_range_info       = cudf::io::text::byte_range_info;
+using Type                  = cudf::io::parquet::Type;
 
 namespace {
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
@@ -108,7 +108,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
     auto const has_flba =
       std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return chunk.physical_type == cudf::io::parquet::detail::FIXED_LEN_BYTE_ARRAY and
+        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
@@ -1010,7 +1010,7 @@ void impl::populate_metadata(table_metadata& out_metadata) const
     auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
     out_metadata.schema_info[i].name = schema.name;
     out_metadata.schema_info[i].is_nullable =
-      schema.repetition_type != cudf::io::parquet::detail::REQUIRED;
+      schema.repetition_type != cudf::io::parquet::FieldRepetitionType::REQUIRED;
   }
 
   // Return user metadata
