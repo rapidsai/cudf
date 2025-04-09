@@ -21,6 +21,7 @@
 #include <nvml.h>
 
 #include <iostream>
+#include <mutex>
 #include <sstream>
 
 #define CHECK_NVML(err_code) check_nvml(err_code, __FILE__, __LINE__)
@@ -35,11 +36,28 @@ inline void check_nvml(nvmlReturn_t err_code, const char* file, int line)
 }
 
 namespace cudf {
+namespace detail {
+/**
+ * @brief Perform the initialization of NVML library.
+ *
+ * The NVML initialization can be costly. Using this function ensures it is performed only once per
+ * process.
+ *
+ * @note NVML shutdown is also costly. We may avoid calling it at the expense of a slight NVML
+ * resource leak.
+ */
+void initialize_nvml()
+{
+  static std::once_flag flag{};
+  std::call_once(flag, [] { CHECK_NVML(nvmlInit_v2()); });
+}
+}  // namespace detail
+
 bool is_c2c_available()
 {
   nvmlDevice_t device_handle{};
 
-  CHECK_NVML(nvmlInit_v2());
+  detail::initialize_nvml();
   CHECK_NVML(nvmlDeviceGetHandleByIndex_v2(rmm::get_current_cuda_device().value(), &device_handle));
 
   nvmlFieldValue_t field{};
