@@ -44,7 +44,7 @@ struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
 
 namespace {
 
-auto get_footer_bytes(cudf::host_span<uint8_t const> buffer)
+auto fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
 {
   /**
    * @brief Struct that describes the Parquet file data header
@@ -79,6 +79,14 @@ auto get_footer_bytes(cudf::host_span<uint8_t const> buffer)
 
   return cudf::host_span<uint8_t const>(buffer.data() + len - ender->footer_len - ender_len,
                                         ender->footer_len);
+}
+
+auto fetch_page_index_bytes(cudf::host_span<uint8_t const> buffer,
+                            cudf::io::text::byte_range_info const page_index_bytes)
+{
+  return cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
+    page_index_bytes.size());
 }
 
 template <size_t NumTableConcats>
@@ -125,10 +133,35 @@ auto create_parquet_with_stats()
   return std::pair{cudf::table{std::move(columns)}, buffer};
 }
 
-std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
-  cudf::host_span<char const> host_buffer,
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
   cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  cudf::host_span<cudf::size_type const> /* chunk_source_map */,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<rmm::device_buffer> buffers{};
+  buffers.reserve(byte_ranges.size());
+
+  std::transform(
+    byte_ranges.begin(),
+    byte_ranges.end(),
+    std::back_inserter(buffers),
+    [&](auto const& byte_range) {
+      auto const chunk_offset = host_buffer.data() + byte_range.offset();
+      auto const chunk_size   = byte_range.size();
+      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+      return buffer;
+    });
+
+  stream.synchronize_no_throw();
+  return buffers;
+}
+
+std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -172,75 +205,101 @@ auto hybrid_scan(std::vector<char>& buffer,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
-  // Hybrid scan reader options
+  // Create reader options with empty source info
   cudf::io::parquet_reader_options const options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
       .filter(filter_expression);
 
-  // Get footer and page index bytes from the buffer.
-  // TODO: Currently, we are just using the entire buffer and figuring out bytes within the reader.
-  auto const footer_bytes = get_footer_bytes(
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+  // Input file buffer span
+  auto const file_buffer_span =
+    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
 
-  // Create hybrid scan reader - API # 1
-  auto const reader = cudf::experimental::io::make_hybrid_scan_reader(footer_bytes, options);
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
-  // Get page index bytes from the reader - API # 2
-  auto const page_index_bytes = cudf::experimental::io::get_page_index_bytes(reader);
+  // Create hybrid scan reader with footer bytes - API # 1
+  auto const reader = cudf::experimental::io::make_hybrid_scan_reader(footer_buffer, options);
 
-  // Get a span of page index bytes from the input buffer
-  auto const page_index_buffer = cudf::host_span<uint8_t const>(
-    reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
-    page_index_bytes.size());
+  // Get page index byte range from the reader - API # 2
+  auto const page_index_byte_range = cudf::experimental::io::get_page_index_bytes(reader);
+
+  // Fetch page index bytes from the input buffer
+  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
 
   // Setup page index - API # 3
   cudf::experimental::io::setup_page_index(reader, page_index_buffer);
 
   // Get all row groups from the reader - API # 4
-  auto input_row_groups = cudf::experimental::io::get_all_row_groups(reader, options);
+  auto input_row_group_indices = cudf::experimental::io::get_all_row_groups(reader, options);
+
+  // Span to track current row group indices
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
 
   // Filter row groups with stats - API # 5
-  auto stats_filtered_row_groups =
-    cudf::experimental::io::filter_row_groups_with_stats(reader, input_row_groups, options, stream);
-  auto filtered_row_groups = cudf::host_span<cudf::size_type>(stats_filtered_row_groups);
+  auto stats_filtered_row_group_indices = cudf::experimental::io::filter_row_groups_with_stats(
+    reader, input_row_group_indices, options, stream);
 
-  // Get bloom filter and dictionary page bytes from the reader - API # 6
-  auto [bloom_filter_bytes, dict_page_bytes] =
-    cudf::experimental::io::get_secondary_filters(reader, stats_filtered_row_groups, options);
+  // Update current row group indices
+  current_row_group_indices = cudf::host_span<cudf::size_type>(stats_filtered_row_group_indices);
 
-  // TODO: Filter row groups with dictionary pages. Not yet implemented. API # 7
+  // Get bloom filter and dictionary page byte ranges from the reader - API # 6
+  auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
+    cudf::experimental::io::get_secondary_filters(reader, current_row_group_indices, options);
+
+  // Filter row groups with dictionary pages - API # 7
+  std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
+  dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
+  // If we have dictionary page byte ranges, filter row groups with dictionary pages
+  if (dict_page_byte_ranges.size()) {
+    // Fetch dictionary page buffers from the input file buffer
+    std::vector<rmm::device_buffer> dictionary_page_buffers =
+      fetch_byte_ranges(file_buffer_span, dict_page_byte_ranges, stream, mr);
+
+    // NOT YET IMPLEMENTED - Filter row groups with dictionary pages
+    dictionary_page_filtered_row_group_indices =
+      cudf::experimental::io::filter_row_groups_with_dictionary_pages(
+        reader, dictionary_page_buffers, current_row_group_indices, options, stream);
+    // Update current row group indices
+    current_row_group_indices =
+      cudf::host_span<cudf::size_type>(dictionary_page_filtered_row_group_indices);
+  }
 
   // Filter row groups with bloom filters - API # 8
-  std::vector<cudf::size_type> bloom_filtered_row_groups;
-  bloom_filtered_row_groups.reserve(filtered_row_groups.size());
-  if (bloom_filter_bytes.size()) {
-    // TODO: Read bloom filter data
-    std::vector<rmm::device_buffer> bloom_filter_data;
-    bloom_filtered_row_groups = cudf::experimental::io::filter_row_groups_with_bloom_filters(
-      reader, bloom_filter_data, stats_filtered_row_groups, options, stream);
-    filtered_row_groups = cudf::host_span<cudf::size_type>(bloom_filtered_row_groups);
+  std::vector<cudf::size_type> bloom_filtered_row_group_indices;
+  bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
+  // If we have bloom filter byte ranges, filter row groups with bloom filters
+  if (bloom_filter_byte_ranges.size()) {
+    // Fetch bloom filter data from the input file buffer
+    std::vector<rmm::device_buffer> bloom_filter_data =
+      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, mr);
+
+    // Filter row groups with bloom filters
+    bloom_filtered_row_group_indices = cudf::experimental::io::filter_row_groups_with_bloom_filters(
+      reader, bloom_filter_data, current_row_group_indices, options, stream);
+    // Update current row group indices
+    current_row_group_indices = cudf::host_span<cudf::size_type>(bloom_filtered_row_group_indices);
   }
 
   // Filter data pages with `PageIndex` stats - API # 9
   auto [row_mask, data_page_mask] = cudf::experimental::io::filter_data_pages_with_stats(
-    reader, stats_filtered_row_groups, options, stream, mr);
+    reader, current_row_group_indices, options, stream, mr);
 
   EXPECT_EQ(data_page_mask.size(), num_filter_columns);
 
   // Get column chunk byte ranges from the reader - API # 10
   auto const filter_column_chunk_byte_ranges =
     cudf::experimental::io::get_filter_column_chunk_byte_ranges(
-      reader, stats_filtered_row_groups, options);
+      reader, current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
   auto filter_column_chunk_buffers =
-    fetch_column_chunk_buffers(buffer, filter_column_chunk_byte_ranges, {}, stream, mr);
+    fetch_column_chunk_buffers(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns - API # 11
   auto [filter_table, filter_metadata] =
     cudf::experimental::io::materialize_filter_columns(reader,
                                                        data_page_mask,
-                                                       stats_filtered_row_groups,
+                                                       current_row_group_indices,
                                                        std::move(filter_column_chunk_buffers),
                                                        row_mask->mutable_view(),
                                                        options,
@@ -249,16 +308,16 @@ auto hybrid_scan(std::vector<char>& buffer,
   // Get column chunk byte ranges from the reader - API # 12
   auto const payload_column_chunk_byte_ranges =
     cudf::experimental::io::get_payload_column_chunk_byte_ranges(
-      reader, stats_filtered_row_groups, options);
+      reader, current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
   [[maybe_unused]] auto payload_column_chunk_buffers =
-    fetch_column_chunk_buffers(buffer, payload_column_chunk_byte_ranges, {}, stream, mr);
+    fetch_column_chunk_buffers(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the payload columns - API # 13
   [[maybe_unused]] auto [payload_table, payload_metadata] =
     cudf::experimental::io::materialize_payload_columns(reader,
-                                                        stats_filtered_row_groups,
+                                                        current_row_group_indices,
                                                         std::move(payload_column_chunk_buffers),
                                                         row_mask->view(),
                                                         options,
