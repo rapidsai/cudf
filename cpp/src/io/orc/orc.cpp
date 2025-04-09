@@ -420,8 +420,7 @@ orc_decompressor::orc_decompressor(CompressionKind kind, uint64_t block_size)
   }
 }
 
-host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src,
-                                                             rmm::cuda_stream_view stream)
+host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src)
 {
   // If uncompressed, just pass-through the input
   if (src.empty() or _compression == compression_type::NONE) { return src; }
@@ -462,7 +461,7 @@ host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t c
     } else {
       // Compressed block
       dst_length += cudf::io::detail::decompress(
-        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize}, stream);
+        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
     }
     i += block_len;
   }
@@ -489,14 +488,14 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
 
   // Read compressed filefooter section
   buffer             = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
+  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
   protobuf_reader(ff_data.data(), ff_data.size()).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
+  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
   protobuf_reader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();
