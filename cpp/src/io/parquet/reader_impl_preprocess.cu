@@ -1745,7 +1745,7 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
+  return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

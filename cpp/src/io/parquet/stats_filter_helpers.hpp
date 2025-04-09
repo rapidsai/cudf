@@ -176,7 +176,7 @@ class stats_caster_base {
         offsets.push_back(offsets.back() + tmp.length());
       }
       auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-      auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
+      auto d_offsets = cudf::detail::make_device_uvector(offsets, stream, mr);
       return std::tuple{std::move(d_chars), std::move(d_offsets)};
     }
 
