@@ -96,7 +96,6 @@ files:
   test_java:
     output: none
     includes:
-      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -389,6 +388,7 @@ files:
       - test_python_cudf
       - depends_on_cudf
       - depends_on_cudf_polars
+      - depends_on_narwhals
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -813,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.26
+          - polars>=1.24,<1.27
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -867,7 +867,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - *cmake_ver
+          - cmake>=3.30.4,<4.0.0
+          - ninja
           - maven
           - openjdk=8.*
           - boost
@@ -961,7 +962,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
       - output_types: conda
@@ -986,7 +990,10 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.*
+              # pyarrow 14 is fine in some circumstances but we require pyarrow
+              # 15 in our CI tests in order to get a lz4-c that is compatible
+              # with cudf_kafka's dependencies.
+              - pyarrow==15.*
           - matrix:
             packages:
   test_python_cudf_polars:
@@ -1234,3 +1241,8 @@ dependencies:
       - output_types: conda
         packages:
           - cudf-polars==25.6.*,>=0.0.0a0
+  depends_on_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - narwhals==1.33

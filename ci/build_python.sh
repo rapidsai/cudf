@@ -12,6 +12,7 @@ export CMAKE_GENERATOR=Ninja
 rapids-print-env
 
 rapids-generate-version > ./VERSION
+rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
 
