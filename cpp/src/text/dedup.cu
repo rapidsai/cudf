@@ -159,8 +159,6 @@ std::unique_ptr<rmm::device_uvector<int32_t>> build_suffix_array_fn(
   auto tmp_bytes    = std::size_t{0};
   cub::DeviceMergeSort::SortKeysCopy(
     nullptr, tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
-  // std::cout << indices.size() * sizeof(int64_t) << "/" << tmp_bytes << std::endl;
-  // tmp_stg looks to be the same as the indices size in bytes
   auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
   cub::DeviceMergeSort::SortKeysCopy(
     tmp_stg.data(), tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
@@ -405,8 +403,6 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
   // sort the resulting indices/sizes for overlap filtering
   thrust::sort_by_key(
     rmm::exec_policy_nosync(stream), dup_indices.begin(), dup_indices.end(), sizes.begin());
-
-  // return std::make_unique<cudf::column>(std::move(dup_indices), rmm::device_buffer{}, 0);
 
   // produce final duplicates for make_strings_column and collapse any overlapping candidates
   auto duplicates =
