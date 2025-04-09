@@ -2023,3 +2023,63 @@ class HConcat(IR):
                 )
             )
         )
+
+
+class Sink(IR):
+    """Sink a dataframe to a file."""
+
+    __slots__ = ("payload",)
+    _non_child = ("schema", "payload")
+    payload: str
+    """JSON string of sink options."""
+
+    def __init__(self, schema: Schema, payload: str, df: IR):
+        self.schema = schema
+        self.payload = payload
+        self.children = (df,)
+        self._non_child_args = (schema, payload)
+
+    @staticmethod
+    def _get_valid_csv_options(
+        builder: plc.io.csv.CsvWriterOptionsBuilder, options: dict[str, Any]
+    ) -> plc.io.csv.CsvWriterOptions:
+        """Validate and extract polars sink_csv options to pylibcudf write_csv options."""
+        if include_bom := options["include_bom"]:
+            raise NotImplementedError(f"{include_bom=} is not currently not supported.")
+        serialize_options = options["serialize_options"]
+        for formats in (
+            "date_format",
+            "time_format",
+            "datetime_format",
+            "float_scientific",
+            "float_precision",
+        ):
+            if serialize_options[formats] is not None:
+                raise NotImplementedError(f"{formats} is not currently not supported.")
+        if (quote_style := serialize_options["quote_style"]) != "Necessary":
+            raise NotImplementedError(f"{quote_style=} is not currently not supported.")
+        if (quote_char := chr(serialize_options["quote_char"])) != '"':
+            raise NotImplementedError(f"{quote_char=} is not currently not supported.")
+        return (
+            builder.include_header(options["include_header"])
+            .na_rep(serialize_options["null"])
+            .line_terminator(serialize_options["line_terminator"])
+            .inter_column_delimiter(chr(serialize_options["separator"]))
+            .build()
+        )
+
+    @classmethod
+    def do_evaluate(cls, schema: Schema, payload: str, df: DataFrame) -> DataFrame:
+        breakpoint()
+        """Evaluate and return a dataframe."""
+        sink_payload = json.loads(payload)
+        sink_target = plc.io.SinkInfo([sink_payload["File"]["target"]])
+        sink_type = sink_payload["File"]["file_type"]
+        if (csv_options := sink_type.get("Csv")) is not None:
+            builder = plc.io.csv.CsvWriterOptions.builder(sink_target, df.table)
+            plc.io.csv.write_csv(cls._get_valid_csv_options(builder, csv_options))
+        else:
+            raise NotImplementedError(
+                f"Unsupported sink type: {next(iter(sink_type.keys()), None)}"
+            )
+        return df

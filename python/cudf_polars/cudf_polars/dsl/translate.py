@@ -495,6 +495,13 @@ def _(
     return ir.HConcat(schema, *(translator.translate_ir(n=n) for n in node.inputs))
 
 
+@_translate_ir.register
+def _(
+    node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
+) -> ir.IR:
+    return ir.Sink(schema, node.payload, translator.translate_ir(n=node.input))
+
+
 def translate_named_expr(
     translator: Translator, *, n: pl_expr.PyExprIR
 ) -> expr.NamedExpr:
@@ -785,3 +792,15 @@ def _(node: pl_expr.Len, translator: Translator, dtype: plc.DataType) -> expr.Ex
     if dtype.id() != plc.TypeId.INT32:
         return expr.Cast(dtype, value)
     return value  # pragma: no cover; never reached since polars len has uint32 dtype
+
+
+@_translate_expr.register
+def _(
+    node: pl_expr.BinaryExpr, translator: Translator, dtype: plc.DataType
+) -> expr.Expr:
+    return expr.BinOp(
+        dtype,
+        expr.BinOp._MAPPING[node.op],
+        translator.translate_expr(n=node.left),
+        translator.translate_expr(n=node.right),
+    )
