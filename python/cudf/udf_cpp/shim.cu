@@ -399,7 +399,6 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
   block.sync();
 
   AccumT local_sum = 0;
-
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_sum += static_cast<AccumT>(data[idx]);
   }
@@ -723,13 +722,24 @@ make_definition_corr(BlockCorr, int64, int64_t);
 #undef make_definition_corr
 }
 
+/*
+A block level data structure that represents the slice of a column
+that corresponds to a groupby group. This class is aware of only two
+things: the pointer to start of the data (an offset within a larger
+column) and the size of the group itslef
+*/
 class udf_group {
  public:
   int64_t* data;
   size_t size;
 
   __device__ udf_group(int64_t* data_ptr, size_t size_val)
-      : data(data_ptr), size(size_val) {}
+      : data(data_ptr), size(size_val) {
+        if (threadIdx.x == 0 and blockIdx.x == 1) {
+          for (size_t i = 0; i < size_val; ++i) {
+          }
+        }
+      }
 
   __device__ udf_group() : data(nullptr), size(0) {}
 
@@ -739,6 +749,9 @@ class udf_group {
 
       if (threadIdx.x == 0) {
           ptr = malloc(size * sizeof(int64_t));
+          if (ptr == nullptr) {
+            printf("[block_alloc] malloc failed!\n");
+          }
       }
 
       __syncthreads();  // all threads wait for ptr to be written
@@ -751,30 +764,32 @@ class udf_group {
           free(ptr);
       }
   }
+  __device__ udf_group binary_add(udf_group const& other) {
+      int gid = threadIdx.x + (blockIdx.x * blockDim.x);
 
-  __device__ udf_group binary_add(udf_group other) {
       int64_t* ptr = (int64_t*)block_alloc(size * sizeof(int64_t));
-      ptr[threadIdx.x] = this->data[threadIdx.x] + other.data[threadIdx.x];
-      __syncthreads();
-      udf_group result;
-      result.data = ptr;
-      result.size = size;
-      printf("I am being called!\n");
+
+      __syncthreads(); // may help clarify if block_alloc uses shared memory
+
+      if (threadIdx.x < other.size) {
+          ptr[threadIdx.x] = this->data[threadIdx.x] + other.data[threadIdx.x];
+      }
+      udf_group result(ptr, size);
       return result;
   }
 };
 
 
-
 extern "C" 
 __device__ int group_sum_binaryop(                                                 
-    int64_t* numba_return_value, int64_t* lhs, int64_t* rhs, int64_t* out, int64_t size) 
+    int64_t** numba_return_value, int64_t* lhs, int64_t* rhs, int64_t size) 
 {
-  auto lhs_ptr = reinterpret_cast<udf_group*>(lhs);
-  auto rhs_ptr = reinterpret_cast<udf_group*>(rhs);
-  auto udf_group_ptr   = new (out) udf_group;
 
-  *udf_group_ptr = lhs_ptr->binary_add(*rhs_ptr);
+  udf_group lhs_udf_grp = udf_group(lhs, size);
+  udf_group rhs_udf_grp = udf_group(rhs, size);
+  __syncthreads();
+  udf_group out_group = lhs_udf_grp.binary_add(rhs_udf_grp);
+  *numba_return_value = out_group.data;
 
   return 0;
 }

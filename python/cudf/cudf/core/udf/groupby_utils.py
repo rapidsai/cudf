@@ -19,6 +19,7 @@ from cudf.core.udf.templates import (
     group_initializer_template,
     groupby_apply_kernel_template,
 )
+from numba.np.numpy_support import as_dtype
 from cudf.core.udf.utils import (
     UDFError,
     _all_dtypes_from_frame,
@@ -112,7 +113,6 @@ def _get_groupby_apply_kernel(frame, func, args):
     )
 
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
-    breakpoint()
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
         "cuda": cuda,
@@ -150,9 +150,12 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         kernel_getter=_get_groupby_apply_kernel,
         suffix="__GROUPBY_APPLY_UDF",
     )
-
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
+
+    if isinstance(return_type, GroupType):
+        return_type = as_dtype(return_type.group_scalar_type)
+        assert False
 
     output = column_empty(ngroups, dtype=return_type, for_numba=True)
     launch_args = [
@@ -193,6 +196,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     # Launch kernel
     with _CUDFNumbaConfig():
+        breakpoint()
         specialized[ngroups, tpb](*launch_args)
 
     return output

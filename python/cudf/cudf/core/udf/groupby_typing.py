@@ -396,15 +396,14 @@ for attr in ("group_data", "index", "size"):
 
 _group_sum_binaryop = cuda.declare_device(
     "group_sum_binaryop",
-    types.void(
+    types.CPointer(types.int64)(
         types.CPointer(types.int64),
         types.CPointer(types.int64), 
-        types.CPointer(types.int64),
         group_size_type,
     )
 )
-def call_group_sum(lhs, rhs, out, size):
-    return _group_sum_binaryop(lhs, rhs, out, size)
+def call_group_sum(lhs, rhs, size):
+    return _group_sum_binaryop(lhs, rhs, size)
 
 
 
@@ -416,3 +415,11 @@ class GroupAdd(AbstractTemplate):
             return nb_signature(GroupType(types.int64), args[0], args[1])
 
 cuda_registry.register_global(operator.add)(GroupAdd)
+
+@cuda_registry.register_global(operator.setitem)
+class SetItemGroupColumn(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], types.Array) and isinstance(args[1], types.Integer) and isinstance(
+            args[2], GroupType
+        ):
+            return types.void(args[0], args[1], args[2])

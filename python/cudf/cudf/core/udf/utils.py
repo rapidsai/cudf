@@ -122,7 +122,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     if isinstance(numba_output_type, MaskedType):
         result = numba_output_type.value_type
     elif isinstance(numba_output_type, GroupType):
-        result = numba_output_type.group_scalar_type
+        return numba_output_type
     else:
         result = numba_output_type
 
@@ -293,6 +293,10 @@ def _compile_or_get(
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
+    from cudf.core.udf.groupby_typing import GroupType
+    if isinstance(scalar_return_type, GroupType):
+        #precompiled[cache_key] = (kernel, scalar_return_type)
+        return kernel, scalar_return_type
     np_return_type = (
         numpy_support.as_dtype(scalar_return_type)
         if scalar_return_type.is_internal

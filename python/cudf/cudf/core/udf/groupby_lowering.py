@@ -203,20 +203,35 @@ def cuda_lower_add(context, builder, sig, args):
     )
 
     output = cgutils.create_struct_proxy(sig.return_type)(context, builder)
-    _ = context.compile_internal(
+    out_ptr = context.compile_internal(
         builder,
         call_group_sum,
-        types.void(
-            sig.return_type.group_data_type,
+        types.CPointer(types.int64)(
             sig.args[0].group_data_type,
             sig.args[1].group_data_type,
             group_size_type,
         ),
         (
-            output.group_data,
             lhs_grp.group_data,
             rhs_grp.group_data,
             lhs_grp.size,
         ),
     )
+    output.size = lhs_grp.size
+    output.group_data = out_ptr
     return output._getvalue()
+
+
+@cuda_lower(
+    operator.setitem,
+    types.Array(types.int64, '1d', 'C'),
+    types.Any,
+    types.Any,
+)
+def setitem_group(context, builder, sig, args):
+    pass
+    #base_ptr, idx, val = args
+    #elem_ptr = builder.gep(base_ptr, [idx])
+    #builder.store(val, elem_ptr)
+    #context.nrt.incref(builder, managed_udf_string, val)
+
