@@ -421,7 +421,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto const host_bitmask = [&] {
     auto const num_bitmasks = num_bitmask_words(predicate.size());
     if (predicate.nullable()) {
-      return cudf::detail::make_host_vector_sync(
+      return cudf::detail::make_host_vector(
         device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
     } else {
       auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
@@ -434,7 +434,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
   // Return only filtered row groups based on predicate
-  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
+  auto const is_row_group_required = cudf::detail::make_host_vector(
     device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
 
   // Return if all are required, or all are nulls.

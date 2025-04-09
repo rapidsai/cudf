@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -328,7 +329,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
         // this tells us between which segments of left elements a right element
         // would fall
         auto const r_bound      = thrust::upper_bound(thrust::seq, left, left + left_size, idx);
-        auto const r_segment    = thrust::distance(left, r_bound);
+        auto const r_segment    = cuda::std::distance(left, r_bound);
         merged[r_segment + idx] = thrust::make_pair(side::RIGHT, idx);
       } else {
         auto const left_idx               = idx - right_size;

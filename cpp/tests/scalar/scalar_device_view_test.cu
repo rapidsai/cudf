@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,7 +131,7 @@ TEST_F(StringScalarDeviceViewTest, Value)
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result{cudf::get_default_stream()};
-  auto value_v = cudf::detail::make_device_uvector_sync(
+  auto value_v = cudf::detail::make_device_uvector(
     value, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   test_string_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
