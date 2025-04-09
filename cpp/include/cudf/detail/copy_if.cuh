@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -66,7 +67,8 @@ std::unique_ptr<table> copy_if(table_view const& input,
   auto const indices_end =
     thrust::copy_if(rmm::exec_policy(stream), begin, end, indices.begin(), filter);
 
-  auto const output_size = static_cast<size_type>(thrust::distance(indices.begin(), indices_end));
+  auto const output_size =
+    static_cast<size_type>(cuda::std::distance(indices.begin(), indices_end));
 
   // nothing selected
   if (output_size == 0) { return empty_like(input); }
