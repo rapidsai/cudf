@@ -246,10 +246,9 @@ auto hybrid_scan(std::vector<char>& buffer,
   auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
     cudf::experimental::io::get_secondary_filters(reader, current_row_group_indices, options);
 
-  // Filter row groups with dictionary pages - API # 7
+  // If we have dictionary page byte ranges, filter row groups with dictionary pages - API # 7
   std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
   dictionary_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  // If we have dictionary page byte ranges, filter row groups with dictionary pages
   if (dict_page_byte_ranges.size()) {
     // Fetch dictionary page buffers from the input file buffer
     std::vector<rmm::device_buffer> dictionary_page_buffers =
@@ -264,10 +263,9 @@ auto hybrid_scan(std::vector<char>& buffer,
       cudf::host_span<cudf::size_type>(dictionary_page_filtered_row_group_indices);
   }
 
-  // Filter row groups with bloom filters - API # 8
+  // If we have bloom filter byte ranges, filter row groups with bloom filters - API # 8
   std::vector<cudf::size_type> bloom_filtered_row_group_indices;
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
-  // If we have bloom filter byte ranges, filter row groups with bloom filters
   if (bloom_filter_byte_ranges.size()) {
     // Fetch bloom filter data from the input file buffer
     std::vector<rmm::device_buffer> bloom_filter_data =
