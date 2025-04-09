@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
+#include <cuda/std/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -101,7 +102,7 @@ __device__ void gpuDecodeFixedWidthValues(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const dtype          = s->col.physical_type;
+  Type const dtype         = s->col.physical_type;
   uint32_t const dtype_len = s->dtype_len;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -138,8 +139,8 @@ __device__ void gpuDecodeFixedWidthValues(
 
       if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
         switch (dtype) {
-          case INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
-          case INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;
+          case Type::INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
+          case Type::INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;
           default:
             if (s->dtype_len_in <= sizeof(int32_t)) {
               gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<int32_t*>(dst));
@@ -150,9 +151,9 @@ __device__ void gpuDecodeFixedWidthValues(
             }
             break;
         }
-      } else if (dtype == BOOLEAN) {
+      } else if (dtype == Type::BOOLEAN) {
         gpuOutputBoolean(sb, src_pos, static_cast<uint8_t*>(dst));
-      } else if (dtype == INT96) {
+      } else if (dtype == Type::INT96) {
         gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
       } else if (dtype_len == 8) {
         if (s->dtype_len_in == 4) {
@@ -188,8 +189,8 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const dtype       = s->col.physical_type;
-  auto const data_len   = thrust::distance(s->data_start, s->data_end);
+  Type const dtype      = s->col.physical_type;
+  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -234,9 +235,9 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
       // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
       if (is_decimal) {
         switch (dtype) {
-          case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
-          case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
-          case FIXED_LEN_BYTE_ARRAY:
+          case Type::INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+          case Type::INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
+          case Type::FIXED_LEN_BYTE_ARRAY:
             if (s->dtype_len_in <= sizeof(int32_t)) {
               gpuOutputSplitFixedLenByteArrayAsInt(
                 reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);

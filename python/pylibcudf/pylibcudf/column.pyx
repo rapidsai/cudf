@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libc.stdint cimport uintptr_t
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
@@ -269,10 +270,10 @@ cdef class Column:
                 )
 
         cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.head[char](), owner
+            <uintptr_t> cv.head[char](), owner
         )
         cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.null_mask(), owner
+            <uintptr_t> cv.null_mask(), owner
         )
 
         return Column(
@@ -365,10 +366,13 @@ cdef class Column:
 
         Raises
         ------
+        TypeError
+            If the object does not support __cuda_array_interface__.
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
-        ImportError
-            If the data is 2D and NumPy is not installed.
+            If the number of rows exceeds size_type limit.
+        NotImplementedError
+            If the object has a mask.
         """
         try:
             iface = obj.__cuda_array_interface__
@@ -376,7 +380,7 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         if iface.get("mask") is not None:
-            raise ValueError("mask not yet supported")
+            raise NotImplementedError("mask not yet supported")
 
         typestr = iface["typestr"][1:]
         data_type = _datatype_from_dtype_desc(typestr)
@@ -390,20 +394,12 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            try:
-                import numpy as np
-            except ImportError:
-                raise ImportError(
-                    "NumPy must be installed to use this method on 2D data"
-                )
             num_rows, num_cols = shape
             if num_rows < numeric_limits[size_type].max():
-                # TODO: Add a new Scalar.from_py(value, dtype) API so
-                # we can specify the dtype (size_type in this case) too.
                 offsets_col = sequence(
                     num_rows + 1,
-                    Scalar.from_numpy(np.int32(0)),
-                    Scalar.from_numpy(np.int32(num_cols))
+                    Scalar.from_py(0, DataType(type_id.INT32)),
+                    Scalar.from_py(num_cols, DataType(type_id.INT32)),
                 )
             else:
                 raise ValueError(
