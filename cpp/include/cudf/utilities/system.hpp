@@ -20,6 +20,19 @@
 
 namespace CUDF_EXPORT cudf {
 
+/**
+ * @addtogroup utility_system
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Check if the current device has at least one active NVLink-C2C interconnect.
+ *
+ * @return Boolean answer.
+ */
 bool is_c2c_available();
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf
