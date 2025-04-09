@@ -1810,7 +1810,6 @@ class MapFunction(IR):
         self.name = name
         self.options = options
         self.children = (df,)
-        print("NAME", self.name)
         if (
             self.name not in MapFunction._NAMES
         ):  # pragma: no cover; need more polars rust functions
