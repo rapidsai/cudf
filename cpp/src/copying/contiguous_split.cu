@@ -1547,7 +1547,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
                              offsets.begin());
 
       // the next part is working on the CPU, so we want to synchronize here
-      return detail::make_host_vector_sync(offsets, stream);
+      return detail::make_host_vector(offsets, stream);
     }();
 
     std::vector<std::size_t> num_batches_per_iteration;
@@ -1859,7 +1859,7 @@ struct contiguous_split_state {
   {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(
-      user_buffer.size() == user_buffer_size,
+      user_buffer.size() >= user_buffer_size,
       "Cannot use a device span smaller than the output buffer size configured at instantiation!");
     CUDF_EXPECTS(has_next(), "Cannot call contiguous_split_chunk with has_next() == false!");
 
