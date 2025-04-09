@@ -53,6 +53,7 @@ set(cython_sources
     types.pyx
     unary.pyx
     utils.pyx
+    utilities.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
