@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ void BM_iterator(benchmark::State& state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<TypeParam>(
     1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0

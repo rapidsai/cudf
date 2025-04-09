@@ -468,7 +468,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
   // move the differences to the host.
   auto h_differences =
-    cudf::detail::make_host_vector_sync(differences, cudf::test::get_default_stream());
+    cudf::detail::make_host_vector(differences, cudf::test::get_default_stream());
   if (verbosity == debug_output_level::ALL_ERRORS) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
@@ -917,7 +917,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
                          static_cast<bitmask_type*>(mask.data()), num_bitmasks),
                        std::move(mask)};
     }();
-    return cudf::detail::make_std_vector_sync(bitmask_span, cudf::get_default_stream());
+    return cudf::detail::make_std_vector(bitmask_span, cudf::get_default_stream());
   } else {
     return std::vector<bitmask_type>{};
   }
@@ -945,7 +945,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   using Rep = typename T::rep;
 
   auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
-  auto host_rep_types = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
+  auto host_rep_types = cudf::detail::make_host_vector(col_span, cudf::get_default_stream());
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
   auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
@@ -971,7 +971,7 @@ struct strings_to_host_fn {
                   cudf::column_view const& offsets,
                   rmm::cuda_stream_view stream)
   {
-    auto const h_offsets = cudf::detail::make_std_vector_sync(
+    auto const h_offsets = cudf::detail::make_std_vector(
       cudf::device_span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
     // build std::string vector from chars and offsets
     std::transform(std::begin(h_offsets),
@@ -1001,7 +1001,7 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
   auto stream = cudf::get_default_stream();
   if (c.size() > c.null_count()) {
     auto const scv     = strings_column_view(c);
-    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+    auto const h_chars = cudf::detail::make_std_vector<char>(
       cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto offsets =
       cudf::slice(scv.offsets(), {scv.offset(), scv.offset() + scv.size() + 1}).front();
