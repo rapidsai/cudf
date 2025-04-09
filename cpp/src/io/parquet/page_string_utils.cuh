@@ -150,10 +150,10 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
 
 /**
  * @brief Update offsets with either zeros if this is a large string column, `initial_value`
- * otherwise.
+ *        otherwise.
  *
- * Fill zeros at all offsets and atomically update the initial string offset to build large string
- * column. Otherwise, `initial_value` at all offsets.
+ * For large string columns, fill zeros (sizes) at all offsets and atomically update the initial
+ * string offset. Otherwise, fill `initial_value` at all offsets.
  *
  * @tparam block_size Thread block size
  * @tparam has_lists Whether the column is a list column
