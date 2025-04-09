@@ -40,7 +40,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> get_left_indices(cudf::siz
 {
   auto sequence = std::vector<cudf::size_type>(size);
   std::iota(sequence.begin(), sequence.end(), 0);
-  auto indices = cudf::detail::make_device_uvector_sync(
+  auto indices = cudf::detail::make_device_uvector(
     sequence, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   return std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices));
 }
