@@ -33,10 +33,10 @@ auto constexpr MAX_BLOCK_SIZE = 128;
  * @brief Launches the appropriate compute column kernel based on template parameters
  *
  * This function selects and launches the appropriate kernel implementation based on whether
- * the output may contain nulls and whether the input contains complex types.
+ * the input contains nulls and whether the input contains complex types.
  *
- * @tparam HasNulls Whether the output column may contain nulls
- * @tparam HasComplexType Whether the input table contains complex types
+ * @tparam HasNulls Whether the input contains nulls
+ * @tparam HasComplexType Whether the input contains complex types
  *
  * @param table_device Device view of the input table
  * @param device_expression_data Device data required to evaluate the expression
