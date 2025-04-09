@@ -220,7 +220,7 @@ class parquet_reader_options {
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Specifies which row groups to read for each input source.
+   * @brief Specifies which row groups to read from each input source.
    *
    * When reading from multiple sources (e.g., multiple files), this function allows selecting
    * specific row groups for each source individually. The outer vector corresponds to the list
