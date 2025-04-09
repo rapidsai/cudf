@@ -29,7 +29,8 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-constexpr int decode_block_size = 128;
+constexpr int decode_block_size              = 128;
+constexpr int decode_delta_binary_block_size = 96;
 
 // DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
 // columns. For each element in a sequence of strings, a prefix length from the preceding string
@@ -305,7 +306,7 @@ struct delta_byte_array_decoder {
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
 template <typename level_t>
-CUDF_KERNEL void __launch_bounds__(96)
+CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   gpuDecodeDeltaBinary(PageInfo* pages,
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
@@ -353,7 +354,7 @@ CUDF_KERNEL void __launch_bounds__(96)
     page.num_nulls  = page.num_rows;
     page.num_valids = 0;
     // Update offsets for all list depth levels
-    if (has_repetition) { update_list_offsets_for_pruned_pages<96>(s); }
+    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_delta_binary_block_size>(s); }
     return;
   }
 
