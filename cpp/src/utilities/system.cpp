@@ -40,10 +40,10 @@ namespace detail {
 /**
  * @brief Perform the initialization of NVML library.
  *
- * The NVML initialization can be costly. Using this function ensures it is performed only once per
+ * NVML initialization can be costly. Using this function ensures it is performed only once per
  * process.
  *
- * @note NVML shutdown is also costly. We may avoid calling it at the expense of a slight NVML
+ * @note NVML shutdown is also costly. We may avoid doing it at the expense of a slight NVML
  * resource leak.
  */
 void initialize_nvml()
