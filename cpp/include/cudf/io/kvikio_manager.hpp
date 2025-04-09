@@ -55,6 +55,7 @@ class kvikio_manager {
    * creates a new one with the specified value. Otherwise, the existing thread pool will be used
    * for subsequent I/O operations.
    *
+   * @param num_io_threads The number of IO threads to be used.
    */
   static void set_num_io_threads(unsigned int num_io_threads);
 
