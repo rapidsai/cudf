@@ -4,6 +4,7 @@ from cython.operator cimport dereference
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
+    PyCapsule_New,
 )
 
 from libcpp.limits cimport numeric_limits
@@ -17,6 +18,16 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width, is_fixed_point
 from pylibcudf.libcudf.copying cimport get_element
+
+from pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowSchema,
+    column_metadata,
+    release_arrow_array_raw,
+    release_arrow_schema_raw,
+    to_arrow_host_raw,
+    to_arrow_schema_raw,
+)
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
@@ -33,6 +44,38 @@ import functools
 
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+
+
+cdef void _release_schema(object schema_capsule) noexcept:
+    """Release the ArrowSchema object stored in a PyCapsule."""
+    cdef ArrowSchema* schema = <ArrowSchema*>PyCapsule_GetPointer(
+        schema_capsule, 'arrow_schema'
+    )
+    release_arrow_schema_raw(schema)
+
+
+cdef void _release_array(object array_capsule) noexcept:
+    """Release the ArrowArray object stored in a PyCapsule."""
+    cdef ArrowArray* array = <ArrowArray*>PyCapsule_GetPointer(
+        array_capsule, 'arrow_array'
+    )
+    release_arrow_array_raw(array)
+
+
+cdef column_metadata _metadata_to_libcudf(metadata):
+    """Convert a ColumnMetadata object to C++ column_metadata.
+
+    Since this class is mutable and cheap, it is easier to create the C++
+    object on the fly rather than have it directly backing the storage for
+    the Cython class. Additionally, this structure restricts the dependency
+    on C++ types to just within this module, allowing us to make the module a
+    pure Python module (from an import sense, i.e. no pxd declarations).
+    """
+    cdef column_metadata c_metadata
+    c_metadata.name = metadata.name.encode()
+    for child_meta in metadata.children_meta:
+        c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
+    return c_metadata
 
 
 class _ArrowLikeMeta(type):
@@ -660,6 +703,39 @@ cdef class Column:
         with nogil:
             c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
+
+    def _to_schema(self, metadata=None):
+        """Create an Arrow schema from this Column."""
+        # TODO: We'll need to reshuffle where things are defined to avoid circular
+        # imports. For now, we'll just import this inline. We should be able to avoid
+        # circularity altogether by simply not needing ColumnMetadata at all in the
+        # future and just using the schema directly, so we can consider that approach.
+        from pylibcudf.interop import ColumnMetadata, _create_nested_column_metadata
+        if metadata is None:
+            metadata = _create_nested_column_metadata(self)
+        elif isinstance(metadata, str):
+            metadata = ColumnMetadata(metadata)
+
+        cdef column_metadata c_metadata = _metadata_to_libcudf(metadata)
+
+        cdef ArrowSchema* raw_schema_ptr
+        with nogil:
+            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+
+        return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
+
+    def _to_host_array(self):
+        cdef ArrowArray* raw_host_array_ptr
+        with nogil:
+            raw_host_array_ptr = to_arrow_host_raw(self.view())
+
+        return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
+
+    def __arrow_c_array__(self, requested_schema=None):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Column does not support alternative schema")
+
+        return self._to_schema(), self._to_host_array()
 
 
 cdef class ListColumnView:

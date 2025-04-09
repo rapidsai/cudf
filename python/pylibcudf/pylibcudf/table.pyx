@@ -36,23 +36,6 @@ from functools import singledispatchmethod
 __all__ = ["Table"]
 
 
-# TODO: Add a strong type here on the ColumnMetadata input
-cdef column_metadata _metadata_to_libcudf(metadata):
-    """Convert a ColumnMetadata object to C++ column_metadata.
-
-    Since this class is mutable and cheap, it is easier to create the C++
-    object on the fly rather than have it directly backing the storage for
-    the Cython class. Additionally, this structure restricts the dependency
-    on C++ types to just within this module, allowing us to make the module a
-    pure Python module (from an import sense, i.e. no pxd declarations).
-    """
-    cdef column_metadata c_metadata
-    c_metadata.name = metadata.name.encode()
-    for child_meta in metadata.children_meta:
-        c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
-    return c_metadata
-
-
 cdef void _release_schema(object schema_capsule) noexcept:
     """Release the ArrowSchema object stored in a PyCapsule."""
     cdef ArrowSchema* schema = <ArrowSchema*>PyCapsule_GetPointer(
@@ -67,6 +50,22 @@ cdef void _release_array(object array_capsule) noexcept:
         array_capsule, 'arrow_array'
     )
     release_arrow_array_raw(array)
+
+
+cdef column_metadata _metadata_to_libcudf(metadata):
+    """Convert a ColumnMetadata object to C++ column_metadata.
+
+    Since this class is mutable and cheap, it is easier to create the C++
+    object on the fly rather than have it directly backing the storage for
+    the Cython class. Additionally, this structure restricts the dependency
+    on C++ types to just within this module, allowing us to make the module a
+    pure Python module (from an import sense, i.e. no pxd declarations).
+    """
+    cdef column_metadata c_metadata
+    c_metadata.name = metadata.name.encode()
+    for child_meta in metadata.children_meta:
+        c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
+    return c_metadata
 
 
 class _ArrowLikeMeta(type):
@@ -220,29 +219,16 @@ cdef class Table:
         """The columns in this table."""
         return self._columns
 
-    @staticmethod
-    def _create_nested_column_metadata(Column col):
-        # TODO: We'll need to reshuffle where things are defined to avoid circular
-        # imports. For now, we'll just import this inline. We should be able to avoid
-        # circularity altogether by simply not needing ColumnMetadata at all in the
-        # future and just using the schema directly, so we can consider that approach.
-        from pylibcudf.interop import ColumnMetadata
-        return ColumnMetadata(
-            children_meta=[
-                Table._create_nested_column_metadata(child) for child in col.children()
-            ]
-        )
-
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""
         # TODO: We'll need to reshuffle where things are defined to avoid circular
         # imports. For now, we'll just import this inline. We should be able to avoid
         # circularity altogether by simply not needing ColumnMetadata at all in the
         # future and just using the schema directly, so we can consider that approach.
-        from pylibcudf.interop import ColumnMetadata
+        from pylibcudf.interop import ColumnMetadata, _create_nested_column_metadata
         if metadata is None:
             metadata = [
-                Table._create_nested_column_metadata(col) for col in self.columns()
+                _create_nested_column_metadata(col) for col in self.columns()
             ]
         else:
             metadata = [
@@ -271,6 +257,4 @@ cdef class Table:
         if requested_schema is not None:
             raise ValueError("pylibcudf.Table does not support alternative schema")
 
-        # For the host array protocol the capsules own the data.
-        ret = self._to_schema(), self._to_host_array()
-        return ret
+        return self._to_schema(), self._to_host_array()

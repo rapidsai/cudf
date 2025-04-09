@@ -75,6 +75,14 @@ class ColumnMetadata:
     children_meta: list[ColumnMetadata] = field(default_factory=list)
 
 
+def _create_nested_column_metadata(Column col):
+    return ColumnMetadata(
+        children_meta=[
+            _create_nested_column_metadata(child) for child in col.children()
+        ]
+    )
+
+
 @singledispatch
 def from_arrow(pyarrow_object, *, DataType data_type=None):
     """Create a cudf object from a pyarrow object.
@@ -198,29 +206,28 @@ def _to_arrow_datatype(cudf_object, **kwargs):
             )
 
 
-class _TableWithArrowMetadata:
-    def __init__(self, tbl, metadata=None):
-        self.tbl = tbl
+class _ObjectWithArrowMetadata:
+    def __init__(self, obj, metadata=None):
+        self.obj = obj
         self.metadata = metadata
 
     def __arrow_c_array__(self, requested_schema=None):
-        return self.tbl._to_schema(self.metadata), self.tbl._to_host_array()
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
 
 
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
+    """Create a PyArrow table from a pylibcudf table."""
     # TODO: See if we can stop supporting configuration of struct field names when
     # exporting to arrow data. That would allow us to get rid of the
-    # _TableWithArrowMetadata struct and just use the underlying Table directly.
-    return pa.table(_TableWithArrowMetadata(cudf_object, metadata))
+    # _ObjectWithArrowMetadata struct and just use the underlying Table directly.
+    return pa.table(_ObjectWithArrowMetadata(cudf_object, metadata))
 
 
 @to_arrow.register(Column)
 def _to_arrow_array(cudf_object, metadata=None):
     """Create a PyArrow array from a pylibcudf column."""
-    if metadata is not None:
-        metadata = [metadata]
-    return to_arrow(Table([cudf_object]), metadata)[0]
+    return pa.array(_ObjectWithArrowMetadata(cudf_object, metadata))
 
 
 @to_arrow.register(Scalar)
