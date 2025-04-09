@@ -4,23 +4,22 @@
 
 from __future__ import annotations
 
+from itertools import chain
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast
-from cudf_polars.dsl.ir import Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     traversal,
 )
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks
-from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.base import get_key_name
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
@@ -29,25 +28,11 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.base import NamedExpr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import ExprTransformer
 
 
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
-
-
-def _valid_sub_expr(sub_expr: Expr) -> Expr:
-    """Check that a multi-partition expression is supported."""
-    if sub_expr.is_pointwise:
-        # Pointwise expressions are always supported.
-        return sub_expr
-    elif isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
-        # This is a supported Agg expression.
-        return sub_expr
-    else:
-        # This is an un-supported expression - raise.
-        raise NotImplementedError(
-            f"{type(sub_expr)} not supported for multiple partitions."
-        )
 
 
 class FusedExpr(Expr):
@@ -63,29 +48,25 @@ class FusedExpr(Expr):
     - When a FusedExpr object is evaluated, it will
     substitute it's evaluated children into ``sub_expr``,
     and evaluate the re-written sub-expression.
-    - A FusedExpr object may point to a non-pointwise
-    Expr node. However, all other nodes in ``sub_expr``
-    must be pointwise or FusedExpr children.
     """
 
-    __slots__ = ("sub_expr",)
-    _non_child = ("dtype", "sub_expr")
+    __slots__ = ("kind", "sub_expr")
+    _non_child = ("dtype", "sub_expr", "kind")
 
     def __init__(
         self,
         dtype: plc.DataType,
         sub_expr: Expr,
+        kind: str | None,
         *children: FusedExpr,
     ):
         self.dtype = dtype
         self.sub_expr = sub_expr
-        assert all(isinstance(c, FusedExpr) for c in children)
+        self.kind = kind
         self.children = children
-        self.is_pointwise = sub_expr.is_pointwise
-        assert all(
-            e.is_pointwise or isinstance(e, FusedExpr)
-            for e in traversal(list(sub_expr.children))
-        ), f"Invalid FusedExpr sub-expression: {sub_expr}"
+        self.is_pointwise = self.kind == "pointwise"
+        assert all(isinstance(c, FusedExpr) for c in children)
+        assert kind in ("pointwise", "shuffle", "aggregation")
 
     def do_evaluate(
         self,
@@ -96,6 +77,47 @@ class FusedExpr(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return self.sub_expr.evaluate(df, context=context, mapping=mapping)
+
+
+class NoOp(Expr):
+    """No-op expression."""
+
+    __slots__ = ()
+    _non_child = ("dtype",)
+
+    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
+        self.dtype = dtype
+        self.children = (value,)
+        self.is_pointwise = True
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        return child.evaluate(df, context=context, mapping=mapping)
+
+
+class ShuffleColumn(Expr):
+    """Shuffle expression."""
+
+    __slots__ = ("config_options",)
+    _non_child = ("dtype", "config_options")
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        config_options: ConfigOptions,
+        value: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.config_options = config_options
+        self.children = (value,)
+        self.is_pointwise = False
 
 
 def extract_partition_counts(
@@ -132,8 +154,6 @@ def extract_partition_counts(
         for node in list(traversal([expr], cutoff_types=cutoff_types))[::-1]:
             if isinstance(node, FusedExpr):
                 # Process the fused sub-expression graph first
-                # if skip_fused_exprs:
-                #     continue  # Stay within the current sub expression
                 expr_partition_counts = extract_partition_counts(
                     [node.sub_expr],
                     child_ir_count,
@@ -144,7 +164,7 @@ def extract_partition_counts(
             elif isinstance(node, (Agg, Literal)):
                 # Assume all aggregations produce 1 partition
                 expr_partition_counts[node] = 1
-            elif node.is_pointwise:
+            elif node.is_pointwise or isinstance(node, ShuffleColumn):
                 # Pointwise expressions should preserve child partition count
                 if node.children:
                     # Assume maximum child partition count
@@ -167,12 +187,11 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
 
     # Transform child expressions first
     new_children = tuple(map(rec, expr.children))
-
+    fused_children: list[FusedExpr] = []
     if new_children:
         # Non-leaf node.
         # Construct child lists for new expressions
         # (both the fused expression and the sub-expression)
-        fused_children: list[FusedExpr] = []
         sub_expr_children: list[Expr] = []
         for child in new_children:
             # All children should be FusedExpr
@@ -191,14 +210,110 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
                 # distinct FusedExpr nodes
                 fused_children.append(child)
                 sub_expr_children.append(child)
-        # Reconstruct and return the new FusedExpr
-        sub_expr = _valid_sub_expr(expr.reconstruct(sub_expr_children))
-        return FusedExpr(sub_expr.dtype, sub_expr, *fused_children)
+        sub_expr = expr.reconstruct(sub_expr_children)
     else:
         # Leaf node.
         # Convert to simple FusedExpr with no children
-        sub_expr = _valid_sub_expr(expr)
-        return FusedExpr(sub_expr.dtype, sub_expr)
+        sub_expr = expr
+
+    return construct_fused_expr(sub_expr, fused_children)
+
+
+def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> FusedExpr:
+    """
+    Construct new FusedExpr object.
+
+    Parameters
+    ----------
+    sub_expr
+        Expression to be wrapped in a ``FusedExpr`` class.
+    fused_children
+        Children of ``sub_expr`` that are already ``FusedExpr`` nodes.
+
+    Returns
+    -------
+    New ``FusedExpr`` object.
+    """
+    if sub_expr.is_pointwise:
+        # Pointwise expressions are always supported.
+        kind = "pointwise"
+        final_expr = sub_expr
+    elif isinstance(sub_expr, Agg) and sub_expr.name in _SUPPORTED_AGGS:
+        # This is a supported Agg expression.
+        kind = "aggregation"
+        agg = sub_expr
+        agg_name = agg.name
+        chunk_expr: Expr
+        if agg_name == "count":
+            # Chunkwise
+            chunk_expr = agg
+            # Combine
+            combine_expr = Agg(
+                agg.dtype,
+                "sum",
+                None,
+                chunk_expr,
+            )
+            # Finalize
+            final_expr = NoOp(agg.dtype, combine_expr)
+        elif agg_name == "mean":
+            # Chunkwise
+            chunk_exprs = [
+                Agg(agg.dtype, "sum", None, *agg.children),
+                Agg(agg.dtype, "count", None, *agg.children),
+            ]
+            # Combine
+            combine_exprs = [
+                Agg(
+                    agg.dtype,
+                    "sum",
+                    None,
+                    chunk_expr,
+                )
+                for chunk_expr in chunk_exprs
+            ]
+            # Finalize
+            final_expr = BinOp(
+                agg.dtype,
+                plc.binaryop.BinaryOperator.DIV,
+                *combine_exprs,
+            )
+        elif agg_name == "n_unique":
+            # Inject shuffle
+            # TODO: Avoid shuffle if possible
+            (child,) = agg.children
+            shuffled = FusedExpr(
+                child.dtype,
+                ShuffleColumn(child.dtype, ConfigOptions({}), child),
+                "shuffle",
+                *fused_children,
+            )
+            fused_children = [shuffled]
+            # Chunkwise
+            chunk_expr = Cast(agg.dtype, shuffled)
+            # Combine
+            combine_expr = Agg(agg.dtype, "sum", None, chunk_expr)
+            # Finalize
+            final_expr = NoOp(agg.dtype, combine_expr)
+        else:
+            # Chunkwise
+            chunk_expr = agg
+            # Combine
+            combine_expr = Agg(
+                agg.dtype,
+                agg.name,
+                agg.options,
+                chunk_expr,
+            )
+            # Finalize
+            final_expr = NoOp(agg.dtype, combine_expr)
+    else:
+        # This is an un-supported expression - raise.
+        raise NotImplementedError(
+            f"{type(sub_expr)} not supported for multiple partitions."
+        )
+
+    return FusedExpr(final_expr.dtype, final_expr, kind, *fused_children)
 
 
 def decompose_expr_graph(expr: Expr) -> Expr:
@@ -258,92 +373,22 @@ def combine_chunks_multi_agg(
     return col.rename(name)
 
 
-def shuffle_child(
-    child: IR,
-    on: Expr,
-    named_expr: NamedExpr,
-    child_partition_info: PartitionInfo,
-    config_options: ConfigOptions,
-) -> tuple[IR, MutableMapping[Any, Any]]:
-    """
-    Shuffle the child IR on a single expression.
-
-    Parameters
-    ----------
-    child
-        Child IR we are shuffling.
-    on
-        Single Expr to shuffle on.
-    named_expr
-        Outer NamedExpr needing this shuffle.
-    child_partition_info
-        IR partitioning information.
-    config_options
-        GPU engine configuration options.
-
-    Returns
-    -------
-    shuffled
-        New (shuffled) child. The corresponding DataFrame
-        container will only contain the columns associated
-        with the shuffle keys (``on``).
-    graph
-        Task graph needed to shuffle child.
-    """
-    graph: MutableMapping[Any, Any] = {}
-
-    if child_partition_info.partitioned_on == (
-        named_expr.reconstruct(on),
-    ):  # pragma: no cover
-        # No shuffle necessary
-        return child, graph
-
-    child_partition_info = PartitionInfo(count=child_partition_info.count)
-    shuffle_on = [
-        named_expr.reconstruct(
-            FusedExpr(
-                on.dtype,
-                on,
-                *(c for c in named_expr.value.children if isinstance(c, FusedExpr)),
-            )
-        )
-    ]
-
-    pi: MutableMapping[IR, PartitionInfo] = {child: child_partition_info}
-    schema = {col.name: col.dtype for col in traversal([on]) if isinstance(col, Col)}
-    if set(schema) != set(child.schema):
-        # Drop unnecessary columns before the shuffle
-        child = Select(
-            schema,
-            shuffle_on,
-            False,  # noqa: FBT003
-            child,
-        )
-        pi[child] = child_partition_info
-        graph.update(generate_ir_tasks(child, pi))
-    shuffled = Shuffle(
-        schema,
-        tuple(shuffle_on),
-        config_options,
-        child,
-    )
-    pi[shuffled] = child_partition_info
-    graph.update(generate_ir_tasks(shuffled, pi))
-
-    return shuffled, graph
-
-
 def make_agg_graph(
     named_expr: NamedExpr,
     expr_partition_counts: MutableMapping[Expr, int],
-    child: IR,
-    child_partition_info: PartitionInfo,
+    child_ir: IR,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph."""
     expr = named_expr.value
     assert isinstance(expr, FusedExpr)
-    agg = expr.sub_expr
-    assert isinstance(agg, Agg), f"Expected Agg, got {agg}"
+    assert expr.kind == "aggregation"
+
+    # Define aggregation steps
+    final_expr = expr.sub_expr
+    combine_exprs = final_expr.children
+    chunkwise_exprs = tuple(
+        chain.from_iterable(combine_expr.children for combine_expr in combine_exprs)
+    )
 
     # NOTE: This algorithm assumes we are doing nested
     # aggregations, or we are only aggregating a single
@@ -354,50 +399,21 @@ def make_agg_graph(
     key_name = get_key_name(expr)
     expr_child_names = [get_key_name(c) for c in expr.children]
     expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
-    input_count = max(expr_partition_counts[c] for c in agg.children)
+    input_count = max(expr_partition_counts[c] for c in chunkwise_exprs[0].children)
 
     graph: MutableMapping[Any, Any] = {}
 
-    # Define operations for each aggregation stage
-    chunk_aggs: list[Expr]
-    agg_name = agg.name
-    if agg_name == "count":
-        chunk_aggs = [agg]
-        combine_aggs = [Agg(agg.dtype, "sum", None, *agg.children)]
-        finalize = None
-    elif agg_name == "mean":
-        sum_agg = Agg(agg.dtype, "sum", None, *agg.children)
-        count_agg = Agg(agg.dtype, "count", None, *agg.children)
-        chunk_aggs = [sum_agg, count_agg]
-        combine_aggs = [sum_agg, sum_agg]
-        finalize = (agg.dtype, "DIV")
-    elif agg_name == "n_unique":
-        chunk_aggs = [Cast(agg.dtype, agg)]
-        combine_aggs = [Agg(agg.dtype, "sum", None, *agg.children)]
-        finalize = None
-        child, graph = shuffle_child(
-            child,
-            agg.children[0],
-            named_expr,
-            child_partition_info,
-            # TODO: Plumb through config options to Shuffle
-            ConfigOptions({}),
-        )
-    else:
-        chunk_aggs = [agg]
-        combine_aggs = [agg]
-        finalize = None
-
     # Pointwise stage
     pointwise_keys = []
-    child_name = get_key_name(child)
+    key_name = get_key_name(expr)
+    child_name = get_key_name(child_ir)
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
         pointwise_keys.append((chunk_name, i))
         graph[pointwise_keys[-1]] = (
             evaluate_chunk_multi_agg,
             (child_name, i),
-            chunk_aggs,
+            chunkwise_exprs,
             expr.children,
             *(
                 (name, 0) if bcast else (name, i)
@@ -409,12 +425,24 @@ def make_agg_graph(
     graph[(key_name, 0)] = (
         combine_chunks_multi_agg,
         pointwise_keys,
-        combine_aggs,
-        finalize,
+        combine_exprs,
+        # TODO: Evaluate final_expr directly
+        None if isinstance(final_expr, NoOp) else (final_expr.dtype, "DIV"),
         named_expr.name,
     )
 
     return graph
+
+
+def make_shuffle_graph(
+    named_expr: NamedExpr,
+    expr_partition_counts: MutableMapping[Expr, int],
+    child_ir: IR,
+    child_ir_partition_info: PartitionInfo,
+) -> MutableMapping[Any, Any]:
+    """Build a FusedExpr aggregation graph for shuffling."""
+    # TODO: Add shuffle graph logic
+    raise NotImplementedError()
 
 
 def make_pointwise_graph(
@@ -454,11 +482,14 @@ def make_fusedexpr_graph(
 ) -> MutableMapping[Any, Any]:
     """Build task graph for a FusedExpr node."""
     expr = named_expr.value
-    if expr.is_pointwise:
-        # Pointwise expressions have trivial task graph
+    assert isinstance(expr, FusedExpr)
+    if expr.kind == "pointwise":
         return make_pointwise_graph(named_expr, expr_partition_counts, child)
-    else:
-        # Non-pointwise expressions require a reduction or a shuffle
-        return make_agg_graph(
+    elif expr.kind == "shuffle":
+        return make_shuffle_graph(
             named_expr, expr_partition_counts, child, child_partition_info
         )
+    elif expr.kind == "aggregation":
+        return make_agg_graph(named_expr, expr_partition_counts, child)
+    else:
+        raise ValueError()
