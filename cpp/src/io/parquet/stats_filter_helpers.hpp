@@ -16,13 +16,12 @@
 
 #pragma once
 
-#include "io/parquet/parquet_common.hpp"
-
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -177,7 +176,7 @@ class stats_caster_base {
         offsets.push_back(offsets.back() + tmp.length());
       }
       auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-      auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
+      auto d_offsets = cudf::detail::make_device_uvector(offsets, stream, mr);
       return std::tuple{std::move(d_chars), std::move(d_offsets)};
     }
 
