@@ -2070,7 +2070,6 @@ class Sink(IR):
 
     @classmethod
     def do_evaluate(cls, schema: Schema, payload: str, df: DataFrame) -> DataFrame:
-        breakpoint()
         """Evaluate and return a dataframe."""
         sink_payload = json.loads(payload)
         sink_target = plc.io.SinkInfo([sink_payload["File"]["target"]])
