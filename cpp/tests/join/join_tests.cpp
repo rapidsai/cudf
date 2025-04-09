@@ -2138,9 +2138,6 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     auto const build_tv = cudf::table_view{{build}};
     auto const probe_tv = cudf::table_view{{probe}};
 
-    cudf::test::print(build);
-    cudf::test::print(probe);
-
     auto const [left_result_map, right_result_map] =
       join_func(build_tv,
                 probe_tv,
