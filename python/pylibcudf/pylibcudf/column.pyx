@@ -37,12 +37,12 @@ from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr, _get_stream
 from .null_mask cimport bitmask_allocation_size_bytes
-from ._interop cimport (
+from ._interop_helpers cimport (
     _release_schema,
     _release_array,
     _metadata_to_libcudf,
 )
-from ._interop import ColumnMetadata
+from ._interop_helpers import ColumnMetadata
 
 import functools
 

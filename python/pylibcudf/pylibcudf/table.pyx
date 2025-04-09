@@ -28,12 +28,12 @@ from pylibcudf.libcudf.interop cimport (
 
 from .column cimport Column
 from .utils cimport _get_stream
-from pylibcudf._interop cimport (
+from pylibcudf._interop_helpers cimport (
     _release_schema,
     _release_array,
     _metadata_to_libcudf,
 )
-from ._interop import ColumnMetadata
+from ._interop_helpers import ColumnMetadata
 
 from functools import singledispatchmethod
 

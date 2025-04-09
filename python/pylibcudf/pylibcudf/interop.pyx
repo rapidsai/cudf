@@ -25,7 +25,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
-from ._interop import ColumnMetadata
+from ._interop_helpers import ColumnMetadata
 
 __all__ = [
     "ColumnMetadata",
