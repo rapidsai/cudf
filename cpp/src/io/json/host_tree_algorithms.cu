@@ -205,7 +205,7 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  auto const value           = cudf::detail::make_host_vector_sync(
+  auto const value           = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
   return value[0];
@@ -347,8 +347,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
     auto values_column_indices =
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
-    auto h_values_column_indices =
-      cudf::detail::make_host_vector_sync(values_column_indices, stream);
+    auto h_values_column_indices = cudf::detail::make_host_vector(values_column_indices, stream);
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
                    column_names.cbegin(),
@@ -363,7 +362,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
     if (is_enabled_mixed_types_as_string) {
-      return cudf::detail::make_std_vector_sync(
+      return cudf::detail::make_std_vector(
         is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
     }
     return std::vector<uint8_t>();
