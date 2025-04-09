@@ -927,7 +927,7 @@ endif()
 
 # Define logging level
 target_compile_definitions(
-  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=CUDF_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
+  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=RAPIDS_LOGGER_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
 )
 
 # Enable remote IO through KvikIO
