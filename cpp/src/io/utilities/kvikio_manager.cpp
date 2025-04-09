@@ -31,7 +31,7 @@ kvikio_manager::kvikio_manager()
   // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
   // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
   // initialized.
-  CUDF_CUDA_TRY(cudaFree(nullptr));
+  cudaFree(nullptr);
 
   auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
   kvikio::defaults::set_compat_mode(compat_mode);
