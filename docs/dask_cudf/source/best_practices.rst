@@ -73,7 +73,7 @@ Enable cuDF spilling
 When using Dask cuDF for classic ETL workloads, it is usually best
 to enable `native spilling support in cuDF
 <https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory>`__.
-When using :func:`LocalCUDACluster`, this is easily accomplished by
+When using :class:`dask_cuda.LocalCUDACluster`, this is easily accomplished by
 setting ``enable_cudf_spill=True``.
 
 When a Dask cuDF workflow includes conversion between DataFrame and Array
@@ -91,7 +91,7 @@ Memory allocations in cuDF are significantly faster and more efficient when
 the `RAPIDS Memory Manager (RMM) <https://docs.rapids.ai/api/rmm/stable/>`__
 library is configured appropriately on worker processes. In most cases, the best way to manage
 memory is by initializing an RMM pool on each worker before executing a
-workflow. When using :func:`LocalCUDACluster`, this is easily accomplished
+workflow. When using :class:`dask_cuda.LocalCUDACluster`, this is easily accomplished
 by setting ``rmm_pool_size`` to a large fraction (e.g. ``0.9``).
 
 See the `Dask-CUDA memory-management documentation
@@ -108,13 +108,13 @@ API instead. Simply `use the Dask configuration system
 to set the ``"dataframe.backend"`` option to ``"cudf"``, and the
 ``dask_cudf`` module will be imported and used implicitly.
 
-Be sure to use the :func:`to_backend` method if you need to convert
+Be sure to use the :meth:`dask.dataframe.DataFrame.to_backend` method if you need to convert
 between the different DataFrame backends. For example::
 
   df = df.to_backend("pandas")  # This gives us a pandas-backed collection
 
 .. note::
-  Although :func:`to_backend` makes it easy to move data between pandas
+  Although :meth:`dask.dataframe.DataFrame.to_backend` makes it easy to move data between pandas
   and cuDF, repetitive CPU-GPU data movement can degrade performance
   significantly. For optimal results, keep your data on the GPU as much
   as possible.
@@ -126,44 +126,44 @@ Although Dask DataFrame collections are lazy by default, there are several
 notable methods that will result in the immediate execution of the
 underlying task graph:
 
-:func:`compute`: Calling ``ddf.compute()`` will materialize the result of
+:meth:`dask.dataframe.DataFrame.compute`: Calling ``ddf.compute()`` will materialize the result of
 ``ddf`` and return a single cuDF object. This is done by executing the entire
 task graph associated with ``ddf`` and concatenating its partitions in
 local memory on the client process.
 
 .. note::
-  Never call :func:`compute` on a large collection that cannot fit comfortably
+  Never call :meth:`dask.dataframe.DataFrame.compute` on a large collection that cannot fit comfortably
   in the memory of a single GPU!
 
-:func:`persist`: Like :func:`compute`, calling ``ddf.persist()`` will
+:meth:`dask.dataframe.DataFrame.persist`: Like :meth:`dask.dataframe.DataFrame.compute`, calling ``ddf.persist()`` will
 execute the entire task graph associated with ``ddf``. The most important
 difference is that the computed partitions will remain in distributed
 worker memory instead of being concatenated together on the client process.
-Another difference is that :func:`persist` will return immediately when
+Another difference is that :meth:`dask.dataframe.DataFrame.persist` will return immediately when
 executing on a distributed cluster. If you need a blocking synchronization
-point in your workflow, simply use the :func:`wait` function::
+point in your workflow, simply use the :func:`distributed.wait` function::
 
   ddf = ddf.persist()
   wait(ddf)
 
 .. note::
-  Avoid calling :func:`persist` on a large collection that cannot fit comfortably
+  Avoid calling :meth:`dask.dataframe.DataFrame.persist` on a large collection that cannot fit comfortably
   in global worker memory. If the total sum of the partition sizes is larger
   than the sum of all GPU memory, calling persist will result in significant
   spilling from device memory. If the individual partition sizes are large, this
   is likely to produce an OOM error.
 
-:func:`len` / :func:`head` / :func:`tail`: Although these operations are used
+:func:`len` / :meth:`dask.dataframe.DataFrame.head` / :meth:`dask.dataframe.DataFrame.tail`: Although these operations are used
 often within pandas/cuDF code to quickly inspect data, it is best to avoid
 them in Dask DataFrame. In most cases, these operations will execute some or all
 of the underlying task graph to materialize the collection.
 
-:func:`sort_values` / :func:`set_index` : These operations both require Dask to
+:meth:`dask.dataframe.DataFrame.sort_values` / :meth:`dask.dataframe.DataFrame.set_index` : These operations both require Dask to
 eagerly collect quantile information about the column(s) being targeted by the
 global sort operation. See the next section for notes on sorting considerations.
 
 .. note::
-  When using :func:`set_index`, be sure to pass in ``sort=False`` whenever the
+  When using :meth:`dask.dataframe.DataFrame.set_index`, be sure to pass in ``sort=False`` whenever the
   global collection does not **need** to be sorted by the new index.
 
 Avoid Sorting
@@ -174,7 +174,7 @@ makes it advantageous to work with data that is already sorted along its index a
 creation time. For most other cases, it is best to avoid sorting unless the logic
 of the workflow makes global ordering absolutely necessary.
 
-If the purpose of a :func:`sort_values` operation is to ensure that all unique
+If the purpose of a :meth:`dask.dataframe.DataFrame.sort_values` operation is to ensure that all unique
 values in ``by`` will be moved to the same output partition, then `shuffle
 <https://docs.dask.org/en/stable/generated/dask.dataframe.DataFrame.shuffle.html>`__
 is often the better option.
@@ -201,8 +201,8 @@ errors can become significant.
   size is both an art and a science.
 
 The easiest way to tune the partition size is when the DataFrame collection
-is first created by a function like :func:`read_parquet`, :func:`read_csv`,
-or :func:`from_map`. For example, both :func:`read_parquet` and :func:`read_csv`
+is first created by a function like :func:`dask.dataframe.read_parquet`, :func:`dask.dataframe.read_csv`,
+or :func:`dask.dataframe.from_map`. For example, both :func:`dask.dataframe.read_parquet` and :func:`dask.dataframe.read_csv`
 expose a ``blocksize`` argument for adjusting the maximum partition size.
 
 If the partition size cannot be tuned effectively at creation time, the
@@ -218,7 +218,7 @@ file format for Dask cuDF. It provides efficient columnar storage and enables
 Dask to perform valuable query optimizations like column projection and
 predicate pushdown.
 
-The most important arguments to :func:`read_parquet` are ``blocksize`` and
+The most important arguments to :func:`dask.dataframe.read_parquet` are ``blocksize`` and
 ``aggregate_files``:
 
 ``blocksize``: Use this argument to specify the maximum partition size.
@@ -241,8 +241,8 @@ result in a simple 1-to-1 mapping between files and output partitions.
 
 .. note::
   If your workflow requires a strict 1-to-1 mapping between files and
-  partitions, use :func:`from_map` to manually construct your partitions
-  with ``cudf.read_parquet``. When :func:`dd.read_parquet` is used,
+  partitions, use :func:`dask.dataframe.from_map` to manually construct your partitions
+  with ``cudf.read_parquet``. When :func:`dask.dataframe.read_parquet` is used,
   query-planning optimizations may automatically aggregate distinct files
   into the same partition (even when ``aggregate_files=False``).
 
@@ -262,13 +262,13 @@ result in a simple 1-to-1 mapping between files and output partitions.
   ``"dataframe.parquet.minimum-partition-size"`` config to control
   file aggregation.
 
-Use :func:`from_map`
-~~~~~~~~~~~~~~~~~~~~
+Use :func:`dask.dataframe.from_map`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To implement custom DataFrame-creation logic that is not covered by
-existing APIs (like :func:`read_parquet`), use :func:`dask.dataframe.from_map`
-whenever possible. The :func:`from_map` API has several advantages
-over :func:`from_delayed`:
+existing APIs (like :func:`dask.dataframe.read_parquet`), use :func:`dask.dataframe.from_map`
+whenever possible. The :func:`dask.dataframe.from_map` API has several advantages
+over :func:`dask.dataframe.from_delayed`:
 
 * It allows proper lazy execution of your custom logic
 * It enables column projection (as long as the mapped function supports a ``columns`` key-word argument)
@@ -278,7 +278,7 @@ for more details.
 
 .. note::
   Whenever possible, be sure to specify the ``meta`` argument to
-  :func:`from_map`. If this argument is excluded, Dask will need to
+  :func:`dask.dataframe.from_map`. If this argument is excluded, Dask will need to
   materialize the first partition eagerly. If a large RMM pool is in
   use on the first visible device, this eager execution on the client
   may lead to an OOM error.
@@ -321,12 +321,12 @@ Most real-world Dask DataFrame workflows use `map_partitions
 <https://docs.dask.org/en/stable/generated/dask.dataframe.DataFrame.map_partitions.html>`__
 to map user-defined functions across every partition of the underlying data.
 This API is a fantastic way to apply custom operations in an intuitive and
-scalable way. With that said, the :func:`map_partitions` method will produce
+scalable way. With that said, the :meth:`dask.dataframe.DataFrame.map_partitions` method will produce
 an opaque DataFrame expression that blocks the query-planning `optimizer
 <https://docs.dask.org/en/stable/dataframe-optimizer.html>`__ from performing
 useful optimizations (like projection and filter pushdown).
 
 Since column-projection pushdown is often the most effective optimization,
 it is important to select the necessary columns both before and after calling
-:func:`map_partitions`. You can also add explicit filter operations to further
+:meth:`dask.dataframe.DataFrame.map_partitions`. You can also add explicit filter operations to further
 mitigate the loss of filter pushdown.

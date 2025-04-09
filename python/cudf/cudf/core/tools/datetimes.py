@@ -9,16 +9,18 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
+import pyarrow as pa
 from typing_extensions import Self
 
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import ensure_index
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -212,11 +214,11 @@ def to_datetime(
                 )
 
             new_series = (
-                arg[unit_rev["year"]].astype("str")
+                arg[unit_rev["year"]].astype(CUDF_STRING_DTYPE)
                 + "-"
-                + arg[unit_rev["month"]].astype("str").str.zfill(2)
+                + arg[unit_rev["month"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
                 + "-"
-                + arg[unit_rev["day"]].astype("str").str.zfill(2)
+                + arg[unit_rev["day"]].astype(CUDF_STRING_DTYPE).str.zfill(2)
             )
             format = "%Y-%m-%d"
             for u in ["h", "m", "s", "ms", "us", "ns"]:
@@ -225,21 +227,26 @@ def to_datetime(
                     arg_col = arg._data[value]
                     if arg_col.dtype.kind == "f":
                         col = new_series._column.strptime(
-                            cudf.dtype("datetime64[ns]"), format=format
+                            np.dtype("datetime64[ns]"), format=format
                         )
                         break
                     elif arg_col.dtype.kind == "O":
                         if not arg_col.is_integer().all():
                             col = new_series._column.strptime(
-                                cudf.dtype("datetime64[ns]"), format=format
+                                np.dtype("datetime64[ns]"), format=format
                             )
                             break
             else:
                 col = new_series._column.strptime(
-                    cudf.dtype("datetime64[s]"), format=format
+                    np.dtype("datetime64[s]"), format=format
                 )
 
             times_column = None
+            factor_denominator = (
+                column.datetime._unit_to_nanoseconds_conversion["s"]
+                if np.datetime_data(col.dtype)[0] == "s"
+                else 1
+            )
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
                 if value is not None and value in arg:
@@ -248,19 +255,17 @@ def to_datetime(
                     # float dtype we don't want to type-cast
                     if current_col.dtype.kind in ("O"):
                         try:
-                            current_col = current_col.astype(dtype="int64")
+                            current_col = current_col.astype(
+                                np.dtype(np.int64)
+                            )
                         except ValueError:
-                            current_col = current_col.astype(dtype="float64")
+                            current_col = current_col.astype(
+                                np.dtype(np.float64)
+                            )
 
-                    factor = cudf.Scalar(
+                    factor = (
                         column.datetime._unit_to_nanoseconds_conversion[u]
-                        / (
-                            column.datetime._unit_to_nanoseconds_conversion[
-                                "s"
-                            ]
-                            if np.datetime_data(col.dtype)[0] == "s"
-                            else 1
-                        )
+                        / factor_denominator
                     )
 
                     if times_column is None:
@@ -268,7 +273,7 @@ def to_datetime(
                     else:
                         times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (col.astype(dtype="int64") + times_column).astype(
+                col = (col.astype(np.dtype(np.int64)) + times_column).astype(
                     dtype=col.dtype
                 )
             col = _process_col(
@@ -324,10 +329,7 @@ def _process_col(
 ):
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
-            factor = cudf.Scalar(
-                column.datetime._unit_to_nanoseconds_conversion[unit]
-            )
-            col = col * factor
+            col = col * column.datetime._unit_to_nanoseconds_conversion[unit]
 
         if format is not None:
             # Converting to int because,
@@ -337,39 +339,39 @@ def _process_col(
             # Instead we directly cast to int and perform
             # parsing against `format`.
             col = (
-                col.astype("int")
-                .astype("str")
+                col.astype(np.dtype(np.int64))
+                .astype(CUDF_STRING_DTYPE)
                 .strptime(
-                    dtype=cudf.dtype("datetime64[us]")
+                    dtype=np.dtype("datetime64[us]")
                     if "%f" in format
-                    else cudf.dtype("datetime64[s]"),
+                    else np.dtype("datetime64[s]"),
                     format=format,
                 )
             )
         else:
-            col = col.astype(dtype="datetime64[ns]")
+            col = col.astype(dtype=np.dtype("datetime64[ns]"))
 
     elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
-            factor = cudf.Scalar(
+            factor = (
                 column.datetime._unit_to_nanoseconds_conversion[unit]
                 / column.datetime._unit_to_nanoseconds_conversion["s"]
             )
             col = col * factor
 
         if format is not None:
-            col = col.astype("str").strptime(
-                dtype=cudf.dtype(_unit_dtype_map[unit]), format=format
+            col = col.astype(CUDF_STRING_DTYPE).strptime(
+                dtype=np.dtype(_unit_dtype_map[unit]), format=format
             )
         else:
-            col = col.astype(dtype=cudf.dtype(_unit_dtype_map[unit]))
+            col = col.astype(dtype=np.dtype(_unit_dtype_map[unit]))
 
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
-                col = col.astype(dtype="int64")
+                col = col.astype(np.dtype(np.int64))
             except ValueError:
-                col = col.astype(dtype="float64")
+                col = col.astype(np.dtype(np.float64))
             return _process_col(
                 col=col,
                 unit=unit,
@@ -390,7 +392,7 @@ def _process_col(
                     dayfirst=dayfirst,
                 )
             col = col.strptime(
-                dtype=cudf.dtype(_unit_dtype_map[unit]),
+                dtype=np.dtype(_unit_dtype_map[unit]),
                 format=format,
             )
     elif col.dtype.kind != "M":
@@ -589,14 +591,13 @@ class DateOffset:
         scalars = {}
         for k, v in kwds.items():
             if k in all_possible_units:
-                # Months must be int16
+                # Months must be int16 or int32
                 if k == "months":
-                    # TODO: throw for out-of-bounds int16 values
-                    dtype = "int16"
+                    # TODO: throw for out-of-bounds int32 values
+                    scalars[k] = np.int32(v)
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = cudf.dtype(f"timedelta64[{unit}]")
-                scalars[k] = cudf.Scalar(v, dtype=dtype)
+                    scalars[k] = np.timedelta64(v, unit)
 
         self._scalars = scalars
 
@@ -647,32 +648,22 @@ class DateOffset:
                 f" and {type(datetime_col).__name__}"
             )
         if not self._is_no_op:
-            if "months" in self._scalars:
-                rhs = self._generate_months_column(len(datetime_col), op)
-                with acquire_spill_lock():
-                    datetime_col = type(datetime_col).from_pylibcudf(
-                        plc.datetime.add_calendrical_months(
-                            datetime_col.to_pylibcudf(mode="read"),
-                            rhs.to_pylibcudf(mode="read"),
-                        )
-                    )
-
             for unit, value in self._scalars.items():
-                if unit != "months":
-                    value = -value if op == "__sub__" else value
-                    datetime_col += cudf.core.column.as_column(
+                value = -value if op == "__sub__" else value
+                if unit == "months":
+                    with acquire_spill_lock():
+                        datetime_col = type(datetime_col).from_pylibcudf(
+                            plc.datetime.add_calendrical_months(
+                                datetime_col.to_pylibcudf(mode="read"),
+                                pa_scalar_to_plc_scalar(pa.scalar(value)),
+                            )
+                        )
+                else:
+                    datetime_col += column.as_column(
                         value, length=len(datetime_col)
                     )
 
         return datetime_col
-
-    def _generate_months_column(self, size, op):
-        months = self._scalars["months"]
-        months = -months if op == "__sub__" else months
-        # TODO: pass a scalar instead of constructing a column
-        # https://github.com/rapidsai/cudf/issues/6990
-        col = cudf.core.column.as_column(months, length=size)
-        return col
 
     @property
     def _is_no_op(self) -> bool:
@@ -891,7 +882,7 @@ def date_range(
             "three must be specified"
         )
 
-    if periods is not None and not cudf.api.types.is_integer(periods):
+    if periods is not None and not is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
@@ -899,14 +890,15 @@ def date_range(
         )
 
     dtype = np.dtype("datetime64[ns]")
+    unit, _ = np.datetime_data(dtype)
 
     if freq is None:
         # `start`, `end`, `periods` is specified, we treat the timestamps as
         # integers and divide the number range evenly with `periods` elements.
-        start = cudf.Scalar(start, dtype=dtype).value.astype("int64")
-        end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
-        arr = np.linspace(start=start, stop=end, num=periods)
-        result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        start = dtype.type(start, unit).astype(np.dtype(np.int64))
+        end = dtype.type(end, unit).astype(np.dtype(np.int64))
+        arr = np.linspace(start=start, stop=end, num=periods).astype(dtype)
+        result = column.as_column(arr)
         return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
             tz
         )
@@ -941,14 +933,13 @@ def date_range(
     _periods_not_specified = False
 
     if start is None:
-        end = cudf.Scalar(end, dtype=dtype)
-        start = cudf.Scalar(
-            pd.Timestamp(end.value)
-            - (periods - 1) * offset._maybe_as_fast_pandas_offset(),
-            dtype=dtype,
-        )
+        end = dtype.type(end, unit)
+        start = (
+            pd.Timestamp(end)
+            - (periods - 1) * offset._maybe_as_fast_pandas_offset()
+        ).to_numpy()
     elif end is None:
-        start = cudf.Scalar(start, dtype=dtype)
+        start = dtype.type(start, unit)
     elif periods is None:
         # When `periods` is unspecified, its upper bound estimated by
         # dividing the number of nanoseconds between two timestamps with
@@ -956,8 +947,8 @@ def date_range(
         # may contain extra elements that exceeds `end`, they are trimmed
         # as a post processing step. [1]
         _periods_not_specified = True
-        start = cudf.Scalar(start, dtype=dtype)
-        end = cudf.Scalar(end, dtype=dtype)
+        start = dtype.type(start, unit)
+        end = dtype.type(end, unit)
         _is_increment_sequence = end >= start
 
         periods = math.floor(
@@ -985,7 +976,7 @@ def date_range(
         # are dropped in conversion during the binops
         warnings.simplefilter("ignore", UserWarning)
         end_estim = (
-            pd.Timestamp(start.value)
+            pd.Timestamp(start)
             + periods * offset._maybe_as_fast_pandas_offset()
         ).to_datetime64()
 
@@ -995,10 +986,10 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = libcudf.column.Column.from_pylibcudf(
+            res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
-                    start.device_value,
+                    pa_scalar_to_plc_scalar(pa.scalar(start)),
                     months,
                 )
             )
@@ -1012,13 +1003,11 @@ def date_range(
     else:
         # If `offset` is fixed frequency, we generate a range of
         # treating `start`, `stop` and `step` as ints:
-        stop = end_estim.astype("int64")
-        start = start.value.astype("int64")
+        stop = end_estim.astype(np.dtype(np.int64))
+        start = start.astype(np.dtype(np.int64))
         step = _offset_to_nanoseconds_lower_bound(offset)
         arr = range(int(start), int(stop), step)
-        res = cudf.core.column.as_column(arr, dtype="int64").astype(
-            "datetime64[ns]"
-        )
+        res = column.as_column(arr).astype(dtype)
 
     return cudf.DatetimeIndex._from_column(
         res, name=name, freq=freq

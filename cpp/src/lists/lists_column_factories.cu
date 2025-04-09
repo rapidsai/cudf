@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,6 +112,13 @@ std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
 }  // namespace detail
 }  // namespace lists
 
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
+  return lists::detail::make_empty_lists_column(child_type, stream, mr);
+}
+
 /**
  * @copydoc cudf::make_lists_column
  */
@@ -143,6 +150,8 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                          std::move(null_mask),
                                          null_count,
                                          std::move(children));
+
+  if (num_rows == 0) { return output; }
 
   // We need to enforce all null lists to be empty.
   // `has_nonempty_nulls` is less expensive than `purge_nonempty_nulls` and can save some

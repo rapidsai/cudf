@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "file_io_utilities.hpp"
 #include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -45,62 +44,62 @@ namespace io {
 namespace {
 
 /**
- * @brief Base class for file input. Only implements direct device reads.
+ * @brief Base class for kvikIO-based data sources.
  */
-class file_source : public datasource {
- public:
-  explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
+template <typename HandleT>
+class kvikio_source : public datasource {
+  class kvikio_initializer {
+   public:
+    kvikio_initializer() { kvikio_integration::set_up_kvikio(); }
+  };
+
+  std::pair<std::vector<uint8_t>, std::future<size_t>> clamped_read_to_vector(size_t offset,
+                                                                              size_t size)
   {
-    detail::force_init_cuda_context();
-    if (cufile_integration::is_kvikio_enabled()) {
-      cufile_integration::set_up_kvikio();
-      _kvikio_file = kvikio::FileHandle(filepath);
-      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
-                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
-    } else {
-      _cufile_in = detail::make_cufile_input(filepath);
-    }
+    // Clamp length to available data
+    auto const read_size = std::min(size, this->size() - offset);
+    std::vector<uint8_t> v(read_size);
+    return {std::move(v), _kvikio_handle.pread(v.data(), read_size, offset)};
   }
 
+ public:
+  kvikio_source(HandleT&& h) : _kvikio_handle(std::move(h)) {}
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    lseek(_file.desc(), offset, SEEK_SET);
-
-    // Clamp length to available data
-    ssize_t const read_size = std::min(size, _file.size() - offset);
-
-    std::vector<uint8_t> v(read_size);
-    CUDF_EXPECTS(read(_file.desc(), v.data(), read_size) == read_size, "read failed");
+    auto [v, fut] = clamped_read_to_vector(offset, size);
+    fut.get();
     return buffer::create(std::move(v));
+  }
+
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
+  {
+    auto clamped_read = clamped_read_to_vector(offset, size);
+    return std::async(std::launch::deferred, [cr = std::move(clamped_read)]() mutable {
+      cr.second.get();
+      return buffer::create(std::move(cr.first));
+    });
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    lseek(_file.desc(), offset, SEEK_SET);
-
-    // Clamp length to available data
-    auto const read_size = std::min(size, _file.size() - offset);
-
-    CUDF_EXPECTS(read(_file.desc(), dst, read_size) == static_cast<ssize_t>(read_size),
-                 "read failed");
-    return read_size;
+    return host_read_async(offset, size, dst).get();
   }
 
-  ~file_source() override = default;
-
-  [[nodiscard]] bool supports_device_read() const override
+  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
   {
-    return !_kvikio_file.closed() || _cufile_in != nullptr;
+    // Clamp length to available data
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_handle.pread(dst, read_size, offset);
   }
+
+  ~kvikio_source() override = default;
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (!supports_device_read()) { return false; }
-
-    // Always prefer device reads if kvikio is enabled
-    if (!_kvikio_file.closed()) { return true; }
-
-    return size >= _gds_read_preferred_threshold;
+    return supports_device_read();
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -110,9 +109,8 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    auto const read_size = std::min(size, _file.size() - offset);
-    if (!_kvikio_file.closed()) { return _kvikio_file.pread(dst, read_size, offset); }
-    return _cufile_in->read_async(offset, read_size, dst, stream);
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_handle.pread(dst, read_size, offset);
   }
 
   size_t device_read(size_t offset,
@@ -134,16 +132,29 @@ class file_source : public datasource {
     return datasource::buffer::create(std::move(out_data));
   }
 
-  [[nodiscard]] size_t size() const override { return _file.size(); }
+  [[nodiscard]] size_t size() const override { return _kvikio_handle.nbytes(); }
+
+  kvikio_initializer _;
 
  protected:
-  detail::file_wrapper _file;
+  HandleT _kvikio_handle;
+};
 
- private:
-  std::unique_ptr<detail::cufile_input_impl> _cufile_in;
-  kvikio::FileHandle _kvikio_file;
-  // The read size above which GDS is faster then posix-read + h2d-copy
-  static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
+/**
+ * @brief A class representing a file source using kvikIO.
+ *
+ * This class is derived from `kvikio_source` and is used to handle file operations
+ * using kvikIO library.
+ */
+class file_source : public kvikio_source<kvikio::FileHandle> {
+ public:
+  explicit file_source(char const* filepath) : kvikio_source{kvikio::FileHandle(filepath, "r")}
+  {
+    CUDF_EXPECTS(!_kvikio_handle.closed(), "KvikIO did not open the file successfully.");
+    CUDF_LOG_INFO(
+      "Reading a file using kvikIO, with compatibility mode %s.",
+      _kvikio_handle.get_compat_mode_manager().is_compat_mode_preferred() ? "on" : "off");
+  }
 };
 
 /**
@@ -157,9 +168,9 @@ class memory_mapped_source : public file_source {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : file_source(filepath)
   {
-    if (_file.size() != 0) {
+    if (this->size() != 0) {
       // Memory mapping is not exclusive, so we can include the whole region we expect to read
-      map(_file.desc(), offset, max_size_estimate);
+      map(_kvikio_handle.fd(), offset, max_size_estimate);
     }
   }
 
@@ -171,7 +182,7 @@ class memory_mapped_source : public file_source {
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_file.size() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -195,7 +206,7 @@ class memory_mapped_source : public file_source {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_file.size() - offset);
+    auto const read_size = std::min(size, this->size() - offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -210,12 +221,12 @@ class memory_mapped_source : public file_source {
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file", std::overflow_error);
+    CUDF_EXPECTS(offset < this->size(), "Offset is past end of file", std::overflow_error);
 
     // Offset for `mmap()` must be page aligned
     _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
-    if (size == 0 || (offset + size) > _file.size()) { size = _file.size() - offset; }
+    if (size == 0 || (offset + size) > this->size()) { size = this->size() - offset; }
 
     // Size for `mmap()` needs to include the page padding
     _map_size = size + (offset - _map_offset);
@@ -358,6 +369,17 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
+  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
+  {
+    return source->host_read_async(offset, size, dst);
+  }
+
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
+  {
+    return source->host_read_async(offset, size);
+  }
+
   [[nodiscard]] bool supports_device_read() const override
   {
     return source->supports_device_read();
@@ -403,67 +425,17 @@ class user_datasource_wrapper : public datasource {
 /**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
-class remote_file_source : public datasource {
-  static std::unique_ptr<kvikio::S3Endpoint> create_s3_endpoint(char const* filepath)
+class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
+  static auto create_s3_handle(char const* filepath)
   {
     auto [bucket_name, bucket_object] = kvikio::S3Endpoint::parse_s3_url(filepath);
-    return std::make_unique<kvikio::S3Endpoint>(bucket_name, bucket_object);
+    return kvikio::RemoteHandle{std::make_unique<kvikio::S3Endpoint>(bucket_name, bucket_object)};
   }
 
  public:
-  explicit remote_file_source(char const* filepath) : _kvikio_file{create_s3_endpoint(filepath)} {}
+  explicit remote_file_source(char const* filepath) : kvikio_source{create_s3_handle(filepath)} {}
 
   ~remote_file_source() override = default;
-
-  [[nodiscard]] bool supports_device_read() const override { return true; }
-
-  [[nodiscard]] bool is_device_read_preferred(size_t size) const override { return true; }
-
-  [[nodiscard]] size_t size() const override { return _kvikio_file.nbytes(); }
-
-  std::future<size_t> device_read_async(size_t offset,
-                                        size_t size,
-                                        uint8_t* dst,
-                                        rmm::cuda_stream_view stream) override
-  {
-    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
-    auto const read_size = std::min(size, this->size() - offset);
-    return _kvikio_file.pread(dst, read_size, offset);
-  }
-
-  size_t device_read(size_t offset,
-                     size_t size,
-                     uint8_t* dst,
-                     rmm::cuda_stream_view stream) override
-  {
-    return device_read_async(offset, size, dst, stream).get();
-  }
-
-  std::unique_ptr<datasource::buffer> device_read(size_t offset,
-                                                  size_t size,
-                                                  rmm::cuda_stream_view stream) override
-  {
-    rmm::device_buffer out_data(size, stream);
-    size_t const read =
-      device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
-    out_data.resize(read, stream);
-    return datasource::buffer::create(std::move(out_data));
-  }
-
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    auto const read_size = std::min(size, this->size() - offset);
-    return _kvikio_file.pread(dst, read_size, offset).get();
-  }
-
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
-  {
-    auto const count = std::min(size, this->size() - offset);
-    std::vector<uint8_t> h_data(count);
-    this->host_read(offset, count, h_data.data());
-    return datasource::buffer::create(std::move(h_data));
-  }
 
   /**
    * @brief Is `url` referring to a remote file supported by KvikIO?
@@ -476,9 +448,6 @@ class remote_file_source : public datasource {
     static std::regex const pattern{R"(^s3://)", std::regex_constants::icase};
     return std::regex_search(url, pattern);
   }
-
- private:
-  kvikio::RemoteHandle _kvikio_file;
 };
 #else
 /**
@@ -534,6 +503,19 @@ std::unique_ptr<datasource> datasource::create(datasource* source)
 {
   // instantiate a wrapper that forwards the calls to the user implementation
   return std::make_unique<user_datasource_wrapper>(source);
+}
+
+std::future<std::unique_ptr<datasource::buffer>> datasource::host_read_async(size_t offset,
+                                                                             size_t size)
+{
+  return std::async(std::launch::deferred,
+                    [this, offset, size] { return host_read(offset, size); });
+}
+
+std::future<size_t> datasource::host_read_async(size_t offset, size_t size, uint8_t* dst)
+{
+  return std::async(std::launch::deferred,
+                    [this, offset, size, dst] { return host_read(offset, size, dst); });
 }
 
 }  // namespace io

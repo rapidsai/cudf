@@ -5,45 +5,55 @@
     "args": {
       "CUDA": "12.8",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:25.02-cpp-mambaforge-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:25.04-cpp-mambaforge-ubuntu22.04"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda12.8-conda"
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.04-cuda12.8-conda"
   ],
-  "hostRequirements": {"gpu": "optional"},
+  "hostRequirements": {
+    "gpu": "optional"
+  },
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/cuda:25.2": {
-        "version": "12.8",
-        "installCompilers": false,
-        "installProfilers": true,
-        "installDevPackages": false,
-        "installcuDNN": false,
-        "installcuTensor": false,
-        "installNCCL": false,
-        "installCUDARuntime": false,
-        "installNVRTC": false,
-        "installOpenCL": false,
-        "installcuBLAS": false,
-        "installcuSPARSE": false,
-        "installcuFFT": false,
-        "installcuFile": false,
-        "installcuRAND": false,
-        "installcuSOLVER": false,
-        "installNPP": false,
-        "installnvJPEG": false,
-        "pruneStaticLibs": true
-      },
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.2": {}
+    "ghcr.io/rapidsai/devcontainers/features/cuda:25.4": {
+      "version": "12.8",
+      "installCompilers": false,
+      "installProfilers": true,
+      "installDevPackages": false,
+      "installcuDNN": false,
+      "installcuTensor": false,
+      "installNCCL": false,
+      "installCUDARuntime": false,
+      "installNVRTC": false,
+      "installOpenCL": false,
+      "installcuBLAS": false,
+      "installcuSPARSE": false,
+      "installcuFFT": false,
+      "installcuFile": false,
+      "installcuRAND": false,
+      "installcuSOLVER": false,
+      "installNPP": false,
+      "installnvJPEG": false,
+      "pruneStaticLibs": true
+    },
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.4": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/cuda",
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
-  "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.8-envs}"],
-  "postAttachCommand": ["/bin/bash", "-c", "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"],
+  "initializeCommand": [
+    "/bin/bash",
+    "-c",
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.8-envs}"
+  ],
+  "postAttachCommand": [
+    "/bin/bash",
+    "-c",
+    "if [ ${CODESPACES:-false} = 'true' ]; then . devcontainer-utils-post-attach-command; . rapids-post-attach-command; fi"
+  ],
   "workspaceFolder": "/home/coder",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/coder/cudf,type=bind,consistency=consistent",
   "mounts": [

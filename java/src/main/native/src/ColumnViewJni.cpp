@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1503,7 +1503,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
     return release_as_jlong(
-      cudf::transform(*column, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+      cudf::transform({*column}, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
   }
   CATCH_STD(env, 0);
 }

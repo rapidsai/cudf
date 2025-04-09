@@ -36,6 +36,7 @@ function sed_runner() {
 
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
+echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
 
 # Wheel testing script
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
@@ -43,6 +44,7 @@ sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
 DEPENDENCIES=(
   cudf
   cudf_kafka
+  cudf-polars
   cugraph
   cuml
   custreamz
@@ -50,6 +52,9 @@ DEPENDENCIES=(
   dask-cudf
   kvikio
   libcudf
+  libcudf-example
+  libcudf_kafka
+  libcudf-tests
   libkvikio
   librmm
   pylibcudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -143,7 +143,13 @@ void binary_operation(mutable_column_view& out,
   std::string const output_type_name = cudf::type_to_name(out.type());
 
   std::string cuda_source =
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
+    cudf::jit::parse_single_function_ptx(ptx,
+                                         "GENERIC_BINARY_OP",
+                                         {
+                                           {0, output_type_name + " *"},
+                                           {1, cudf::type_to_name(lhs.type())},
+                                           {2, cudf::type_to_name(rhs.type())},
+                                         });
 
   std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
                               .instantiate(output_type_name,  // list of template arguments

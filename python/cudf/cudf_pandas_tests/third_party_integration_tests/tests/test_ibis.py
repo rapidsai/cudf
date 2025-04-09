@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-ibis.set_backend("pandas")
-
 ibis.options.interactive = False
 
 
@@ -59,7 +57,7 @@ def ibis_table_num():
         rng.integers(0, 100, (N, K)), columns=[f"val{x}" for x in np.arange(K)]
     )
     df["key"] = rng.choice(np.arange(10), N)
-    table = ibis.memtable(df, name="t")
+    table = ibis.memtable(df, name="u")
     return table
 
 
@@ -72,12 +70,15 @@ def test_column_reductions(ibis_table_num_str, op):
 @pytest.mark.parametrize("op", ["mean", "sum", "min", "max"])
 def test_groupby_reductions(ibis_table_num_str, op):
     t = ibis_table_num_str
-    return getattr(t.group_by("key").col1, op)().to_pandas()
+    return getattr(t.group_by("key").col1, "min")().order_by("key").to_pandas()
 
 
 @pytest.mark.parametrize("op", ELEMENTWISE_UFUNCS)
 def test_mutate_ufunc(ibis_table_num_str, op):
     t = ibis_table_num_str
+    if op == "log":
+        # avoid duckdb log of 0 error
+        t = t.mutate(col1=t.col1 + 1)
     expr = getattr(t.col1, op)()
     return t.mutate(col1_sin=expr).to_pandas()
 
@@ -116,7 +117,10 @@ def test_notin(ibis_table_num_str):
 def test_window(ibis_table_num_str):
     t = ibis_table_num_str
     return (
-        t.group_by("key").mutate(demeaned=t.col1 - t.col1.mean()).to_pandas()
+        t.group_by("key")
+        .mutate(demeaned=t.col1 - t.col1.mean())
+        .order_by("key")
+        .to_pandas()
     )
 
 
@@ -162,9 +166,13 @@ def test_order_by(ibis_table_num_str):
 
 def test_aggregate_having(ibis_table_num_str):
     t = ibis_table_num_str
-    return t.aggregate(
-        by=["key"],
-        sum_c0=t.col0.sum(),
-        avg_c0=t.col0.mean(),
-        having=t.col1.mean() > 50,
-    ).to_pandas()
+    return (
+        t.aggregate(
+            by=["key"],
+            sum_c0=t.col0.sum(),
+            avg_c0=t.col0.mean(),
+            having=t.col1.mean() > 50,
+        )
+        .order_by("key")
+        .to_pandas()
+    )

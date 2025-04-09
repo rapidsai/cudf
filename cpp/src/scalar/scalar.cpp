@@ -56,7 +56,7 @@ bool* scalar::validity_data() { return _is_valid.data(); }
 
 bool const* scalar::validity_data() const { return _is_valid.data(); }
 
-string_scalar::string_scalar(std::string const& string,
+string_scalar::string_scalar(std::string_view string,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)

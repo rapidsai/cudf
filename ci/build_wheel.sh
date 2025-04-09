@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -10,17 +10,18 @@ source rapids-configure-sccache
 source rapids-date-string
 
 rapids-generate-version > ./VERSION
+rapids-generate-version > ./python/cudf/cudf/VERSION
 
 cd "${package_dir}"
 
 sccache --zero-stats
 
 rapids-logger "Building '${package_name}' wheel"
-python -m pip wheel \
+rapids-telemetry-record build-${package_name}.log rapids-pip-retry wheel \
     -w dist \
     -v \
     --no-deps \
     --disable-pip-version-check \
     .
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-${package_name}.txt sccache --show-adv-stats

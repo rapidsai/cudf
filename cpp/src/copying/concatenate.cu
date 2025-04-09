@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -308,11 +308,11 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto count = 0;
   for (auto& v : views) {
-    cudaMemcpyAsync(m_view.begin<T>() + count,
-                    v.begin<T>(),
-                    v.size() * sizeof(T),
-                    cudaMemcpyDeviceToDevice,
-                    stream.value());
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_view.begin<T>() + count,
+                                  v.begin<T>(),
+                                  v.size() * sizeof(T),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
     count += v.size();
   }
 

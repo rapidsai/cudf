@@ -1,11 +1,16 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from rmm.pylibrmm.stream cimport Stream
+
 from pylibcudf.concatenate cimport concatenate
+
 from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
+
 from pylibcudf.libcudf.io.json cimport (
     json_reader_options,
     json_recovery_mode_t,
@@ -14,12 +19,18 @@ from pylibcudf.libcudf.io.json cimport (
     schema_element,
     write_json as cpp_write_json,
 )
+
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     table_with_metadata,
 )
+
 from pylibcudf.libcudf.types cimport data_type, size_type
+
 from pylibcudf.types cimport DataType
+
+from pylibcudf.utils cimport _get_stream
+
 
 __all__ = [
     "chunked_read_json",
@@ -307,56 +318,6 @@ cdef class JsonReaderOptions:
 
 
 cdef class JsonReaderOptionsBuilder:
-    cpdef JsonReaderOptionsBuilder compression(self, compression_type compression):
-        """
-        Sets compression type.
-
-        Parameters
-        ----------
-        compression : CompressionType
-            The compression type to use
-
-        Returns
-        -------
-        Self
-        """
-        self.c_obj.compression(compression)
-        return self
-
-    cpdef JsonReaderOptionsBuilder lines(self, bool val):
-        """
-        Set whether to read the file as a json object per line.
-
-        Parameters
-        ----------
-        val : bool
-            Boolean value to enable/disable the option
-            to read each line as a json object
-
-        Returns
-        -------
-        Self
-        """
-        self.c_obj.lines(val)
-        return self
-
-    cpdef JsonReaderOptionsBuilder keep_quotes(self, bool val):
-        """
-        Set whether the reader should keep quotes of string values.
-
-        Parameters
-        ----------
-        val : bool
-            Boolean value to indicate whether the
-            reader should keep quotes of string values
-
-        Returns
-        -------
-        Self
-        """
-        self.c_obj.keep_quotes(val)
-        return self
-
     cpdef JsonReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset):
         """
         Set number of bytes to skip from source start.
@@ -389,6 +350,259 @@ cdef class JsonReaderOptionsBuilder:
         self.c_obj.byte_range_size(byte_range_size)
         return self
 
+    cpdef JsonReaderOptionsBuilder compression(self, compression_type compression):
+        """
+        Sets compression type.
+
+        Parameters
+        ----------
+        compression : CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.compression(compression)
+        return self
+
+    cpdef JsonReaderOptionsBuilder dayfirst(self, bool val):
+        """
+        Set whether the reader should parse dates as DD/MM versus MM/DD.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether the
+            reader should enable/disable DD/MM parsing
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.dayfirst(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder delimiter(self, str delimiter):
+        """
+        Set delimiter character separating records in JSON lines inputs
+
+        Parameters
+        ----------
+        delimiter : str
+            Character to be used as delimiter separating records
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.delimiter(delimiter)
+        return self
+
+    cpdef JsonReaderOptionsBuilder dtypes(self, list types):
+        """
+        Set data type for columns to be read
+
+        Parameters
+        ----------
+        types : list
+            List of dtypes or a list of tuples of
+            column names, dtypes, and list of tuples
+            (to support nested column hierarchy)
+
+        Returns
+        -------
+        Self
+        """
+        cdef vector[data_type] types_vec
+        if isinstance(types[0], tuple):
+            self.c_obj.dtypes(_generate_schema_map(types))
+            return self
+        else:
+            types_vec.reserve(len(types))
+            for dtype in types:
+                types_vec.push_back((<DataType>dtype).c_obj)
+            self.c_obj.dtypes(types_vec)
+            return self
+
+    cpdef JsonReaderOptionsBuilder experimental(self, bool val):
+        """
+        Set whether to enable experimental features.
+        When set to true, experimental features, such as the new column tree
+        construction, utf-8 matching of field names will be enabled.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable experimental features
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.experimental(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder keep_quotes(self, bool val):
+        """
+        Set whether the reader should keep quotes of string values.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether the
+            reader should keep quotes of string values
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.keep_quotes(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder lines(self, bool val):
+        """
+        Set whether to read the file as a json object per line.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable the option
+            to read each line as a json object
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.lines(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder mixed_types_as_string(self, bool val):
+        """
+        Set whether to parse mixed types as a string column.
+        Also enables forcing to read a struct as string column using schema.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable parsing mixed types as a string column
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.mixed_types_as_string(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder na_values(self, list vals):
+        """
+        Sets additional values to recognize as null values.
+
+        Parameters
+        ----------
+        vals : list
+            Vector of values to be considered to be null
+
+        Returns
+        -------
+        Self
+        """
+        cdef vector[string] vec
+        for val in vals:
+            if isinstance(val, str):
+                vec.push_back(val.encode())
+        self.c_obj.na_values(vec)
+        return self
+
+    cpdef JsonReaderOptionsBuilder nonnumeric_numbers(self, bool val):
+        """
+        Set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
+        Infinity, and -Infinity. Strict validation must be enabled for this to work.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether leading zeros are allowed in numeric
+            values
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.nonnumeric_numbers(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder normalize_single_quotes(self, bool val):
+        """
+        Sets whether to normalize single quotes around strings.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable the option to normalize single quotes
+            around strings
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.normalize_single_quotes(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder normalize_whitespace(self, bool val):
+        """
+        Sets whether to normalize unquoted whitespace characters
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable the option to normalize unquoted
+            whitespace characters
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.normalize_whitespace(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder numeric_leading_zeros(self, bool val):
+        """
+        Set whether leading zeros are allowed in numeric values. Strict validation
+        must be enabled for this to work.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether leading zeros are allowed in numeric
+            values
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.numeric_leading_zeros(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder prune_columns(self, bool val):
+        """
+        Set whether to prune columns on read, selected based on the @ref dtypes option.
+        When set as true, if the reader options include @ref dtypes, then
+        the reader will only return those columns which are mentioned in @ref dtypes.
+        If false, then all columns are returned, independent of the @ref dtypes setting.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable column pruning
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.prune_columns(val)
+        return self
+
     cpdef JsonReaderOptionsBuilder recovery_mode(
         self,
         json_recovery_mode_t recovery_mode
@@ -409,6 +623,40 @@ cdef class JsonReaderOptionsBuilder:
         self.c_obj.recovery_mode(recovery_mode)
         return self
 
+    cpdef JsonReaderOptionsBuilder strict_validation(self, bool val):
+        """
+        Set whether strict validation is enabled or not
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether strict validation is to be enabled
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.strict_validation(val)
+        return self
+
+    cpdef JsonReaderOptionsBuilder unquoted_control_chars(self, bool val):
+        """
+        Set whether in a quoted string should characters greater than or equal to 0
+        and less than 32 be allowed without some form of escaping. Strict validation
+        must be enabled for this to work.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to indicate whether unquoted control chars are allowed
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.unquoted_control_chars(val)
+        return self
+
     cpdef build(self):
         """Create a JsonReaderOptions object"""
         cdef JsonReaderOptions json_options = JsonReaderOptions.__new__(
@@ -422,6 +670,7 @@ cdef class JsonReaderOptionsBuilder:
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
+    Stream stream = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -433,6 +682,8 @@ cpdef tuple chunked_read_json(
     chunk_size : int, default 100_000_000 bytes.
         The number of bytes to be read in chunks.
         The chunk_size should be set to at least row_size.
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -448,6 +699,7 @@ cpdef tuple chunked_read_json(
     meta_names = None
     child_names = None
     i = 0
+    cdef Stream s = _get_stream(stream)
     while True:
         options.enable_lines(True)
         options.set_byte_range_offset(c_range_size * i)
@@ -455,7 +707,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj))
+                c_result = move(cpp_read_json(options.c_obj, s.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -483,7 +735,8 @@ cpdef tuple chunked_read_json(
 
 
 cpdef TableWithMetadata read_json(
-    JsonReaderOptions options
+    JsonReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from JSON format.
@@ -497,6 +750,8 @@ cpdef TableWithMetadata read_json(
     ----------
     options: JsonReaderOptions
         Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
@@ -504,9 +759,9 @@ cpdef TableWithMetadata read_json(
         The Table and its corresponding metadata (column names) that were read in.
     """
     cdef table_with_metadata c_result
-
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj))
+        c_result = move(cpp_read_json(options.c_obj, s.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -694,7 +949,7 @@ cdef class JsonWriterOptionsBuilder:
         return json_options
 
 
-cpdef void write_json(JsonWriterOptions options):
+cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     """
     Writes a set of columns to JSON format.
 
@@ -702,10 +957,13 @@ cpdef void write_json(JsonWriterOptions options):
     ----------
     options : JsonWriterOptions
         Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
 
     Returns
     -------
     None
     """
+    cdef Stream s = _get_stream(stream)
     with nogil:
-        cpp_write_json(options.c_obj)
+        cpp_write_json(options.c_obj, s.view())

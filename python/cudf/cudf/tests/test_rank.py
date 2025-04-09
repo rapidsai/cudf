@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import DataFrame
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -151,3 +152,14 @@ def test_series_rank_combinations(elem, dtype):
     ranked_ps = df["a"].rank(method="first")
     # Check
     assert_eq(ranked_ps, ranked_gs)
+
+
+@pytest.mark.parametrize("klass", ["Series", "DataFrame"])
+def test_int_nan_pandas_compatible(klass):
+    data = [3, 6, 1, 1, None, 6]
+    pd_obj = getattr(pd, klass)(data)
+    cudf_obj = getattr(cudf, klass)(data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf_obj.rank()
+    expected = pd_obj.rank()
+    assert_eq(result, expected)

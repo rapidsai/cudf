@@ -38,6 +38,7 @@
 #include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <array>
+#include <numeric>
 #include <type_traits>
 
 namespace nvcomp = cudf::io::detail::nvcomp;

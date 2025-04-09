@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/atomic>
+#include <cuda/std/functional>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/gather.h>
@@ -442,7 +443,7 @@ std::
                     inbuf.begin(),
                     inbuf.end(),
                     stencil.begin(),
-                    thrust::identity<int>());
+                    cuda::std::identity{});
   inbuf.resize(inbuf_size - num_deletions, stream);
 
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),

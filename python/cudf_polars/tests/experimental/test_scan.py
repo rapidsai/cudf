@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -59,8 +59,8 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
 
 
 @pytest.mark.parametrize("blocksize", [1_000, 10_000, 1_000_000])
-def test_parquet_blocksize(tmp_path, df, blocksize):
-    n_files = 3
+@pytest.mark.parametrize("n_files", [2, 3])
+def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
     make_source(df, tmp_path, "parquet", n_files)
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(

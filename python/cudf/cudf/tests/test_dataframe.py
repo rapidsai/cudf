@@ -2603,8 +2603,7 @@ def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
     pdf[pdf == 1.0] = 2
     gdf[gdf == 1.0] = 2
     try:
-        with pytest.warns(FutureWarning):
-            d = binop(pdf, other)
+        d = binop(pdf, other)
     except Exception:
         if isinstance(other, (pd.Series, pd.DataFrame)):
             cudf_other = cudf.from_pandas(other)
@@ -4344,21 +4343,27 @@ def test_as_column_types():
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([], dtype="float64"), dtype="float32")
+    col = column.as_column(
+        cudf.Series([], dtype="float64"), dtype=np.dtype(np.float32)
+    )
     assert_eq(col.dtype, np.dtype("float32"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([], dtype="float64"), dtype="str")
+    col = column.as_column(
+        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
+    )
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(cudf.Series([], dtype="float64"), dtype="object")
+    col = column.as_column(
+        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
+    )
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -4367,7 +4372,7 @@ def test_as_column_types():
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(np.array([1, 2, 3]), dtype="float32")
+        column.as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
@@ -4390,14 +4395,18 @@ def test_as_column_types():
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="float32")
+        column.as_column(
+            cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32)
+        )
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
     gds = cudf.Series._from_column(
-        column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="str")
+        column.as_column(
+            cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str")
+        )
     )
 
     assert_eq(pds, gds)
@@ -5229,7 +5238,7 @@ def test_empty_df_astype(dtype):
 )
 def test_series_astype_error_handling(errors):
     sr = cudf.Series(["random", "words"])
-    got = sr.astype("datetime64", errors=errors)
+    got = sr.astype("datetime64[ns]", errors=errors)
     assert_eq(sr, got)
 
 
@@ -11075,6 +11084,21 @@ def test_dataframe_columns_set_preserve_type(klass):
 
 
 @pytest.mark.parametrize(
+    "expected",
+    [
+        pd.RangeIndex(1, 2, name="a"),
+        pd.Index([1], dtype=np.int8, name="a"),
+        pd.MultiIndex.from_arrays([[1]], names=["a"]),
+    ],
+)
+@pytest.mark.parametrize("binop", [lambda df: df == df, lambda df: df - 1])
+def test_dataframe_binop_preserves_column_metadata(expected, binop):
+    df = cudf.DataFrame([1], columns=expected)
+    result = binop(df).columns
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
     "scalar",
     [
         1,
@@ -11269,3 +11293,25 @@ def test_empty_construction_rangeindex_columns(data):
     result = cudf.DataFrame(data=data).columns
     expected = pd.RangeIndex(0)
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_midx_columns_loc():
+    idx_1 = ["Hi", "Lo"]
+    idx_2 = ["I", "II", "III"]
+    idx = cudf.MultiIndex.from_product([idx_1, idx_2])
+
+    data_rand = (
+        np.random.default_rng(seed=0)
+        .uniform(0, 1, 3 * len(idx))
+        .reshape(3, -1)
+    )
+    df = cudf.DataFrame(data_rand, index=["A", "B", "C"], columns=idx)
+    pdf = df.to_pandas()
+
+    assert_eq(df.shape, pdf.shape)
+
+    expected = pdf.loc[["A", "B"]]
+    actual = df.loc[["A", "B"]]
+
+    assert_eq(expected, actual)
+    assert_eq(df, pdf)

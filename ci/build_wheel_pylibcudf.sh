@@ -22,6 +22,7 @@ python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
+    --exclude librapids_logger.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 

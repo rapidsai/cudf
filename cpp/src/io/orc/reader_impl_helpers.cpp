@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                  to_cudf_decimal_type(decimal128_columns, metadata, orc_col_id));
 
   switch (kind) {
-    case orc::LIST: {
+    case LIST: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
       return make_lists_column(0,
@@ -50,7 +50,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                rmm::device_buffer{0, stream},
                                stream);
     }
-    case orc::MAP: {
+    case MAP: {
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("struct");
       auto const child_column_ids = metadata.get_col_type(orc_col_id).subtypes;
@@ -76,7 +76,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
         stream);
     }
 
-    case orc::STRUCT: {
+    case STRUCT: {
       std::vector<std::unique_ptr<column>> child_columns;
       for (auto const col : metadata.get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
@@ -92,7 +92,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
         0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
     }
 
-    case orc::DECIMAL: {
+    case DECIMAL: {
       int32_t scale = 0;
       if (type == type_id::DECIMAL32 or type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
         scale = -static_cast<int32_t>(metadata.get_types()[orc_col_id].scale.value_or(0));
@@ -119,8 +119,8 @@ column_buffer assemble_buffer(size_type orc_col_id,
   col_buffer.name = metadata.column_name(0, orc_col_id);
   auto kind       = metadata.get_col_type(orc_col_id).kind;
   switch (kind) {
-    case orc::LIST:
-    case orc::STRUCT: {
+    case LIST:
+    case STRUCT: {
       auto const& children_indices = selected_columns.children.at(orc_col_id);
       for (auto const child_id : children_indices) {
         col_buffer.children.emplace_back(assemble_buffer(
@@ -128,7 +128,7 @@ column_buffer assemble_buffer(size_type orc_col_id,
       }
     } break;
 
-    case orc::MAP: {
+    case MAP: {
       std::vector<column_buffer> child_col_buffers;
       // Get child buffers
       auto const& children_indices = selected_columns.children.at(orc_col_id);

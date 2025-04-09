@@ -19,10 +19,15 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
+#include <optional>
+#include <variant>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -30,6 +35,106 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
+
+/**
+ * @brief Strongly typed wrapper for bounded closed rolling windows.
+ *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
+ * The endpoints of this window are included.
+ */
+struct bounded_closed {
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
+};
+
+/**
+ * @brief Strongly typed wrapper for bounded open rolling windows.
+ *
+ * @param delta The scalar delta from the current row. Must be valid,
+ * behaviour is undefined if not. If the scalar represents a floating
+ * point type the value must be neither inf nor nan, otherwise
+ * behaviour is undefined.
+ *
+ * The endpoints of this window are excluded.
+ */
+struct bounded_open {
+  cudf::scalar const& delta_;  ///< Delta from the current row in the window. Must be valid,
+                               ///< behaviour is undefined if not.
+  ///< Similarly, if the delta is a floating point type the value must be neither inf nor nan
+  ///< otherwise behaviour is undefined.
+
+  /**
+   * @brief Return pointer to the row delta scalar.
+   * @return pointer to scalar, not null.
+   */
+  cudf::scalar const* delta() const noexcept { return &delta_; }
+};
+
+/**
+ * @brief Strongly typed wrapper for unbounded rolling windows.
+ *
+ * This window runs to the begin/end of the current row's group.
+ */
+struct unbounded {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
+/**
+ * @brief Strongly typed wrapper for current_row rolling windows.
+ *
+ * This window contains all rows that are equal to the current row.
+ */
+struct current_row {
+  /**
+   * @brief Return a null row delta
+   * @return nullptr
+   */
+  constexpr cudf::scalar const* delta() const noexcept { return nullptr; }
+};
+
+/**
+ * @brief The type of the range-based rolling window endpoint.
+ */
+using range_window_type = std::variant<unbounded, current_row, bounded_closed, bounded_open>;
+
+/**
+ * @brief Constructs preceding and following columns given window range specifications.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups.
+ * @param orderby Column defining window ranges. Must be sorted. If `group_keys` is non-empty, must
+ * be sorted groupwise.
+ * @param order Sort order of the `orderby` column.
+ * @param null_order Null sort order in the sorted `orderby` column. Apples groupwise if
+ * `group_keys` is non-empty.
+ * @param preceding Type of the preceding window.
+ * @param following Type of the following window.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return pair of preceding and following columns that define the window bounds for each row,
+ * suitable for passing to `rolling_window`.
+ */
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
+  table_view const& group_keys,
+  column_view const& orderby,
+  order order,
+  null_order null_order,
+  range_window_type preceding,
+  range_window_type following,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
@@ -316,140 +421,6 @@ std::unique_ptr<column> grouped_rolling_window(
   column_view const& default_outputs,
   window_bounds preceding_window,
   window_bounds following_window,
-  size_type min_periods,
-  rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
- *         column.
- *
- * @deprecated Since 25.02, to be removed in 25.04
- *
- * Like `rolling_window()`, this function aggregates values in a window around each
- * element of a specified `input` column. It differs from `rolling_window()` in two respects:
- *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
- *      groupby), determined by the corresponding values of the columns under `group_keys`. The
- *      window-aggregation cannot cross the group boundaries.
- *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number
- *      of days preceding/following the current row). The timestamps for the input data are
- *      specified by the `timestamp_column` argument.
- *
- * Note: This method requires that the rows are presorted by the group keys and timestamp values.
- *
- * @code{.pseudo}
- * Example: Consider a user-sales dataset, where the rows look as follows:
- *  { "user_id", sales_amt, date }
- *
- * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by
- * increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding
- *day, the current day, and 1 following day).
- *
- * In this example,
- *    1. `group_keys == [ user_id ]`
- *    2. `timestamp_column == date`
- *    3. `input == sales_amt`
- * The data are grouped by `user_id`, and ordered by `date`. The aggregation
- * (SUM) is then calculated for a window of 3 days around (and including) each row.
- *
- * For the following input:
- *
- *  [ // user,  sales_amt,  YYYYMMDD (date)
- *    { "user1",   10,      20200101    },
- *    { "user2",   20,      20200101    },
- *    { "user1",   20,      20200102    },
- *    { "user1",   10,      20200103    },
- *    { "user2",   30,      20200101    },
- *    { "user2",   80,      20200102    },
- *    { "user1",   50,      20200107    },
- *    { "user1",   60,      20200107    },
- *    { "user2",   40,      20200104    }
- *  ]
- *
- * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt`
- * vector (with 2 groups, one for each distinct `user_id`):
- *
- * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
- * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
- *                    <-------user1-------->|<---------user2--------->
- *
- * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1
- * period. The aggregation window is thus 3 *days* wide, yielding the following output column:
- *
- *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
- *
- * @endcode
- *
- * Note: The number of rows participating in each window might vary, based on the index within the
- * group, datestamp, and `min_periods`. Apropos:
- *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no
- *     preceding values.
- *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2
- *     following values, based on its datestamp.
- *
- * Each aggregation operation cannot cross group boundaries.
- *
- * The returned column for `op == COUNT` always has `INT32` type. All other operators return a
- * column of the same type as the input. Therefore it is suggested to convert integer column types
- * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
- *
- * @param[in] group_keys The (pre-sorted) grouping columns
- * @param[in] timestamp_column The (pre-sorted) timestamps for each row
- * @param[in] timestamp_order  The order (ASCENDING/DESCENDING) in which the timestamps are sorted
- * @param[in] input The input column (to be aggregated)
- * @param[in] preceding_window_in_days The rolling window time-interval in the backward direction
- * @param[in] following_window_in_days The rolling window time-interval in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
- * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
- *
- * @returns   A nullable output column containing the rolling window results
- */
-[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
-grouped_time_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& timestamp_column,
-  cudf::order const& timestamp_order,
-  column_view const& input,
-  size_type preceding_window_in_days,
-  size_type following_window_in_days,
-  size_type min_periods,
-  rolling_aggregation const& aggr,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
- *         column,.
- *
- * @deprecated Since 25.02, to be removed in 25.04
- *
- * @details @copydetails grouped_time_range_rolling_window(
- *                table_view const& group_keys,
- *                column_view const& timestamp_column,
- *                cudf::order const& timestamp_order,
- *                column_view const& input,
- *                size_type preceding_window_in_days,
- *                size_type following_window_in_days,
- *                size_type min_periods,
- *                rolling_aggregation const& aggr,
- *                rmm::cuda_stream_view stream,
- *                rmm::device_async_resource_ref mr)
- *
- * The `preceding_window_in_days` and `following_window_in_days` are specified as a `window_bounds`
- * and supports "unbounded" windows, if set to `window_bounds::unbounded()`.
- */
-[[deprecated("Use cudf::grouped_range_rolling_window instead")]] std::unique_ptr<column>
-grouped_time_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& timestamp_column,
-  cudf::order const& timestamp_order,
-  column_view const& input,
-  window_bounds preceding_window_in_days,
-  window_bounds following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),

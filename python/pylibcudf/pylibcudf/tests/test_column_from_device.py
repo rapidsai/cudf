@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -68,7 +68,14 @@ def iface_obj(input_column):
     return DataBuffer(data.view("uint8"), data.dtype)
 
 
-def test_from_cuda_array_interface(input_column, iface_obj):
-    col = plc.column.Column.from_cuda_array_interface_obj(iface_obj)
+@pytest.mark.parametrize("patch_cai", [True, False])
+def test_from_cuda_array_interface(
+    monkeypatch, input_column, iface_obj, patch_cai
+):
+    if patch_cai:
+        # patch strides to be None to test C-configuous layout
+        monkeypatch.setattr(iface_obj, "strides", None)
 
-    assert_column_eq(input_column, col)
+    res = plc.Column.from_cuda_array_interface_obj(iface_obj)
+
+    assert_column_eq(input_column, res)

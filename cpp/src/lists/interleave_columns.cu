@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -282,7 +281,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(), validities.end(), thrust::identity{}, stream, mr);
+        validities.begin(), validities.end(), cuda::std::identity{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     }
 
@@ -381,7 +380,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
+    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, mr);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),

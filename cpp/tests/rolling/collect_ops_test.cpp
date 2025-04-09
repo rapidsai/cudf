@@ -27,7 +27,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/std/functional>
 
 #include <vector>
 
@@ -455,8 +455,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
 {
   // Test that when the number of observations is fewer than min_periods,
   // the result is null.
-  auto const input_iter =
-    cudf::detail::make_counting_transform_iterator(0, thrust::identity<int32_t>{});
+  auto const input_iter   = thrust::counting_iterator{0};
   auto const input_column = cudf::test::fixed_point_column_wrapper<int32_t>{
     input_iter, input_iter + 6, numeric::scale_type{0}};
 

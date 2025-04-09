@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -191,7 +191,7 @@ class BooleanFunction(Expr):
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
             result = plc.reduce.reduce(column.obj, agg, self.dtype)
-            if not ignore_nulls and column.obj.null_count() > 0:
+            if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
                 #   | F U T     | F U T
@@ -218,14 +218,14 @@ class BooleanFunction(Expr):
             (column,) = columns
             return Column(
                 plc.unary.is_nan(column.obj).with_mask(
-                    column.obj.null_mask(), column.obj.null_count()
+                    column.obj.null_mask(), column.null_count
                 )
             )
         elif self.name is BooleanFunction.Name.IsNotNan:
             (column,) = columns
             return Column(
                 plc.unary.is_not_nan(column.obj).with_mask(
-                    column.obj.null_mask(), column.obj.null_count()
+                    column.obj.null_mask(), column.null_count
                 )
             )
         elif self.name is BooleanFunction.Name.IsFirstDistinct:

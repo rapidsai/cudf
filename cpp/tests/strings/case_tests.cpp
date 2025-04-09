@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,14 +110,14 @@ TEST_F(StringsCaseTest, Capitalize)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = cudf::strings::capitalize(strings_view, std::string(" "));
+    auto results = cudf::strings::capitalize(strings_view, std::string_view(" "));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
       {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = cudf::strings::capitalize(strings_view, std::string(" \t"));
+    auto results = cudf::strings::capitalize(strings_view, std::string_view(" \t"));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tThe", "Tést\tStrings", ""},
       {true, true, true, false, true, true, true});
@@ -185,7 +185,7 @@ TEST_F(StringsCaseTest, MultiCharUpper)
   auto results = cudf::strings::to_upper(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  results = cudf::strings::capitalize(strings_view, std::string(" "));
+  results = cudf::strings::capitalize(strings_view, std::string_view(" "));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::title(strings_view);

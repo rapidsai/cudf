@@ -126,6 +126,23 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
     return result
 
 
+def ndarray__reduce__(self):
+    # As it stands the custom pickling logic used for all other
+    # proxy types is incompatible with our proxy ndarray. The pickle
+    # constructor we use to deserialize the other proxy types calls
+    # object.__new__(type) which you cannot call on subclasses of
+    # numpy arrays because the new array won't be created with numpy's
+    # specific memory management logic. Therefore, we have to handle
+    # serialization separately for proxy arrays.
+    return (
+        ndarray.__new__,
+        (
+            ndarray,
+            self._fsproxy_wrapped,
+        ),
+    )
+
+
 ndarray = make_final_proxy_type(
     "ndarray",
     cupy.ndarray,
@@ -140,6 +157,7 @@ ndarray = make_final_proxy_type(
         "__cuda_array_interface__": cuda_array_interface,
         "__array_interface__": array_interface,
         "__array_ufunc__": ndarray__array_ufunc__,
+        "__reduce__": ndarray__reduce__,
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device

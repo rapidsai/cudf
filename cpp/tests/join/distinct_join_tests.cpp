@@ -27,6 +27,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <numeric>
 #include <vector>
 
 template <typename T>

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A column, with some properties."""
@@ -19,12 +19,15 @@ from pylibcudf.strings.convert.convert_integers import (
 )
 from pylibcudf.traits import is_floating_point
 
+from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars as pl
+
+    from cudf_polars.typing import ColumnHeader, ColumnOptions, Slice
 
 __all__: list[str] = ["Column"]
 
@@ -51,9 +54,68 @@ class Column:
         name: str | None = None,
     ):
         self.obj = column
-        self.is_scalar = self.obj.size() == 1
+        self.is_scalar = self.size == 1
         self.name = name
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
+
+    @classmethod
+    def deserialize(
+        cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a Column from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        Column
+            The deserialized Column.
+        """
+        packed_metadata, packed_gpu_data = frames
+        (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        ).columns()
+        return cls(plc_column, **header["column_kwargs"])
+
+    def serialize(
+        self,
+    ) -> tuple[ColumnHeader, tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the Column into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(plc.Table([self.obj]))
+        column_kwargs: ColumnOptions = {
+            "is_sorted": self.is_sorted,
+            "order": self.order,
+            "null_order": self.null_order,
+            "name": self.name,
+        }
+        header: ColumnHeader = {
+            "column_kwargs": column_kwargs,
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
@@ -70,9 +132,7 @@ class Column:
             If the column is not length-1.
         """
         if not self.is_scalar:
-            raise ValueError(
-                f"Cannot convert a column of length {self.obj.size()} to scalar"
-            )
+            raise ValueError(f"Cannot convert a column of length {self.size} to scalar")
         return plc.copying.get_element(self.obj, 0)
 
     def rename(self, name: str | None, /) -> Self:
@@ -242,7 +302,7 @@ class Column:
         -------
         Self with metadata set.
         """
-        if self.obj.size() <= 1:
+        if self.size <= 1:
             is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
@@ -268,7 +328,7 @@ class Column:
     def mask_nans(self) -> Self:
         """Return a shallow copy of self with nans masked out."""
         if plc.traits.is_floating_point(self.obj.type()):
-            old_count = self.obj.null_count()
+            old_count = self.null_count
             mask, new_count = plc.transform.nans_to_nulls(self.obj)
             result = type(self)(self.obj.with_mask(mask, new_count))
             if old_count == new_count:
@@ -288,3 +348,36 @@ class Column:
                 )
             ).as_py()
         return 0
+
+    @property
+    def size(self) -> int:
+        """Return the size of the column."""
+        return self.obj.size()
+
+    @property
+    def null_count(self) -> int:
+        """Return the number of Null values in the column."""
+        return self.obj.null_count()
+
+    def slice(self, zlice: Slice | None) -> Self:
+        """
+        Slice a column.
+
+        Parameters
+        ----------
+        zlice
+            optional, tuple of start and length, negative values of start
+            treated as for python indexing. If not provided, returns self.
+
+        Returns
+        -------
+        New column (if zlice is not None) otherwise self (if it is)
+        """
+        if zlice is None:
+            return self
+        (table,) = plc.copying.slice(
+            plc.Table([self.obj]),
+            conversion.from_polars_slice(zlice, num_rows=self.size),
+        )
+        (column,) = table.columns()
+        return type(self)(column, name=self.name).sorted_like(self)

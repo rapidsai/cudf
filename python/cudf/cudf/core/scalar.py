@@ -9,7 +9,6 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -21,11 +20,14 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    _BaseDtype,
 )
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    get_allowed_combinations_for_operator,
+    CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    find_common_type,
     to_cudf_compatible_scalar,
 )
 
@@ -33,6 +35,158 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import Dtype, ScalarLike
+
+
+# Type dispatch loops similar to what are found in `np.add.types`
+# In NumPy, whether or not an op can be performed between two
+# operands is determined by checking to see if NumPy has a c/c++
+# loop specifically for adding those two operands built in. If
+# not it will search lists like these for a loop for types that
+# the operands can be safely cast to. These are those lookups,
+# modified slightly for cuDF's rules
+_ADD_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mMM",
+    "MmM",
+    "mmm",
+    "LMM",
+    "MLM",
+    "Lmm",
+    "mLm",
+]
+_SUB_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "MMm",
+    "mmm",
+    "MmM",
+    "MLM",
+    "mLm",
+    "Lmm",
+]
+_MUL_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mLm",
+    "Lmm",
+    "mlm",
+    "lmm",
+]
+_FLOORDIV_TYPES = [
+    "bbb",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mqm",
+    "mdm",
+    "mmq",
+]
+_TRUEDIV_TYPES = ["fff", "ddd", "mqm", "mmd", "mLm"]
+_MOD_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+    "mmm",
+]
+_POW_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+]
+
+
+def get_allowed_combinations_for_operator(
+    dtype_l: np.dtype, dtype_r: np.dtype, op: str
+) -> np.dtype:
+    error = TypeError(
+        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
+    )
+
+    to_numpy_ops = {
+        "__add__": _ADD_TYPES,
+        "__radd__": _ADD_TYPES,
+        "__sub__": _SUB_TYPES,
+        "__rsub__": _SUB_TYPES,
+        "__mul__": _MUL_TYPES,
+        "__rmul__": _MUL_TYPES,
+        "__floordiv__": _FLOORDIV_TYPES,
+        "__rfloordiv__": _FLOORDIV_TYPES,
+        "__truediv__": _TRUEDIV_TYPES,
+        "__rtruediv__": _TRUEDIV_TYPES,
+        "__mod__": _MOD_TYPES,
+        "__rmod__": _MOD_TYPES,
+        "__pow__": _POW_TYPES,
+        "__rpow__": _POW_TYPES,
+    }
+    allowed = to_numpy_ops.get(op, op)
+
+    # special rules for string
+    if dtype_l == "object" or dtype_r == "object":
+        if (dtype_l == dtype_r == "object") and op == "__add__":
+            return CUDF_STRING_DTYPE
+        else:
+            raise error
+
+    # Check if we can directly operate
+
+    for valid_combo in allowed:
+        ltype, rtype, outtype = valid_combo  # type: ignore[misc]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]  # noqa: TID251
+            dtype_r.char,
+            rtype,  # type: ignore[has-type]
+        ):
+            return np.dtype(outtype)  # type: ignore[has-type]
+
+    raise error
 
 
 def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
@@ -76,10 +230,17 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         else:
             return NA, dtype
 
+    if isinstance(value, pa.Scalar):
+        # TODO: Avoid converting to a Python scalar since we
+        # end up converting pyarrow.Scalars to pylibcudf.Scalars
+        if dtype is None:
+            dtype = cudf_dtype_from_pa_type(value.type)
+        return value.as_py(), dtype
+
     if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-        value = pa.scalar(
-            value, type=pa.decimal128(dtype.precision, dtype.scale)
-        ).as_py()
+        if isinstance(value, np.integer):
+            value = int(value)
+        value = pa.scalar(value, type=dtype.to_arrow()).as_py()
     if isinstance(value, decimal.Decimal) and dtype is None:
         dtype = cudf.Decimal128Dtype._from_decimal(value)
 
@@ -103,8 +264,10 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         else:
             dtype = value.dtype
 
-    if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+    if not isinstance(dtype, (np.dtype, _BaseDtype)):
         dtype = cudf.dtype(dtype)
+    elif dtype.kind == "U":
+        dtype = CUDF_STRING_DTYPE
 
     if not valid:
         value = NaT if dtype.kind in "mM" else NA
@@ -167,7 +330,8 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar for cudf.Scalar._device_value
     """
     if cudf.utils.utils.is_na_like(value):
         value = None
@@ -182,7 +346,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     if isinstance(dtype, cudf.core.dtypes._BaseDtype):
         pa_type = dtype.to_arrow()
-    elif pd.api.types.is_string_dtype(dtype):
+    elif dtype == CUDF_STRING_DTYPE:
         # Have to manually convert object types, which we use internally
         # for strings but pyarrow only supports as unicode 'U'
         pa_type = pa.string()
@@ -217,7 +381,8 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
 
     Returns
     -------
-    plc.Scalar
+    pylibcudf.Scalar
+        pylibcudf.Scalar to use in pylibcudf APIs
     """
     return plc.interop.from_arrow(pa_scalar)
 
@@ -294,18 +459,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-    0    2
-    1    3
-    2    4
-    dtype: int64
-    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-    >>> slr = cudf.Scalar(10, dtype='uint8')
-    >>> df - slr
-       a    b
-    0 -9 -5.5
-    1 -8 -4.5
-    2 -7 -3.5
 
     Parameters
     ----------
@@ -468,16 +621,16 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         # https://github.com/numpy/numpy/issues/17552
         return f"{self.__class__.__name__}({self.value!s}, dtype={self.dtype})"
 
-    def _binop_result_dtype_or_error(self, other, op):
+    def _binop_result_dtype_or_error(self, other, op) -> np.dtype:
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
-            return np.bool_
+            return np.dtype(np.bool_)
 
         out_dtype = get_allowed_combinations_for_operator(
             self.dtype, other.dtype, op
         )
 
         # datetime handling
-        if out_dtype in {"M", "m"}:
+        if out_dtype.kind in {"M", "m"}:
             if self.dtype.char in {"M", "m"} and other.dtype.char not in {
                 "M",
                 "m",
@@ -494,10 +647,10 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return cudf.dtype("m8" + f"[{res}]")
-                return np.result_type(self.dtype, other.dtype)
+                    return np.dtype(f"m8[{res}]")
+                return find_common_type((self.dtype, other.dtype))
 
-        return cudf.dtype(out_dtype)
+        return out_dtype
 
     def _binaryop(self, other, op: str):
         if is_scalar(other):
@@ -537,9 +690,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return cudf.dtype("float32")
+                return np.dtype(np.float32)
             else:
-                return cudf.dtype("float64")
+                return np.dtype(np.float64)
         return self.dtype
 
     def _scalar_unaop(self, op) -> None | Self:

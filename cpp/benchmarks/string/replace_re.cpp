@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ static void bench_replace(nvbench::state& state)
       cudf::strings::replace_with_backrefs(input, *program, replacement);
     });
   } else {
-    auto replacement = std::string("77");
+    auto replacement = std::string_view("77");
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::replace_re(input, *program, replacement);
     });

@@ -11,11 +11,11 @@ from numba.types import CPointer, void
 import rmm
 
 import cudf
-from cudf._lib.column import Column
 from cudf._lib.strings_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
 )
+from cudf.core.column import ColumnBase
 from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
@@ -97,20 +97,24 @@ def run_udf_test(data, func, dtype):
     with _CUDFNumbaConfig():
         sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = Column.from_pylibcudf(column_from_udf_string_array(output))
+        result = ColumnBase.from_pylibcudf(
+            column_from_udf_string_array(output)
+        )
     else:
         result = output
 
-    got = cudf.Series._from_column(result.astype(dtype))
+    got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = Column.from_pylibcudf(column_from_udf_string_array(output))
+        result = ColumnBase.from_pylibcudf(
+            column_from_udf_string_array(output)
+        )
     else:
         result = output
 
-    got = cudf.Series._from_column(result.astype(dtype))
+    got = cudf.Series._from_column(result.astype(cudf.dtype(dtype)))
     assert_eq(expect, got, check_dtype=False)
 
 

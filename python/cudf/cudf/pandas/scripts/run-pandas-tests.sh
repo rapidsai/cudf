@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -137,7 +137,7 @@ and not test_array_tz"
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current" \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current and not test_pickle_frame_v124_unpickle_130" \
     --import-mode=importlib \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)

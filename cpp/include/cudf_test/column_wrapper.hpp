@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -1645,8 +1645,11 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(
-      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
+    thrust::copy_if(std::cbegin(cols),
+                    std::cend(cols),
+                    valids,
+                    std::back_inserter(children),
+                    cuda::std::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
                                  : cudf::concatenate(children,

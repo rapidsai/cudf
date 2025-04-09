@@ -55,16 +55,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME}
-    PRIVATE cudf::cudftestutil
-            cudf::cudftestutil_impl
-            GTest::gmock
-            GTest::gmock_main
-            GTest::gtest
-            GTest::gtest_main
-            nvtx3::nvtx3-cpp
-            $<TARGET_NAME_IF_EXISTS:conda_env>
-            "${_CUDF_TEST_EXTRA_LIBS}"
+    ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -283,6 +275,7 @@ ConfigureTest(
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
+  interop/arrow_data_structures_test.cpp
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
@@ -298,7 +291,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
+ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
 
 ConfigureTest(
@@ -307,14 +300,9 @@ ConfigureTest(
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(
-  FILE_IO_TEST io/file_io_test.cpp
-  GPUS 1
-  PERCENT 30
-)
-ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   PARQUET_TEST
@@ -345,7 +333,7 @@ ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
@@ -405,7 +393,6 @@ ConfigureTest(
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
-  utilities_tests/logger_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
@@ -506,6 +493,7 @@ ConfigureTest(
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
+  rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
   PERCENT 70
