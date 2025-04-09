@@ -6,13 +6,15 @@ from numba import types
 from numba.core import cgutils
 from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
-from numba.cuda.cudaimpl import lower as cuda_lower
+from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_registry
 from numba import cuda
+from numba.core.datamodel import default_manager
 
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
     GroupView,
     GroupViewType,
+    ManagedGroupViewType,
     call_cuda_functions,
     group_size_type,
     index_default_type,
@@ -217,20 +219,20 @@ def cuda_lower_add(context, builder, sig, args):
             lhs_grp.size,
         ),
     )
-    output.size = lhs_grp.size
-    output.group_data = out_ptr
+    output.group_view.size = lhs_grp.size
+    output.group_view.group_data = out_ptr
     return output._getvalue()
 
 
-@cuda_lower(
-    operator.setitem,
-    types.Array(types.int64, '1d', 'C'),
-    types.Any,
-    types.Any,
-)
-def setitem_group(context, builder, sig, args):
-    pass
-    #base_ptr, idx, val = args
-    #elem_ptr = builder.gep(base_ptr, [idx])
-    #builder.store(val, elem_ptr)
-    #context.nrt.incref(builder, managed_udf_string, val)
+@cuda_registry.lower_cast(ManagedGroupViewType(GroupViewType(types.int64)), GroupViewType(types.int64))
+def cast_managed_group_view_to_group_view(
+    context, builder, fromty, toty, val
+):
+
+    managed = cgutils.create_struct_proxy(fromty)(
+        context, builder, value=val
+    )
+
+    result = cgutils.create_struct_proxy(toty)(context, builder, value=managed.group_view)
+
+    return result._getvalue()

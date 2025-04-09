@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 import operator
-
+from numba.core import cgutils
+from numba.cuda.descriptor import cuda_target
 import numba
 from numba import cuda, types
 from numba.core.extending import (
@@ -74,6 +75,43 @@ class GroupViewType(numba.types.Type):
         super().__init__(
             name=f"GroupView({self.group_scalar_type}, {self.index_type})"
         )
+
+class ManagedGroupViewType(numba.types.Type):
+    """
+    An NRT tracked version of a group to be constructed
+    around intermediate groups that are allocated during the UDF
+    """
+
+    def __init__(self, group):
+        self.group = group
+        super().__init__(name="managed_group_view")
+
+    @property
+    def group_scalar_type(self):
+        return self.group.group_scalar_type
+    
+    @property
+    def index_type(self):
+        return self.group.index_type
+    
+
+
+@register_model(ManagedGroupViewType)
+class managed_group_view_model(models.StructModel):
+    _members = (("meminfo", types.voidptr), ("group_view", GroupViewType(types.int64)))
+
+    def __init__(self, dmm, fe_type):
+        super().__init__(dmm, fe_type, self._members)
+
+    def has_nrt_meminfo(self):
+        return True
+
+    def get_nrt_meminfo(self, builder, value):
+        udf_group_and_meminfo = cgutils.create_struct_proxy(ManagedGroupViewType(GroupViewType(types.int64)))(
+            cuda_target.target_context, builder, value=value
+        )
+        return udf_group_and_meminfo.meminfo
+
 
 
 class GroupByJITDataFrame(Row):
@@ -394,6 +432,10 @@ for attr in ("group_data", "index", "size"):
 #for op in arith_ops + comparison_ops + unary_ops:
 #    cuda_registry.register_global(op)(GroupOpBase)
 
+@cuda_registry.register_attr
+class ManagedGroupViewTypeAttrs(GroupViewAttr):
+    key = ManagedGroupViewType(GroupViewType(types.int64))
+
 _group_sum_binaryop = cuda.declare_device(
     "group_sum_binaryop",
     types.CPointer(types.int64)(
@@ -412,6 +454,6 @@ class GroupViewAdd(AbstractTemplate):
         if isinstance(args[0], GroupViewType) and isinstance(
             args[1], GroupViewType
         ):
-            return nb_signature(GroupViewType(types.int64), args[0], args[1])
+            return nb_signature(ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1])
 
 cuda_registry.register_global(operator.add)(GroupViewAdd)

@@ -735,8 +735,10 @@ class udf_group {
 
   __device__ udf_group(int64_t* data_ptr, size_t size_val)
       : data(data_ptr), size(size_val) {
-        if (threadIdx.x == 0 and blockIdx.x == 1) {
+        if (threadIdx.x == 0 and blockIdx.x == 0) {
+          printf("the data pointer is %p\n", data);
           for (size_t i = 0; i < size_val; ++i) {
+            printf("[udf_group] data[%zu] = %lld\n", i, data[i]);
           }
         }
       }
