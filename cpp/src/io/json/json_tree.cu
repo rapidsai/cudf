@@ -266,7 +266,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       error_count > 0) {
     auto const error_location =
       thrust::find(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
-    auto error_index = cudf::detail::make_host_vector_sync<SymbolOffsetT>(
+    auto error_index = cudf::detail::make_host_vector<SymbolOffsetT>(
       device_span<SymbolOffsetT const>{
         token_indices.data() + cuda::std::distance(tokens.begin(), error_location), 1},
       stream);

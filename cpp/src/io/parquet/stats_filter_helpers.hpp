@@ -16,13 +16,12 @@
 
 #pragma once
 
-#include "io/parquet/parquet_common.hpp"
-
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -66,7 +65,7 @@ class stats_caster_base {
   template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
-    CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
+    CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
     return stats_caster_base::targetType<T>(*reinterpret_cast<bool const*>(stats_val));
   }
 
@@ -77,16 +76,16 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case INT32:
+      case Type::INT32:
         return stats_caster_base::targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
-      case INT64:
+      case Type::INT64:
         return stats_caster_base::targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
-      case INT96:  // Deprecated in parquet specification
+      case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::targetType<T>(
           static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0]) << 32 |
           reinterpret_cast<int32_t const*>(stats_val)[2]);
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
+      case Type::BYTE_ARRAY: [[fallthrough]];
+      case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           // if type size == length of stats_val. then typecast and return.
           if constexpr (cudf::is_chrono<T>()) {
@@ -105,9 +104,9 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case FLOAT:
+      case Type::FLOAT:
         return stats_caster_base::targetType<T>(*reinterpret_cast<float const*>(stats_val));
-      case DOUBLE:
+      case Type::DOUBLE:
         return stats_caster_base::targetType<T>(*reinterpret_cast<double const*>(stats_val));
       default: CUDF_FAIL("Invalid type and stats combination");
     }
@@ -117,8 +116,8 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY:
+      case Type::BYTE_ARRAY: [[fallthrough]];
+      case Type::FIXED_LEN_BYTE_ARRAY:
         return string_view(reinterpret_cast<char const*>(stats_val), stats_size);
       default: CUDF_FAIL("Invalid type and stats combination");
     }
@@ -177,7 +176,7 @@ class stats_caster_base {
         offsets.push_back(offsets.back() + tmp.length());
       }
       auto d_chars   = cudf::detail::make_device_uvector_async(chars, stream, mr);
-      auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream, mr);
+      auto d_offsets = cudf::detail::make_device_uvector(offsets, stream, mr);
       return std::tuple{std::move(d_chars), std::move(d_offsets)};
     }
 

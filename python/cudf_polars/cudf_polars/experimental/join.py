@@ -9,9 +9,10 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import Join
-from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
+from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -197,10 +198,10 @@ def _(
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
-    elif ir.options[0] == "Cross":
-        raise NotImplementedError(
-            "Cross join not support for multiple partitions."
-        )  # pragma: no cover
+    elif ir.options[0] == "Cross":  # pragma: no cover
+        return _lower_ir_fallback(
+            ir, rec, msg="Cross join not support for multiple partitions."
+        )
 
     if _should_bcast_join(ir, left, right, partition_info, output_count):
         # Create a broadcast join
