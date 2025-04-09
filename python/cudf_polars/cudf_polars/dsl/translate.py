@@ -792,15 +792,3 @@ def _(node: pl_expr.Len, translator: Translator, dtype: plc.DataType) -> expr.Ex
     if dtype.id() != plc.TypeId.INT32:
         return expr.Cast(dtype, value)
     return value  # pragma: no cover; never reached since polars len has uint32 dtype
-
-
-@_translate_expr.register
-def _(
-    node: pl_expr.BinaryExpr, translator: Translator, dtype: plc.DataType
-) -> expr.Expr:
-    return expr.BinOp(
-        dtype,
-        expr.BinOp._MAPPING[node.op],
-        translator.translate_expr(n=node.left),
-        translator.translate_expr(n=node.right),
-    )
