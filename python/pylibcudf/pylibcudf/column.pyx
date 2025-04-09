@@ -30,7 +30,6 @@ from pylibcudf.libcudf.interop cimport (
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
-
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .scalar cimport Scalar
@@ -60,10 +59,12 @@ class _ArrowLike(metaclass=_ArrowLikeMeta):
 
 
 cdef class _ArrowColumnHolder:
+    """A holder for an Arrow column for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_column] col
 
 
 cdef class OwnerWithCAI:
+    """An interface for column view's data with gpumemoryview via CAI."""
     @staticmethod
     cdef create(column_view cv, object owner):
         obj = OwnerWithCAI()
@@ -106,6 +107,7 @@ cdef class OwnerWithCAI:
 
 
 cdef class OwnerMaskWithCAI:
+    """An interface for column view's null mask with gpumemoryview via CAI."""
     @staticmethod
     cdef create(column_view cv, object owner):
         obj = OwnerMaskWithCAI()

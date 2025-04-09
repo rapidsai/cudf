@@ -55,6 +55,7 @@ class _ArrowLike(metaclass=_ArrowLikeMeta):
 
 
 cdef class _ArrowTableHolder:
+    """A holder for an Arrow table for gpumemoryview lifetime management."""
     cdef unique_ptr[arrow_table] tbl
 
 

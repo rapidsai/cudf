@@ -200,9 +200,6 @@ class _ObjectWithArrowMetadata:
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
     """Create a PyArrow table from a pylibcudf table."""
-    # TODO: See if we can stop supporting configuration of struct field names when
-    # exporting to arrow data. That would allow us to get rid of the
-    # _ObjectWithArrowMetadata struct and just use the underlying Table directly.
     return pa.table(_ObjectWithArrowMetadata(cudf_object, metadata))
 
 
