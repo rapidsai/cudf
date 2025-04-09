@@ -119,7 +119,12 @@ class impl {
                                rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_filter_column_chunk_byte_ranges
+   * @brief Fetches byte ranges of column chunks of filter columns
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Pair of a vector of byte ranges to column chunks of filter columns and a vector of
+   *         their corresponding input source file indices
    */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
@@ -139,7 +144,12 @@ class impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_payload_column_chunk_byte_ranges
+   * @brief Fetches byte ranges of column chunks of payload columns
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Pair of a vector of byte ranges to column chunks of payload columns and a vector of
+   * their corresponding input source file indices
    */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::size_type>>
