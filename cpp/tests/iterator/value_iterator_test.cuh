@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ template <typename T>
 void non_null_iterator(IteratorTest<T>& testFixture)
 {
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
-  auto dev_array  = cudf::detail::make_device_uvector_sync(
+  auto dev_array  = cudf::detail::make_device_uvector(
     host_array, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // calculate the expected value by CPU.
