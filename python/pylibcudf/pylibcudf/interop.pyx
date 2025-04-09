@@ -9,7 +9,6 @@ from cpython.pycapsule cimport (
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from dataclasses import dataclass, field
 from functools import singledispatch
 
 from pyarrow import lib as pa
@@ -26,6 +25,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
+from ._interop import ColumnMetadata
 
 __all__ = [
     "ColumnMetadata",
@@ -63,24 +63,6 @@ ARROW_TO_PYLIBCUDF_TYPES = {
 LIBCUDF_TO_ARROW_TYPES = {
     v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
 }
-
-
-@dataclass
-class ColumnMetadata:
-    """Metadata associated with a column.
-
-    This is the Python representation of :cpp:class:`cudf::column_metadata`.
-    """
-    name: str = ""
-    children_meta: list[ColumnMetadata] = field(default_factory=list)
-
-
-def _create_nested_column_metadata(Column col):
-    return ColumnMetadata(
-        children_meta=[
-            _create_nested_column_metadata(child) for child in col.children()
-        ]
-    )
 
 
 @singledispatch

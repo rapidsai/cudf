@@ -22,54 +22,26 @@ from pylibcudf.libcudf.interop cimport (
     ArrowSchema,
     arrow_table,
     column_metadata,
-    release_arrow_array_raw,
-    release_arrow_schema_raw,
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
 
 from .column cimport Column
 from .utils cimport _get_stream
+from pylibcudf._interop cimport (
+    _release_schema,
+    _release_array,
+    _metadata_to_libcudf,
+)
+from ._interop import ColumnMetadata
 
 from functools import singledispatchmethod
 
 __all__ = ["Table"]
 
 
-cdef void _release_schema(object schema_capsule) noexcept:
-    """Release the ArrowSchema object stored in a PyCapsule."""
-    cdef ArrowSchema* schema = <ArrowSchema*>PyCapsule_GetPointer(
-        schema_capsule, 'arrow_schema'
-    )
-    release_arrow_schema_raw(schema)
-
-
-cdef void _release_array(object array_capsule) noexcept:
-    """Release the ArrowArray object stored in a PyCapsule."""
-    cdef ArrowArray* array = <ArrowArray*>PyCapsule_GetPointer(
-        array_capsule, 'arrow_array'
-    )
-    release_arrow_array_raw(array)
-
-
-cdef column_metadata _metadata_to_libcudf(metadata):
-    """Convert a ColumnMetadata object to C++ column_metadata.
-
-    Since this class is mutable and cheap, it is easier to create the C++
-    object on the fly rather than have it directly backing the storage for
-    the Cython class. Additionally, this structure restricts the dependency
-    on C++ types to just within this module, allowing us to make the module a
-    pure Python module (from an import sense, i.e. no pxd declarations).
-    """
-    cdef column_metadata c_metadata
-    c_metadata.name = metadata.name.encode()
-    for child_meta in metadata.children_meta:
-        c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
-    return c_metadata
-
-
 class _ArrowLikeMeta(type):
-    # Unfortunately we cannot separate stream and array via singledispatch because the
+    # We cannot separate stream and array via singledispatch because the
     # dispatch will often be ambiguous when objects expose both protocols.
     def __subclasscheck__(cls, other):
         return (
@@ -221,14 +193,9 @@ cdef class Table:
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""
-        # TODO: We'll need to reshuffle where things are defined to avoid circular
-        # imports. For now, we'll just import this inline. We should be able to avoid
-        # circularity altogether by simply not needing ColumnMetadata at all in the
-        # future and just using the schema directly, so we can consider that approach.
-        from pylibcudf.interop import ColumnMetadata, _create_nested_column_metadata
         if metadata is None:
             metadata = [
-                _create_nested_column_metadata(col) for col in self.columns()
+                col._create_nested_column_metadata() for col in self.columns()
             ]
         else:
             metadata = [

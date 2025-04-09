@@ -28,6 +28,7 @@ set(cython_sources
     groupby.pyx
     hashing.pyx
     interop.pyx
+    _interop.pyx
     jit.pyx
     join.pyx
     json.pyx
@@ -68,6 +69,7 @@ include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
 target_link_libraries(pylibcudf_table PUBLIC nanoarrow)
 target_link_libraries(pylibcudf_column PUBLIC nanoarrow)
+target_link_libraries(pylibcudf__interop PUBLIC nanoarrow)
 
 add_subdirectory(libcudf)
 add_subdirectory(strings)
