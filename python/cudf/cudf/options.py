@@ -67,6 +67,10 @@ def _register_option(
     validator : Callable
         Called on the option value to check its validity. Should raise an
         error if the value is invalid.
+    set_callback : Callable | None
+        Called when setting the option value.
+    get_callback : Callable | None
+        Called when getting the option value.
 
     Raises
     ------
@@ -406,6 +410,7 @@ _register_option(
         completes all existing I/O tasks, destroys the previous thread pool,
         and creates a new one with the specified value. Otherwise, the existing
         thread pool will be used for subsequent I/O operations.
+        \tValid values are integers. Default is 4.
     """
     ),
     _integer_validator,
