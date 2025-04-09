@@ -11,9 +11,9 @@ from numba.np import numpy_support
 from cudf.core.column import column_empty
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
-    Group,
+    GroupView,
     GroupByJITDataFrame,
-    GroupType,
+    GroupViewType,
 )
 from cudf.core.udf.templates import (
     group_initializer_template,
@@ -59,7 +59,7 @@ def _get_frame_groupby_type(dtype, index_dtype):
         title = info[2] if len(info) == 3 else None
         ty = numpy_support.from_dtype(elemdtype)
         indexty = numpy_support.from_dtype(index_dtype)
-        groupty = GroupType(ty, indexty)
+        groupty = GroupViewType(ty, indexty)
         infos = {
             "type": groupty,
             "offset": offset,
@@ -116,7 +116,7 @@ def _get_groupby_apply_kernel(frame, func, args):
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
         "cuda": cuda,
-        "Group": Group,
+        "Group": GroupView,
         "dataframe_group_type": dataframe_group_type,
         "types": types,
     }
@@ -153,7 +153,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    if isinstance(return_type, GroupType):
+    if isinstance(return_type, GroupViewType):
         return_type = as_dtype(return_type.group_scalar_type)
         assert False
 

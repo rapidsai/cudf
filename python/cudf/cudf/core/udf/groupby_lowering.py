@@ -11,8 +11,8 @@ from numba import cuda
 
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
-    Group,
-    GroupType,
+    GroupView,
+    GroupViewType,
     call_cuda_functions,
     group_size_type,
     index_default_type,
@@ -93,7 +93,7 @@ def group_corr(context, builder, sig, args):
     return result
 
 
-@lower_builtin(Group, types.Array, group_size_type, types.Array)
+@lower_builtin(GroupView, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
     Instruction boilerplate used for instantiating a Group
@@ -175,25 +175,25 @@ cuda_Group_count = cuda_Group_size
 
 
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
-    cuda_lower("GroupType.max", GroupType(ty))(cuda_Group_max)
-    cuda_lower("GroupType.min", GroupType(ty))(cuda_Group_min)
-    cuda_lower("GroupType.sum", GroupType(ty))(cuda_Group_sum)
-    cuda_lower("GroupType.count", GroupType(ty))(cuda_Group_count)
-    cuda_lower("GroupType.size", GroupType(ty))(cuda_Group_size)
-    cuda_lower("GroupType.mean", GroupType(ty))(cuda_Group_mean)
-    cuda_lower("GroupType.std", GroupType(ty))(cuda_Group_std)
-    cuda_lower("GroupType.var", GroupType(ty))(cuda_Group_var)
-    cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(
+    cuda_lower("GroupViewType.max", GroupViewType(ty))(cuda_Group_max)
+    cuda_lower("GroupViewType.min", GroupViewType(ty))(cuda_Group_min)
+    cuda_lower("GroupViewType.sum", GroupViewType(ty))(cuda_Group_sum)
+    cuda_lower("GroupViewType.count", GroupViewType(ty))(cuda_Group_count)
+    cuda_lower("GroupViewType.size", GroupViewType(ty))(cuda_Group_size)
+    cuda_lower("GroupViewType.mean", GroupViewType(ty))(cuda_Group_mean)
+    cuda_lower("GroupViewType.std", GroupViewType(ty))(cuda_Group_std)
+    cuda_lower("GroupViewType.var", GroupViewType(ty))(cuda_Group_var)
+    cuda_lower("GroupViewType.idxmax", GroupViewType(ty, types.int64))(
         cuda_Group_idxmax
     )
-    cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
+    cuda_lower("GroupViewType.idxmin", GroupViewType(ty, types.int64))(
         cuda_Group_idxmin
     )
-    cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)
+    cuda_lower("GroupViewType.corr", GroupViewType(ty), GroupViewType(ty))(group_corr)
 
 
 import operator
-@cuda_lower(operator.add, GroupType(types.int64), GroupType(types.int64))
+@cuda_lower(operator.add, GroupViewType(types.int64), GroupViewType(types.int64))
 def cuda_lower_add(context, builder, sig, args):
     lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
@@ -234,4 +234,3 @@ def setitem_group(context, builder, sig, args):
     #elem_ptr = builder.gep(base_ptr, [idx])
     #builder.store(val, elem_ptr)
     #context.nrt.incref(builder, managed_udf_string, val)
-

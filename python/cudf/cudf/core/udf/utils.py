@@ -110,18 +110,18 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # needed here.
     with _CUDFNumbaConfig():
         ptx, output_type = cudautils.compile_udf(func, compile_sig)
-    
-    # TODO
-    from cudf.core.udf.groupby_typing import GroupType
 
-    if not isinstance(output_type, (MaskedType, GroupType)):
+    # TODO
+    from cudf.core.udf.groupby_typing import GroupViewType
+
+    if not isinstance(output_type, (MaskedType, GroupViewType)):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
         numba_output_type = output_type
 
     if isinstance(numba_output_type, MaskedType):
         result = numba_output_type.value_type
-    elif isinstance(numba_output_type, GroupType):
+    elif isinstance(numba_output_type, GroupViewType):
         return numba_output_type
     else:
         result = numba_output_type
@@ -293,8 +293,8 @@ def _compile_or_get(
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-    from cudf.core.udf.groupby_typing import GroupType
-    if isinstance(scalar_return_type, GroupType):
+    from cudf.core.udf.groupby_typing import GroupViewType
+    if isinstance(scalar_return_type, GroupViewType):
         #precompiled[cache_key] = (kernel, scalar_return_type)
         return kernel, scalar_return_type
     np_return_type = (
