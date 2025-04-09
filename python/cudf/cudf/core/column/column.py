@@ -750,7 +750,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return plc.interop.to_arrow(self.to_pylibcudf(mode="read")).chunk(0)
+        return plc.interop.to_arrow(self.to_pylibcudf(mode="read"))
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
