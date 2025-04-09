@@ -1862,6 +1862,20 @@ class MapFunction(IR):
                 raise NotImplementedError(f"Unsupported scan type: {typ}")
         self._non_child_args = (schema, name, self.options)
 
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The options dictionaries are serialised for hashing purposes
+        as json strings.
+        """
+        return (
+            type(self),
+            self.name,
+            json.dumps(self.options),
+            tuple(self.schema.items()),
+        )
+
     @classmethod
     def do_evaluate(
         cls, schema: Schema, name: str, options: Any, df: DataFrame
