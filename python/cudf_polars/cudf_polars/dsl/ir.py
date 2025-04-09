@@ -1801,6 +1801,7 @@ class MapFunction(IR):
             "explode",
             "unpivot",
             "row_index",
+            "fast_count",
         ]
     )
 
@@ -1809,6 +1810,7 @@ class MapFunction(IR):
         self.name = name
         self.options = options
         self.children = (df,)
+        print("NAME", self.name)
         if (
             self.name not in MapFunction._NAMES
         ):  # pragma: no cover; need more polars rust functions
@@ -1854,6 +1856,11 @@ class MapFunction(IR):
         elif self.name == "row_index":
             col_name, offset = options
             self.options = (col_name, offset)
+        elif self.name == "fast_count":
+            _, scan_type, _ = options
+            typ = scan_type[0]
+            if typ != "parquet":
+                raise NotImplementedError(f"Unsupported scan type: {typ}")
         self._non_child_args = (schema, name, self.options)
 
     @classmethod
@@ -1936,6 +1943,25 @@ class MapFunction(IR):
                 name=col_name,
             )
             return DataFrame([index_col, *df.columns])
+        elif name == "fast_count":
+            paths, scan_type, alias = options
+            typ, _, _ = scan_type
+
+            if typ == "parquet":
+                meta = plc.io.parquet_metadata.read_parquet_metadata(
+                    plc.io.SourceInfo(paths)
+                )
+                nrows = meta.num_rows()
+            col = Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        nrows, plc.types.DataType(plc.types.TypeId.UINT32)
+                    ),
+                    1,
+                ),
+                name=alias or "len",
+            )
+            return DataFrame([col])
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 

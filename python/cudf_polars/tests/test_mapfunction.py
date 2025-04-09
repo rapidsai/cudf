@@ -94,3 +94,29 @@ def test_with_row_index_defaults():
     )
     q = lf.with_row_index()
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("engine", ["csv", "ndjson"])
+def test_fast_count_unsupported_formats(tmp_path, engine):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    file = tmp_path / f"test.{engine}"
+    if engine == "csv":
+        df.write_csv(file)
+    elif engine == "ndjson":
+        df.write_ndjson(file)
+
+    q = (
+        pl.scan_csv(file).select(pl.len())
+        if engine == "csv"
+        else pl.scan_ndjson(file).select(pl.len())
+    )
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_fast_count_parquet(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    file = tmp_path / "data.parquet"
+    df.write_parquet(file)
+
+    q = pl.scan_parquet(file).select(pl.len())
+    assert_gpu_result_equal(q)
