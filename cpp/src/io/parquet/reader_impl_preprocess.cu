@@ -655,7 +655,7 @@ __device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
   auto const is_binary =
-    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+    chunk.physical_type == Type::BYTE_ARRAY or chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return is_binary and not is_decimal;
 }
 
@@ -924,7 +924,7 @@ void reader::impl::allocate_nesting_info()
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
             to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
-          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
+          pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
         // move up the hierarchy
