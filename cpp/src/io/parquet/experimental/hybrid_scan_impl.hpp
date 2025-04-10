@@ -15,8 +15,8 @@
  */
 
 /**
- * @file reader_impl.hpp
- * @brief cuDF-IO Parquet reader class implementation header
+ * @file hybrid_scan_impl.hpp
+ * @brief cuDF-IO experimental Parquet reader class implementation header
  */
 
 #pragma once
