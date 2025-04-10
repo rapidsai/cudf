@@ -727,16 +727,18 @@ __global__ void get_snappy_uncompressed_size_kernel(
   auto cur       = inputs[idx].begin();
   auto const end = inputs[idx].end();
 
-  size_t uncompressed_size = 0;
-  int shift                = 0;
-  while (cur < end && shift <= 57) {
+  constexpr int payload_bits_per_byte = 7;
+  constexpr size_t payload_mask       = (1 << payload_bits_per_byte) - 1;
+  size_t uncompressed_size            = 0;
+  int shift                           = 0;
+  while (cur < end && shift + payload_bits_per_byte <= 8 * sizeof(size_t)) {
     size_t const byte = *cur++;
-    uncompressed_size |= (byte & 0x7f) << shift;
-    if (!(byte & 0x80)) {
+    uncompressed_size |= (byte & payload_mask) << shift;
+    if ((byte & (1 << payload_bits_per_byte)) == 0) {
       uncompressed_sizes[idx] = uncompressed_size;
       return;
     }
-    shift += 7;
+    shift += payload_bits_per_byte;
   }
   // Invalid varint
   uncompressed_sizes[idx] = 0;
