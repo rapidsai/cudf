@@ -2,6 +2,8 @@
 
 `cudf-polars` enables GPU acceleration for Polars' LazyFrame API by executing logical plans with cuDF and pylibcudf. It requires minimal code changes and works by specifying a GPU execution engine during collection or profiling.
 
+For a high-level overview of GPU support in Polars, see the [Polars GPU support guide](https://docs.pola.rs/user-guide/gpu-support/).
+
 ## Getting Started
 
 Use `cudf-polars` by calling `.collect(engine="gpu")` or `.profile(engine="gpu")` on a LazyFrame:
