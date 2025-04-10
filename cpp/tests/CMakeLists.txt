@@ -343,6 +343,7 @@ target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
+ConfigureTest(KVIKIO_MANAGER_TEST io/kvikio_manager_test.cpp EXTRA_LIBS kvikio::kvikio)
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
