@@ -569,6 +569,7 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-cudart-dev
+              - cuda-nvml-dev
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
@@ -576,6 +577,7 @@ dependencies:
               cuda: "11.8"
             packages:
               - cudatoolkit
+              - cuda-nvml-dev
               - cuda-nvtx=11.8
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86

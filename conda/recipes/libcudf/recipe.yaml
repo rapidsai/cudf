@@ -82,6 +82,7 @@ cache:
             then:
               - libcufile-dev
       - cuda-version =${{ cuda_version }}
+      - cuda-nvml-dev
       - nvcomp ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
@@ -250,6 +251,7 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - cuda-version =${{ cuda_version }}
+        - cuda-nvml-dev
         - if: cuda_major == "11"
           then:
             - cuda-nvtx =${{ cuda_version }}
