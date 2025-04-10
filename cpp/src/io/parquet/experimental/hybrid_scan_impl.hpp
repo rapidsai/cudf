@@ -15,8 +15,8 @@
  */
 
 /**
- * @file reader_impl.hpp
- * @brief cuDF-IO Parquet reader class implementation header
+ * @file hybrid_scan_impl.hpp
+ * @brief cuDF-IO experimental Parquet reader class implementation header
  */
 
 #pragma once
@@ -288,18 +288,18 @@ class impl {
   void populate_metadata(table_metadata& out_metadata) const;
 
   /**
-   * @brief Read the set of column chunks to be processed for this pass.
+   * @brief Setup pointers to columns chunks to be processed for this pass.
    *
    * Does not decompress the chunk data.
    *
    * @return boolean indicating if compressed chunks were found
    */
-  bool read_column_chunks();
+  bool setup_column_chunks();
 
   /**
-   * @brief Read compressed column chunks data and page information for the current pass.
+   * @brief Setup compressed column chunks data and decode page headers for the current pass.
    */
-  void read_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers);
+  void setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers);
 
   /**
    * @brief Build string dictionary indices for a pass.

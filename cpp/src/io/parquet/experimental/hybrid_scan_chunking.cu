@@ -832,10 +832,8 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
     pass.skip_rows = _file_itm_data.global_skip_rows;
     pass.num_rows  = _file_itm_data.global_num_rows;
 
-    // load page information for the chunk. this retrieves the compressed bytes for all the
-    // pages, and their headers (which we can access without decompressing)
-
-    read_compressed_data(std::move(column_chunk_buffers));
+    // Setup page information for the chunk (which we can access without decompressing)
+    setup_compressed_data(std::move(column_chunk_buffers));
 
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N

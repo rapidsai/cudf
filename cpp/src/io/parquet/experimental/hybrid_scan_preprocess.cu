@@ -1003,7 +1003,7 @@ void impl::allocate_nesting_info()
   page_nesting_decode_info.host_to_device_async(_stream);
 }
 
-bool impl::read_column_chunks()
+bool impl::setup_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
   auto& chunks                = _pass_itm_data->chunks;
@@ -1036,7 +1036,7 @@ bool impl::read_column_chunks()
   return total_decompressed_size > 0;
 }
 
-void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers)
+void impl::setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 
@@ -1048,7 +1048,7 @@ void impl::read_compressed_data(std::vector<rmm::device_buffer> column_chunk_buf
   // Move column chunk buffers to raw page data.
   _pass_itm_data->raw_page_data = std::move(column_chunk_buffers);
 
-  pass.has_compressed_data = read_column_chunks();
+  pass.has_compressed_data = setup_column_chunks();
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
