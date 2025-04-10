@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/type_checks.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -22,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -108,12 +108,10 @@ void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream
   std::vector<void*> h_dsts(num_columns);
 
   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
-              "All columns must have the same data type",
-              cudf::data_type_error);
-  CUDF_EXPECTS( !cudf::has_nulls(input),
-              "All columns must contain no nulls",
-              std::invalid_argument);
-  std::transform( input.begin(), input.end(), h_srcs.begin(), [] (auto& col) {
+               "All columns must have the same data type",
+               cudf::data_type_error);
+  CUDF_EXPECTS(!cudf::has_nulls(input), "All columns must contain no nulls", std::invalid_argument);
+  std::transform(input.begin(), input.end(), h_srcs.begin(), [](auto& col) {
     return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
   });
   for (int i = 0; i < num_columns; ++i) {

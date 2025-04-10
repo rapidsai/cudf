@@ -85,8 +85,8 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
   }
 
   std::vector<cudf::column_view> views(cols.size());
-  std::transform(cols.begin(), cols.end(), views.begin(),
-                 [](auto const& col) { return col->view(); });
+  std::transform(
+    cols.begin(), cols.end(), views.begin(), [](auto const& col) { return col->view(); });
   cudf::table_view input{views};
 
   auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, *mr);
@@ -120,7 +120,6 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   size_t num_elements = input.num_rows() * input.num_columns();
 
   auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, *mr);
-
 
   cudf::table_to_array(input, output.data(), dtype, stream);
 
