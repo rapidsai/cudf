@@ -43,8 +43,8 @@ namespace detail {
  * NVML initialization can be costly. Using this function ensures it is performed only once per
  * process.
  *
- * @note NVML shutdown is also costly. We may avoid doing it at the expense of a slight NVML
- * resource leak.
+ * @note NVML shutdown is also costly. We may intentionally not perform shutdown at the expense of a
+ * slight NVML resource leak.
  */
 void initialize_nvml()
 {
