@@ -407,7 +407,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
     }
 
-    auto const got = cudf::detail::make_std_vector_sync(d_got, stream);
+    auto const got = cudf::detail::make_std_vector(d_got, stream);
 
     EXPECT_EQ(expected, got);
   }
