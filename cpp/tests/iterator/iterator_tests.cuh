@@ -88,7 +88,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
   {
     InputIterator d_in_last = d_in + num_items;
     EXPECT_EQ(cuda::std::distance(d_in, d_in_last), num_items);
-    auto dev_expected = cudf::detail::make_device_uvector_sync(
+    auto dev_expected = cudf::detail::make_device_uvector(
       expected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     // using a temporary vector and calling transform and all_of separately is
@@ -112,7 +112,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                 rmm::device_uvector<T_output> const& dev_result,
                 char const* msg = nullptr)
   {
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
+    auto host_result = cudf::detail::make_host_vector(dev_result, cudf::get_default_stream());
 
     EXPECT_EQ(expected, host_result[0]) << msg;
   }
