@@ -251,7 +251,6 @@ outputs:
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - cuda-version =${{ cuda_version }}
-        - cuda-nvml-dev
         - if: cuda_major == "11"
           then:
             - cuda-nvtx =${{ cuda_version }}
@@ -334,6 +333,7 @@ outputs:
               - libcurand-dev
         by_name:
           - cuda-cudart
+          - cuda-nvml
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
