@@ -194,6 +194,13 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupViewType.corr", GroupViewType(ty), GroupViewType(ty))(group_corr)
 
 
+_print_group_data = cuda.declare_device(
+    'print_group_data',
+    types.void(types.CPointer(types.int64), types.int64)
+)
+def call_print_group_data(data_ptr, size):
+    _print_group_data(data_ptr, size)
+
 import operator
 @cuda_lower(operator.add, GroupViewType(types.int64), GroupViewType(types.int64))
 def cuda_lower_add(context, builder, sig, args):
@@ -202,6 +209,15 @@ def cuda_lower_add(context, builder, sig, args):
     )
     rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
         context, builder, value=args[1]
+    )
+
+    _ = context.compile_internal(
+        builder,
+        call_print_group_data,
+        types.void(
+            types.CPointer(types.int64), types.int64
+        ),
+        (lhs_grp.group_data, lhs_grp.size),
     )
 
     output = cgutils.create_struct_proxy(sig.return_type)(context, builder)
@@ -219,8 +235,22 @@ def cuda_lower_add(context, builder, sig, args):
             lhs_grp.size,
         ),
     )
-    output.group_view.size = lhs_grp.size
-    output.group_view.group_data = out_ptr
+
+    _ = context.compile_internal(
+        builder,
+        call_print_group_data,
+        types.void(
+            types.CPointer(types.int64), types.int64
+        ),
+        (out_ptr, lhs_grp.size),
+    )
+
+    out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder)
+    out_grp.group_data = out_ptr
+    out_grp.size = lhs_grp.size
+
+    output.group_view = out_grp._getvalue()
+
     return output._getvalue()
 
 

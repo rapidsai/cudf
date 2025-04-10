@@ -736,9 +736,10 @@ class udf_group {
   __device__ udf_group(int64_t* data_ptr, size_t size_val)
       : data(data_ptr), size(size_val) {
         if (threadIdx.x == 0 and blockIdx.x == 0) {
-          printf("the data pointer is %p\n", data);
-          for (size_t i = 0; i < size_val; ++i) {
-            printf("[udf_group] data[%zu] = %lld\n", i, data[i]);
+          
+          printf("[udf_group constructor]: the data pointer is %p\n", data);
+          for (int64_t i = 0; i < size_val; ++i) {
+            printf("[udf_group] data[%lld] = %lld\n", i, data[i]);
           }
         }
       }
@@ -786,6 +787,13 @@ __device__ int group_sum_binaryop(
     int64_t** numba_return_value, int64_t* lhs, int64_t* rhs, int64_t size) 
 {
 
+  if (threadIdx.x == 0 and blockIdx.x == 0 ) {
+    printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
+    for (int64_t i = 0; i < size; ++i) {
+      printf("[group_sum_binaryop] lhs[%lld] = %lld\n", i, lhs[i]);
+    }
+  }
+  __syncthreads();
   udf_group lhs_udf_grp = udf_group(lhs, size);
   udf_group rhs_udf_grp = udf_group(rhs, size);
   __syncthreads();
@@ -795,6 +803,16 @@ __device__ int group_sum_binaryop(
   return 0;
 }
 
+extern "C"
+__device__ int print_group_data(int64_t* numba_return_value, int64_t* group_data, int64_t size) {
+  if (threadIdx.x == 0) {
+    printf("[print_group_data]: the data pointer is %p\n", group_data);
+    for (int64_t i = 0; i < size; ++i) {
+      printf("group_data[%lld] = %lld, block idx = %d\n", i, group_data[i], blockIdx.x);
+    }
+  }
+  return 0;
+}
 
 
 /*/*
