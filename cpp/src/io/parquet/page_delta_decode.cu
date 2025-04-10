@@ -860,7 +860,7 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
-  dim3 dim_block(96, 1);
+  dim3 dim_block(decode_delta_binary_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
