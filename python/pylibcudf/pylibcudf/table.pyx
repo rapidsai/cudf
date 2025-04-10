@@ -2,11 +2,9 @@
 
 from cython.operator cimport dereference
 
-from cpython cimport Py_INCREF, Py_DECREF
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
     PyCapsule_New,
-    PyCapsule_SetContext,
 )
 
 from libcpp.memory cimport unique_ptr, make_unique
@@ -229,16 +227,13 @@ cdef class Table:
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
         with nogil:
-            raw_device_array_ptr = to_arrow_device_raw(self.view())
+            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
 
-        cdef object capsule = PyCapsule_New(
+        return PyCapsule_New(
             <void*>raw_device_array_ptr,
             "arrow_device_array",
             _release_device_array
         )
-        PyCapsule_SetContext(capsule, <void*>self)
-        Py_INCREF(self)
-        return capsule
 
     def __arrow_c_array__(self, requested_schema=None):
         if requested_schema is not None:

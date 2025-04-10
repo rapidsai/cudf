@@ -135,14 +135,47 @@ cdef extern from *:
       delete array;
     }
 
+    struct PylibcudfArrowDeviceArrayPrivateData {
+       ArrowArray parent;
+       PyObject* owner;
+    };
+
+    void PylibcudfArrowDeviceArrayRelease(ArrowArray* array)
+    {
+      // TODO: Figure out if synchronization needs to be handled here in addition to the
+      // parent. It probably does because we'll allocate an extra level of it.
+      auto private_data = reinterpret_cast<PylibcudfArrowDeviceArrayPrivateData*>(
+        array->private_data);
+      Py_DECREF(private_data->owner);
+      private_data->parent.release(&private_data->parent);
+      array->release = nullptr;
+    }
+
     ArrowDeviceArray* to_arrow_device_raw(
       cudf::table_view const& tbl,
+      PyObject* owner,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      // TODO: Technically need to call the sync event.
-      ArrowDeviceArray *arr = new ArrowDeviceArray();
       auto tmp = cudf::to_arrow_device(tbl, stream, mr);
-      ArrowDeviceArrayMove(tmp.get(), arr);
+
+      // TODO: Technically need to call the sync event before we do anything.
+
+      // Instead of moving the whole device array, we move the underlying ArrowArray
+      // into the custom private data struct for managing its data then create a new
+      // device array from scratch.
+      auto private_data = new PylibcudfArrowDeviceArrayPrivateData();
+      ArrowArrayMove(&tmp->array, &private_data->parent);
+      private_data->owner = owner;
+      Py_INCREF(owner);
+
+      ArrowDeviceArray *arr = new ArrowDeviceArray();
+      arr->device_id          = tmp->device_id;
+      arr->device_type        = tmp->device_type;
+      arr->sync_event         = tmp->sync_event;
+      arr->array              = private_data->parent;  // shallow copy
+      arr->array.private_data = private_data;
+      arr->array.release      = &PylibcudfArrowDeviceArrayRelease;
+
       return arr;
     }
     """
@@ -182,4 +215,5 @@ cdef extern from *:
     ) except +libcudf_exception_handler nogil
     cdef ArrowDeviceArray* to_arrow_device_raw(
         const table_view& tbl,
+        object owner,
     ) except +libcudf_exception_handler nogil
