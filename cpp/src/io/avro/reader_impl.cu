@@ -283,28 +283,28 @@ rmm::device_buffer decompress_data(datasource& source,
                    });
     compressed_blocks.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<size_t> decompressed_sizes(num_blocks, stream);
-    get_snappy_uncompressed_size(compressed_blocks, decompressed_sizes, stream);
-    decompressed_sizes.device_to_host(stream);
+    cudf::detail::hostdevice_vector<size_t> uncompressed_sizes(num_blocks, stream);
+    get_snappy_uncompressed_size(compressed_blocks, uncompressed_sizes, stream);
+    uncompressed_sizes.device_to_host(stream);
 
-    cudf::detail::hostdevice_vector<size_t> decompressed_offsets(num_blocks, stream);
-    std::exclusive_scan(decompressed_sizes.begin(),
-                        decompressed_sizes.end(),
-                        decompressed_offsets.begin(),
+    cudf::detail::hostdevice_vector<size_t> uncompressed_offsets(num_blocks, stream);
+    std::exclusive_scan(uncompressed_sizes.begin(),
+                        uncompressed_sizes.end(),
+                        uncompressed_offsets.begin(),
                         size_t{0});
-    decompressed_offsets.host_to_device_async(stream);
+    uncompressed_offsets.host_to_device_async(stream);
 
-    size_t const decompressed_data_size = decompressed_offsets.back() + decompressed_sizes.back();
+    size_t const uncompressed_data_size = uncompressed_offsets.back() + uncompressed_sizes.back();
     size_t const max_decomp_block_size =
-      *std::max_element(decompressed_sizes.begin(), decompressed_sizes.end());
+      *std::max_element(uncompressed_sizes.begin(), uncompressed_sizes.end());
 
-    rmm::device_buffer decompressed_data(decompressed_data_size, stream);
+    rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
     thrust::tabulate(rmm::exec_policy(stream),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
-                     [off  = decompressed_offsets.device_ptr(),
-                      size = decompressed_sizes.device_ptr(),
+                     [off  = uncompressed_offsets.device_ptr(),
+                      size = uncompressed_sizes.device_ptr(),
                       data = static_cast<uint8_t*>(decompressed_data.data())] __device__(int i) {
                        return device_span<uint8_t>{data + off[i], size[i]};
                      });
@@ -320,11 +320,11 @@ rmm::device_buffer decompress_data(datasource& source,
                decompressed_blocks,
                decomp_results,
                max_decomp_block_size,
-               decompressed_data_size,
+               uncompressed_data_size,
                stream);
     CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                               decompressed_sizes.d_begin(),
-                               decompressed_sizes.d_end(),
+                               uncompressed_sizes.d_begin(),
+                               uncompressed_sizes.d_end(),
                                decomp_results.begin(),
                                [] __device__(auto const& size, auto const& result) {
                                  return size == result.bytes_written and
@@ -334,8 +334,8 @@ rmm::device_buffer decompress_data(datasource& source,
 
     // Update blocks offsets & sizes to refer to uncompressed data
     for (size_t i = 0; i < num_blocks; i++) {
-      meta.block_list[i].offset = decompressed_offsets[i];
-      meta.block_list[i].size   = decompressed_sizes[i];
+      meta.block_list[i].offset = uncompressed_offsets[i];
+      meta.block_list[i].size   = uncompressed_sizes[i];
     }
 
     return decompressed_data;
