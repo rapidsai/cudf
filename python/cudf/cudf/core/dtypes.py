@@ -53,6 +53,8 @@ def get_dtype_enum(dtype: Dtype) -> int:
         return DTYPE_ENUM_MAP[pd.core.dtypes.dtypes.ArrowDtype]
     elif issubclass(type(dtype), pd.core.dtypes.dtypes.ExtensionDtype):
         return DTYPE_ENUM_MAP[pd.core.dtypes.dtypes.ExtensionDtype]
+    elif isinstance(dtype, np.dtype):
+        return 0
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 

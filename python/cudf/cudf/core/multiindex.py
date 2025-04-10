@@ -191,7 +191,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
             source_data[i] = result_col._with_type_metadata(
-                level.dtype, dtype_enum=level.dtype_enum
+                level.dtype, dtype_enum=level._column.dtype_enum
             )
 
         super().__init__(ColumnAccessor(source_data))
