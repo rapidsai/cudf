@@ -4458,4 +4458,4 @@ def test_parquet_reader_empty_compressed_page(datadir):
     fname = datadir / "empty_datapage_v2.parquet"
 
     df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
-    assert_eq(cudf.read_parquet(fname),df)
+    assert_eq(cudf.read_parquet(fname), df)
