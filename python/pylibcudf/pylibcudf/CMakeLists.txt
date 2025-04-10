@@ -63,7 +63,9 @@ rapids_cython_create_modules(
 )
 
 target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-target_include_directories(pylibcudf__interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
+target_include_directories(
+  pylibcudf__interop_helpers PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
+)
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
