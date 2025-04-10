@@ -20,7 +20,6 @@ from cudf_polars.dsl.traversal import (
     traversal,
 )
 from cudf_polars.experimental.base import get_key_name
-from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import ExprTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 _SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
@@ -46,6 +46,8 @@ class FusedExpr(Expr):
     - When a FusedExpr object is evaluated, it will
     substitute it's evaluated children into ``sub_expr``,
     and evaluate the re-written sub-expression.
+    - The specific structure of ``sub_expr`` depends on
+    the ``kind`` attribute.
     """
 
     __slots__ = ("kind", "sub_expr")
@@ -235,10 +237,12 @@ def _decompose(expr: Expr, rec: ExprTransformer) -> FusedExpr:
         # Convert to simple FusedExpr with no children
         sub_expr = expr
 
-    return construct_fused_expr(sub_expr, fused_children)
+    return construct_fused_expr(sub_expr, fused_children, rec.state["config_options"])
 
 
-def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> FusedExpr:
+def construct_fused_expr(
+    sub_expr: Expr, fused_children: list[FusedExpr], config_options: ConfigOptions
+) -> FusedExpr:
     """
     Construct new FusedExpr object.
 
@@ -248,6 +252,8 @@ def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> Fus
         Expression to be wrapped in a ``FusedExpr`` class.
     fused_children
         Children of ``sub_expr`` that are already ``FusedExpr`` nodes.
+    config_options
+        GPUEngine configuration options.
 
     Returns
     -------
@@ -303,7 +309,7 @@ def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> Fus
             (child,) = agg.children
             shuffled = FusedExpr(
                 child.dtype,
-                ShuffleColumn(child.dtype, ConfigOptions({}), child),
+                ShuffleColumn(child.dtype, config_options, child),
                 "shuffle",
                 *fused_children,
             )
@@ -338,9 +344,9 @@ def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> Fus
     return FusedExpr(final_expr.dtype, final_expr, kind, *fused_children)
 
 
-def decompose_expr_graph(expr: Expr) -> Expr:
+def decompose_expr_graph(expr: Expr, config_options: ConfigOptions) -> Expr:
     """Transform an Expr into a graph of FusedExpr nodes."""
-    mapper = CachingVisitor(_decompose)
+    mapper = CachingVisitor(_decompose, state={"config_options": config_options})
     return mapper(expr)
 
 

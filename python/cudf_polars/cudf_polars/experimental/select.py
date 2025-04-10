@@ -25,15 +25,19 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 def decompose_select(
     ir: Select,
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Decompose a Select expression (if possible)."""
-    named_exprs = [e.reconstruct(decompose_expr_graph(e.value)) for e in ir.exprs]
+    named_exprs = [
+        e.reconstruct(decompose_expr_graph(e.value, config_options)) for e in ir.exprs
+    ]
     new_node = Select(
         ir.schema,
         named_exprs,
@@ -61,7 +65,9 @@ def _(
     ):
         try:
             # Try decomposing the underlying expressions
-            return decompose_select(ir, child, partition_info)
+            return decompose_select(
+                ir, child, partition_info, rec.state["config_options"]
+            )
         except NotImplementedError:
             # TODO: Handle more non-pointwise expressions.
             return _lower_ir_fallback(
