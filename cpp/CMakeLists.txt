@@ -871,7 +871,8 @@ if(CUDF_BUILD_STACKTRACE_DEBUG)
     cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
     "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
   )
-  target_link_libraries(cudf PRIVATE $<BUILD_LOCAL_INTERFACE:cudf_backtrace>)
+  add_library(cudf::cudf_backtrace ALIAS cudf_backtrace)
+  target_link_libraries(cudf PUBLIC cudf_backtrace)
 endif()
 
 # Specify include paths for the current target and dependents
@@ -1174,6 +1175,15 @@ install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
+# install cudf_backtrace in the same export set with cudf
+if(TARGET cudf_backtrace)
+  install(
+    TARGETS cudf_backtrace
+    DESTINATION ${lib_dir}
+    EXPORT cudf-exports
+  )
+endif()
+
 set(_components_export_string)
 if(TARGET cudftestutil)
   install(
@@ -1225,7 +1235,7 @@ following IMPORTED GLOBAL  targets:
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
+  GLOBAL_TARGETS cudf cudf_backtrace cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
 )
@@ -1246,7 +1256,7 @@ endif()
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
+  GLOBAL_TARGETS cudf cudf_backtrace cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
