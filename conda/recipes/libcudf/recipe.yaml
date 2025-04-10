@@ -121,7 +121,9 @@ outputs:
         - zlib ${{ zlib_version }}
         - if: cuda_major == "11"
           then: cudatoolkit
-          else: cuda-cudart-dev
+          else:
+            - cuda-cudart-dev
+            - cuda-nvml-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major == "11"
@@ -333,7 +335,6 @@ outputs:
               - libcurand-dev
         by_name:
           - cuda-cudart
-          - cuda-nvml
           - cuda-nvrtc
           - cuda-nvtx
           - cuda-version
