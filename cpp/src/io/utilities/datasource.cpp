@@ -102,12 +102,6 @@ class kvikio_source : public datasource {
     return supports_device_read();
   }
 
-  /**
-   * @param[in] dst Address of the existing device memory
-   *                It must not be used asynchronously before the returned future is completed, 
-   *                because the kvikio pread call is not guaranteed to follow stream-ordering.
-   *                See https://github.com/rapidsai/cudf/pull/18279#issuecomment-2727726886
-   */
   std::future<size_t> device_read_async(size_t offset,
                                         size_t size,
                                         uint8_t* dst,
@@ -123,7 +117,7 @@ class kvikio_source : public datasource {
                                   offset,
                                   kvikio::defaults::task_size(),
                                   kvikio::defaults::gds_threshold(),
-                                  false /* no to sync_default_stream */);
+                                  false /* not to sync_default_stream */);
     } else {
       // HandleT is kvikio::RemoteHandle
       return _kvikio_handle.pread(dst, read_size, offset);
