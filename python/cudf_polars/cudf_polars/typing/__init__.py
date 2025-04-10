@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable, Mapping, MutableMapping
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
@@ -69,6 +70,8 @@ PolarsExpr: TypeAlias = Union[
 Schema: TypeAlias = Mapping[str, plc.DataType]
 
 Slice: TypeAlias = tuple[int, int | None]
+
+CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
 
 
 class NodeTraverser(Protocol):

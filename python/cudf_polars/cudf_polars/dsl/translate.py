@@ -228,9 +228,8 @@ def _(
         # TODO: with versioning, rename on the rust side
         skip_rows, n_rows = n_rows
 
-    if file_options.include_file_paths is not None:
-        raise NotImplementedError("No support for including file path in scan")
     row_index = file_options.row_index
+    include_file_paths = file_options.include_file_paths
     return ir.Scan(
         schema,
         typ,
@@ -242,6 +241,7 @@ def _(
         skip_rows,
         n_rows,
         row_index,
+        include_file_paths,
         translate_named_expr(translator, n=node.predicate)
         if node.predicate is not None
         else None,
@@ -252,7 +252,9 @@ def _(
 def _(
     node: pl_ir.Cache, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Cache(schema, node.id_, translator.translate_ir(n=node.input))
+    return ir.Cache(
+        schema, node.id_, node.cache_hits, translator.translate_ir(n=node.input)
+    )
 
 
 @_translate_ir.register

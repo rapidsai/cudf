@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -81,7 +82,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  auto const data_len    = thrust::distance(s->data_start, s->data_end);
+  auto const data_len    = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values  = data_len / s->dtype_len_in;
   auto const out_thread0 = warp_size;
 
@@ -114,7 +115,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
     } else {
       // WARP1..WARP3: Decode values
-      int const dtype = s->col.physical_type;
+      Type const dtype = s->col.physical_type;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -155,9 +156,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
         if (is_decimal) {
           switch (dtype) {
-            case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
-            case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
-            case FIXED_LEN_BYTE_ARRAY:
+            case Type::INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+            case Type::INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
+            case Type::FIXED_LEN_BYTE_ARRAY:
               if (s->dtype_len_in <= sizeof(int32_t)) {
                 gpuOutputSplitFixedLenByteArrayAsInt(
                   reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
@@ -254,9 +255,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
     switch (s->col.physical_type) {
-      case BOOLEAN: [[fallthrough]];
-      case BYTE_ARRAY: [[fallthrough]];
-      case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
+      case Type::BOOLEAN: [[fallthrough]];
+      case Type::BYTE_ARRAY: [[fallthrough]];
+      case Type::FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
       default: out_thread0 = 32;
     }
   }
@@ -300,16 +301,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
-      } else if (s->col.physical_type == BOOLEAN) {
+      } else if (s->col.physical_type == Type::BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if (s->col.physical_type == BYTE_ARRAY or
-                 s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+      } else if (s->col.physical_type == Type::BYTE_ARRAY or
+                 s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
       if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      int const dtype = s->col.physical_type;
+      Type const dtype = s->col.physical_type;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -345,7 +346,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         auto const is_decimal =
           s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
-        if (dtype == BYTE_ARRAY) {
+        if (dtype == Type::BYTE_ARRAY) {
           if (is_decimal) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
             auto const decimal_precision = s->col.logical_type->precision();
@@ -359,12 +360,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           } else {
             gpuOutputString(s, sb, val_src_pos, dst);
           }
-        } else if (dtype == BOOLEAN) {
+        } else if (dtype == Type::BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (is_decimal) {
           switch (dtype) {
-            case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
-            case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
+            case Type::INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
+            case Type::INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
             default:
               if (s->dtype_len_in <= sizeof(int32_t)) {
                 gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
@@ -375,9 +376,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
               }
               break;
           }
-        } else if (dtype == FIXED_LEN_BYTE_ARRAY) {
+        } else if (dtype == Type::FIXED_LEN_BYTE_ARRAY) {
           gpuOutputString(s, sb, val_src_pos, dst);
-        } else if (dtype == INT96) {
+        } else if (dtype == Type::INT96) {
           gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {

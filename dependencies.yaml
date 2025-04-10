@@ -4,7 +4,7 @@ files:
     output: conda
     matrix:
       cuda: ["11.8", "12.8"]
-      arch: [x86_64]
+      arch: [x86_64, aarch64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
       # version conflicts with the rest of RAPIDS as well as its own
@@ -388,6 +388,7 @@ files:
       - test_python_cudf
       - depends_on_cudf
       - depends_on_cudf_polars
+      - depends_on_narwhals
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -1233,3 +1234,8 @@ dependencies:
       - output_types: conda
         packages:
           - cudf-polars==25.6.*,>=0.0.0a0
+  depends_on_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - narwhals==1.33

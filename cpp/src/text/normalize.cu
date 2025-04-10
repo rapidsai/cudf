@@ -42,6 +42,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -349,12 +350,12 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
   char candidate[8];
   auto const ch_begin =
     thrust::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
-  auto const ch_end = ch_begin + thrust::distance(begin, match + 1);
+  auto const ch_end = ch_begin + cuda::std::distance(begin, match + 1);
   auto last         = thrust::copy_if(
     thrust::seq, ch_begin, ch_end, candidate, [](auto c) { return c != 0 && c != ' '; });
   *last = 0;  // only needed for debug
 
-  auto const size  = static_cast<cudf::size_type>(thrust::distance(candidate, last));
+  auto const size  = static_cast<cudf::size_type>(cuda::std::distance(candidate, last));
   auto const token = cudf::string_view(candidate, size);
   // the binary_search expects the special_tokens to be sorted
   if (!thrust::binary_search(thrust::seq, special_tokens.begin(), special_tokens.end(), token)) {

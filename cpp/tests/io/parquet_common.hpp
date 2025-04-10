@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
 
 #include <random>
 #include <type_traits>
@@ -106,38 +106,34 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
 // of the file to populate the FileMetaData pointed to by file_meta_data.
 // throws cudf::logic_error if the file or metadata is invalid.
 void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
-                 cudf::io::parquet::detail::FileMetaData* file_meta_data);
+                 cudf::io::parquet::FileMetaData* file_meta_data);
 
 // returns the number of bits used for dictionary encoding data at the given page location.
 // this assumes the data is uncompressed.
 // throws cudf::logic_error if the page_loc data is invalid.
 int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
-                   cudf::io::parquet::detail::PageLocation const& page_loc);
+                   cudf::io::parquet::PageLocation const& page_loc);
 
 // read column index from datasource at location indicated by chunk,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf::io::parquet::detail::ColumnIndex read_column_index(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::ColumnChunk const& chunk);
+cudf::io::parquet::ColumnIndex read_column_index(
+  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk);
 
 // read offset index from datasource at location indicated by chunk,
 // parse and return as an OffsetIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf::io::parquet::detail::OffsetIndex read_offset_index(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::ColumnChunk const& chunk);
+cudf::io::parquet::OffsetIndex read_offset_index(
+  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk);
 
 // Return as a Statistics from the column chunk
-cudf::io::parquet::detail::Statistics const& get_statistics(
-  cudf::io::parquet::detail::ColumnChunk const& chunk);
+cudf::io::parquet::Statistics const& get_statistics(cudf::io::parquet::ColumnChunk const& chunk);
 
 // read page header from datasource at location indicated by page_loc,
 // parse and return as a PageHeader struct.
 // throws cudf::logic_error if the page_loc data is invalid.
-cudf::io::parquet::detail::PageHeader read_page_header(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::PageLocation const& page_loc);
+cudf::io::parquet::PageHeader read_page_header(std::unique_ptr<cudf::io::datasource> const& source,
+                                               cudf::io::parquet::PageLocation const& page_loc);
 
 // make a random validity iterator
 inline auto random_validity(std::mt19937& engine)
@@ -169,8 +165,8 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
 
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
-                       cudf::io::parquet::detail::Type ptype,
-                       std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype);
+                       cudf::io::parquet::Type ptype,
+                       std::optional<cudf::io::parquet::ConvertedType> const& ctype);
 
 void expect_compression_stats_empty(std::shared_ptr<cudf::io::writer_compression_statistics> stats);
 

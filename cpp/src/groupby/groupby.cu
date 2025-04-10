@@ -258,7 +258,7 @@ groupby::groups groupby::get_groups(table_view values,
   auto grouped_keys = helper().sorted_keys(stream, mr);
 
   auto const& group_offsets       = helper().group_offsets(stream);
-  auto const group_offsets_vector = cudf::detail::make_std_vector_sync(group_offsets, stream);
+  auto const group_offsets_vector = cudf::detail::make_std_vector(group_offsets, stream);
 
   if (not values.is_empty()) {
     auto grouped_values = cudf::detail::gather(values,
