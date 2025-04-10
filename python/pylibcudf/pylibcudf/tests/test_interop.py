@@ -1,6 +1,8 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import cupy as cp
+import nanoarrow
+import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -120,3 +122,32 @@ def test_to_dlpack_error():
 def test_from_dlpack_error():
     with pytest.raises(ValueError, match="Invalid PyCapsule object"):
         plc.interop.from_dlpack(1)
+
+
+def test_device_interop_table():
+    # Have to manually construct the schema to ensure that names match. pyarrow will
+    # assign names to nested types automatically otherwise.
+    schema = pa.schema(
+        [
+            pa.field("", pa.int64()),
+            pa.field("", pa.float64()),
+            pa.field("", pa.string()),
+            pa.field("", pa.list_(pa.field("", pa.int64()))),
+            pa.field("", pa.struct([pa.field("", pa.float64())])),
+        ]
+    )
+    pa_tbl = pa.table(
+        [
+            [1, None, 3],
+            [1.0, 2.0, None],
+            ["a", "b", None],
+            [[1, None], None, [2]],
+            [{"a": 1.0}, None, {"b": 2.0}],
+        ],
+        schema=schema,
+    )
+    plc_table = plc.interop.from_arrow(pa_tbl)
+
+    na_arr = nanoarrow.device.c_device_array(plc_table)
+    actual_schema = pa.schema(na_arr.schema)
+    assert actual_schema.equals(pa_tbl.schema)

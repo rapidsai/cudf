@@ -924,6 +924,7 @@ dependencies:
           - hypothesis
           - *numpy
           - pandas
+          - nanoarrow
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
