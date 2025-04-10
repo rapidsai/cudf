@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/io/text/byte_range_info.hpp"
-#include "cudf/utilities/default_stream.hpp"
-#include "cudf/utilities/memory_resource.hpp"
-#include "cudf/utilities/span.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -30,40 +26,35 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <src/io/parquet/parquet_gpu.hpp>
-
-#include <array>
 
 // Base test fixture for tests
 struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
 
 namespace {
 
-auto fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
+/**
+ * @brief Fetches a host span of Parquet footer bytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @return A host span of the footer bytes
+ */
+cudf::host_span<uint8_t const> fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
 {
-  /**
-   * @brief Struct that describes the Parquet file data header
-   */
-  struct file_header_s {
-    uint32_t magic;
-  };
-
-  /**
-   * @brief Struct that describes the Parquet file data postscript
-   */
-  struct file_ender_s {
-    uint32_t footer_len;
-    uint32_t magic;
-  };
+  using namespace cudf::io::parquet;
 
   constexpr auto header_len = sizeof(file_header_s);
   constexpr auto ender_len  = sizeof(file_ender_s);
-  auto const len            = buffer.size();
+  size_t const len          = buffer.size();
 
   auto const header_buffer = cudf::host_span<uint8_t const>(buffer.data(), header_len);
   auto const header        = reinterpret_cast<file_header_s const*>(header_buffer.data());
@@ -81,14 +72,71 @@ auto fetch_footer_bytes(cudf::host_span<uint8_t const> buffer)
                                         ender->footer_len);
 }
 
-auto fetch_page_index_bytes(cudf::host_span<uint8_t const> buffer,
-                            cudf::io::text::byte_range_info const page_index_bytes)
+/**
+ * @brief Fetches a host span of Parquet PageIndexbytes from the input buffer span
+ *
+ * @param buffer Input buffer span
+ * @param page_index_bytes Byte range of `PageIndex` to fetch
+ * @return A host span of the PageIndex bytes
+ */
+cudf::host_span<uint8_t const> fetch_page_index_bytes(
+  cudf::host_span<uint8_t const> buffer, cudf::io::text::byte_range_info const page_index_bytes)
 {
   return cudf::host_span<uint8_t const>(
     reinterpret_cast<uint8_t const*>(buffer.data()) + page_index_bytes.offset(),
     page_index_bytes.size());
 }
 
+/**
+ * @brief Fetches a list of byte ranges from a host buffer into a vector of device buffers
+ *
+ * @param host_buffer Host buffer span
+ * @param byte_ranges Byte ranges to fetch
+ * @param stream CUDA stream
+ * @param mr Device memory resource to create device buffers with
+ *
+ * @return Vector of device buffers
+ */
+std::vector<rmm::device_buffer> fetch_byte_ranges(
+  cudf::host_span<uint8_t const> host_buffer,
+  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<rmm::device_buffer> buffers{};
+  buffers.reserve(byte_ranges.size());
+
+  std::transform(
+    byte_ranges.begin(),
+    byte_ranges.end(),
+    std::back_inserter(buffers),
+    [&](auto const& byte_range) {
+      auto const chunk_offset = host_buffer.data() + byte_range.offset();
+      auto const chunk_size   = byte_range.size();
+      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
+      return buffer;
+    });
+
+  stream.synchronize_no_throw();
+  return buffers;
+}
+
+/**
+ * @brief Creates a table and writes it to Parquet host buffer with column level statistics
+ *
+ * This function creates a table with three columns:
+ * - col_uint32: ascending uint32_t values
+ * - col_int64: descending int64_t values
+ * - col_str: ascending string values
+ *
+ * The function creates a table by concatenating the same set of columns NumTableConcats times.
+ * It then writes this table to a Parquet host buffer with column level statistics.
+ *
+ * @tparam NumTableConcats Number of times to concatenate the base table (must be >= 1)
+ * @return Tuple of table and Parquet host buffer
+ */
 template <size_t NumTableConcats>
 auto create_parquet_with_stats()
 {
@@ -131,58 +179,6 @@ auto create_parquet_with_stats()
     columns = table->release();
   }
   return std::pair{cudf::table{std::move(columns)}, buffer};
-}
-
-std::vector<rmm::device_buffer> fetch_byte_ranges(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<rmm::device_buffer> buffers{};
-  buffers.reserve(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto buffer             = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return buffer;
-    });
-
-  stream.synchronize_no_throw();
-  return buffers;
-}
-
-std::vector<rmm::device_buffer> fetch_column_chunk_buffers(
-  cudf::host_span<uint8_t const> host_buffer,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  std::vector<rmm::device_buffer> column_chunk_buffers{};
-  column_chunk_buffers.reserve(byte_ranges.size());
-
-  std::transform(
-    byte_ranges.begin(),
-    byte_ranges.end(),
-    std::back_inserter(column_chunk_buffers),
-    [&](auto const& byte_range) {
-      auto const chunk_offset = host_buffer.data() + byte_range.offset();
-      auto const chunk_size   = byte_range.size();
-      auto chunk_buffer       = rmm::device_buffer(chunk_size, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        chunk_buffer.data(), chunk_offset, chunk_size, cudaMemcpyHostToDevice, stream.value()));
-      return chunk_buffer;
-    });
-
-  stream.synchronize_no_throw();
-  return column_chunk_buffers;
 }
 
 /**
@@ -294,7 +290,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Fetch column chunk device buffers from the input buffer
   auto filter_column_chunk_buffers =
-    fetch_column_chunk_buffers(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges(file_buffer_span, filter_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the filter columns - API # 11
   auto [filter_table, filter_metadata] =
@@ -311,7 +307,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Fetch column chunk device buffers from the input buffer
   [[maybe_unused]] auto payload_column_chunk_buffers =
-    fetch_column_chunk_buffers(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+    fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
 
   // Materialize the table with only the payload columns - API # 13
   [[maybe_unused]] auto [payload_table, payload_metadata] =
