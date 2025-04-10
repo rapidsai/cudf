@@ -37,7 +37,7 @@ q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15
 profile = q.profile(engine="gpu")
 ```
 
-The result is a tuple containing the materialized DataFrame and a DataFrame that contains profiling information of each node that is executed.
+The result is a tuple containing 2 materialized DataFrames - the first with the query result and the second with profiling information of each node that is executed.
 ```python
 print(profile[0])
 ```
