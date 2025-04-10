@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -38,8 +39,65 @@ namespace cudf {
 namespace detail {
 namespace {
 
+// template <typename T>
+// void table_to_array_impl(cudf::table_view const& input,
+//                             void* output,
+//                             rmm::cuda_stream_view stream)
+// {
+//   auto const num_columns = input.num_columns();
+//   auto const num_rows    = input.num_rows();
+//   auto const item_size   = sizeof(T);
+
+//   std::vector<void*> dsts(num_columns);
+//   std::vector<void*> srcs(num_columns);
+//   std::vector<size_t> sizes(num_columns, item_size * num_rows);
+
+//   auto* base_ptr = static_cast<uint8_t*>(output);
+
+//   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
+//               "All columns must have the same data type",
+//               cudf::data_type_error);
+//   CUDF_EXPECTS( !cudf::has_nulls(input),
+//               "All columns must contain no nulls",
+//               std::invalid_argument);
+
+//   std::transform(input.begin(), input.end(), srcs.begin(),
+//   [](auto const& col) {
+//     return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
+//   });
+//   for (int i = 0; i < num_columns; ++i) {
+//     dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
+//   }
+
+// #if defined(CUDA_VERSION) && CUDA_VERSION >= 12080
+//   // std::vector<cudaMemcpyAttributes> attrs(1);
+//   // attrs[0].srcAccessOrder = cudaMemcpySrcAccessOrderStream;
+//   // std::vector<size_t> attr_idxs(num_columns, 0);
+//   // size_t fail_idx = SIZE_MAX;
+
+//   // CUDF_CUDA_TRY(cudaMemcpyBatchAsync(dsts.data(),
+//   //                                     const_cast<void**>(srcs.data()),
+//   //                                     sizes.data(),
+//   //                                     num_columns,
+//   //                                     attrs.data(),
+//   //                                     attr_idxs.data(),
+//   //                                     attrs.size(),
+//   //                                     &fail_idx,
+//   //                                     stream.value()));
+//   for (int i = 0; i < num_columns; ++i) {
+//     CUDF_CUDA_TRY(
+//       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
+//   }
+// #else
+//   for (int i = 0; i < num_columns; ++i) {
+//     CUDF_CUDA_TRY(
+//       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
+//   }
+// #endif
+// }
+
 template <typename T>
-void table_to_array_iml(table_view const& input, void* output, rmm::cuda_stream_view stream)
+void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream_view stream)
 {
   auto const num_columns = input.num_columns();
   auto const num_rows    = input.num_rows();
@@ -49,12 +107,16 @@ void table_to_array_iml(table_view const& input, void* output, rmm::cuda_stream_
   std::vector<void*> h_srcs(num_columns);
   std::vector<void*> h_dsts(num_columns);
 
+  CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
+              "All columns must have the same data type",
+              cudf::data_type_error);
+  CUDF_EXPECTS( !cudf::has_nulls(input),
+              "All columns must contain no nulls",
+              std::invalid_argument);
+  std::transform( input.begin(), input.end(), h_srcs.begin(), [] (auto& col) {
+    return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
+  });
   for (int i = 0; i < num_columns; ++i) {
-    auto const& col = input.column(i);
-    CUDF_EXPECTS(col.type() == input.column(0).type(), "All columns must have the same dtype");
-    CUDF_EXPECTS(col.null_count() == 0, "All columns must be non-nullable or contain no nulls");
-
-    h_srcs[i] = const_cast<void*>(static_cast<void const*>(col.data<T>()));
     h_dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
   }
 
@@ -94,7 +156,7 @@ struct table_to_array_dispatcher {
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
   void operator()() const
   {
-    table_to_array_iml<T>(input, output, stream);
+    table_to_array_impl<T>(input, output, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>

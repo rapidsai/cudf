@@ -643,8 +643,8 @@ add_library(
   src/replace/replace.cu
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
-  src/reshape/tile.cu
   src/reshape/table_to_array.cu
+  src/reshape/tile.cu
   src/rolling/detail/optimized_unbounded_window.cpp
   src/rolling/detail/rolling_collect_list.cu
   src/rolling/detail/rolling_fixed_window.cu

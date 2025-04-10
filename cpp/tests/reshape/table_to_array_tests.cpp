@@ -84,17 +84,16 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
       cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end())));
   }
 
-  std::vector<cudf::column_view> views;
-  for (auto const& col : cols) {
-    views.push_back(col->view());
-  }
+  std::vector<cudf::column_view> views(cols.size());
+  std::transform(cols.begin(), cols.end(), views.begin(),
+                 [](auto const& col) { return col->view(); });
   cudf::table_view input{views};
 
-  auto output = cudf::detail::make_zeroed_device_uvector_sync<T>(nrows * ncols, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<T>(nrows * ncols, stream, *mr);
 
   cudf::table_to_array(input, output.data(), dtype, stream);
 
-  auto host_result = cudf::detail::make_std_vector_sync(output, stream);
+  auto host_result = cudf::detail::make_std_vector(output, stream);
   EXPECT_EQ(host_result, expected);
 }
 
@@ -120,11 +119,12 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   cudf::table_view input({col0, col1});
   size_t num_elements = input.num_rows() * input.num_columns();
 
-  auto output = cudf::detail::make_zeroed_device_uvector_sync<RepType>(num_elements, stream, *mr);
+  auto output = cudf::detail::make_zeroed_device_uvector<RepType>(num_elements, stream, *mr);
+
 
   cudf::table_to_array(input, output.data(), dtype, stream);
 
-  auto host_result = cudf::detail::make_std_vector_sync(output, stream);
+  auto host_result = cudf::detail::make_std_vector(output, stream);
 
   std::vector<RepType> expected{123, 456, 789, 321, 654, 987};
   EXPECT_EQ(host_result, expected);
@@ -155,5 +155,5 @@ TEST(TableToDeviceArrayTest, FailsWithNullValues)
 
   EXPECT_THROW(
     cudf::table_to_array(input_table, output.data(), cudf::data_type{cudf::type_id::INT32}, stream),
-    cudf::logic_error);
+    std::invalid_argument);
 }

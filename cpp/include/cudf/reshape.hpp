@@ -110,7 +110,7 @@ std::unique_ptr<column> byte_cast(
 /**
  * @brief Copies a table into a contiguous column-major device array.
  *
- * This function converts a table_view with columns of the same type
+ * This function copies a table_view with columns of the same type
  * into a 2D device array in column-major order. The output buffer must be
  * preallocated and large enough to hold `num_rows * num_columns` values of `output_dtype`.
  *
