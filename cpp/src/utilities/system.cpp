@@ -18,6 +18,8 @@
 
 #include <rmm/cuda_device.hpp>
 
+#include <cuda_runtime.h>
+
 #include <nvml.h>
 
 #include <iostream>
@@ -55,6 +57,10 @@ void initialize_nvml()
 
 bool is_c2c_available()
 {
+  // todo: remove this once CUDA 11 support is dropped
+#if CUDART_VERSION < 12000
+  return false;
+#else
   nvmlDevice_t device_handle{};
 
   detail::initialize_nvml();
@@ -65,5 +71,6 @@ bool is_c2c_available()
   CHECK_NVML(nvmlDeviceGetFieldValues(device_handle, 1, &field));
 
   return (field.nvmlReturn == nvmlReturn_t::NVML_SUCCESS) && (field.value.uiVal > 0);
+#endif
 }
 }  // namespace cudf
