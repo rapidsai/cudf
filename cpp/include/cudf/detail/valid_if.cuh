@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 
 namespace cudf {
 namespace detail {
@@ -95,7 +95,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
-  size_type size = thrust::distance(begin, end);
+  size_type size = cuda::std::distance(begin, end);
 
   auto null_mask = cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
