@@ -355,11 +355,21 @@ struct lb_fn {
   }
 };
 
+struct prefix_string_fn {
+  __device__ uint32_t operator()(cudf::string_view str) const
+  {
+    uint32_t data   = 0;
+    auto const size = cuda::std::min(static_cast<size_t>(str.size_bytes()), sizeof(uint32_t));
+    memcpy(&data, str.data(), size);
+    return __byte_perm(data, 0, 0x0123);
+  }
+};
+
 struct mini_fn {
   cudf::device_span<char const> chars;
   __device__ uint32_t operator()(cudf::size_type idx) const
   {
-    auto const size = cuda::std::min(static_cast<cudf::size_type>(chars.size() - idx), 4);
+    auto const size = cuda::std::min((chars.size() - idx), sizeof(uint32_t));
     uint32_t data   = 0;
     memcpy(&data, chars.data() + idx, size);
     return __byte_perm(data, 0, 0x0123);
@@ -399,26 +409,18 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   auto itr2 = thrust::make_transform_iterator(indices2.begin(), lb_fn{chars_span2});
   auto end2 = itr2 + indices2.size();
 
-  auto pd1 = rmm::device_uvector<uint32_t>(indices2.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    itr2,
-                    end2,
-                    pd1.begin(),
-                    [] __device__(auto const& d_str) -> uint32_t {
-                      uint32_t data = 0;
-                      memcpy(&data, d_str.data(), cuda::std::min(4, d_str.size_bytes()));
-                      return __byte_perm(data, 0, 0x0123);
-                    });
+  auto pd1 = rmm::device_uvector<uint32_t>(indices2.size(), stream);  // 4x
+  thrust::transform(rmm::exec_policy_nosync(stream), itr2, end2, pd1.begin(), prefix_string_fn{});
 
-  auto lb1 = rmm::device_uvector<int32_t>(indices1.size(), stream);
+  auto lb1 = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x
   thrust::lower_bound(
     rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, lb1.begin());
-  auto ub1 = rmm::device_uvector<int32_t>(indices1.size(), stream);
+  auto ub1 = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x
   thrust::upper_bound(
     rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, ub1.begin());
 
   auto fd2 = find_duplicates2_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb1, ub1};
-  auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);
+  auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);  // 2x
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<int32_t>(0),
                     thrust::counting_iterator<int32_t>(sizes.size()),
