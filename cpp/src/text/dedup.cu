@@ -76,10 +76,8 @@ __device__ int32_t count_common_bytes(cudf::string_view lhs, cudf::string_view r
   auto const* ptr2 = rhs.data();
 
   int32_t idx = 0;
-  for (; (idx < size1) && (idx < size2); ++idx) {
-    if (*ptr1 != *ptr2) { break; }
-    ++ptr1;
-    ++ptr2;
+  while ((idx < size1) && (idx < size2) && (*ptr1++ == *ptr2++)) {
+    ++idx;
   }
   return idx;
 }
@@ -300,12 +298,15 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
 }
 
 namespace {
+
 struct find_duplicates2_fn {
   cudf::device_span<char const> chars_span1;
   cudf::device_span<char const> chars_span2;
   int32_t width;
   cudf::device_span<int32_t const> d_indices1;
   cudf::device_span<int32_t const> d_indices2;
+  cudf::device_span<int32_t const> lb_indices;
+  cudf::device_span<int32_t const> ub_indices;
 
   __device__ int16_t operator()(int32_t idx) const
   {
@@ -319,20 +320,23 @@ struct find_duplicates2_fn {
         auto const rhs_size = static_cast<cudf::size_type>(cs - rhs_idx);
         return cudf::string_view(d_chars + rhs_idx, rhs_size);
       });
-    auto const eitr = itr + d_indices2.size();
+    auto const lb_idx = lb_indices[idx];
+    auto const ub_idx = ub_indices[idx];
+    auto const begin  = itr + lb_idx;
+    auto const end    = itr + ub_idx + (ub_idx < d_indices2.size());
 
-    auto const fnd = thrust::lower_bound(thrust::seq, itr, eitr, lh_str);
-    if (fnd == eitr) { return 0; }
-    auto size   = count_common_bytes(lh_str, *fnd);
-    auto rh_str = *fnd;
+    auto const fnd = thrust::lower_bound(thrust::seq, begin, end, lh_str);
+    if (fnd == end) { return 0; }
+    auto size = count_common_bytes(lh_str, *fnd);
 
-    auto const ridx = thrust::distance(itr, fnd) - 1;  // lower_bound edge case
+    // check for lower_bound edge case
+    auto const ridx = lb_idx + thrust::distance(begin, fnd) - (lb_idx > 0);
     if (size < width && ridx >= 0) {
       auto const rhs_idx  = d_indices2[ridx];
       auto const rhs_size = static_cast<cudf::size_type>(chars_span2.size() - rhs_idx);
+      auto const rh_str   = cudf::string_view(chars_span2.data() + rhs_idx, rhs_size);
 
-      rh_str = cudf::string_view(chars_span2.data() + rhs_idx, rhs_size);
-      size   = count_common_bytes(lh_str, rh_str);
+      size = count_common_bytes(lh_str, rh_str);
     }
 
     constexpr auto max_run_length = static_cast<int32_t>(cuda::std::numeric_limits<int16_t>::max());
@@ -341,15 +345,35 @@ struct find_duplicates2_fn {
     return size >= width ? static_cast<int16_t>(size) : 0;
   }
 };
-}  // namespace
 
-std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view const& input1,
-                                                      cudf::device_span<int32_t const> indices1,
-                                                      cudf::strings_column_view const& input2,
-                                                      cudf::device_span<int32_t const> indices2,
-                                                      int32_t min_width,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+struct lb_fn {
+  cudf::device_span<char const> chars;
+  __device__ cudf::string_view operator()(cudf::size_type idx) const
+  {
+    auto const size = static_cast<cudf::size_type>(chars.size() - idx);
+    return cudf::string_view(chars.data() + idx, size);
+  }
+};
+
+struct mini_fn {
+  cudf::device_span<char const> chars;
+  __device__ uint32_t operator()(cudf::size_type idx) const
+  {
+    auto const size = cuda::std::min(static_cast<cudf::size_type>(chars.size() - idx), 4);
+    uint32_t data   = 0;
+    memcpy(&data, chars.data() + idx, size);
+    return __byte_perm(data, 0, 0x0123);
+  }
+};
+
+std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
+  cudf::strings_column_view const& input1,
+  cudf::device_span<int32_t const> indices1,
+  cudf::strings_column_view const& input2,
+  cudf::device_span<int32_t const> indices2,
+  int32_t min_width,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
   auto d_strings1 = cudf::column_device_view::create(input1.parent(), stream);
@@ -370,12 +394,31 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
   auto const chars_span1 = cudf::device_span<char const>(d_input_chars1, chars_size1);
   auto const chars_span2 = cudf::device_span<char const>(d_input_chars2, chars_size2);
 
-  // check for duplicates between the 2 suffix arrays
-  // force the 2nd input to be the smaller one
-  auto fd2   = indices2.size() < indices1.size()
-                 ? find_duplicates2_fn{chars_span1, chars_span2, min_width, indices1, indices2}
-                 : find_duplicates2_fn{chars_span2, chars_span1, min_width, indices2, indices1};
-  auto sizes = rmm::device_uvector<int16_t>(std::max(indices1.size(), indices2.size()), stream);
+  auto itr1 = thrust::make_transform_iterator(indices1.begin(), mini_fn{chars_span1});
+  auto end1 = itr1 + indices1.size();
+  auto itr2 = thrust::make_transform_iterator(indices2.begin(), lb_fn{chars_span2});
+  auto end2 = itr2 + indices2.size();
+
+  auto pd1 = rmm::device_uvector<uint32_t>(indices2.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    itr2,
+                    end2,
+                    pd1.begin(),
+                    [] __device__(auto const& d_str) -> uint32_t {
+                      uint32_t data = 0;
+                      memcpy(&data, d_str.data(), cuda::std::min(4, d_str.size_bytes()));
+                      return __byte_perm(data, 0, 0x0123);
+                    });
+
+  auto lb1 = rmm::device_uvector<int32_t>(indices1.size(), stream);
+  thrust::lower_bound(
+    rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, lb1.begin());
+  auto ub1 = rmm::device_uvector<int32_t>(indices1.size(), stream);
+  thrust::upper_bound(
+    rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, ub1.begin());
+
+  auto fd2 = find_duplicates2_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb1, ub1};
+  auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<int32_t>(0),
                     thrust::counting_iterator<int32_t>(sizes.size()),
@@ -392,8 +435,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
   // remove the non-candidate entries from indices and sizes
   thrust::remove_copy_if(
     rmm::exec_policy(stream),
-    fd2.d_indices1.begin(),
-    fd2.d_indices1.end(),
+    indices1.begin(),
+    indices1.end(),
     thrust::counting_iterator<int32_t>(0),
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(int32_t idx) -> bool { return d_sizes[idx] == 0; });
@@ -411,7 +454,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
                     thrust::counting_iterator<int32_t>(0),
                     thrust::counting_iterator<int32_t>(dup_indices.size()),
                     duplicates.begin(),
-                    collapse_overlaps_fn{fd2.chars_span1.data(), dup_indices.data(), sizes.data()});
+                    collapse_overlaps_fn{chars_span1.data(), dup_indices.data(), sizes.data()});
 
   // filter out the remaining non-viable candidates
   duplicates.resize(
@@ -442,6 +485,24 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
   return cudf::strings::detail::make_strings_column(
     duplicates.begin(), duplicates.end(), stream, mr);
 }
+}  // namespace
+
+std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view const& input1,
+                                                      cudf::device_span<int32_t const> indices1,
+                                                      cudf::strings_column_view const& input2,
+                                                      cudf::device_span<int32_t const> indices2,
+                                                      int32_t min_width,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  // check for duplicates between the 2 suffix arrays
+  // force the 2nd input to be the smaller one
+  return (indices1.size() < indices2.size())
+           ? resolve_duplicates_pair_impl(input2, indices2, input1, indices1, min_width, stream, mr)
+           : resolve_duplicates_pair_impl(
+               input1, indices1, input2, indices2, min_width, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view const& input,
