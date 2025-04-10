@@ -875,13 +875,7 @@ struct codec_stats {
   auto copy_out =
     cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
-  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             comp_res.begin(),
-                             comp_res.end(),
-                             compression_result{0, compression_status::FAILURE});
-
-  auto set_parameters = [&](codec_stats const& codec,
+  auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
                             void* decomp_data,
                             bool select_dict_pages,
@@ -900,10 +894,18 @@ struct codec_stats {
           copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
           copy_out.push_back({dst_base, static_cast<size_t>(offset)});
         }
-        comp_in.push_back(
-          {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-        comp_out.push_back(
-          {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+        // Only decompress if the page contains data after the def/rep levels
+        if (page.compressed_page_size > offset) {
+          comp_in.push_back(
+            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
+          comp_out.push_back(
+            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+        } else {
+          // If the page wasn't included in the decompression parameters, we need to adjust the
+          // page count to allocate results and perform decompression correctly
+          --codec.num_pages;
+          --num_comp_pages;
+        }
         page.page_data = dst_base;
         decomp_offset += page.uncompressed_page_size;
       }
@@ -912,16 +914,21 @@ struct codec_stats {
 
   size_t pass_decomp_offset    = 0;
   size_t subpass_decomp_offset = 0;
-  for (auto const& codec : codecs) {
+  for (auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
     set_parameters(codec, pass_pages, pass_decomp_pages.data(), true, pass_decomp_offset);
     set_parameters(codec, subpass_pages, subpass_decomp_pages.data(), false, subpass_decomp_offset);
   }
 
-  auto d_comp_in = cudf::detail::make_device_uvector_async(
+  auto const d_comp_in = cudf::detail::make_device_uvector_async(
     comp_in, stream, cudf::get_current_device_resource_ref());
-  auto d_comp_out = cudf::detail::make_device_uvector_async(
+  auto const d_comp_out = cudf::detail::make_device_uvector_async(
     comp_out, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             comp_res.begin(),
+                             comp_res.end(),
+                             compression_result{0, compression_status::FAILURE});
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
