@@ -13,7 +13,7 @@ q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15
 result = q.collect(engine="gpu")
 ```
 
-Alternatively, you can create a GPUEngine instance with custom configuration:
+Alternatively, you can create a `GPUEngine` instance with custom configuration:
 
 ```python
 import polars as pl
