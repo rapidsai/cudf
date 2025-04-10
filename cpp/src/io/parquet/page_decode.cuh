@@ -450,7 +450,7 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
   int total_len       = 0;
 
   // All group threads can participate for fixed len byte arrays.
-  if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+  if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     int const dtype_len_in = s->dtype_len_in;
     total_len              = min((target_pos - pos) * dtype_len_in, dict_size - s->dict_val);
     if constexpr (!sizes_only) {
@@ -1211,12 +1211,12 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       auto const is_decimal =
         s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
       switch (data_type) {
-        case BOOLEAN:
+        case Type::BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
           break;
-        case INT32: [[fallthrough]];
-        case FLOAT: s->dtype_len = 4; break;
-        case INT64:
+        case Type::INT32: [[fallthrough]];
+        case Type::FLOAT: s->dtype_len = 4; break;
+        case Type::INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
@@ -1236,9 +1236,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             }
           }
           [[fallthrough]];
-        case DOUBLE: s->dtype_len = 8; break;
-        case INT96: s->dtype_len = 12; break;
-        case BYTE_ARRAY:
+        case Type::DOUBLE: s->dtype_len = 8; break;
+        case Type::INT96: s->dtype_len = 12; break;
+        case Type::BYTE_ARRAY:
           if (is_decimal) {
             auto const decimal_precision = s->col.logical_type->precision();
             s->dtype_len                 = [decimal_precision]() {
@@ -1261,7 +1261,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       }
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
-      if (data_type == FIXED_LEN_BYTE_ARRAY) {
+      if (data_type == Type::FIXED_LEN_BYTE_ARRAY) {
         if (is_decimal) {
           s->dtype_len = [dtype_len = s->dtype_len]() {
             if (dtype_len <= sizeof(int32_t)) {
@@ -1275,7 +1275,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         } else {
           s->dtype_len = sizeof(string_index_pair);
         }
-      } else if (data_type == INT32) {
+      } else if (data_type == Type::INT32) {
         // check for smaller bitwidths
         if (s->col.logical_type.has_value()) {
           auto const& lt = *s->col.logical_type;
@@ -1286,9 +1286,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             s->dtype_len = 8;
           }
         }
-      } else if (data_type == BYTE_ARRAY && s->col.is_strings_to_cat) {
+      } else if (data_type == Type::BYTE_ARRAY && s->col.is_strings_to_cat) {
         s->dtype_len = 4;  // HASH32 output
-      } else if (data_type == INT96) {
+      } else if (data_type == Type::INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
@@ -1363,8 +1363,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           // RLE-packed dictionary indices, first byte indicates index length in bits
           auto const is_decimal =
             s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
-          if ((s->col.physical_type == BYTE_ARRAY or
-               s->col.physical_type == FIXED_LEN_BYTE_ARRAY) and
+          if ((s->col.physical_type == Type::BYTE_ARRAY or
+               s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) and
               not is_decimal and s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
@@ -1384,7 +1384,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
-          if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
+          if (s->col.physical_type == Type::BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: {
           // first 4 bytes are length of RLE data

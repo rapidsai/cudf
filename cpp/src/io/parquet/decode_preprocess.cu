@@ -385,7 +385,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     // everything
     if (is_base_pass) {
       s->first_row             = 0;
-      s->num_rows              = INT_MAX;
+      s->num_rows              = std::numeric_limits<int32_t>::max();
       s->row_index_lower_bound = -1;
     }
   }
@@ -393,7 +393,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   compute_string_sizes =
-    compute_string_sizes && s->col.physical_type == BYTE_ARRAY && !s->col.is_strings_to_cat;
+    compute_string_sizes && s->col.physical_type == Type::BYTE_ARRAY && !s->col.is_strings_to_cat;
 
   // early out optimizations:
 
