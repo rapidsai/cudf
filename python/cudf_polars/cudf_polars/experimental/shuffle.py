@@ -146,6 +146,10 @@ def _partition_dataframe(
     A dictionary mapping between int partition indices and
     DataFrame fragments.
     """
+    if df.num_rows == 0:
+        # Fast path for empty DataFrame
+        return {i: df for i in range(count)}
+
     # Hash the specified keys to calculate the output
     # partition for each row
     partition_map = plc.binaryop.binary_operation(

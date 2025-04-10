@@ -124,7 +124,8 @@ def test_join_then_shuffle(left, right):
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
         pl.col("xx").mean(),
-        pl.col("y").n_unique().cast(pl.Int32),
+        pl.col("y").n_unique(),
+        (pl.col("y") * pl.col("y")).n_unique().alias("y2"),
     )
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

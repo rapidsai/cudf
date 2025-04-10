@@ -117,6 +117,17 @@ class ShuffleColumn(Expr):
         self.children = (value,)
         self.is_pointwise = False
 
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        return child.evaluate(df, context=context, mapping=mapping)
+
 
 def extract_partition_counts(
     exprs: Sequence[Expr],
@@ -463,15 +474,19 @@ def _df_to_column(df: DataFrame, name: str) -> Column:
 
 def make_shuffle_graph(
     named_expr: NamedExpr,
+    expr_partition_counts: MutableMapping[Expr, int],
     input_ir: IR,
-    partition_count: int,
+    ir_partition_info: PartitionInfo,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph for shuffling."""
-    from cudf_polars.experimental.shuffle import _simple_shuffle_graph
+    from cudf_polars.experimental.shuffle import (
+        _SHUFFLE_METHODS,
+        RMPIntegration,
+        _simple_shuffle_graph,
+    )
 
     expr = named_expr.value
     col_name = named_expr.name
-    tmp_name = col_name  # str(uuid.uuid4())
     assert isinstance(expr, FusedExpr)
     assert isinstance(expr.sub_expr, ShuffleColumn)
     (child,) = expr.sub_expr.children
@@ -480,16 +495,65 @@ def make_shuffle_graph(
     name_ir_in = get_key_name(input_ir)
     name_projected = f"projected-{key_name}"
     name_shuffled = f"shuffled-{key_name}"
+    partition_count = ir_partition_info.count
+
+    # Check if we can avoid the shuffle
+    if partition_count == 1 or (
+        ir_partition_info.partitioned_on == (named_expr.reconstruct(child),)
+        and ir_partition_info.count == partition_count
+    ):
+        return make_pointwise_graph(
+            named_expr,
+            expr_partition_counts,
+            input_ir,
+        )
 
     # Select the column needed for shuffling
-    selection = NamedExpr(tmp_name, child)
+    selection = NamedExpr(col_name, child)
     graph: MutableMapping[Any, Any] = {
         (name_projected, i): (_project, (name_ir_in, i), selection)
         for i in range(partition_count)
     }
 
-    # Shuffle (TODO: support rapidsmp)
-    shuffle_on = NamedExpr(tmp_name, Col(child.dtype, tmp_name))
+    shuffle_on = NamedExpr(col_name, Col(child.dtype, col_name))
+    if (
+        shuffle_method := expr.sub_expr.config_options.get(
+            "executor_options.shuffle_method",
+            default=None,
+        )
+    ) not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
+        raise ValueError(
+            f"{shuffle_method} is not a supported shuffle method. "
+            f"Expected one of: {_SHUFFLE_METHODS}."
+        )
+
+    if shuffle_method in (None, "rapidsmp"):  # pragma: no cover
+        try:
+            from rapidsmp.integrations.dask import rapidsmp_shuffle_graph
+
+            graph.update(
+                rapidsmp_shuffle_graph(
+                    name_projected,
+                    name_shuffled,
+                    [col_name],
+                    [col_name],
+                    partition_count,
+                    partition_count,
+                    RMPIntegration,
+                )
+            )
+
+        except (ImportError, ValueError) as err:
+            # ImportError: rapidsmp is not installed
+            # ValueError: rapidsmp couldn't find a distributed client
+            if shuffle_method == "rapidsmp":
+                # Only raise an error if the user specifically
+                # set the shuffle method to "rapidsmp"
+                raise ValueError(
+                    "Rapidsmp is not installed correctly or the current "
+                    "Dask cluster does not support rapidsmp shuffling."
+                ) from err
+
     graph.update(
         _simple_shuffle_graph(
             name_projected,
@@ -553,7 +617,9 @@ def make_fusedexpr_graph(
     if expr.kind == "pointwise":
         return make_pointwise_graph(named_expr, expr_partition_counts, input_ir)
     elif expr.kind == "shuffle":
-        return make_shuffle_graph(named_expr, input_ir, input_ir_partition_info.count)
+        return make_shuffle_graph(
+            named_expr, expr_partition_counts, input_ir, input_ir_partition_info
+        )
     elif expr.kind == "aggregation":
         return make_agg_graph(named_expr, expr_partition_counts, input_ir)
     else:  # pragma: no cover
