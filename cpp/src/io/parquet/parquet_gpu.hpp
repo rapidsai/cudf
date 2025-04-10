@@ -673,8 +673,8 @@ __device__ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
   }
 
   auto const non_hashed_byte_array =
-    chunk.physical_type == BYTE_ARRAY and not chunk.is_strings_to_cat;
-  auto const fixed_len_byte_array = chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+    chunk.physical_type == Type::BYTE_ARRAY and not chunk.is_strings_to_cat;
+  auto const fixed_len_byte_array = chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return non_hashed_byte_array or fixed_len_byte_array;
 }
 
