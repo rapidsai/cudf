@@ -675,7 +675,7 @@ class alignas(16) mutable_column_device_view : public raw_mutable_column_device_
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
-   * @return reference to the element at the specified index
+   * @return Reference to the element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
@@ -684,15 +684,15 @@ class alignas(16) mutable_column_device_view : public raw_mutable_column_device_
   }
 
   /**
-   * @brief For a given `T`, indicates if `raw_mutable_column_device_view::element<T>()` has a valid
+   * @brief For a given `T`, indicates if `mutable_column_device_view::element<T>()` has a valid
    * overload.
    *
-   * @return `true` if `raw_mutable_column_device_view::element<T>()` has a valid overload, `false`
+   * @return `true` if `mutable_column_device_view::element<T>()` has a valid overload, `false`
    */
   template <typename T>
   CUDF_HOST_DEVICE static constexpr bool has_element_accessor()
   {
-    return has_element_accessor_impl<raw_mutable_column_device_view, T>::value;
+    return has_element_accessor_impl<mutable_column_device_view, T>::value;
   }
 
   /// Counting iterator

@@ -443,7 +443,6 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
     auto const offset     = itr[index];
     return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
   }
- 
 
  public:
   /**
