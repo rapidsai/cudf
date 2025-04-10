@@ -50,6 +50,7 @@ class _ArrowLikeMeta(type):
         return (
             hasattr(other, "__arrow_c_stream__")
             or hasattr(other, "__arrow_c_array__")
+            or hasattr(other, "__arrow_c_device_array__")
         )
 
 
@@ -87,10 +88,29 @@ cdef class Table:
 
     @_init.register(_ArrowLike)
     def _(self, arrow_like):
-        cdef ArrowArrayStream* c_stream
+        cdef ArrowSchema* c_schema
+        cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
-        if hasattr(arrow_like, "__arrow_c_stream__"):
+        if hasattr(arrow_like, "__arrow_c_device_stream__"):
+            raise NotImplementedError("Device streams not yet supported")
+        elif hasattr(arrow_like, "__arrow_c_device_array__"):
+            schema, array = arrow_like.__arrow_c_device_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_array = (
+                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+            )
+
+            result = _ArrowTableHolder()
+            with nogil:
+                c_result = make_unique[arrow_table](
+                    move(dereference(c_schema)), move(dereference(c_array))
+                )
+            result.tbl.swap(c_result)
+
+            tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
+            self._columns = tmp.columns()
+        elif hasattr(arrow_like, "__arrow_c_stream__"):
             stream = arrow_like.__arrow_c_stream__()
             c_stream = (
                 <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")

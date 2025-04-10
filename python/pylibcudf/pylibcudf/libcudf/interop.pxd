@@ -59,7 +59,11 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
     cdef cppclass arrow_table:
         arrow_table(
             ArrowArrayStream&& stream,
-            ) except +libcudf_exception_handler
+        ) except +libcudf_exception_handler
+        arrow_table(
+            ArrowSchema&& schema,
+            ArrowDeviceArray&& array,
+        ) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
 
 

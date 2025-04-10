@@ -151,3 +151,6 @@ def test_device_interop_table():
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)
     assert actual_schema.equals(pa_tbl.schema)
+
+    new_tbl = plc.Table(na_arr)
+    assert_table_eq(pa_tbl, new_tbl)
