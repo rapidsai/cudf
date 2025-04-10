@@ -213,6 +213,12 @@ class parquet_reader_options {
    * Columns that do not exist in the input files will be ignored silently.
    * The output table will only include the columns that are actually found.
    *
+   * To select a nested column (e.g., a struct member), use dot notation.
+   *
+   * Example:
+   * To read only the `bar` and `baz` fields, call:
+   *   set_columns({"foo.bar", "foo.baz"});
+   *
    * @note This function does not currently support per-source column selection.
    *
    * @param col_names A vector of column names to attempt to read from each input source.
