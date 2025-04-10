@@ -72,7 +72,10 @@ class hybrid_scan_reader {
   ~hybrid_scan_reader();
 
   /**
-   * @brief Get the Parquet file footer metadata
+   * @brief Get the Parquet file footer metadata.
+   *
+   * Returns the materialized Parquet file footer metadata struct. The footer will contain the
+   * materialized `PageIndex` if called after `setup_page_index()`.
    *
    * @return Parquet file footer metadata
    */
@@ -86,7 +89,11 @@ class hybrid_scan_reader {
   [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
 
   /**
-   * @brief Setup the PageIndex
+   * @brief Setup the `PageIndex` within the Parquet file metadata struct for later use
+   *
+   * Materialize the `ColumnIndex` and `OffsetIndex` structs (collectively called `PageIndex`)
+   * within the Parquet file metadata struct. The statistics contained in `PageIndex` can be used to
+   * prune data pages before decoding
    *
    * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
    */
@@ -102,7 +109,7 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options) const;
 
   /**
-   * @brief Filter the row groups with statistics
+   * @brief Filter the input row groups with statistics
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -115,7 +122,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Fetches byte ranges of bloom filters and dictionary pages (secondary filters) for
+   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for
    * further row group pruning
    *
    * @param row_group_indices Input row groups indices
@@ -175,7 +182,7 @@ class hybrid_scan_reader {
                                rmm::device_async_resource_ref mr) const;
 
   /**
-   * @brief Fetches byte ranges of column chunks of filter columns
+   * @brief Get byte ranges of column chunks of filter columns
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -186,7 +193,7 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options) const;
 
   /**
-   * @brief Materializes filter columns, and updates the input row validity mask to only the rows
+   * @brief Materialize filter columns, and updates the input row validity mask to only the rows
    *        that survive the row selection predicate at row level
    *
    * @param page_mask Boolean vectors indicating data pages are not pruned, one per filter column
@@ -206,7 +213,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Fetches byte ranges of column chunks of payload columns
+   * @brief Get byte ranges of column chunks of payload columns
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -217,7 +224,7 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options) const;
 
   /**
-   * @brief Materializes payload columns
+   * @brief Materialize payload columns
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
