@@ -704,9 +704,8 @@ static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
 {
   namespace cg = cooperative_groups;
 
-  int constexpr start_depth    = 0;
   int const max_depth          = state->col.max_nesting_depth - 1;
-  bool const in_nesting_bounds = (0 >= start_depth and 0 <= max_depth);
+  bool const in_nesting_bounds = max_depth >= 0;
   auto const tid               = cg::this_thread_block().thread_rank();
 
   // Iterate by depth and store offset(s) to the list location(s)

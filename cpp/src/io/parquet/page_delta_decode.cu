@@ -327,16 +327,6 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   auto* const db        = &db_state;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-
-  // Exit super early for simple types if the page does not need to be decoded
-  if (not has_repetition and not page_mask[page_idx]) {
-    auto& page      = pages[page_idx];
-    page.num_nulls  = page.num_rows;
-    page.num_valids = 0;
-    return;
-  }
-
   // Setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
@@ -347,6 +337,9 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
                           page_processing_stage::DECODE)) {
     return;
   }
+
+  // Must be evaluated after setupLocalPageInfo
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // Write list offsets and exit if the page does not need to be decoded
   if (not page_mask[page_idx]) {
