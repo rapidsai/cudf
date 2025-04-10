@@ -11,7 +11,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expressions.aggregation import Agg
-from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast
@@ -25,7 +25,6 @@ from cudf_polars.utils.config import ConfigOptions
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
-    from cudf_polars.dsl.expressions.base import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.typing import ExprTransformer
@@ -299,7 +298,10 @@ def construct_fused_expr(sub_expr: Expr, fused_children: list[FusedExpr]) -> Fus
             )
             fused_children = [shuffled]
             # Chunkwise
-            chunk_expr = Cast(agg.dtype, shuffled)
+            chunk_expr = Cast(
+                agg.dtype,
+                Agg(agg.dtype, "n_unique", agg.options, shuffled),
+            )
             # Combine
             combine_expr = Agg(agg.dtype, "sum", None, chunk_expr)
             # Finalize
@@ -398,6 +400,10 @@ def make_agg_graph(
     chunkwise_exprs = tuple(
         chain.from_iterable(combine_expr.children for combine_expr in combine_exprs)
     )
+    (chunkwise_child,) = chunkwise_exprs[0].children
+    if isinstance(chunkwise_child, Agg):
+        # We may have needed a cast after the chunkwise agg
+        (chunkwise_child,) = chunkwise_child.children
 
     # NOTE: This algorithm assumes we are doing nested
     # aggregations, or we are only aggregating a single
@@ -405,16 +411,16 @@ def make_agg_graph(
     # across multiple columns at once, we should perform
     # our reduction at the DataFrame level instead.
 
-    key_name = get_key_name(expr)
-    expr_child_names = [get_key_name(c) for c in expr.children]
+    key_name = get_key_name(expr, input_ir)
+    expr_child_names = [get_key_name(c, input_ir) for c in expr.children]
     expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
-    input_count = max(expr_partition_counts[c] for c in chunkwise_exprs[0].children)
+    input_count = expr_partition_counts[chunkwise_child]
 
     graph: MutableMapping[Any, Any] = {}
 
     # Pointwise stage
     pointwise_keys = []
-    key_name = get_key_name(expr)
+    key_name = get_key_name(expr, input_ir)
     inpit_ir_name = get_key_name(input_ir)
     chunk_name = f"chunk-{key_name}"
     for i in range(input_count):
@@ -442,15 +448,68 @@ def make_agg_graph(
     return graph
 
 
+def _project(df: DataFrame, selection: NamedExpr) -> DataFrame:
+    # Select a Column from a DataFrame.
+    # (Used by `make_shuffle_graph`)
+    return DataFrame([selection.evaluate(df)])
+
+
+def _df_to_column(df: DataFrame, name: str) -> Column:
+    # Convert a DataFrame to a Column.
+    # (Used by `make_shuffle_graph`)
+    (column,) = df.columns
+    return column.rename(name)
+
+
 def make_shuffle_graph(
     named_expr: NamedExpr,
-    expr_partition_counts: MutableMapping[Expr, int],
     input_ir: IR,
-    input_ir_partition_info: PartitionInfo,
+    partition_count: int,
 ) -> MutableMapping[Any, Any]:
     """Build a FusedExpr aggregation graph for shuffling."""
-    # TODO: Add shuffle graph logic
-    raise NotImplementedError()
+    from cudf_polars.experimental.shuffle import _simple_shuffle_graph
+
+    expr = named_expr.value
+    col_name = named_expr.name
+    tmp_name = col_name  # str(uuid.uuid4())
+    assert isinstance(expr, FusedExpr)
+    assert isinstance(expr.sub_expr, ShuffleColumn)
+    (child,) = expr.sub_expr.children
+
+    key_name = get_key_name(expr, input_ir)
+    name_ir_in = get_key_name(input_ir)
+    name_projected = f"projected-{key_name}"
+    name_shuffled = f"shuffled-{key_name}"
+
+    # Select the column needed for shuffling
+    selection = NamedExpr(tmp_name, child)
+    graph: MutableMapping[Any, Any] = {
+        (name_projected, i): (_project, (name_ir_in, i), selection)
+        for i in range(partition_count)
+    }
+
+    # Shuffle (TODO: support rapidsmp)
+    shuffle_on = NamedExpr(tmp_name, Col(child.dtype, tmp_name))
+    graph.update(
+        _simple_shuffle_graph(
+            name_projected,
+            name_shuffled,
+            (shuffle_on,),
+            partition_count,
+            partition_count,
+        )
+    )
+
+    # Convert DataFrame back to Column
+    # TODO: Use fusion/nesting?
+    graph.update(
+        {
+            (key_name, i): (_df_to_column, (name_shuffled, i), col_name)
+            for i in range(partition_count)
+        }
+    )
+
+    return graph
 
 
 def make_pointwise_graph(
@@ -461,8 +520,8 @@ def make_pointwise_graph(
     """Build simple pointwise FusedExpr graph."""
     expr = named_expr.value
     input_ir_name = get_key_name(input_ir)
-    key_name = get_key_name(expr)
-    expr_child_names = [get_key_name(c) for c in expr.children]
+    key_name = get_key_name(expr, input_ir)
+    expr_child_names = [get_key_name(c, input_ir) for c in expr.children]
     expr_bcast = [expr_partition_counts[c] == 1 for c in expr.children]
     count = expr_partition_counts[expr]
     assert isinstance(expr, FusedExpr)
@@ -494,10 +553,8 @@ def make_fusedexpr_graph(
     if expr.kind == "pointwise":
         return make_pointwise_graph(named_expr, expr_partition_counts, input_ir)
     elif expr.kind == "shuffle":
-        return make_shuffle_graph(
-            named_expr, expr_partition_counts, input_ir, input_ir_partition_info
-        )
+        return make_shuffle_graph(named_expr, input_ir, input_ir_partition_info.count)
     elif expr.kind == "aggregation":
         return make_agg_graph(named_expr, expr_partition_counts, input_ir)
-    else:
-        raise ValueError()
+    else:  # pragma: no cover
+        raise ValueError(f"{expr.kind} is not a supported `FusedExpr.kind` value.")

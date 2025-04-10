@@ -36,6 +36,6 @@ class PartitionInfo:
         yield from ((name, i) for i in range(self.count))
 
 
-def get_key_name(node: Node) -> str:
+def get_key_name(node: Node, *other: Node) -> str:
     """Generate the key name for a Node."""
-    return f"{type(node).__name__.lower()}-{hash(node)}"
+    return f"{type(node).__name__.lower()}-{hash((node, *other))}"

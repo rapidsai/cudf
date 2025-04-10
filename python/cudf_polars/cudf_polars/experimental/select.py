@@ -107,7 +107,7 @@ def build_fusedexpr_select_graph(
     # Add task(s) to select the final columns
     name = get_key_name(ir)
     count = max(expr_partition_counts[root.value] for root in roots)
-    expr_names = [get_key_name(root.value) for root in roots]
+    expr_names = [get_key_name(root.value, child) for root in roots]
     expr_bcast = [expr_partition_counts[root.value] == 1 for root in roots]
     for i in range(count):
         graph[(name, i)] = (

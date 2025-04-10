@@ -112,19 +112,19 @@ def test_broadcast_join_limit(left, right, broadcast_join_limit):
         assert len(shuffle_nodes) == 0
 
 
-# def test_join_then_shuffle(left, right):
-#     engine = pl.GPUEngine(
-#         raise_on_fail=True,
-#         executor="dask-experimental",
-#         executor_options={
-#             "max_rows_per_partition": 2,
-#             "broadcast_join_limit": 1,
-#         },
-#     )
-#     q = left.join(right, on="y", how="inner").select(
-#         pl.col("x").sum(),
-#         pl.col("xx").mean(),
-#         pl.col("y").n_unique().cast(pl.Int32),
-#     )
+def test_join_then_shuffle(left, right):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="dask-experimental",
+        executor_options={
+            "max_rows_per_partition": 2,
+            "broadcast_join_limit": 1,
+        },
+    )
+    q = left.join(right, on="y", how="inner").select(
+        pl.col("x").sum(),
+        pl.col("xx").mean(),
+        pl.col("y").n_unique().cast(pl.Int32),
+    )
 
-#     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
