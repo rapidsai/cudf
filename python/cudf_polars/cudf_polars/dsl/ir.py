@@ -2068,17 +2068,61 @@ class Sink(IR):
             .build()
         )
 
+    @staticmethod
+    def _get_valid_json_options(
+        builder: plc.io.json.JsonWriterOptionsBuilder, options: dict[str, Any]
+    ) -> plc.io.json.JsonWriterOptions:
+        """Validate and extract polars sink_ndjson options to pylibcudf write_json options."""
+        return builder.build()
+
+    @staticmethod
+    def _get_valid_parquet_options(
+        builder: plc.io.parquet.ParquetWriterOptionsBuilder, options: dict[str, Any]
+    ) -> plc.io.parquet.ParquetWriterOptions:
+        """Validate and extract polars sink_parquet options to pylibcudf write_parquet options."""
+        compression = options["compression"]
+        compression_type, compression_level = next(iter(compression.items()))
+        if compression_level is not None:
+            raise NotImplementedError(
+                "compression_level is not currently not supported."
+            )
+        if (
+            plc_compression := getattr(
+                plc.io.types.CompressionType, compression_type.upper(), None
+            )
+        ) is None:
+            raise NotImplementedError(
+                f"{compression_type=} is not currently not supported."
+            )
+        builder.compression(plc_compression)
+        if options["data_page_size"] is not None:
+            builder.set_max_page_size_bytes(options["data_page_size"])
+        if options["row_group_size"] is not None:
+            builder.row_group_size_rows(options["row_group_size"])
+        return builder.build()
+
     @classmethod
     def do_evaluate(cls, schema: Schema, payload: str, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         sink_payload = json.loads(payload)
         sink_target = plc.io.SinkInfo([sink_payload["File"]["target"]])
         sink_type = sink_payload["File"]["file_type"]
-        if (csv_options := sink_type.get("Csv")) is not None:
-            builder = plc.io.csv.CsvWriterOptions.builder(sink_target, df.table)
-            plc.io.csv.write_csv(cls._get_valid_csv_options(builder, csv_options))
+        if (sink_kwargs := sink_type.get("Parquet")) is not None:
+            builder_cls = plc.io.parquet.ParquetWriterOptionsBuilder
+            options_parser = cls._get_valid_parquet_options
+            sink_writer = plc.io.parquet.write_parquet
+        elif (sink_kwargs := sink_type.get("Csv")) is not None:
+            builder_cls = plc.io.csv.CsvWriterOptionsBuilder
+            options_parser = cls._get_valid_csv_options
+            sink_writer = plc.io.csv.write_csv
+        elif (sink_kwargs := sink_type.get("Json")) is not None:
+            builder_cls = plc.io.json.JsonWriterOptionsBuilder
+            options_parser = cls._get_valid_json_options
+            sink_writer = plc.io.json.write_json
         else:
             raise NotImplementedError(
                 f"Unsupported sink type: {next(iter(sink_type.keys()), None)}"
             )
+        builder = builder_cls(sink_target, df.table)
+        sink_writer(options_parser(builder, sink_kwargs))
         return df
