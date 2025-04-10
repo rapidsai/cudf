@@ -45,8 +45,6 @@ using PageInfo              = cudf::io::parquet::detail::PageInfo;
 using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
 using Type                  = cudf::io::parquet::Type;
 
-void impl::decode_page_data(size_t skip_rows, size_t num_rows) {}
-
 impl::impl(cudf::host_span<uint8_t const> footer_bytes,
            cudf::io::parquet_reader_options const& options)
 {
@@ -62,10 +60,6 @@ FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_p
 cudf::io::text::byte_range_info impl::get_page_index_bytes() const { return {}; }
 
 void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const {}
-
-void impl::select_columns(read_mode read_mode, cudf::io::parquet_reader_options const& options) {}
-
-void impl::reset_internal_state() {}
 
 std::vector<size_type> impl::get_all_row_groups(
   cudf::io::parquet_reader_options const& options) const
@@ -158,39 +152,5 @@ cudf::io::table_with_metadata impl::materialize_payload_columns(
 {
   return {};
 }
-
-void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              cudf::io::parquet_reader_options const& options,
-                              rmm::cuda_stream_view stream)
-{
-}
-
-template <typename RowMaskView>
-cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskView row_mask)
-{
-  return {};
-}
-
-template <typename RowMaskView>
-cudf::io::table_with_metadata impl::finalize_output(
-  read_mode read_mode,
-  table_metadata& out_metadata,
-  std::vector<std::unique_ptr<column>>& out_columns,
-  RowMaskView row_mask)
-{
-  return {};
-}
-
-void impl::populate_metadata(table_metadata& out_metadata) const {}
-
-void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                        std::vector<rmm::device_buffer> column_chunk_buffers,
-                        cudf::io::parquet_reader_options const& options)
-{
-}
-
-void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask) {}
-
-void impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask) {}
 
 }  // namespace cudf::experimental::io::parquet::detail
