@@ -1125,5 +1125,7 @@ def test_resolve_duplicates_pair(duplicate_input):
     input2 = cudf.Series(text2)
     sa2 = input2.str.build_suffix_array(0)
     actual = input1.str.resolve_duplicates_pair(sa1, input2, sa2, 15)
-    expected = cudf.Series([". 012345678901234", " reprehenderit "])
+    expected = cudf.Series(
+        [". 012345678901234", " 012345678901234", " reprehenderit "]
+    )
     assert_eq(expected, actual)
