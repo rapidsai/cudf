@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -867,10 +867,8 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
     auto const empty_str = std::string{""};                                                     \
     auto const jmessage  = env->NewStringUTF(message == nullptr ? empty_str.c_str() : message); \
     if (jmessage == nullptr) { return ret_val; }                                                \
-    auto const jstacktrace =                                                                    \
-      env->NewStringUTF(stacktrace == nullptr ? empty_str.c_str() : stacktrace);                \
-    if (jstacktrace == nullptr) { return ret_val; }                                             \
-    auto const jobj = env->NewObject(ex_class, ctor_id, jmessage, jstacktrace);                 \
+    auto const jstacktrace = stacktrace == nullptr ? nullptr : env->NewStringUTF(stacktrace);   \
+    auto const jobj        = env->NewObject(ex_class, ctor_id, jmessage, jstacktrace);          \
     if (jobj == nullptr) { return ret_val; }                                                    \
     env->Throw(reinterpret_cast<jthrowable>(jobj));                                             \
     return ret_val;                                                                             \
@@ -888,9 +886,7 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
     auto const empty_str = std::string{""};                                                         \
     auto const jmessage  = env->NewStringUTF(message == nullptr ? empty_str.c_str() : message);     \
     if (jmessage == nullptr) { return ret_val; }                                                    \
-    auto const jstacktrace =                                                                        \
-      env->NewStringUTF(stacktrace == nullptr ? empty_str.c_str() : stacktrace);                    \
-    if (jstacktrace == nullptr) { return ret_val; }                                                 \
+    auto const jstacktrace = stacktrace == nullptr ? nullptr : env->NewStringUTF(stacktrace);       \
     auto const jerror_code = static_cast<jint>(error_code);                                         \
     auto const jobj        = env->NewObject(ex_class, ctor_id, jmessage, jstacktrace, jerror_code); \
     if (jobj == nullptr) { return ret_val; }                                                        \
@@ -907,6 +903,15 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
   {                                                                                       \
     if (!(obj)) { JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, error_msg, ret_val); } \
   }
+
+#ifdef CUDF_BUILD_STACKTRACE_DEBUG
+#define GET_STACKTRACE(e, stacktrace_ptr)                                                    \
+  if (auto const cudf_ex = dynamic_cast<cudf::logic_error const*>(&e); cudf_ex != nullptr) { \
+    stacktrace = cudf_ex->stacktrace();                                                      \
+  }
+#else
+#define GET_STACKTRACE(e, stacktrace_ptr)
+#endif  // CUDF_BUILD_STACKTRACE_DEBUG
 
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                 \
   catch (const rmm::out_of_memory& e)                                                             \
@@ -941,10 +946,8 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
   }                                                                                               \
   catch (const std::exception& e)                                                                 \
   {                                                                                               \
-    char const* stacktrace = "No native stacktrace is available.";                                \
-    if (auto const cudf_ex = dynamic_cast<cudf::logic_error const*>(&e); cudf_ex != nullptr) {    \
-      stacktrace = cudf_ex->stacktrace();                                                         \
-    }                                                                                             \
+    char const* stacktrace = nullptr;                                                             \
+    GET_STACKTRACE(e, stacktrace)                                                                 \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */           \
     /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */           \
     /* occurred if the second call doesn't return with cudaSuccess. */                            \

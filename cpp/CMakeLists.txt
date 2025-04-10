@@ -67,7 +67,7 @@ option(
 # human-readable stacktrace for debugging.
 option(
   CUDF_BUILD_STACKTRACE_DEBUG
-  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
+  "Replace the current optimization flags by the options '-rdynamic -Og', useful for debugging with stacktrace retrieval"
   OFF
 )
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
@@ -871,7 +871,7 @@ if(CUDF_BUILD_STACKTRACE_DEBUG)
     cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
     "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
   )
-  target_link_libraries(cudf PRIVATE cudf_backtrace)
+  target_link_libraries(cudf PRIVATE $<BUILD_LOCAL_INTERFACE:cudf_backtrace>)
 endif()
 
 # Specify include paths for the current target and dependents

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,22 +20,21 @@ package ai.rapids.cudf;
  */
 public class CudfException extends RuntimeException {
   CudfException(String message) {
-    this(message, "No native stacktrace is available.");
+    super(message);
   }
 
   CudfException(String message, String nativeStacktrace) {
-    super(message);
-    this.nativeStacktrace = nativeStacktrace;
+    super(getExceptionMessage(message, nativeStacktrace));
   }
 
   CudfException(String message, String nativeStacktrace, Throwable cause) {
-    super(message, cause);
-    this.nativeStacktrace = nativeStacktrace;
+    super(getExceptionMessage(message, nativeStacktrace), cause);
   }
 
-  public final String getNativeStacktrace() {
-    return nativeStacktrace;
+  private static String getExceptionMessage(String message, String nativeStacktrace) {
+    if (nativeStacktrace == null) {
+      return message;
+    }
+    return message + "\n\t========== native stack frame ==========\n" + nativeStacktrace;
   }
-
-  private final String nativeStacktrace;
 }
