@@ -32,7 +32,6 @@ You can profile your code by passing `engine="gpu"` or `engine=pl.GPUEngine(...)
 
 ```python
 import polars as pl
-
 q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
 profile = q.profile(engine="gpu")
 ```
