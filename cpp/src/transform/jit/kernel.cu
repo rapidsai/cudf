@@ -37,17 +37,19 @@ namespace transformation {
 namespace jit {
 
 template <typename T, int32_t Index>
-struct accessor {
+struct column_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view const* views,
+                                           [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
     return views[index].element<T>(row);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view const* views,
+                                           [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
     return views[index].element<T>(row);
@@ -61,21 +63,49 @@ struct accessor {
   }
 };
 
+template <int32_t Index>
+struct user_data_accessor {
+  using type                     = void*;
+  static constexpr int32_t index = Index;
+
+  static __device__ void* element([[maybe_unused]] cudf::mutable_column_device_view const* views,
+                                  void* const* user_data,
+                                  [[maybe_unused]] cudf::size_type row)
+  {
+    return user_data[index];
+  }
+
+  static __device__ void* element([[maybe_unused]] cudf::column_device_view const* views,
+                                  void* const* user_data,
+                                  [[maybe_unused]] cudf::size_type row)
+  {
+    return user_data[index];
+  }
+
+  static __device__ void assign([[maybe_unused]] cudf::mutable_column_device_view const* views,
+                                [[maybe_unused]] cudf::size_type row,
+                                [[maybe_unused]] type value)
+  {
+  }
+};
+
 template <typename Accessor>
 struct scalar {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view const* views,
+                                           void* const* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(views, 0);
+    return Accessor::element(views, user_data, 0);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view const* views,
+                                           void* const* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(views, 0);
+    return Accessor::element(views, user_data, 0);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view const* views,
@@ -86,10 +116,10 @@ struct scalar {
   }
 };
 
-template <bool has_data, typename Out, typename... In>
-CUDF_KERNEL void kernel(void* user_data,
-                        cudf::mutable_column_device_view const* output,
-                        cudf::column_device_view const* inputs)
+template <typename Out, typename... In>
+CUDF_KERNEL void kernel(cudf::mutable_column_device_view const* output,
+                        cudf::column_device_view const* inputs,
+                        void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -99,18 +129,14 @@ CUDF_KERNEL void kernel(void* user_data,
   thread_index_type const size   = output->size();
 
   for (auto i = start; i < size; i += stride) {
-    if constexpr (has_data) {
-      GENERIC_TRANSFORM_OP(user_data, &Out::element(output, i), In::element(inputs, i)...);
-    } else {
-      GENERIC_TRANSFORM_OP(&Out::element(output, i), In::element(inputs, i)...);
-    }
+    GENERIC_TRANSFORM_OP(&Out::element(output, i), In::element(inputs, user_data, i)...);
   }
 }
 
-template <bool has_data, typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(void* user_data,
-                                    cudf::mutable_column_device_view const* output,
-                                    cudf::column_device_view const* inputs)
+template <typename Out, typename... In>
+CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view const* output,
+                                    cudf::column_device_view const* inputs,
+                                    void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -118,24 +144,19 @@ CUDF_KERNEL void fixed_point_kernel(void* user_data,
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
   thread_index_type const size   = output->size();
-
-  numeric::scale_type const output_scale = static_cast<numeric::scale_type>(output->type().scale());
+  auto const output_scale        = static_cast<numeric::scale_type>(output->type().scale());
 
   for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
-    if constexpr (has_data) {
-      GENERIC_TRANSFORM_OP(user_data, &result, In::element(inputs, i)...);
-    } else {
-      GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
-    }
+    GENERIC_TRANSFORM_OP(&result, In::element(inputs, user_data, i)...);
     Out::assign(output, i, result);
   }
 }
 
-template <bool has_data, typename... In>
-CUDF_KERNEL void substring_kernel(void* user_data,
-                                  cudf::device_span<cudf::string_view>* output,
-                                  cudf::column_device_view const* inputs)
+template <typename... In>
+CUDF_KERNEL void substr_kernel(cudf::device_span<cudf::string_view>* output,
+                               cudf::column_device_view const* inputs,
+                               void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -145,28 +166,24 @@ CUDF_KERNEL void substring_kernel(void* user_data,
   thread_index_type const size   = output->size();
 
   for (auto i = start; i < size; i += stride) {
-    if constexpr (has_data) {
-      GENERIC_TRANSFORM_OP(user_data, &(*output)[i], In::element(inputs, i)...);
-    } else {
-      GENERIC_TRANSFORM_OP(&(*output)[i], In::element(inputs, i)...);
-    }
+    GENERIC_TRANSFORM_OP(&(*output)[i], In::element(inputs, user_data, i)...);
   }
 }
 
 template <typename... In>
-CUDF_KERNEL void string_kernel(void* user_data,
-                               cudf::mutable_column_device_view const* output,
-                               cudf::column_device_view const* inputs)
+CUDF_KERNEL void void_kernel(cudf::column_device_view const* base,
+                             cudf::column_device_view const* inputs,
+                             void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
-  thread_index_type const size   = output->size();
+  thread_index_type const size   = base->size();
 
   for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(user_data, &(*output)[i], In::element(inputs, i)...);
+    GENERIC_TRANSFORM_OP(In::element(inputs, user_data, i)...);
   }
 }
 
