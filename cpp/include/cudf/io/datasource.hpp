@@ -296,6 +296,9 @@ class datasource {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
    * @param dst Address of the existing device memory
+   *            It must not be used asynchronously before the returned future is completed,
+   *            because the implementation is not guaranteed to follow stream-ordering.
+   *            See https://github.com/rapidsai/cudf/pull/18279#issuecomment-2727726886
    * @param stream CUDA stream to use
    *
    * @return The number of bytes read as a future value (can be smaller than size)
