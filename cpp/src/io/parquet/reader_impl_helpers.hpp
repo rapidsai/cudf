@@ -113,6 +113,7 @@ struct row_group_info {
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
+  metadata() = default;
   explicit metadata(datasource* source);
   void sanitize_schema();
 };
@@ -134,6 +135,7 @@ struct surviving_row_group_metrics {
 };
 
 class aggregate_reader_metadata {
+ protected:
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
@@ -219,7 +221,7 @@ class aggregate_reader_metadata {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
-   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
+   * @return A flattened list of bloom filter bitset device buffers for each filter column across
    * row group
    */
   [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
@@ -582,8 +584,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   size_type _num_input_columns;
-
- private:
   std::vector<std::vector<ast::literal*>> _literals;
 };
 
