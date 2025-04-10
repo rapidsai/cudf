@@ -895,9 +895,9 @@ int CompactProtocolReader::WalkSchema(
 {
   if (idx >= 0 && (size_t)idx < md->schema.size()) {
     SchemaElement* e = &md->schema[idx];
-    if (e->repetition_type == OPTIONAL) {
+    if (e->repetition_type == FieldRepetitionType::OPTIONAL) {
       ++max_def_level;
-    } else if (e->repetition_type == REPEATED) {
+    } else if (e->repetition_type == FieldRepetitionType::REPEATED) {
       ++max_def_level;
       ++max_rep_level;
     }

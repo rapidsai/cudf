@@ -191,7 +191,7 @@ TEST_F(ParquetWriterTest, BufferSource)
 
   // device buffer
   {
-    auto const d_input = cudf::detail::make_device_uvector_sync(
+    auto const d_input = cudf::detail::make_device_uvector(
       cudf::host_span<uint8_t const>{reinterpret_cast<uint8_t const*>(out_buffer.data()),
                                      out_buffer.size()},
       cudf::get_default_stream(),
@@ -1403,8 +1403,9 @@ TEST_F(ParquetWriterTest, SkipCompression)
   cudf::io::parquet::FileMetaData fmd;
   read_footer(source, &fmd);
 
-  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.codec, cudf::io::parquet::UNCOMPRESSED);
-  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.codec, cudf::io::parquet::ZSTD);
+  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.codec,
+            cudf::io::parquet::Compression::UNCOMPRESSED);
+  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.codec, cudf::io::parquet::Compression::ZSTD);
 }
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
