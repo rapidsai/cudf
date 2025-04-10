@@ -117,15 +117,14 @@ outputs:
         - ${{ compiler("c") }}
       host:
         - cuda-version =${{ cuda_version }}
+        - cuda-nvml-dev
         - libkvikio =${{ minor_version }}
         - nvcomp ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}
         - if: cuda_major == "11"
           then: cudatoolkit
-          else:
-            - cuda-cudart-dev
-            - cuda-nvml-dev
+          else: cuda-cudart-dev
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - if: cuda_major == "11"
