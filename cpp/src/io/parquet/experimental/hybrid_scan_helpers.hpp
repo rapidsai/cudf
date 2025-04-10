@@ -118,6 +118,13 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Get the Parquet file metadata
    */
   [[nodiscard]] FileMetadata const& get_parquet_metadata() const;
+
+  /**
+   * @brief Setup the PageIndex
+   *
+   * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
+   */
+  void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
 };
 
 }  // namespace cudf::experimental::io::parquet::detail

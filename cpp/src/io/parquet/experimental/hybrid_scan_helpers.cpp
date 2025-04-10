@@ -64,4 +64,6 @@ FileMetadata const& aggregate_reader_metadata::get_parquet_metadata() const
   return per_file_metadata.front();
 }
 
+void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) {}
+
 }  // namespace cudf::experimental::io::parquet::detail
