@@ -57,14 +57,23 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
 
 FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_parquet_metadata(); }
 
-cudf::io::text::byte_range_info impl::get_page_index_bytes() const { return {}; }
+cudf::io::text::byte_range_info impl::get_page_index_bytes() const
+{
+  return _metadata->get_page_index_bytes();
+}
 
-void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const {}
+void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
+{
+  _metadata->setup_page_index(page_index_bytes);
+}
 
 std::vector<size_type> impl::get_all_row_groups(
   cudf::io::parquet_reader_options const& options) const
 {
-  return {};
+  auto const num_row_groups = _metadata->get_num_row_groups();
+  auto row_groups_indices   = std::vector<size_type>(num_row_groups);
+  std::iota(row_groups_indices.begin(), row_groups_indices.end(), size_type{0});
+  return row_groups_indices;
 }
 
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
