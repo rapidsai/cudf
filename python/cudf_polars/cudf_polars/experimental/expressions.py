@@ -74,7 +74,7 @@ class FusedExpr(Expr):
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:
+    ) -> Column:  # pragma: no cover
         """Evaluate this expression given a dataframe for context."""
         return self.sub_expr.evaluate(df, context=context, mapping=mapping)
 
@@ -96,7 +96,7 @@ class NoOp(Expr):
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:
+    ) -> Column:  # pragma: no cover
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         return child.evaluate(df, context=context, mapping=mapping)
