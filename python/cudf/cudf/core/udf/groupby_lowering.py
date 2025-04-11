@@ -201,6 +201,13 @@ _print_group_data = cuda.declare_device(
 def call_print_group_data(data_ptr, size):
     _print_group_data(data_ptr, size)
 
+_udf_grp_meminfo = cuda.declare_device(
+    "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))
+)
+
+def make_udf_grp_meminfo(data_ptr):
+    return _udf_grp_meminfo(data_ptr)
+
 import operator
 @cuda_lower(operator.add, GroupViewType(types.int64), GroupViewType(types.int64))
 def cuda_lower_add(context, builder, sig, args):
@@ -236,20 +243,20 @@ def cuda_lower_add(context, builder, sig, args):
         ),
     )
 
-    _ = context.compile_internal(
+    mi = context.compile_internal(
         builder,
-        call_print_group_data,
-        types.void(
-            types.CPointer(types.int64), types.int64
-        ),
-        (out_ptr, lhs_grp.size),
+        make_udf_grp_meminfo,
+        types.voidptr(types.CPointer(types.int64)),
+        (out_ptr,)
     )
+
 
     out_grp = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder)
     out_grp.group_data = out_ptr
     out_grp.size = lhs_grp.size
 
     output.group_view = out_grp._getvalue()
+#    output.meminfo = mi
 
     return output._getvalue()
 

@@ -779,6 +779,11 @@ class udf_group {
       udf_group result(ptr, size);
       return result;
   }
+    __device__ ~udf_group() {
+      if (data != nullptr) {
+        block_free(data);
+      }
+    }
 };
 
 
@@ -812,6 +817,19 @@ __device__ int print_group_data(int64_t* numba_return_value, int64_t* group_data
     }
   }
   return 0;
+}
+
+
+__device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<udf_group*>(udf_group_ptr);
+  ptr->~udf_group();
+}
+
+extern "C"
+__device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data) {
+  *nb_retval = NRT_MemInfo_new(group_data, NULL, udf_group_dtor, NULL);
+  //NRT_MemInfo_new(void* data, size_t size, NRT_dtor_function dtor, void* dtor_info);
 }
 
 
