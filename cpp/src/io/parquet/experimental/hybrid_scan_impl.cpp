@@ -86,10 +86,13 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(subpass.pages.size() > 0, "There are no pages to decode");
 
-  size_t const sum_max_depths = std::accumulate(
-    pass.chunks.begin(), pass.chunks.end(), 0, [&](size_t cursum, ColumnChunkDesc const& chunk) {
-      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
-    });
+  size_t const sum_max_depths =
+    std::accumulate(pass.chunks.begin(),
+                    pass.chunks.end(),
+                    size_t{0},
+                    [&](auto cursum, ColumnChunkDesc const& chunk) {
+                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+                    });
 
   // figure out which kernels to run
   auto const kernel_mask = GetAggregatedDecodeKernelMask(subpass.pages, _stream);

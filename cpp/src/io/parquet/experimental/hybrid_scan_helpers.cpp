@@ -612,7 +612,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
         std::accumulate(row_group_indices.begin(),
                         row_group_indices.end(),
                         size_t{0},
-                        [](size_t& sum, auto const& pfm) { return sum + pfm.size(); });
+                        [](auto sum, auto const& pfm) { return sum + pfm.size(); });
 
       // Check if we have less than 2B total row groups.
       CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -661,7 +661,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
     row_group_indices.begin(),
     row_group_indices.end(),
     cudf::size_type{0},
-    [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
   auto const equality_literals =
@@ -728,7 +728,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
     row_group_indices.begin(),
     row_group_indices.end(),
     cudf::size_type{0},
-    [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
   auto const [literals, _] =
@@ -837,7 +837,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
     row_group_indices.begin(),
     row_group_indices.end(),
     cudf::size_type{0},
-    [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect literals and operators for dictionary page filtering for each input table column
   auto const [literals, operators] =
@@ -900,7 +900,7 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
     row_group_indices.begin(),
     row_group_indices.end(),
     cudf::size_type{0},
-    [](auto& sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
   auto const equality_literals =

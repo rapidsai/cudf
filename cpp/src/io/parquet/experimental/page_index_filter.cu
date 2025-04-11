@@ -310,7 +310,7 @@ struct page_stats_caster : public stats_caster_base {
           auto [page_str_chars, page_str_sizes, page_str_offsets] = [&]() {
             auto const& host_strings    = host_col.val;
             auto const total_char_count = std::accumulate(
-              host_strings.begin(), host_strings.end(), 0, [](auto sum, auto const& str) {
+              host_strings.begin(), host_strings.end(), size_t{0}, [](auto sum, auto const& str) {
                 return sum + str.size_bytes();
               });
             auto chars = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
@@ -485,11 +485,11 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
     [&](auto sum, auto const src_index) {
       auto const& rg_indices = row_group_indices[src_index];
       return std::accumulate(
-        rg_indices.begin(), rg_indices.end(), sum, [&](auto sum, auto const rg_index) {
-          CUDF_EXPECTS(sum + per_file_metadata[src_index].row_groups[rg_index].num_rows <=
+        rg_indices.begin(), rg_indices.end(), sum, [&](auto subsum, auto const rg_index) {
+          CUDF_EXPECTS(subsum + per_file_metadata[src_index].row_groups[rg_index].num_rows <=
                          std::numeric_limits<size_type>::max(),
                        "Total rows exceed the maximum value");
-          return sum + per_file_metadata[src_index].row_groups[rg_index].num_rows;
+          return subsum + per_file_metadata[src_index].row_groups[rg_index].num_rows;
         });
     });
 

@@ -866,9 +866,9 @@ void impl::allocate_nesting_info()
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
-  auto counting_iter = thrust::make_counting_iterator(size_t{0});
-  size_t const total_page_nesting_infos =
-    std::accumulate(counting_iter, counting_iter + num_columns, 0, [&](int total, size_t index) {
+  auto counting_iter                    = thrust::make_counting_iterator(size_t{0});
+  size_t const total_page_nesting_infos = std::accumulate(
+    counting_iter, counting_iter + num_columns, size_t{0}, [&](auto total, size_t index) {
       return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
     });
 
