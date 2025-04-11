@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ void BM_setnullmask(benchmark::State& state)
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);
 }
 
+class SetNullmaskBulk : public cudf::benchmark {};
+
 void BM_setnullmask_bulk(benchmark::State& state)
 {
   cudf::size_type const size{(cudf::size_type)state.range(0)};
@@ -56,7 +58,7 @@ void BM_setnullmask_bulk(benchmark::State& state)
     cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size * num_masks / 8);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);
 }
 
 #define NBM_BENCHMARK_DEFINE(name)                                                             \
@@ -66,17 +68,17 @@ void BM_setnullmask_bulk(benchmark::State& state)
     ->Range(1 << 10, 1 << 30)                                                                  \
     ->UseManualTime();
 
-#define NBM_BENCHMARK_DEFINE_BULK(name)                                     \
-  BENCHMARK_DEFINE_F(SetNullmaskBulk, name)(::benchmark::State & state)     \
+#define NBM_BULK_BENCHMARK_DEFINE(name)                                     \
+  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)         \
   {                                                                         \
     BM_setnullmask_bulk(state);                                             \
   }                                                                         \
-  BENCHMARK_REGISTER_F(SetNullmaskBulk, name)                               \
+  BENCHMARK_REGISTER_F(SetNullmask, name)                                   \
     ->ArgsProduct({                                                         \
       benchmark::CreateRange(1 << 5, 1 << 20, 1 << 5), /* Powers of 1024 */ \
-      benchmark::CreateRange(1 << 2, 1 << 8, 1 << 2)   /* Powers of 2 */    \
-    })
--> UseManualTime();
+      benchmark::CreateRange(1 << 2, 1 << 8, 1 << 2)   /* Powers of 4 */    \
+    })                                                                      \
+    ->UseManualTime();
 
 NBM_BENCHMARK_DEFINE(SetNullMaskKernel);
-NBM_BENCHMARK_DEFINE_BULK(SetNullMaskBulkKernel);
+NBM_BULK_BENCHMARK_DEFINE(SetNullMaskBulkKernel);
