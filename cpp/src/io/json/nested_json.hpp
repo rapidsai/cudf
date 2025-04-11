@@ -101,6 +101,8 @@ struct json_column {
   json_column(json_column const&)            = delete;
   json_column& operator=(json_column const&) = delete;
 
+  json_column(json_col_t type) : type(type) {}
+
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
    *

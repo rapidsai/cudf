@@ -147,7 +147,7 @@ struct search_list_fn {
 
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [=] __device__(auto const idx) {
+      thrust::find_if(thrust::seq, begin, end, [&list, this] __device__(auto const idx) {
         return !list.is_null(idx) && d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
                                             static_cast<rhs_index_type>(list.row_index()));
       });
