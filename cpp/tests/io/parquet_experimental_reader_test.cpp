@@ -215,7 +215,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<cudf::experimental::io::parquet::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
   [[maybe_unused]] auto const parquet_metadata = reader->get_parquet_metadata();
@@ -325,6 +325,71 @@ auto hybrid_scan(std::vector<char>& buffer,
 }
 
 }  // namespace
+
+TEST_F(ParquetExperimentalReaderTest, TestMetadata)
+{
+  // Create a table with several row groups each with a single page.
+  auto constexpr num_concat    = 1;
+  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+
+  // Filtering AST - table[0] < 100
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
+      .filter(filter_expression);
+
+  // Input file buffer span
+  auto const file_buffer_span =
+    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  // Get Parquet file metadata from the reader - API # 1
+  auto parquet_metadata = reader->get_parquet_metadata();
+
+  // Check that the offset and column indices are not present
+  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+
+  // Get page index byte range from the reader - API # 2
+  auto const page_index_byte_range = reader->get_page_index_bytes();
+
+  // Fetch page index bytes from the input buffer
+  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+
+  // Setup page index - API # 3
+  reader->setup_page_index(page_index_buffer);
+
+  // Get Parquet file metadata from the reader again
+  parquet_metadata = reader->get_parquet_metadata();
+
+  // Check that the offset and column indices are now present
+  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+
+  // Get all row groups from the reader - API # 4
+  auto input_row_group_indices = reader->get_all_row_groups(options);
+  // Expect 4 = 20000 rows / 5000 rows per row group
+  ASSERT_EQ(input_row_group_indices.size(), 4);
+
+  // Explicitly set the row groups to read
+  options.set_row_groups({{0, 1}});
+
+  // Get all row groups from the reader again
+  input_row_group_indices = reader->get_all_row_groups(options);
+  // Expect only 2 row groups now
+  ASSERT_EQ(reader->get_all_row_groups(options).size(), 2);
+}
 
 TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
 {

@@ -32,7 +32,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace experimental::io::parquet {
+namespace io::parquet::experimental {
 
 namespace detail {
 
@@ -197,12 +197,12 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized filter columns and metadata
    */
-  [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
+  [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> page_mask,
     cudf::host_span<size_type const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -212,9 +212,9 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_payload_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<text::byte_range_info> get_payload_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Materializes payload columns
@@ -226,16 +226,16 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized payload columns and metadata
    */
-  [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
+  [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::column_view row_mask,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
  private:
   std::unique_ptr<detail::impl> _impl;
 };
 
-}  // namespace experimental::io::parquet
+}  // namespace io::parquet::experimental
 }  // namespace CUDF_EXPORT cudf

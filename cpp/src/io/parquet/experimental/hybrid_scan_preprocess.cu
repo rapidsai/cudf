@@ -56,25 +56,19 @@
 #include <limits>
 #include <numeric>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
-using chunk_page_info        = cudf::io::parquet::detail::chunk_page_info;
-using ColumnChunkDesc        = cudf::io::parquet::detail::ColumnChunkDesc;
-using Compression            = cudf::io::parquet::Compression;
-using decode_error           = cudf::io::parquet::detail::decode_error;
-using Encoding               = cudf::io::parquet::Encoding;
-using kernel_error           = cudf::io::parquet::kernel_error;
-using level_type             = cudf::io::parquet::detail::level_type;
-using LogicalType            = cudf::io::parquet::LogicalType;
-using PageInfo               = cudf::io::parquet::detail::PageInfo;
-using PageNestingDecodeInfo  = cudf::io::parquet::detail::PageNestingDecodeInfo;
-using PageNestingInfo        = cudf::io::parquet::detail::PageNestingInfo;
-using pass_intermediate_data = cudf::io::parquet::detail::pass_intermediate_data;
-using SchemaElement          = cudf::io::parquet::SchemaElement;
-using string_index_pair      = cudf::io::parquet::detail::string_index_pair;
-using Type                   = cudf::io::parquet::Type;
+using chunk_page_info        = parquet::detail::chunk_page_info;
+using ColumnChunkDesc        = parquet::detail::ColumnChunkDesc;
+using decode_error           = parquet::detail::decode_error;
+using level_type             = parquet::detail::level_type;
+using PageInfo               = parquet::detail::PageInfo;
+using PageNestingDecodeInfo  = parquet::detail::PageNestingDecodeInfo;
+using PageNestingInfo        = parquet::detail::PageNestingInfo;
+using pass_intermediate_data = parquet::detail::pass_intermediate_data;
+using string_index_pair      = parquet::detail::string_index_pair;
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
@@ -745,7 +739,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 }  // namespace
 
 void impl::prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              cudf::io::parquet_reader_options const& options)
+                              parquet_reader_options const& options)
 {
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
@@ -1438,4 +1432,4 @@ void impl::update_row_mask(cudf::column_view in_row_mask,
   cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

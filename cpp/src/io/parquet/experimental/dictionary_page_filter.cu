@@ -39,7 +39,7 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 dictionary_literals_and_operators_collector::dictionary_literals_and_operators_collector() =
   default;
@@ -131,4 +131,4 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::materialize_dictionar
   return {};
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

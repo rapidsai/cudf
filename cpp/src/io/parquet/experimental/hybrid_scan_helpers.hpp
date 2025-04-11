@@ -31,15 +31,14 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
-using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
-using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
-using FileMetadata                   = cudf::io::parquet::FileMetaData;
-using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
-using input_column_info              = cudf::io::parquet::detail::input_column_info;
-using metadata_base                  = cudf::io::parquet::detail::metadata;
-using row_group_info                 = cudf::io::parquet::detail::row_group_info;
+using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
+using equality_literals_collector    = parquet::detail::equality_literals_collector;
+using inline_column_buffer           = io::detail::inline_column_buffer;
+using input_column_info              = parquet::detail::input_column_info;
+using metadata_base                  = parquet::detail::metadata;
+using row_group_info                 = parquet::detail::row_group_info;
 
 /**
  * @brief Class for parsing dataset metadata
@@ -117,7 +116,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Get the Parquet file metadata
    */
-  [[nodiscard]] FileMetadata const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
 
   /**
    * @brief Setup the PageIndex
@@ -364,4 +363,4 @@ class dictionary_literals_and_operators_collector : public equality_literals_col
   std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

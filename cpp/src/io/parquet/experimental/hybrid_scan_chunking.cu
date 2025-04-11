@@ -43,22 +43,18 @@
 
 #include <numeric>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
 namespace nvcomp = cudf::io::detail::nvcomp;
 
-using compression_result    = cudf::io::detail::compression_result;
-using compression_status    = cudf::io::detail::compression_status;
-using compression_type      = cudf::io::compression_type;
-using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
-using CompactProtocolReader = cudf::io::parquet::detail::CompactProtocolReader;
-using Compression           = cudf::io::parquet::Compression;
-using level_type            = cudf::io::parquet::detail::level_type;
-using LogicalType           = cudf::io::parquet::LogicalType;
-using PageInfo              = cudf::io::parquet::detail::PageInfo;
-using Type                  = cudf::io::parquet::Type;
+using compression_result    = io::detail::compression_result;
+using compression_status    = io::detail::compression_status;
+using ColumnChunkDesc       = parquet::detail::ColumnChunkDesc;
+using CompactProtocolReader = parquet::detail::CompactProtocolReader;
+using level_type            = parquet::detail::level_type;
+using PageInfo              = parquet::detail::PageInfo;
 
 #if defined(PAGE_PRUNING_DEBUG)
 void print_pages(cudf::detail::hostdevice_span<PageInfo>& pages, rmm::cuda_stream_view _stream)
@@ -615,7 +611,7 @@ struct get_decomp_scratch {
 
 }  // anonymous namespace
 
-void impl::create_global_chunk_info(cudf::io::parquet_reader_options const& options)
+void impl::create_global_chunk_info(parquet_reader_options const& options)
 {
   auto const num_rows         = _file_itm_data.global_num_rows;
   auto const& row_groups_info = _file_itm_data.row_groups;
@@ -749,7 +745,7 @@ void impl::compute_output_chunks_for_subpass()
 }
 
 void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
-                           cudf::io::parquet_reader_options const& options)
+                           parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -791,7 +787,7 @@ void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
 }
 
 void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
-                           cudf::io::parquet_reader_options const& options)
+                           parquet_reader_options const& options)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1, "");
@@ -875,7 +871,7 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
   }
 }
 
-void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
+void impl::setup_next_subpass(parquet_reader_options const& options)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<cudf::io::parquet::detail::subpass_intermediate_data>();
@@ -957,4 +953,4 @@ void impl::setup_next_subpass(cudf::io::parquet_reader_options const& options)
 #endif  // PAGE_PRUNING_DEBUG
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

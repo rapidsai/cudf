@@ -34,16 +34,13 @@
 #include <limits>
 #include <numeric>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
-using byte_range_info       = cudf::io::text::byte_range_info;
-using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
-using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
-using FileMetaData          = cudf::io::parquet::FileMetaData;
-using LogicalType           = cudf::io::parquet::LogicalType;
-using PageInfo              = cudf::io::parquet::detail::PageInfo;
-using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
-using Type                  = cudf::io::parquet::Type;
+using byte_range_info       = text::byte_range_info;
+using ColumnChunkDesc       = parquet::detail::ColumnChunkDesc;
+using decode_kernel_mask    = parquet::detail::decode_kernel_mask;
+using PageInfo              = parquet::detail::PageInfo;
+using PageNestingDecodeInfo = parquet::detail::PageNestingDecodeInfo;
 
 namespace {
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
@@ -513,8 +510,7 @@ void impl::decode_page_data(size_t skip_rows, size_t num_rows)
   _stream.synchronize();
 }
 
-impl::impl(cudf::host_span<uint8_t const> footer_bytes,
-           cudf::io::parquet_reader_options const& options)
+impl::impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options const& options)
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
@@ -535,7 +531,7 @@ void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) con
   _metadata->setup_page_index(page_index_bytes);
 }
 
-void impl::select_columns(read_mode read_mode, cudf::io::parquet_reader_options const& options)
+void impl::select_columns(read_mode read_mode, parquet_reader_options const& options)
 {
   // Strings may be returned as either string or categorical columns
   auto const strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -590,8 +586,7 @@ void impl::reset_internal_state()
   _output_metadata.reset();
 }
 
-std::vector<size_type> impl::get_all_row_groups(
-  cudf::io::parquet_reader_options const& options) const
+std::vector<size_type> impl::get_all_row_groups(parquet_reader_options const& options) const
 {
   auto const num_row_groups = _metadata->get_num_row_groups();
   auto row_groups_indices   = std::vector<size_type>(num_row_groups);
@@ -601,7 +596,7 @@ std::vector<size_type> impl::get_all_row_groups(
 
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
+  parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
@@ -623,7 +618,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options)
+  parquet_reader_options const& options)
 {
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
 
@@ -646,7 +641,7 @@ std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_pages(
   std::vector<rmm::device_buffer>& dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
+  parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
@@ -670,7 +665,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_page
 std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
   std::vector<rmm::device_buffer>& bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options,
+  parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
@@ -693,7 +688,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
 
 std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
 impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                   cudf::io::parquet_reader_options const& options,
+                                   parquet_reader_options const& options,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
@@ -770,7 +765,7 @@ impl::get_input_column_chunk_byte_ranges(
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 impl::get_filter_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options)
+  parquet_reader_options const& options)
 {
   select_columns(read_mode::FILTER_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
@@ -779,18 +774,18 @@ impl::get_filter_column_chunk_byte_ranges(
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 impl::get_payload_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::io::parquet_reader_options const& options)
+  parquet_reader_options const& options)
 {
   select_columns(read_mode::PAYLOAD_COLUMNS, options);
   return get_input_column_chunk_byte_ranges(row_group_indices);
 }
 
-cudf::io::table_with_metadata impl::materialize_filter_columns(
+table_with_metadata impl::materialize_filter_columns(
   cudf::host_span<std::vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
-  cudf::io::parquet_reader_options const& options,
+  parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   reset_internal_state();
@@ -814,11 +809,11 @@ cudf::io::table_with_metadata impl::materialize_filter_columns(
   return read_chunk_internal(read_mode::FILTER_COLUMNS, row_mask);
 }
 
-cudf::io::table_with_metadata impl::materialize_payload_columns(
+table_with_metadata impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::column_view row_mask,
-  cudf::io::parquet_reader_options const& options,
+  parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
   reset_internal_state();
@@ -842,7 +837,7 @@ cudf::io::table_with_metadata impl::materialize_payload_columns(
 }
 
 void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              cudf::io::parquet_reader_options const& options,
+                              parquet_reader_options const& options,
                               rmm::cuda_stream_view stream)
 {
   // Save the name to reference converter to extract output filter AST in
@@ -867,7 +862,7 @@ void impl::initialize_options(cudf::host_span<std::vector<size_type> const> row_
 }
 
 template <typename RowMaskView>
-cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskView row_mask)
+table_with_metadata impl::read_chunk_internal(read_mode read_mode, RowMaskView row_mask)
 {
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
@@ -934,11 +929,10 @@ cudf::io::table_with_metadata impl::read_chunk_internal(read_mode read_mode, Row
 }
 
 template <typename RowMaskView>
-cudf::io::table_with_metadata impl::finalize_output(
-  read_mode read_mode,
-  table_metadata& out_metadata,
-  std::vector<std::unique_ptr<column>>& out_columns,
-  RowMaskView row_mask)
+table_with_metadata impl::finalize_output(read_mode read_mode,
+                                          table_metadata& out_metadata,
+                                          std::vector<std::unique_ptr<column>>& out_columns,
+                                          RowMaskView row_mask)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
@@ -1025,7 +1019,7 @@ void impl::populate_metadata(table_metadata& out_metadata) const
 
 void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
                         std::vector<rmm::device_buffer> column_chunk_buffers,
-                        cudf::io::parquet_reader_options const& options)
+                        parquet_reader_options const& options)
 {
   // if we have not preprocessed at the whole-file level, do that now
   if (not _file_preprocessed) {
@@ -1118,4 +1112,4 @@ void impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask
     });
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

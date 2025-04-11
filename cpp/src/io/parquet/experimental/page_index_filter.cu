@@ -49,13 +49,11 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
-using ColumnChunk       = cudf::io::parquet::ColumnChunk;
-using metadata_base     = cudf::io::parquet::detail::metadata;
-using stats_caster_base = cudf::io::parquet::detail::stats_caster_base;
-using string_index_pair = cudf::io::parquet::detail::string_index_pair;
-using Type              = cudf::io::parquet::Type;
+using metadata_base     = parquet::detail::metadata;
+using stats_caster_base = parquet::detail::stats_caster_base;
+using string_index_pair = parquet::detail::string_index_pair;
 
 namespace {
 
@@ -690,4 +688,4 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   return data_page_mask;
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail
