@@ -41,7 +41,7 @@ dependencies:
 - libcufile-dev
 - libcurand-dev
 - libkvikio==25.6.*,>=0.0.0a0
-- librdkafka>=2.5.0,<2.6.0a0
+- librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.6.*,>=0.0.0a0
 - make
 - mmh3
@@ -64,7 +64,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.24,<1.26
+- polars>=1.24,<1.28
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
@@ -73,9 +73,10 @@ dependencies:
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
+- pytest-rerunfailures
 - pytest-xdist
 - pytest<8
-- python-confluent-kafka>=2.5.0,<2.6.0a0
+- python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
 - python>=3.10,<3.13
 - pytorch>=2.4.0
