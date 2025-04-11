@@ -9,8 +9,6 @@ import pytest
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
-from cudf_polars.testing.asserts import assert_collect_raises
-
 
 @pytest.fixture(scope="module")
 def df():
@@ -66,8 +64,10 @@ def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, sep
 )
 def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
     path = tmp_path / "unsupported.csv"
-    q = df.sink_csv(str(path), **{kwarg: value})
-    assert_collect_raises(q, cudf_except=NotImplementedError)
+    with pytest.raises(NotImplementedError):
+        df.sink_csv(
+            str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
+        )
 
 
 def test_sink_ndjson(df, tmp_path):
@@ -101,5 +101,7 @@ def test_sink_parquet(df, tmp_path):
 )
 def test_sink_parquet_unsupported_kwargs(df, tmp_path, kwarg, value):
     path = tmp_path / "unsupported.pq"
-    q = df.sink_parquet(str(path), **{kwarg: value})
-    assert_collect_raises(q, cudf_except=NotImplementedError)
+    with pytest.raises(NotImplementedError):
+        df.sink_parquet(
+            str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
+        )
