@@ -18,8 +18,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 

@@ -20,7 +20,7 @@
 #include <cudf/detail/repeat.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>

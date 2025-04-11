@@ -21,7 +21,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 

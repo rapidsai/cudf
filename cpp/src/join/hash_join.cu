@@ -21,7 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -43,8 +43,6 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
-#include <iostream>
-#include <numeric>
 
 namespace cudf {
 namespace detail {
