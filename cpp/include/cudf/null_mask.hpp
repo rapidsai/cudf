@@ -113,6 +113,25 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
+ * @brief Sets a vector of pre-allocated bitmask buffers to given states in the given ranges
+ *  `[begin_bit, end_bit)` in bulk
+ *
+ * Sets `[begin_bit, end_bit)` bits of each bitmask to valid if `valid==true`
+ * or null otherwise.
+ *
+ * @param bitmasks A host span of pointers to bitmasks (e.g. returned by `column_viewnull_mask()`)
+ * @param begin_bits A host span of indices of the first bit to set (inclusive)
+ * @param end_bits A host span of indices of the last bit to set (exclusive)
+ * @param valids A host span of booleans indicating if the bitmask should be set to valid or null
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
+                         cudf::host_span<size_type const> h_begin_bits,
+                         cudf::host_span<size_type const> h_end_bits,
+                         cudf::host_span<bool const> h_valids,
+                         rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
  * of indices `[begin_bit, end_bit)`.
  *
