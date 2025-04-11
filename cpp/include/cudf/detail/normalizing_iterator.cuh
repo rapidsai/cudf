@@ -227,7 +227,7 @@ struct alignas(16) base_normalator {
   };
 
  protected:
-#ifndef CUDF_RUNTIME_JIT  // type_dispatcher header needs to be refactored to support NVRTC
+#ifndef CUDF_RUNTIME_JIT  // TODO: refactor type_dispatcher to support NVRTC
 
   /**
    * @brief Constructor assigns width and type member variables for base class.
