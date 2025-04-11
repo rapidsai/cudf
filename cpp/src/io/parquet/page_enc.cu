@@ -118,14 +118,14 @@ using rle_page_enc_state_s = page_enc_state_s<rle_buffer_size>;
  */
 __device__ constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_length)
 {
-  if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+  if (physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     return id == type_id::DECIMAL128 ? sizeof(__int128_t) : type_length;
   }
   switch (physical_type) {
-    case INT96: return 12u;
-    case INT64:
-    case DOUBLE: return sizeof(int64_t);
-    case BOOLEAN: return 1u;
+    case Type::INT96: return 12u;
+    case Type::INT64:
+    case Type::DOUBLE: return sizeof(int64_t);
+    case Type::BOOLEAN: return 1u;
     default: return sizeof(int32_t);
   }
 }
@@ -203,7 +203,7 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
     if (is_valid) {
       num_valid++;
       len += dtype_len;
-      if (physical_type == BYTE_ARRAY) {
+      if (physical_type == Type::BYTE_ARRAY) {
         switch (leaf_type) {
           case type_id::STRING: {
             auto str = s->col.leaf_column->element<string_view>(val_idx);
@@ -257,9 +257,9 @@ Encoding __device__ determine_encoding(PageType page_type,
   switch (page_type) {
     case PageType::DATA_PAGE: return use_dictionary ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
     case PageType::DATA_PAGE_V2:
-      return physical_type == BOOLEAN ? Encoding::RLE
-             : use_dictionary         ? Encoding::RLE_DICTIONARY
-                                      : Encoding::PLAIN;
+      return physical_type == Type::BOOLEAN ? Encoding::RLE
+             : use_dictionary               ? Encoding::RLE_DICTIONARY
+                                            : Encoding::PLAIN;
     case PageType::DICTIONARY_PAGE:
       return write_v2_headers ? Encoding::PLAIN : Encoding::PLAIN_DICTIONARY;
     default: CUDF_UNREACHABLE("unsupported page type");
@@ -361,7 +361,7 @@ struct BitwiseOr {
 template <Type PT, typename I>
 __device__ uint8_t const* delta_encode(page_enc_state_s<0>* s, uint64_t* buffer, void* temp_space)
 {
-  using output_type = cuda::std::conditional_t<PT == INT32, int32_t, int64_t>;
+  using output_type = cuda::std::conditional_t<PT == Type::INT32, int32_t, int64_t>;
   __shared__ delta_binary_packer<output_type> packer;
 
   auto const t = threadIdx.x;
@@ -512,7 +512,7 @@ __device__ encode_kernel_mask data_encoding_for_col(EncColumnChunk const* chunk,
                                                     bool write_v2_headers)
 {
   // first check for dictionary (boolean always uses dict encoder)
-  if (chunk->use_dictionary or col_desc->physical_type == BOOLEAN) {
+  if (chunk->use_dictionary or col_desc->physical_type == Type::BOOLEAN) {
     return encode_kernel_mask::DICTIONARY;
   }
 
@@ -534,9 +534,9 @@ __device__ encode_kernel_mask data_encoding_for_col(EncColumnChunk const* chunk,
   // BYTE_ARRAY. Everything else will still fall back to PLAIN.
   if (write_v2_headers) {
     switch (col_desc->physical_type) {
-      case INT32:
-      case INT64: return encode_kernel_mask::DELTA_BINARY;
-      case BYTE_ARRAY: return encode_kernel_mask::DELTA_LENGTH_BA;
+      case Type::INT32:
+      case Type::INT64: return encode_kernel_mask::DELTA_BINARY;
+      case Type::BYTE_ARRAY: return encode_kernel_mask::DELTA_LENGTH_BA;
     }
   }
 
@@ -552,8 +552,8 @@ __device__ size_t delta_data_len(Type physical_type,
   // dtype_len_out is for the lengths, rather than the char data, so pass sizeof(int32_t)
   auto const dtype_len_out = physical_type_len(physical_type, type_id, sizeof(int32_t));
   auto const dtype_len     = [&]() -> uint32_t {
-    if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
+    if (physical_type == Type::INT32) { return int32_logical_len(type_id); }
+    if (physical_type == Type::INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -584,9 +584,9 @@ __device__ size_t delta_data_len(Type physical_type,
   // lengths, so just use `page_size`.
   // `num_dbp_blocks` takes into account the two delta binary blocks for DELTA_BYTE_ARRAY.
   size_t char_data_len = 0;
-  if (physical_type == BYTE_ARRAY) {
+  if (physical_type == Type::BYTE_ARRAY) {
     char_data_len = page_size - num_values * sizeof(size_type);
-  } else if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+  } else if (physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     char_data_len = page_size;
   }
 
@@ -708,7 +708,7 @@ CUDF_KERNEL void __launch_bounds__(128)
 
     // page padding needed for RLE encoded boolean data
     auto const rle_pad =
-      write_v2_headers && col_g.physical_type == BOOLEAN ? RLE_LENGTH_FIELD_LEN : 0;
+      write_v2_headers && col_g.physical_type == Type::BOOLEAN ? RLE_LENGTH_FIELD_LEN : 0;
 
     // This loop goes over one page fragment at a time and adds it to page.
     // When page size crosses a particular limit, then it moves on to the next page and then next
@@ -824,7 +824,7 @@ CUDF_KERNEL void __launch_bounds__(128)
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
           }
           // if byte_array then save the variable bytes size
-          if (ck_g.col_desc->physical_type == BYTE_ARRAY) {
+          if (ck_g.col_desc->physical_type == Type::BYTE_ARRAY) {
             // Page size is the sum of frag sizes, and frag sizes for strings includes the
             // 4-byte length indicator, so subtract that.
             page_g.var_bytes_size = var_bytes_size;
@@ -1673,8 +1673,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const type_id       = s->col.leaf_column->type().id();
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
-    if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
+    if (physical_type == Type::INT32) { return int32_logical_len(type_id); }
+    if (physical_type == Type::INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -1725,7 +1725,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
     if (is_valid) {
       len = dtype_len_out;
-      if (physical_type == BYTE_ARRAY) {
+      if (physical_type == Type::BYTE_ARRAY) {
         if (type_id == type_id::STRING) {
           len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
         } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
@@ -1749,8 +1749,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     if (t == 0) { s->cur = dst + total_len; }
     if (is_valid) {
       switch (physical_type) {
-        case INT32: [[fallthrough]];
-        case FLOAT: {
+        case Type::INT32: [[fallthrough]];
+        case Type::FLOAT: {
           auto const v = [dtype_len = dtype_len_in,
                           idx       = val_idx,
                           col       = s->col.leaf_column,
@@ -1765,8 +1765,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
           encode_value(dst + pos, v, stride);
         } break;
-        case DOUBLE:
-        case INT64: {
+        case Type::DOUBLE:
+        case Type::INT64: {
           auto v           = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
           if (ts_scale != 0) {
@@ -1778,7 +1778,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           }
           encode_value(dst + pos, v, stride);
         } break;
-        case INT96: {
+        case Type::INT96: {
           // only PLAIN encoding is supported
           int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
@@ -1812,7 +1812,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           encode_value(dst + pos + 8, w, 1);
         } break;
 
-        case BYTE_ARRAY: {
+        case Type::BYTE_ARRAY: {
           // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
                                 column_device_view const* leaf_column,
@@ -1831,7 +1831,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           encode_value(dst + pos, v, 1);
           if (v != 0) memcpy(dst + pos + 4, bytes, v);
         } break;
-        case FIXED_LEN_BYTE_ARRAY: {
+        case Type::FIXED_LEN_BYTE_ARRAY: {
           if (type_id == type_id::DECIMAL128) {
             // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
             auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
@@ -1908,13 +1908,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const type_id       = s->col.leaf_column->type().id();
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
-    if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
+    if (physical_type == Type::INT32) { return int32_logical_len(type_id); }
+    if (physical_type == Type::INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
   // TODO assert dict_bits >= 0
-  auto const dict_bits = (physical_type == BOOLEAN) ? 1
+  auto const dict_bits = (physical_type == Type::BOOLEAN) ? 1
                          : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
                            ? s->ck.dict_rle_bits
                            : -1;
@@ -1926,10 +1926,10 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s->rle_out       = dst;
     s->page.encoding = determine_encoding(
       s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers, false);
-    if (dict_bits >= 0 && physical_type != BOOLEAN) {
+    if (dict_bits >= 0 && physical_type != Type::BOOLEAN) {
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
-    } else if (write_v2_headers && physical_type == BOOLEAN) {
+    } else if (write_v2_headers && physical_type == Type::BOOLEAN) {
       // save space for RLE length. we don't know the total length yet.
       s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
@@ -1968,7 +1968,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       rle_numvals = s->rle_numvals;
       if (is_valid) {
         uint32_t v;
-        if (physical_type == BOOLEAN) {
+        if (physical_type == Type::BOOLEAN) {
           v = s->col.leaf_column->element<uint8_t>(val_idx);
         } else {
           v = s->ck.dict_index[val_idx];
@@ -1977,7 +1977,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       }
       rle_numvals += rle_numvals_in_block;
       __syncthreads();
-      if ((!write_v2_headers) && (physical_type == BOOLEAN)) {
+      if ((!write_v2_headers) && (physical_type == Type::BOOLEAN)) {
         PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
       } else {
         RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_leaf_values), t);
@@ -2040,8 +2040,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const type_id       = s->col.leaf_column->type().id();
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
-    if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
+    if (physical_type == Type::INT32) { return int32_logical_len(type_id); }
+    if (physical_type == Type::INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -2059,34 +2059,34 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
   uint8_t const* delta_ptr = nullptr;  // this will be the end of delta block pointer
 
-  if (physical_type == INT32) {
+  if (physical_type == Type::INT32) {
     switch (dtype_len_in) {
       case 8: {
         // only DURATIONS map to 8 bytes, so safe to just use signed here?
-        delta_ptr = delta_encode<INT32, int64_t>(s, delta_shared, &temp_storage);
+        delta_ptr = delta_encode<Type::INT32, int64_t>(s, delta_shared, &temp_storage);
         break;
       }
       case 4: {
         if (type_id == type_id::UINT32) {
-          delta_ptr = delta_encode<INT32, uint32_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, uint32_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<INT32, int32_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, int32_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
       case 2: {
         if (type_id == type_id::UINT16) {
-          delta_ptr = delta_encode<INT32, uint16_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, uint16_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<INT32, int16_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, int16_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
       case 1: {
         if (type_id == type_id::UINT8) {
-          delta_ptr = delta_encode<INT32, uint8_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, uint8_t>(s, delta_shared, &temp_storage);
         } else {
-          delta_ptr = delta_encode<INT32, int8_t>(s, delta_shared, &temp_storage);
+          delta_ptr = delta_encode<Type::INT32, int8_t>(s, delta_shared, &temp_storage);
         }
         break;
       }
@@ -2094,9 +2094,9 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     }
   } else {
     if (type_id == type_id::UINT64) {
-      delta_ptr = delta_encode<INT64, uint64_t>(s, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<Type::INT64, uint64_t>(s, delta_shared, &temp_storage);
     } else {
-      delta_ptr = delta_encode<INT64, int64_t>(s, delta_shared, &temp_storage);
+      delta_ptr = delta_encode<Type::INT64, int64_t>(s, delta_shared, &temp_storage);
     }
   }
 
@@ -3214,10 +3214,10 @@ __device__ bool is_descending(statistics_chunk const* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-__device__ int32_t calculate_boundary_order(statistics_chunk const* s,
-                                            Type ptype,
-                                            ConvertedType ctype,
-                                            uint32_t num_pages)
+__device__ BoundaryOrder calculate_boundary_order(statistics_chunk const* s,
+                                                  Type ptype,
+                                                  ConvertedType ctype,
+                                                  uint32_t num_pages)
 {
   if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
   if (is_ascending(s, ptype, ctype, num_pages)) {
@@ -3300,11 +3300,12 @@ CUDF_KERNEL void __launch_bounds__(1)
   }
   encoder.field_list_end(3);
   // boundary_order
-  encoder.field_int32(4,
-                      calculate_boundary_order(&column_stats[first_data_page + pageidx],
-                                               col_g.physical_type,
-                                               col_g.converted_type,
-                                               num_pages - first_data_page));
+  encoder.field_int32(
+    4,
+    static_cast<int32_t>(calculate_boundary_order(&column_stats[first_data_page + pageidx],
+                                                  col_g.physical_type,
+                                                  col_g.converted_type,
+                                                  num_pages - first_data_page)));
   // null_counts
   encoder.field_list_begin(5, num_data_pages, FieldType::I64);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
@@ -3343,7 +3344,7 @@ CUDF_KERNEL void __launch_bounds__(1)
     encoder.field_list_end(7);
   }
 
-  if (col_g.physical_type == BYTE_ARRAY) {
+  if (col_g.physical_type == Type::BYTE_ARRAY) {
     thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
       var_bytes += page.var_bytes_size;
     });
