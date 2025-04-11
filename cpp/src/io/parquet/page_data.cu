@@ -48,6 +48,7 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
@@ -56,6 +57,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                          device_span<ColumnChunkDesc const> chunks,
                          size_t min_row,
                          size_t num_rows,
+                         cudf::device_span<bool const> page_mask,
                          kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -70,6 +72,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int t                 = threadIdx.x;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
+  // Setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
                           chunks,
@@ -80,7 +83,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  // Must be evaluated after setupLocalPageInfo
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Write list offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+    // Update offsets for all list depth levels
+    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+    return;
+  }
 
   auto const data_len    = cuda::std::distance(s->data_start, s->data_end);
   auto const num_values  = data_len / s->dtype_len_in;
@@ -217,6 +231,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
@@ -225,6 +240,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
                     size_t num_rows,
+                    cudf::device_span<bool const> page_mask,
                     kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -239,6 +255,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
+  // Setup local page info
   if (!setupLocalPageInfo(s,
                           &pages[page_idx],
                           chunks,
@@ -249,7 +266,46 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  // Must be evaluated after setupLocalPageInfo
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // Write list offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    auto& page      = pages[page_idx];
+    page.num_nulls  = page.num_rows;
+    page.num_valids = 0;
+
+    // Update offsets for all list depth levels
+    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
+
+    // Fill offsets with the initial `str_offset` to indicate empty strings for BYTE_ARRAY and
+    // FIXED_LEN_BYTE_ARRAY types. These types are now decoded by `gpuDecodePageDataGeneric()`
+    // anyway so the following code should never be reached. Also note that this decoder does not
+    // handle large strings either and should eventually be removed.
+    Type const dtype = s->col.physical_type;
+    auto const is_decimal =
+      s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+    if (dtype == Type::FIXED_LEN_BYTE_ARRAY or (dtype == Type::BYTE_ARRAY and not is_decimal)) {
+      // Initial string offset
+      auto const initial_value = s->page.str_offset;
+
+      // If no repetition we haven't calculated start/end bounds and instead just skipped
+      // values until we reach first_row. account for that here.
+      auto value_count = s->page.num_input_values;
+      if (not has_repetition) { value_count -= s->first_row; }
+
+      auto& ni    = s->nesting_info[s->col.max_nesting_depth - 1];
+      auto offptr = reinterpret_cast<size_type*>(ni.data_out);
+
+      // Write the initial string offset at all positions to indicate empty strings
+      for (int idx = t; idx < value_count; idx += decode_block_size) {
+        offptr[idx] = initial_value;
+      }
+    }
+    return;
+  }
+
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
@@ -261,8 +317,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       default: out_thread0 = 32;
     }
   }
-
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
   __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
@@ -339,9 +393,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
         // nesting level that is storing actual leaf values
-        int leaf_level_index = s->col.max_nesting_depth - 1;
+        int const leaf_level_index = s->col.max_nesting_depth - 1;
 
-        uint32_t dtype_len = s->dtype_len;
+        uint32_t const dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         auto const is_decimal =
@@ -428,6 +482,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
+                             cudf::device_span<bool const> page_mask,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
@@ -438,10 +493,10 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodePageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
     gpuDecodePageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 
@@ -453,6 +508,7 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
+                                  cudf::device_span<bool const> page_mask,
                                   kernel_error::pointer error_code,
                                   rmm::cuda_stream_view stream)
 {
@@ -463,10 +519,10 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodeSplitPageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
     gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 
