@@ -879,6 +879,7 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+          - pytest-rerunfailures
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
