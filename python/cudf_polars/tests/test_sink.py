@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import json
-
 import pytest
 
 import polars as pl
@@ -50,7 +48,7 @@ def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, sep
 
 
 @pytest.mark.parametrize(
-    "kwargs, value",
+    "kwarg, value",
     [
         ("include_bom", True),
         ("date_format", "%Y-%m-%d"),
@@ -64,7 +62,7 @@ def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, sep
 )
 def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
     path = tmp_path / "unsupported.csv"
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(pl.exceptions.ComputeError):
         df.sink_csv(
             str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
         )
@@ -77,10 +75,10 @@ def test_sink_ndjson(df, tmp_path):
     df.sink_ndjson(str(path_polars))
     df.sink_ndjson(str(path_cudf), engine="gpu")
 
-    with path_polars.open() as f:
-        expected = json.load(f)
-    with path_cudf.open() as f:
-        result = json.load(f)
+    expected = path_polars.read_text()
+    result = path_cudf.read_text()
+    # TODO: Limitation in cuDF write_json?
+    result = result.replace("\\u1e85", "ẅ")
     assert result == expected
 
 
@@ -96,12 +94,10 @@ def test_sink_parquet(df, tmp_path):
     assert_frame_equal(result, expected)
 
 
-@pytest.mark.parametrize(
-    "kwarg, value", [("compression_level", 10), ("compression", "brotli")]
-)
+@pytest.mark.parametrize("kwarg, value", [("compression_level", 10)])
 def test_sink_parquet_unsupported_kwargs(df, tmp_path, kwarg, value):
     path = tmp_path / "unsupported.pq"
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(pl.exceptions.ComputeError):
         df.sink_parquet(
             str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
         )

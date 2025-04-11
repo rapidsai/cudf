@@ -2062,6 +2062,7 @@ class Sink(IR):
             raise NotImplementedError(f"{quote_char=} is not currently not supported.")
         return (
             builder.include_header(options["include_header"])
+            .names(options["names"])
             .na_rep(serialize_options["null"])
             .line_terminator(serialize_options["line_terminator"])
             .inter_column_delimiter(chr(serialize_options["separator"]))
@@ -2073,7 +2074,14 @@ class Sink(IR):
         builder: plc.io.json.JsonWriterOptionsBuilder, options: dict[str, Any]
     ) -> plc.io.json.JsonWriterOptions:
         """Validate and extract polars sink_ndjson options to pylibcudf write_json options."""
-        return builder.build()
+        # These options produce polars' default, ndjson output
+        return (
+            builder.lines(val=True)
+            .na_rep("null")
+            .include_nulls(val=True)
+            .metadata(options["metadata"])
+            .build()
+        )
 
     @staticmethod
     def _get_valid_parquet_options(
@@ -2081,25 +2089,26 @@ class Sink(IR):
     ) -> plc.io.parquet.ParquetWriterOptions:
         """Validate and extract polars sink_parquet options to pylibcudf write_parquet options."""
         compression = options["compression"]
-        compression_type, compression_level = next(iter(compression.items()))
-        if compression_level is not None:
-            raise NotImplementedError(
-                "compression_level is not currently not supported."
-            )
-        if (
-            plc_compression := getattr(
-                plc.io.types.CompressionType, compression_type.upper(), None
-            )
-        ) is None:
-            raise NotImplementedError(
-                f"{compression_type=} is not currently not supported."
-            )
-        builder.compression(plc_compression)
+        if compression != "Uncompressed":
+            compression_type, compression_level = next(iter(compression.items()))
+            if compression_level is not None:
+                raise NotImplementedError(
+                    "compression_level is not currently not supported."
+                )
+            if (
+                plc_compression := getattr(
+                    plc.io.types.CompressionType, compression_type.upper(), None
+                )
+            ) is None:
+                raise NotImplementedError(
+                    f"{compression_type=} is not currently not supported."
+                )
+            builder.compression(plc_compression)
         if options["data_page_size"] is not None:
             builder.set_max_page_size_bytes(options["data_page_size"])
         if options["row_group_size"] is not None:
             builder.row_group_size_rows(options["row_group_size"])
-        return builder.build()
+        return builder.metadata(options["metadata"]).build()
 
     @classmethod
     def do_evaluate(cls, schema: Schema, payload: str, df: DataFrame) -> DataFrame:
@@ -2108,15 +2117,25 @@ class Sink(IR):
         sink_target = plc.io.SinkInfo([sink_payload["File"]["target"]])
         sink_type = sink_payload["File"]["file_type"]
         if (sink_kwargs := sink_type.get("Parquet")) is not None:
-            builder_cls = plc.io.parquet.ParquetWriterOptionsBuilder
+            metadata = plc.io.types.TableInputMetadata(df.table)
+            for i, name in enumerate(df.column_names):
+                metadata.column_metadata[i].set_name(name)
+            sink_kwargs["metadata"] = metadata
+            builder_cls = plc.io.parquet.ParquetWriterOptions.builder
             options_parser = cls._get_valid_parquet_options
             sink_writer = plc.io.parquet.write_parquet
         elif (sink_kwargs := sink_type.get("Csv")) is not None:
-            builder_cls = plc.io.csv.CsvWriterOptionsBuilder
+            sink_kwargs["names"] = (
+                df.column_names if sink_kwargs["include_header"] else []
+            )
+            builder_cls = plc.io.csv.CsvWriterOptions.builder
             options_parser = cls._get_valid_csv_options
             sink_writer = plc.io.csv.write_csv
         elif (sink_kwargs := sink_type.get("Json")) is not None:
-            builder_cls = plc.io.json.JsonWriterOptionsBuilder
+            sink_kwargs["metadata"] = plc.io.TableWithMetadata(
+                df.table, [(col, []) for col in df.column_names]
+            )
+            builder_cls = plc.io.json.JsonWriterOptions.builder
             options_parser = cls._get_valid_json_options
             sink_writer = plc.io.json.write_json
         else:
