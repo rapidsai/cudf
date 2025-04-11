@@ -866,7 +866,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  unsigned seed)
 {
   auto const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](double sum, auto tid) {
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), double{0}, [&](auto sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);
