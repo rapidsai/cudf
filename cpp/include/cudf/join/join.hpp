@@ -28,6 +28,12 @@
 namespace CUDF_EXPORT cudf {
 
 /**
+ * @addtogroup column_join
+ * @{
+ * @file
+ */
+
+/**
  * @brief Returns a pair of row index vectors corresponding to an
  * inner join between the specified tables.
  *
@@ -242,5 +248,7 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& right,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf

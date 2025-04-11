@@ -33,6 +33,12 @@
 namespace CUDF_EXPORT cudf {
 
 /**
+ * @addtogroup column_join
+ * @{
+ * @file
+ */
+
+/**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
  * rows between the specified tables where the columns of the equality table
  * are equal and the predicate evaluates to true on the conditional tables.
@@ -398,5 +404,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   null_equality compare_nulls       = null_equality::EQUAL,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf

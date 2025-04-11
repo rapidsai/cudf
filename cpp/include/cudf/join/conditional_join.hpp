@@ -33,6 +33,12 @@
 namespace CUDF_EXPORT cudf {
 
 /**
+ * @addtogroup column_join
+ * @{
+ * @file
+ */
+
+/**
  * @brief Returns a pair of row index vectors corresponding to all pairs
  * of rows between the specified tables where the predicate evaluates to true.
  *
@@ -349,5 +355,7 @@ std::size_t conditional_left_anti_join_size(
   ast::expression const& binary_predicate,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf

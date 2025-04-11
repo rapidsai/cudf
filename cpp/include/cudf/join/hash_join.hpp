@@ -31,6 +31,12 @@
 
 namespace CUDF_EXPORT cudf {
 
+/**
+ * @addtogroup column_join
+ * @{
+ * @file
+ */
+
 // forward declaration
 namespace hashing::detail {
 /**
@@ -313,5 +319,7 @@ class distinct_hash_join {
 
   std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
 };
+
+/** @} */  // end of group
 
 }  // namespace CUDF_EXPORT cudf
