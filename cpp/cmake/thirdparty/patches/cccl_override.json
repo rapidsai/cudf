@@ -4,11 +4,6 @@
     "CCCL" : {
       "patches" : [
         {
-          "file" : "${current_json_dir}/thrust_faster_sort_compile_times.diff",
-          "issue" : "Improve Thrust sort compile times by not unrolling loops for inlined comparators [https://github.com/rapidsai/cudf/pull/10577]",
-          "fixed_in" : "3.0"
-        },
-        {
           "file" : "${current_json_dir}/thrust_faster_scan_compile_times.diff",
           "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
           "fixed_in" : ""
