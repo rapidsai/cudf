@@ -32,7 +32,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace experimental::io::parquet {
+namespace io::parquet::experimental {
 
 namespace detail {
 
@@ -244,5 +244,5 @@ class hybrid_scan_reader {
   std::unique_ptr<detail::impl> _impl;
 };
 
-}  // namespace experimental::io::parquet
+}  // namespace io::parquet::experimental
 }  // namespace CUDF_EXPORT cudf

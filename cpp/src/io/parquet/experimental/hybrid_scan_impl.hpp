@@ -37,7 +37,7 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
 /**
  * @brief Implementation for Parquet reader
@@ -434,11 +434,7 @@ class impl {
   /**
    * @brief Check if there is more work to be done.
    */
-  [[nodiscard]] bool has_more_work() const
-  {
-    return _file_itm_data.num_passes() > 0 &&
-           _file_itm_data._current_input_pass < _file_itm_data.num_passes();
-  }
+  [[nodiscard]] bool has_more_work() const;
 
   /**
    * @brief Read a chunk of data and return an output table.
@@ -455,29 +451,19 @@ class impl {
   cudf::io::table_with_metadata read_chunk_internal(read_mode read_mode, RowMaskView row_mask);
 
   /**
-   * @brief Check if the user has specified custom row bounds
-   *
-   * @return True if the user has specified custom row bounds
-   */
-  [[nodiscard]] constexpr bool uses_custom_row_bounds() const { return false; }
-
-  /**
    * @brief Check if this is the first output chunk
    *
    * @return True if this is the first output chunk
    */
-  [[nodiscard]] bool is_first_output_chunk() const
-  {
-    return _file_itm_data._output_chunk_count == 0;
-  }
+  [[nodiscard]] bool is_first_output_chunk() const;
 
  private:
-  using named_to_reference_converter = cudf::io::parquet::detail::named_to_reference_converter;
-  using input_column_info            = cudf::io::parquet::detail::input_column_info;
-  using inline_column_buffer         = cudf::io::detail::inline_column_buffer;
-  using reader_column_schema         = cudf::io::reader_column_schema;
-  using file_intermediate_data       = cudf::io::parquet::detail::file_intermediate_data;
-  using pass_intermediate_data       = cudf::io::parquet::detail::pass_intermediate_data;
+  using named_to_reference_converter = parquet::detail::named_to_reference_converter;
+  using input_column_info            = parquet::detail::input_column_info;
+  using inline_column_buffer         = io::detail::inline_column_buffer;
+  using reader_column_schema         = io::reader_column_schema;
+  using file_intermediate_data       = parquet::detail::file_intermediate_data;
+  using pass_intermediate_data       = parquet::detail::pass_intermediate_data;
 
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
@@ -525,4 +511,4 @@ class impl {
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 };
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail

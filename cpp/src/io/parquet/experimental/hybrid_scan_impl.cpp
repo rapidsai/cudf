@@ -34,16 +34,13 @@
 #include <limits>
 #include <numeric>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
-using byte_range_info       = cudf::io::text::byte_range_info;
-using ColumnChunkDesc       = cudf::io::parquet::detail::ColumnChunkDesc;
-using decode_kernel_mask    = cudf::io::parquet::detail::decode_kernel_mask;
-using FileMetaData          = cudf::io::parquet::FileMetaData;
-using LogicalType           = cudf::io::parquet::LogicalType;
-using PageInfo              = cudf::io::parquet::detail::PageInfo;
-using PageNestingDecodeInfo = cudf::io::parquet::detail::PageNestingDecodeInfo;
-using Type                  = cudf::io::parquet::Type;
+using ColumnChunkDesc       = parquet::detail::ColumnChunkDesc;
+using decode_kernel_mask    = parquet::detail::decode_kernel_mask;
+using PageInfo              = parquet::detail::PageInfo;
+using PageNestingDecodeInfo = parquet::detail::PageNestingDecodeInfo;
+using byte_range_info       = text::byte_range_info;
 
 impl::impl(cudf::host_span<uint8_t const> footer_bytes,
            cudf::io::parquet_reader_options const& options)
@@ -57,10 +54,7 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes,
 
 FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_parquet_metadata(); }
 
-cudf::io::text::byte_range_info impl::get_page_index_bytes() const
-{
-  return _metadata->get_page_index_bytes();
-}
+byte_range_info impl::get_page_index_bytes() const { return _metadata->get_page_index_bytes(); }
 
 void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
 {
@@ -162,4 +156,12 @@ cudf::io::table_with_metadata impl::materialize_payload_columns(
   return {};
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+bool impl::has_more_work() const
+{
+  return _file_itm_data.num_passes() > 0 &&
+         _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+}
+
+bool impl::is_first_output_chunk() const { return _file_itm_data._output_chunk_count == 0; }
+
+}  // namespace cudf::io::parquet::experimental::detail

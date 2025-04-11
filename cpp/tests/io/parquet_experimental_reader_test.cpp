@@ -149,8 +149,6 @@ auto create_parquet_with_stats()
 
 TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
-  srand(31337);
-
   // Create a table with several row groups each with a single page.
   auto constexpr num_concat    = 1;
   auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
@@ -175,7 +173,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
-    std::make_unique<cudf::experimental::io::parquet::hybrid_scan_reader>(footer_buffer, options);
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
   auto parquet_metadata = reader->get_parquet_metadata();

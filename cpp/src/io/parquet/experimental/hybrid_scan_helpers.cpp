@@ -30,20 +30,14 @@
 #include <numeric>
 #include <optional>
 
-namespace cudf::experimental::io::parquet::detail {
+namespace cudf::io::parquet::experimental::detail {
 
-using aggregate_reader_metadata_base = cudf::io::parquet::detail::aggregate_reader_metadata;
-using ColumnIndex                    = cudf::io::parquet::ColumnIndex;
-using column_name_info               = cudf::io::column_name_info;
-using CompactProtocolReader          = cudf::io::parquet::detail::CompactProtocolReader;
-using equality_literals_collector    = cudf::io::parquet::detail::equality_literals_collector;
-using FieldRepetitionType            = cudf::io::parquet::FieldRepetitionType;
-using inline_column_buffer           = cudf::io::detail::inline_column_buffer;
-using input_column_info              = cudf::io::parquet::detail::input_column_info;
-using metadata_base                  = cudf::io::parquet::detail::metadata;
-using OffsetIndex                    = cudf::io::parquet::OffsetIndex;
-using row_group_info                 = cudf::io::parquet::detail::row_group_info;
-using SchemaElement                  = cudf::io::parquet::SchemaElement;
+using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
+using CompactProtocolReader          = parquet::detail::CompactProtocolReader;
+using equality_literals_collector    = parquet::detail::equality_literals_collector;
+using input_column_info              = parquet::detail::input_column_info;
+using metadata_base                  = parquet::detail::metadata;
+using row_group_info                 = parquet::detail::row_group_info;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -97,7 +91,7 @@ cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes(
   return {};
 }
 
-FileMetadata const& aggregate_reader_metadata::get_parquet_metadata() const
+FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
 {
   return per_file_metadata.front();
 }
@@ -143,4 +137,4 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   }
 }
 
-}  // namespace cudf::experimental::io::parquet::detail
+}  // namespace cudf::io::parquet::experimental::detail
