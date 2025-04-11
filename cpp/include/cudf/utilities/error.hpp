@@ -289,4 +289,27 @@ inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int l
 #else
 #define CUDF_CHECK_CUDA(stream) CUDF_CUDA_TRY(cudaPeekAtLastError());
 #endif
+
+/**
+ * @brief Debug macro to catch and throw an exception that may contain runtime stacktrace.
+ *
+ * If `CUDF_BUILD_STACKTRACE_DEBUG` is set, this macro will catch any exception derived from
+ * `std::exception` that is being thrown during the execution of the given callback. Then, a new
+ * cudf exception is created with the same error message as the caught exception and thrown out.
+ * Beyond carrying the original error message, this new exception also stores the runtime stacktrace
+ * at the caller of the given callback.
+ */
+#ifdef CUDF_BUILD_STACKTRACE_DEBUG
+#define CUDF_CHECK_EXCEPTION(callback)   \
+  [] {                                   \
+    try {                                \
+      return callback;                   \
+    } catch (std::exception const& e) {  \
+      throw cudf::logic_error(e.what()); \
+    }                                    \
+  }();
+#else
+#define CUDF_CHECK_EXCEPTION(callback) callback
+#endif
+
 /** @} */
