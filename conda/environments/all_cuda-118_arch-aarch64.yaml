@@ -18,7 +18,6 @@ dependencies:
 - cmake>=3.30.4
 - cramjam
 - cubinlinker
-- cuda-nvml-dev
 - cuda-nvtx=11.8
 - cuda-python>=11.8.5,<12.0a0
 - cuda-sanitizer-api=11.8.86
