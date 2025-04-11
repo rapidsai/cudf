@@ -294,6 +294,11 @@ TEST_F(ToArrowHostDeviceTest, StringView)
   auto expected = cudf::from_arrow_column(&schema, &result->array);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
 
+  auto sliced = cudf::split(data, {3}).front();
+  result      = cudf::to_arrow_host_stringview(cudf::strings_column_view(sliced));
+  expected    = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), sliced);
+
   data =
     cudf::test::strings_column_wrapper({"all of", "these", "strings", "will", "fit", "inline"});
   result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));

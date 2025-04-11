@@ -387,8 +387,8 @@ unique_device_array_t to_arrow_host(cudf::column_view const& col,
  */
 struct strings_to_binary_view {
   cudf::column_device_view d_strings;
-  input_offsetalator d_offsets;
-  device_span<int64_t const> buffer_offsets;
+  input_offsetalator d_offsets;               // offsets of longer strings in d_strings
+  device_span<int64_t const> buffer_offsets;  // output buffers' offsets
   ArrowBinaryView* d_items;
 
   __device__ void operator()(cudf::size_type idx) const
@@ -449,7 +449,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
     });
 
   // gather all the long-ish strings into a single strings column
-  auto [tmp_col, longer_strings] = [&] {
+  auto [unused_col, longer_strings] = [&] {
     if (num_longer_strings == col.size()) {
       // we can use the input column as is for the remainder of this function
       return std::pair{cudf::make_empty_column(cudf::type_id::STRING), col};
@@ -471,17 +471,18 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
     stream.synchronize();
     return std::pair{std::move(longer_strings), cudf::strings_column_view(longer_strings->view())};
   }();
-  auto [first, last]    = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
-  auto const chars_size = last - first;
+  auto [first, last] = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
+  auto const longer_chars_size = last - first;
 
   d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(longer_strings.offsets(),
                                                                       longer_strings.offset());
 
+  // using max/2 here ensures no buffer is greater than 2GB
   constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
-  auto const num_buffers     = cudf::util::div_rounding_up_safe(chars_size, max_size);
+  auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
   auto buffer_offsets        = rmm::device_uvector<int64_t>(num_buffers, stream);
   // copy the bytes for the longer strings into Arrow variadic buffers
-  if (chars_size > 0) {
+  if (longer_chars_size > 0) {
     // compute buffer boundaries (less than 2GB per buffer)
     auto buffer_indices  = rmm::device_uvector<int64_t>(num_buffers, stream);
     auto const bound_itr = make_counting_transform_iterator(
@@ -494,7 +495,6 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                         bound_itr,
                         bound_itr + num_buffers,
                         buffer_indices.begin());
-    buffer_offsets = rmm::device_uvector<int64_t>(num_buffers, stream);
     thrust::transform(rmm::exec_policy(stream),
                       buffer_indices.begin(),
                       buffer_indices.end(),
@@ -524,8 +524,10 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                      col.size(),
                      strings_to_binary_view{*d_strings, d_offsets, buffer_offsets, d_items.data()});
 
+  constexpr auto data_buffer_idx = 1;
+
   // finally, copy the BinaryView array into host memory
-  auto data_buffer   = ArrowArrayBuffer(out.get(), 1);
+  auto data_buffer   = ArrowArrayBuffer(out.get(), data_buffer_idx);
   auto const bv_size = d_items.size() * sizeof(ArrowBinaryView);
   NANOARROW_THROW_NOT_OK(ArrowBufferReserve(data_buffer, bv_size));
   CUDF_CUDA_TRY(
