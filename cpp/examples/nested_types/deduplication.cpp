@@ -20,7 +20,8 @@
 #include <cudf/groupby.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
@@ -31,7 +32,6 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-#include <chrono>
 #include <iostream>
 #include <string>
 

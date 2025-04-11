@@ -24,7 +24,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>

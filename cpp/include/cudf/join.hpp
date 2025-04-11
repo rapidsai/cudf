@@ -16,7 +16,7 @@
 
 #pragma once
 
-#pragma message("WARNING: You have included problematic_header.h which is deprecated/problematic!")
+#pragma message("WARNING: This header will be deprecated in 25.06. Please use the appropriate headers from include/cudf/join/")
 
 #include <cudf/join/join.hpp>
 #include <cudf/join/hash_join.hpp>

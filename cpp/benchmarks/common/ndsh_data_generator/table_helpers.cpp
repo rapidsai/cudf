@@ -26,7 +26,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>

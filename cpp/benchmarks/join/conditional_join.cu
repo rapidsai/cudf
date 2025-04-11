@@ -15,6 +15,7 @@
  */
 
 #include "join_common.hpp"
+#include <cudf/join/conditional_join.hpp>
 
 auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000};
 

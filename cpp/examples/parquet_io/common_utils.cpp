@@ -18,7 +18,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>

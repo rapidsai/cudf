@@ -25,7 +25,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
