@@ -518,6 +518,86 @@ postprocess_indices(table_view const& left,
 
 }  // anonymous namespace
 
+void sort_merge_join::preprocess_tables(table_view const left,
+                  table_view const right,
+                  null_equality compare_nulls,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr)
+{
+  if (compare_nulls == null_equality::EQUAL) {
+    preprocessed_left_view = left;
+    preprocessed_right_view = right;
+    preprocessed_left = std::nullopt;
+    preprocessed_right = std::nullopt;
+  }
+
+  auto preprocess_table = [stream, mr](table_view const& tbl) {
+    // remove rows that have nulls at any nesting level
+    // step 1: identify nulls at root level
+    auto [validity_mask, num_nulls] = cudf::bitmask_and(tbl, stream, mr);
+    // step 2: identify nulls at non-root levels
+    for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
+      auto col = tbl.column(col_idx);
+      if (col.type().id() == type_id::LIST) {
+        auto lcv     = lists_column_view(col);
+        auto offsets = lcv.offsets();
+        auto child   = lcv.child();
+
+        rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, mr);
+        rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, mr);
+        auto unique_end = thrust::unique_by_key_copy(
+          rmm::exec_policy(stream),
+          thrust::make_reverse_iterator(lcv.offsets_end()),
+          thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
+          thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
+          thrust::make_reverse_iterator(offsets_subset.end()),
+          thrust::make_reverse_iterator(child_positions.end()));
+        auto subset_size   = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()),
+                                            thrust::get<0>(unique_end));
+        auto subset_offset = offsets.size() - subset_size;
+
+        auto [reduced_validity_mask, num_nulls] =
+          detail::segmented_null_mask_reduction(lcv.child().null_mask(),
+                                                offsets_subset.data() + subset_offset,
+                                                offsets_subset.data() + offsets_subset.size() - 1,
+                                                offsets_subset.data() + subset_offset + 1,
+                                                null_policy::INCLUDE,
+                                                std::nullopt,
+                                                stream,
+                                                mr);
+
+        thrust::for_each(
+          rmm::exec_policy(stream),
+          thrust::make_counting_iterator(0),
+          thrust::make_counting_iterator(0) + subset_size,
+          [validity_mask         = static_cast<bitmask_type*>(validity_mask.data()),
+           reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
+           child_positions       = child_positions.begin() + subset_offset] __device__(auto idx) {
+            if (!bit_is_set(reduced_validity_mask, idx))
+              clear_bit(validity_mask, child_positions[idx]);
+          });
+      }
+    }
+    // step 3: construct bool column to apply mask
+    cudf::scalar_type_t<bool> true_scalar(true);
+    auto bool_mask = cudf::make_column_from_scalar(true_scalar, tbl.num_rows(), stream, mr);
+    num_nulls =
+      null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
+    bool_mask->set_null_mask(std::move(validity_mask), num_nulls);
+
+    auto non_null_tbl = apply_boolean_mask(tbl, *bool_mask, stream, mr);
+    return non_null_tbl;
+  };
+
+  preprocessed_left = preprocess_table(left);
+  preprocessed_right = preprocess_table(right);
+  preprocessed_left_view = preprocessed_left->view();
+  preprocessed_right_view = preprocessed_right->view();
+}
+
+sort_merge_join::sort_merge_join(table_view const &left, table_view const &right, bool is_left_sorted, bool is_right_sorted) {
+}
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_inner_join(table_view const& left,

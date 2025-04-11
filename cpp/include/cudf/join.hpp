@@ -1309,5 +1309,22 @@ std::size_t conditional_left_anti_join_size(
   ast::expression const& binary_predicate,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+class sort_merge_join {
+ public:
+  sort_merge_join(table_view const &left, table_view const &right, bool is_left_sorted = false, bool is_right_sorted = false);
+ private:
+  table_view preprocessed_left_view;
+  table_view preprocessed_right_view;
+  std::optional<std::unique_ptr<table>> preprocessed_left;
+  std::optional<std::unique_ptr<table>> preprocessed_right;
+
+  void preprocess_tables(table_view const left,
+                  table_view const right,
+                  null_equality compare_nulls,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr);
+};
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
