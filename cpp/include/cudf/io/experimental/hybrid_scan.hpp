@@ -64,7 +64,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    */
   explicit hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
-                              cudf::io::parquet_reader_options const& options);
+                              parquet_reader_options const& options);
 
   /**
    * @brief Destructor for the experimental parquet reader class
@@ -106,7 +106,7 @@ class hybrid_scan_reader {
    * @return Vector of row group indices
    */
   [[nodiscard]] std::vector<size_type> get_all_row_groups(
-    cudf::io::parquet_reader_options const& options) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups with statistics
@@ -118,7 +118,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_stats(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -132,7 +132,7 @@ class hybrid_scan_reader {
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
   get_secondary_filters(cudf::host_span<size_type const> row_group_indices,
-                        cudf::io::parquet_reader_options const& options) const;
+                        parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the row groups with dictionary pages
@@ -146,7 +146,7 @@ class hybrid_scan_reader {
   [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_dictionary_pages(
     std::vector<rmm::device_buffer>& dictionary_page_data,
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -161,7 +161,7 @@ class hybrid_scan_reader {
   [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_bloom_filters(
     std::vector<rmm::device_buffer>& bloom_filter_data,
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -177,7 +177,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<size_type const> row_group_indices,
-                               cudf::io::parquet_reader_options const& options,
+                               parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr) const;
 
@@ -190,7 +190,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_filter_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Materialize filter columns, and updates the input row validity mask to only the rows
@@ -204,12 +204,12 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized filter columns and metadata
    */
-  [[nodiscard]] cudf::io::table_with_metadata materialize_filter_columns(
+  [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<bool> const> page_mask,
     cudf::host_span<size_type const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -221,7 +221,7 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_payload_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
-    cudf::io::parquet_reader_options const& options) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Materialize payload columns
@@ -233,11 +233,11 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized payload columns and metadata
    */
-  [[nodiscard]] cudf::io::table_with_metadata materialize_payload_columns(
+  [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<size_type const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::column_view row_mask,
-    cudf::io::parquet_reader_options const& options,
+    parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
  private:
