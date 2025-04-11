@@ -213,10 +213,10 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   }
 
   // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
-  // this subpass to be valid.
-  auto host_page_validity = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
-  std::fill(host_page_validity.begin(), host_page_validity.end(), true);
-  auto page_validity = cudf::detail::make_device_uvector_async(host_page_validity, _stream, _mr);
+  // this subpass to be decoded.
+  auto host_page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::fill(host_page_mask.begin(), host_page_mask.end(), true);
+  auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
@@ -253,7 +253,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    skip_rows,
                    level_type_size,
                    decoder_mask,
-                   page_validity,
+                   page_mask,
                    initial_str_offsets,
                    error_code.data(),
                    streams[s_idx++]);
@@ -311,7 +311,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         page_validity,
+                         page_mask,
                          initial_str_offsets,
                          error_code.data(),
                          streams[s_idx++]);
@@ -324,7 +324,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
-                               page_validity,
+                               page_mask,
                                initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
@@ -337,7 +337,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                       num_rows,
                       skip_rows,
                       level_type_size,
-                      page_validity,
+                      page_mask,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -364,7 +364,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        page_validity,
+                        page_mask,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -421,7 +421,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    num_rows,
                    skip_rows,
                    level_type_size,
-                   page_validity,
+                   page_mask,
                    error_code.data(),
                    streams[s_idx++]);
   }
