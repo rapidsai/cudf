@@ -21,8 +21,8 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/join/join.hpp>
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 

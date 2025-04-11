@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "join_common.hpp"
+
 #include <cudf/join/conditional_join.hpp>
 
 auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000};
