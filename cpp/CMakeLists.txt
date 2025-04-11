@@ -492,7 +492,6 @@ add_library(
   src/io/csv/durations.cu
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
-  src/io/experimental/functions.cpp
   src/io/functions.cpp
   src/io/json/host_tree_algorithms.cu
   src/io/json/json_column.cu
@@ -813,6 +812,7 @@ set_source_files_properties(
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
+
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
