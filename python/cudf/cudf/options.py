@@ -7,8 +7,6 @@ from contextlib import ContextDecorator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import pylibcudf as plc
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Container
 
@@ -19,8 +17,6 @@ class Option:
     value: Any
     description: str
     validator: Callable
-    set_callback: Callable | None = None
-    get_callback: Callable | None = None
 
 
 _OPTIONS: dict[str, Option] = {}
@@ -47,12 +43,7 @@ def _env_get_bool(name, default):
 
 
 def _register_option(
-    name: str,
-    default_value: Any,
-    description: str,
-    validator: Callable,
-    set_callback: Callable | None = None,
-    get_callback: Callable | None = None,
+    name: str, default_value: Any, description: str, validator: Callable
 ):
     """Register an option.
 
@@ -67,10 +58,6 @@ def _register_option(
     validator : Callable
         Called on the option value to check its validity. Should raise an
         error if the value is invalid.
-    set_callback : Callable | None
-        Called when setting the option value.
-    get_callback : Callable | None
-        Called when getting the option value.
 
     Raises
     ------
@@ -79,12 +66,7 @@ def _register_option(
     """
     validator(default_value)
     _OPTIONS[name] = Option(
-        default_value,
-        default_value,
-        description,
-        validator,
-        set_callback,
-        get_callback,
+        default_value, default_value, description, validator
     )
 
 
@@ -106,10 +88,7 @@ def get_option(name: str) -> Any:
         If option ``name`` does not exist.
     """
     try:
-        option_obj = _OPTIONS[name]
-        if option_obj.get_callback is not None:
-            option_obj.get_callback()
-        return option_obj.value
+        return _OPTIONS[name].value
     except KeyError:
         raise KeyError(f'"{name}" does not exist.')
 
@@ -132,13 +111,11 @@ def set_option(name: str, val: Any):
         Raised by validator if the value is invalid.
     """
     try:
-        option_obj = _OPTIONS[name]
-        option_obj.validator(val)
-        option_obj.value = val
-        if option_obj.set_callback is not None:
-            option_obj.set_callback()
+        option = _OPTIONS[name]
     except KeyError:
         raise KeyError(f'"{name}" does not exist.')
+    option.validator(val)
+    option.value = val
 
 
 def _build_option_description(name, opt):
@@ -386,36 +363,6 @@ _register_option(
     """
     ),
     _make_contains_validator([False, True]),
-)
-
-
-def _num_io_threads_set_callback():
-    plc.io.kvikio_manager.set_num_io_threads(_OPTIONS["num_io_threads"].value)
-
-
-def _num_io_threads_get_callback():
-    actual_result = plc.io.kvikio_manager.get_num_io_threads()
-    expected_result = _OPTIONS["num_io_threads"].value
-    assert actual_result == expected_result
-
-
-_register_option(
-    "num_io_threads",
-    4,
-    textwrap.dedent(
-        """
-        Set the number of IO threads used by the KvikIO library.
-        If the new value is different from the previous value, then
-        setting this option will block the calling thread until KvikIO
-        completes all existing I/O tasks, destroys the previous thread pool,
-        and creates a new one with the specified value. Otherwise, the existing
-        thread pool will be used for subsequent I/O operations.
-        \tValid values are integers. Default is 4.
-    """
-    ),
-    _integer_validator,
-    _num_io_threads_set_callback,
-    _num_io_threads_get_callback,
 )
 
 

@@ -18,8 +18,8 @@
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/kvikio_manager.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -50,7 +50,7 @@ template <typename HandleT>
 class kvikio_source : public datasource {
   class kvikio_initializer {
    public:
-    kvikio_initializer() { kvikio_manager::instance(); }
+    kvikio_initializer() { kvikio_integration::set_up_kvikio(); }
   };
 
   std::pair<std::vector<uint8_t>, std::future<size_t>> clamped_read_to_vector(size_t offset,

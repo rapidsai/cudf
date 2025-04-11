@@ -16,7 +16,6 @@
 
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/kvikio_manager.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -34,7 +33,7 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
-    kvikio_manager::instance();
+    kvikio_integration::set_up_kvikio();
     _kvikio_file = kvikio::FileHandle(filepath, "w");
     CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
