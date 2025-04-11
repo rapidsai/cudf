@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -815,7 +815,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return detail::make_host_vector_sync(d_stats, stream);
+  return detail::make_host_vector(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,
