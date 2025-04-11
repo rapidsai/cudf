@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file hybrid_scan.hpp
- */
-
 #pragma once
 
 #include <cudf/io/parquet.hpp>
@@ -33,6 +29,11 @@
 
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 namespace detail {
 

@@ -494,7 +494,7 @@ class impl {
   size_type _num_sources{1};
 
   // timestamp_type
-  cudf::data_type _timestamp_type{type_id::EMPTY};
+  cudf::data_type _timestamp_type;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 

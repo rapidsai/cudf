@@ -373,7 +373,7 @@ class reader::impl {
   // Reader configs.
   struct {
     // timestamp_type
-    data_type timestamp_type{type_id::EMPTY};
+    data_type timestamp_type;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
