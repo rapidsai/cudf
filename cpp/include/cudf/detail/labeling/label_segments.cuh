@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/iterator_traits.h>
@@ -69,7 +69,7 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator label_end,
                     rmm::cuda_stream_view stream)
 {
-  auto const num_labels = thrust::distance(label_begin, label_end);
+  auto const num_labels = cuda::std::distance(label_begin, label_end);
 
   // If the output array is empty, that means we have all empty segments.
   // In such cases, we must terminate immediately. Otherwise, the `for_each` loop below may try to
@@ -85,7 +85,7 @@ void label_segments(InputIterator offsets_begin,
   // We should terminate from here, otherwise the `inclusive_scan` call below still does its entire
   // computation. That is unnecessary and may be expensive if we have the input offsets defining a
   // very large segment.
-  if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
+  if (cuda::std::distance(offsets_begin, offsets_end) <= 2) { return; }
 
   thrust::for_each(
     rmm::exec_policy(stream),
@@ -157,9 +157,9 @@ void labels_to_offsets(InputIterator labels_begin,
   //    filled above. If we continue, the `exclusive_scan` call below still does its entire
   //    computation. That is unnecessary and may be expensive if we have the input labels defining
   //    a very large number of segments.
-  if (thrust::distance(labels_begin, labels_end) == 0) { return; }
+  if (cuda::std::distance(labels_begin, labels_end) == 0) { return; }
 
-  auto const num_segments = thrust::distance(offsets_begin, offsets_end) - 1;
+  auto const num_segments = cuda::std::distance(offsets_begin, offsets_end) - 1;
 
   //================================================================================
   // Let's consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
@@ -179,7 +179,7 @@ void labels_to_offsets(InputIterator labels_begin,
                                          thrust::make_constant_iterator<OutputType>(1),
                                          list_indices.begin(),  // output unique label values
                                          list_sizes.begin());  // count for each label
-  auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
+  auto const num_non_empty_segments = cuda::std::distance(list_indices.begin(), end.first);
 
   // Scatter segment sizes into the end position of their corresponding segment indices.
   // Given the example above, we scatter [4, 2, 4] by the scatter map [0, 1, 4], resulting

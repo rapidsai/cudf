@@ -5,6 +5,7 @@ import copy
 import decimal
 import functools
 import operator
+import warnings
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
@@ -446,20 +447,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     May be used in binary operations against other scalars, cuDF
     Series, DataFrame, and Index objects.
 
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Scalar(42, dtype='int64')
-    Scalar(42, dtype=int64)
-    >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
-    Scalar(84.0, dtype=float64)
-    >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
-    Scalar(63, dtype=int64)
-    >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-    >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
-    >>> x - y
-    Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-
     Parameters
     ----------
     value : Python Scalar, NumPy Scalar, or cuDF Scalar
@@ -471,6 +458,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
+        warnings.warn(
+            "Scalar is deprecated and will be removed in 25.08.", FutureWarning
+        )
         self._host_value = None
         self._host_dtype = None
         self._device_value: plc.Scalar | None = None

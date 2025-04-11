@@ -36,8 +36,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -104,7 +104,7 @@ struct replace_multi_parallel_fn {
         if (str_idx < 0) {
           auto const idx_itr =
             thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_strings.size(), idx);
-          str_idx = thrust::distance(d_offsets, idx_itr) - 1;
+          str_idx = cuda::std::distance(d_offsets, idx_itr) - 1;
           d_str   = get_string(str_idx - d_offsets[0]);
         }
         if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return t; }
@@ -159,7 +159,7 @@ struct replace_multi_parallel_fn {
       auto const d_tgt   = d_targets[tgt_idx];
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { count++; }  // don't bother counting empty strings
 
         auto const d_repl = get_replacement_string(tgt_idx);
@@ -216,7 +216,7 @@ struct replace_multi_parallel_fn {
       auto const d_tgt   = d_targets[tgt_idx];
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
-        auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
+        auto const keep_size = static_cast<size_type>(cuda::std::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { d_output[output_idx++] = string_index_pair{str_ptr, keep_size}; }
         output_size += keep_size;
 
@@ -231,7 +231,7 @@ struct replace_multi_parallel_fn {
     }
     // include any leftover parts of the string
     if (str_ptr <= d_str_end) {
-      auto const left_size = static_cast<size_type>(thrust::distance(str_ptr, d_str_end));
+      auto const left_size = static_cast<size_type>(cuda::std::distance(str_ptr, d_str_end));
       d_output[output_idx] = string_index_pair{str_ptr, left_size};
       output_size += left_size;
     }
