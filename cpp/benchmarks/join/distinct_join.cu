@@ -16,7 +16,7 @@
 
 #include "join_common.hpp"
 
-#include <cudf/join/hash_join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 
 template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,

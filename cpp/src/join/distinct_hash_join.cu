@@ -19,7 +19,7 @@
 #include <cudf/detail/join/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/join/hash_join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>

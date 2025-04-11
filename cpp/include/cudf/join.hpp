@@ -20,6 +20,7 @@
     "WARNING: This header is deprecated in cuDF 25.06. Please use the appropriate headers from include/cudf/join/")
 
 #include <cudf/join/conditional_join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
