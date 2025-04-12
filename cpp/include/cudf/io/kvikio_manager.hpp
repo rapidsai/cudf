@@ -66,13 +66,18 @@ class kvikio_manager {
    */
   static unsigned int get_num_io_threads();
 
+  /**
+   * @brief Get the default number of IO threads set by cuDF.
+   *
+   * @return The default number of IO threads set by cuDF.
+   */
+  static unsigned int get_default_num_io_threads();
+
  private:
   /**
    * @brief Constructor of kvikio_manager.
    */
   kvikio_manager();
-
-  unsigned int _num_io_threads;
 };
 
 /** @} */  // end of group

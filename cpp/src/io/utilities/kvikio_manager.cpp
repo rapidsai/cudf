@@ -33,11 +33,14 @@ kvikio_manager::kvikio_manager()
   // initialized.
   cudaFree(nullptr);
 
+  auto env_var_setting = kvikio::defaults::thread_pool_nthreads();
+  auto default_setting = get_default_num_io_threads();
+  if (env_var_setting != default_setting) {
+    kvikio::defaults::set_thread_pool_nthreads(default_setting);
+  }
+
   auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
   kvikio::defaults::set_compat_mode(compat_mode);
-
-  _num_io_threads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4u);
-  kvikio::defaults::set_thread_pool_nthreads(_num_io_threads);
 }
 
 kvikio_manager& kvikio_manager::instance()
@@ -48,12 +51,17 @@ kvikio_manager& kvikio_manager::instance()
 
 void kvikio_manager::set_num_io_threads(unsigned int num_io_threads)
 {
-  if (num_io_threads == instance()._num_io_threads) { return; }
-  instance()._num_io_threads = num_io_threads;
-  kvikio::defaults::set_thread_pool_nthreads(num_io_threads);
+  if (num_io_threads != kvikio::defaults::thread_pool_nthreads()) {
+    kvikio::defaults::set_thread_pool_nthreads(num_io_threads);
+  }
 }
 
-unsigned int kvikio_manager::get_num_io_threads() { return instance()._num_io_threads; }
+unsigned int kvikio_manager::get_num_io_threads()
+{
+  return kvikio::defaults::thread_pool_nthreads();
+}
+
+unsigned int kvikio_manager::get_default_num_io_threads() { return 4u; }
 
 }  // namespace io
 }  // namespace cudf
