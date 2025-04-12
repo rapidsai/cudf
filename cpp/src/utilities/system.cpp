@@ -18,7 +18,7 @@
 
 #include <rmm/cuda_device.hpp>
 
-#include <cuda_runtime.h>
+#include <cuda.h>
 
 #include <nvml.h>
 
@@ -58,7 +58,7 @@ void initialize_nvml()
 bool is_c2c_available()
 {
   // todo: remove this once CUDA 11 support is dropped
-#if CUDART_VERSION < 12000
+#if CUDA_VERSION < 12000
   return false;
 #else
   nvmlDevice_t device_handle{};
