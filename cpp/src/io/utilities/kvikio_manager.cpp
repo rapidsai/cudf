@@ -81,7 +81,12 @@ unsigned int kvikio_manager::get_num_io_threads()
   return kvikio::defaults::thread_pool_nthreads();
 }
 
-unsigned int kvikio_manager::get_default_num_io_threads() { return 4u; }
+unsigned int kvikio_manager::get_default_num_io_threads()
+{
+  // todo: provide a platform-dependent, default setting that can achieve decent performance for
+  // single-process and multi-process benchmarks.
+  return 4u;
+}
 
 }  // namespace io
 }  // namespace cudf
