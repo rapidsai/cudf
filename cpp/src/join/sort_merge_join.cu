@@ -595,7 +595,31 @@ void sort_merge_join::preprocess_tables(table_view const left,
   preprocessed_right_view = preprocessed_right->view();
 }
 
-sort_merge_join::sort_merge_join(table_view const &left, table_view const &right, bool is_left_sorted, bool is_right_sorted) {
+std::unique_ptr<column> sort_merge_join::sort(table_view const& tbl,
+                                                                 rmm::cuda_stream_view stream,
+                                                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  std::vector<cudf::order> column_order(tbl.num_columns(), cudf::order::ASCENDING);
+  std::vector<cudf::null_order> null_precedence(tbl.num_columns(), cudf::null_order::BEFORE);
+  auto sorted_tbl_order_col = cudf::sorted_order(tbl, column_order, null_precedence, stream, mr);
+
+  return std::move(sorted_tbl_order_col);
+}
+
+
+sort_merge_join::sort_merge_join(table_view const &left, bool is_left_sorted, table_view const &right, bool is_right_sorted,
+                  null_equality compare_nulls,
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr) {
+  preprocess_tables(left, right, compare_nulls, stream, mr);
+  if(!is_left_sorted) {
+    preprocessed_left_sorted_order = sort(preprocessed_left_view, stream, mr);
+  }
+  if(!is_right_sorted) {
+    preprocessed_right_sorted_order = sort(preprocessed_right_view, stream, mr);
+  }
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
