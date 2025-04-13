@@ -62,8 +62,8 @@ def _to_plc_compression(
         "lzo",
         "snappy",
         "xz",
-        "zib",
         "zip",
+        "zlib",
         "zstd",
     ]
     | None,
@@ -312,8 +312,8 @@ def _plc_write_json(
     colnames: list[tuple[abc.Hashable, Any]],
     path_or_buf,
     compression: Literal[
-        "snappy",
         "gzip",
+        "snappy",
         "zstd",
     ]
     | None = None,

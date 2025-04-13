@@ -84,8 +84,8 @@ def gdf_writer_types(request):
 
 
 index_params = [True, False]
-# tests limited to compressions formats supported by pandas and cudf: zip, gzip, bz2, zstd
-compression_params = ["gzip", "bz2", "zip", "zstd", None]
+# tests limited to compressions formats supported by pandas and cudf: bz2, gzip, zip, zstd
+compression_params = ["bz2", "gzip", "zip", "zstd", None]
 orient_params = ["columns", "records", "table", "split"]
 params = itertools.product(index_params, compression_params, orient_params)
 
