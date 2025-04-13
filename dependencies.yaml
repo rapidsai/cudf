@@ -931,10 +931,11 @@ dependencies:
           - cramjam
           - fastavro>=0.22.9
           - hypothesis
+          - mmh3
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
-          - mmh3
+          - zstandard
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
