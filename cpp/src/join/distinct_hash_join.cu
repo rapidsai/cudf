@@ -110,6 +110,9 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
+               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
+               std::invalid_argument);
 
   if (this->_build.num_rows() == 0) { return; }
 

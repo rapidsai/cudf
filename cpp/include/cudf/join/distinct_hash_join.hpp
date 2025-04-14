@@ -67,6 +67,7 @@ class distinct_hash_join {
    *
    * @deprecated Deprecated constructor. Use the new load factor overload instead.
    *
+   * @throw cudf::logic_error if the build table has no columns
    * @param build The build table that contains distinct elements
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -77,6 +78,8 @@ class distinct_hash_join {
 
   /**
    * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @throw std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
    */

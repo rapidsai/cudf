@@ -89,6 +89,8 @@ class hash_join {
    * @note The `hash_join` object must not outlive the table viewed by `build`, else behavior is
    * undefined.
    *
+   * @throws cudf::logic_error if the build table has no columns
+   *
    * @param build The build table, from which the hash table is built
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -112,6 +114,8 @@ class hash_join {
 
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @throws std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *                  any `probe` table that will be used later for join
