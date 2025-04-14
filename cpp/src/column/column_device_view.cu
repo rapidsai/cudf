@@ -31,7 +31,7 @@
 namespace cudf {
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-  : raw_column_device_view{source.type(),
+  : column_device_view_core{source.type(),
                            source.size(),
                            source.head(),
                            source.null_mask(),
@@ -90,7 +90,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
 column_device_view::column_device_view(column_view source, void* h_ptr, void* d_ptr)
-  : raw_column_device_view{source.type(),
+  : column_device_view_core{source.type(),
                            source.size(),
                            source.head(),
                            source.null_mask(),
@@ -126,7 +126,7 @@ std::size_t column_device_view::extent(column_view const& source)
 
 // For use with inplace-new to pre-fill memory to be copied to device
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source)
-  : raw_mutable_column_device_view{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                    source.size(),
                                    source.head(),
                                    source.null_mask(),
@@ -139,7 +139,7 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source,
                                                        void* h_ptr,
                                                        void* d_ptr)
-  : raw_mutable_column_device_view{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                    source.size(),
                                    source.head(),
                                    source.null_mask(),

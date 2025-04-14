@@ -15,8 +15,8 @@
  */
 #pragma once
 
+#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/column/raw_column_device_view.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -46,9 +46,9 @@ namespace CUDF_EXPORT cudf {
  *
  * @ingroup column_classes
  */
-class alignas(16) column_device_view : public raw_column_device_view {
+class alignas(16) column_device_view : public column_device_view_core {
  public:
-  using base = raw_column_device_view;  ///< Base type
+  using base = column_device_view_core;  ///< Base type
 
   column_device_view()                          = delete;
   ~column_device_view()                         = default;
@@ -582,7 +582,7 @@ class alignas(16) column_device_view : public raw_column_device_view {
                                       size_type offset,
                                       column_device_view* children,
                                       size_type num_children)
-    : raw_column_device_view{type, size, data, null_mask, offset, children, num_children}
+    : column_device_view_core{type, size, data, null_mask, offset, children, num_children}
   {
   }
 
@@ -605,9 +605,9 @@ class alignas(16) column_device_view : public raw_column_device_view {
  *
  * @ingroup column_classes
  */
-class alignas(16) mutable_column_device_view : public raw_mutable_column_device_view {
+class alignas(16) mutable_column_device_view : public mutable_column_device_view_core {
  public:
-  using base = raw_mutable_column_device_view;  ///< Base class
+  using base = mutable_column_device_view_core;  ///< Base class
 
   mutable_column_device_view()                                  = delete;
   ~mutable_column_device_view()                                 = default;
@@ -776,11 +776,11 @@ class alignas(16) mutable_column_device_view : public raw_mutable_column_device_
   mutable_column_device_view(mutable_column_view source);
 };
 
-static_assert(sizeof(column_device_view) == sizeof(raw_column_device_view),
+static_assert(sizeof(column_device_view) == sizeof(column_device_view_core),
               "column_device_view and raw_column_device_view must be bitwise-compatible");
 
 static_assert(
-  sizeof(mutable_column_device_view) == sizeof(raw_mutable_column_device_view),
+  sizeof(mutable_column_device_view) == sizeof(mutable_column_device_view_core),
   "mutable_column_device_view and raw_mutable_column_device_view must be bitwise-compatible");
 
 namespace detail {
