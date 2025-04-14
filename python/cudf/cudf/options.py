@@ -401,16 +401,23 @@ def _num_io_threads_get_callback():
 
 _register_option(
     "num_io_threads",
-    4,
+    plc.io.kvikio_manager.get_num_io_threads(),
     textwrap.dedent(
         """
-        Set the number of IO threads used by the KvikIO library.
-        If the new value is different from the previous value, then
-        setting this option will block the calling thread until KvikIO
-        completes all existing I/O tasks, destroys the previous thread pool,
-        and creates a new one with the specified value. Otherwise, the existing
-        thread pool will be used for subsequent I/O operations.
-        \tValid values are integers. Default is 4.
+        The number of IO threads used by the KvikIO library.
+        There are different ways to set this value. In descending order of
+        override priority:
+            - cuDF option API
+                - cudf.set_option("num_io_threads", value) to set the value
+                globally
+                - cudf.option_context("num_io_threads", value) to set the value
+                in a context manager
+            - Environment variable KVIKIO_NTHREADS
+            - cuDF's default number of IO threads
+                cuDF derives a default platform-dependent value, which
+                can be queried by the method
+                pylibcudf.io.kvikio_manager.get_default_num_io_threads().
+        \tValid values are integers. Default is a platform-dependent value.
     """
     ),
     _integer_validator,

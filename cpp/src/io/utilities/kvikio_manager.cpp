@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "getenv_or.hpp"
-
 #include <cudf/io/kvikio_manager.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
@@ -44,22 +42,27 @@ kvikio_manager::kvikio_manager()
     // KVIKIO_NTHREADS when the singleton class kvikio::defaults is first instantiated via the above
     // kvikio::defaults::set_compat_mode() call. In this case, cuDF's default value is not derived
     // here so as to avoid the overhead of NVML initialization.
-    CUDF_LOG_INFO("Environment variable %.*s read as %s",
+    CUDF_LOG_INFO("Initialize the number of I/O threads. Environment variable %.*s read as %s",
                   static_cast<int>(env_var_name.length()),
                   env_var_name.data(),
                   env_val);
+    _num_io_threads = kvikio::defaults::thread_pool_nthreads();
   } else {
     // If the env var KVIKIO_NTHREADS is not set, KvikIO will create the thread pool with its own
     // default value M. Here if cuDF's derived default value N is not equal to M, the existing
     // thread pool will be destroyed and a new one with N threads created.
-    auto default_val = get_default_num_io_threads();
+    _num_io_threads = get_default_num_io_threads();
     std::stringstream ss;
-    ss << default_val;
-    CUDF_LOG_INFO("Environment variable %.*s is not set, using default value %s",
-                  static_cast<int>(env_var_name.length()),
-                  env_var_name.data(),
-                  ss.str());
-    set_num_io_threads(default_val);
+    ss << _num_io_threads;
+    CUDF_LOG_INFO(
+      "Initialize the number of I/O threads. Environment variable %.*s is not set, using default "
+      "value %s",
+      static_cast<int>(env_var_name.length()),
+      env_var_name.data(),
+      ss.str());
+    if (_num_io_threads != kvikio::defaults::thread_pool_nthreads()) {
+      kvikio::defaults::set_thread_pool_nthreads(_num_io_threads);
+    }
   }
 }
 
@@ -71,15 +74,16 @@ kvikio_manager& kvikio_manager::instance()
 
 void kvikio_manager::set_num_io_threads(unsigned int num_io_threads)
 {
-  if (num_io_threads != kvikio::defaults::thread_pool_nthreads()) {
+  auto old_setting = instance()._num_io_threads;
+  if (num_io_threads != old_setting) {
+    instance()._num_io_threads = num_io_threads;
     kvikio::defaults::set_thread_pool_nthreads(num_io_threads);
   }
+  CUDF_LOG_INFO(
+    "Set the number of I/O threads. Old value: %u, new value: %u", old_setting, num_io_threads);
 }
 
-unsigned int kvikio_manager::get_num_io_threads()
-{
-  return kvikio::defaults::thread_pool_nthreads();
-}
+unsigned int kvikio_manager::get_num_io_threads() { return instance()._num_io_threads; }
 
 unsigned int kvikio_manager::get_default_num_io_threads()
 {
