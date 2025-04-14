@@ -1355,7 +1355,7 @@ class device_row_comparator {
   __device__ constexpr bool operator()(size_type const lhs_index,
                                        size_type const rhs_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_index, rhs_index, this](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
@@ -1527,7 +1527,7 @@ class device_row_comparator {
         return thrust::all_of(thrust::seq,
                               thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(0) + size,
-                              [=](auto i) { return comp.template operator()<Element>(i, i); });
+                              [this](auto i) { return comp.template operator()<Element>(i, i); });
       }
 
       template <typename Element,
@@ -1871,13 +1871,14 @@ class device_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(),
-        element_hasher_adapter<hash_function>{_check_nulls, _seed},
-        column,
-        row_index);
-    });
+    auto it =
+      thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
+        return cudf::type_dispatcher<dispatch_storage_type>(
+          column.type(),
+          element_hasher_adapter<hash_function>{_check_nulls, _seed},
+          column,
+          row_index);
+      });
 
     // Hash each element and combine all the hash values together
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
