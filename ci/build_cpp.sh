@@ -22,6 +22,7 @@ RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 export RAPIDS_ARTIFACTS_DIR
 
+# populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
 source rapids-rattler-channel-string
 
 # --no-build-id allows for caching with `sccache`
@@ -29,9 +30,7 @@ source rapids-rattler-channel-string
 # https://rattler.build/latest/tips_and_tricks/#using-sccache-or-ccache-with-rattler-build
 rapids-telemetry-record build-libcudf.log \
     rattler-build build --recipe conda/recipes/libcudf \
-                    --experimental \
-                    --no-build-id \
-                    --output-dir "$RAPIDS_CONDA_BLD_OUTPUT_DIR" \
+                    "${RATTLER_ARGS[@]}" \
                     "${RATTLER_CHANNELS[@]}"
 
 rapids-telemetry-record sccache-stats.txt sccache --show-adv-stats
