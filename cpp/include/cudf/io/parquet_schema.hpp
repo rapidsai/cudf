@@ -28,6 +28,11 @@
 namespace CUDF_EXPORT cudf {
 
 namespace io::parquet {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
 
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
@@ -924,5 +929,6 @@ struct PageHeader {
   DataPageHeaderV2 data_page_header_v2;
 };
 
+/** @} */  // end of group
 }  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf
