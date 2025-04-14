@@ -27,7 +27,7 @@ namespace cudf::detail {
 /**
  * @brief Maximum number of threads per block for compute column kernels
  */
-auto constexpr MAX_BLOCK_SIZE = 128;
+size_type constexpr MAX_BLOCK_SIZE = 128;
 
 /**
  * @brief Launches the appropriate compute column kernel based on template parameters
@@ -35,8 +35,8 @@ auto constexpr MAX_BLOCK_SIZE = 128;
  * This function selects and launches the appropriate kernel implementation based on whether
  * the input contains nulls and whether the input contains complex types.
  *
- * @tparam HasNulls Whether the input contains nulls
- * @tparam HasComplexType Whether the input contains complex types
+ * @tparam HasNull Indicates whether the input contains any null value.
+ * @tparam HasComplexType Indicates whether the input may contain complex types
  *
  * @param table_device Device view of the input table
  * @param device_expression_data Device data required to evaluate the expression
@@ -45,7 +45,7 @@ auto constexpr MAX_BLOCK_SIZE = 128;
  * @param shmem_per_block Amount of shared memory to allocate per block
  * @param stream CUDA stream on which to launch the kernel
  */
-template <bool HasNulls, bool HasComplexType>
+template <bool HasNull, bool HasComplexType>
 void launch_compute_column_kernel(table_device_view const& table_device,
                                   ast::detail::expression_device_view device_expression_data,
                                   mutable_column_device_view& mutable_output_device,
