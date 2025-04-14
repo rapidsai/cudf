@@ -741,13 +741,13 @@ int32_t compare_binary(std::vector<uint8_t> const& v1,
                        cudf::io::parquet::Type ptype,
                        std::optional<cudf::io::parquet::ConvertedType> const& ctype)
 {
-  auto ctype_val = ctype.value_or(cudf::io::parquet::UNKNOWN);
+  auto ctype_val = ctype.value_or(cudf::io::parquet::ConvertedType::UNKNOWN);
   switch (ptype) {
-    case cudf::io::parquet::INT32:
+    case cudf::io::parquet::Type::INT32:
       switch (ctype_val) {
-        case cudf::io::parquet::UINT_8:
-        case cudf::io::parquet::UINT_16:
-        case cudf::io::parquet::UINT_32:
+        case cudf::io::parquet::ConvertedType::UINT_8:
+        case cudf::io::parquet::ConvertedType::UINT_16:
+        case cudf::io::parquet::ConvertedType::UINT_32:
           return compare(*(reinterpret_cast<uint32_t const*>(v1.data())),
                          *(reinterpret_cast<uint32_t const*>(v2.data())));
         default:
@@ -755,23 +755,23 @@ int32_t compare_binary(std::vector<uint8_t> const& v1,
                          *(reinterpret_cast<int32_t const*>(v2.data())));
       }
 
-    case cudf::io::parquet::INT64:
-      if (ctype_val == cudf::io::parquet::UINT_64) {
+    case cudf::io::parquet::Type::INT64:
+      if (ctype_val == cudf::io::parquet::ConvertedType::UINT_64) {
         return compare(*(reinterpret_cast<uint64_t const*>(v1.data())),
                        *(reinterpret_cast<uint64_t const*>(v2.data())));
       }
       return compare(*(reinterpret_cast<int64_t const*>(v1.data())),
                      *(reinterpret_cast<int64_t const*>(v2.data())));
 
-    case cudf::io::parquet::FLOAT:
+    case cudf::io::parquet::Type::FLOAT:
       return compare(*(reinterpret_cast<float const*>(v1.data())),
                      *(reinterpret_cast<float const*>(v2.data())));
 
-    case cudf::io::parquet::DOUBLE:
+    case cudf::io::parquet::Type::DOUBLE:
       return compare(*(reinterpret_cast<double const*>(v1.data())),
                      *(reinterpret_cast<double const*>(v2.data())));
 
-    case cudf::io::parquet::BYTE_ARRAY: {
+    case cudf::io::parquet::Type::BYTE_ARRAY: {
       int32_t v1sz = v1.size();
       int32_t v2sz = v2.size();
       int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));

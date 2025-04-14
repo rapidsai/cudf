@@ -1488,6 +1488,7 @@ def test_interval_index_repr():
     assert repr(pi) == repr(gi)
 
 
+@pytest.mark.flaky(reruns=3, reruns_delay=5)
 def test_large_unique_categories_repr():
     # Unfortunately, this is a long running test (takes about 1 minute)
     # and there is no way we can reduce the time
