@@ -2453,10 +2453,20 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(cudf_buffer)
     actual = cudf.read_parquet(pandas_buffer)
 
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
+
     assert_eq(expected, actual, check_index_type=True)
 
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
+
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
 
     assert_eq(
         expected,
@@ -3167,6 +3177,10 @@ def test_parquet_columns_and_index_param(index, columns):
 
     expected = pd.read_parquet(buffer, columns=columns)
     got = cudf.read_parquet(buffer, columns=columns)
+    if columns == [] and index in {False, None}:
+        # cuDF returns RangeIndex columns compared
+        # to pandas' Index[object] columns
+        got.columns = expected.columns
 
     assert_eq(expected, got, check_index_type=True)
 
@@ -3614,13 +3628,14 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
         }
     )
 
+    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
+    if version.parse(pa.__version__) < version.parse("19.0.0"):
+        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
+        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
+
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True, index=index)
-
-    # Convert decimal types to d128
-    expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-    expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
@@ -4427,3 +4442,20 @@ def test_parquet_bloom_filters(
         len(df_stats),
         expected_len,
     )
+
+
+def test_parquet_reader_unsupported_compression(datadir):
+    fname = datadir / "hadoop_lz4_compressed.parquet"
+
+    with pytest.raises(
+        RuntimeError,
+        match="Unsupported Parquet compression type: LZ4",
+    ):
+        cudf.read_parquet(fname)
+
+
+def test_parquet_reader_empty_compressed_page(datadir):
+    fname = datadir / "empty_datapage_v2.parquet"
+
+    df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
+    assert_eq(cudf.read_parquet(fname), df)

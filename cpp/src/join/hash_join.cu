@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -222,7 +223,7 @@ probe_join_hash_table(
                                        stream.value());
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
-        auto const actual_size = thrust::distance(out1_zip_begin, out1_zip_end);
+        auto const actual_size = cuda::std::distance(out1_zip_begin, out1_zip_end);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
       }

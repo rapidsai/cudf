@@ -33,6 +33,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
@@ -106,7 +107,7 @@ struct replace_multi_regex_fn {
                         [ch_pos = itr.position()](auto range) { return range.first == ch_pos; });
       if (ptn_itr != d_ranges + number_of_patterns) {
         // match found, compute and replace the string in the output
-        auto const ptn_idx = static_cast<size_type>(thrust::distance(d_ranges, ptn_itr));
+        auto const ptn_idx = static_cast<size_type>(cuda::std::distance(d_ranges, ptn_itr));
 
         auto d_repl = d_repls.size() > 1 ? d_repls.element<string_view>(ptn_idx)
                                          : d_repls.element<string_view>(0);
