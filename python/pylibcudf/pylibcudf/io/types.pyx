@@ -4,7 +4,7 @@ from cpython.memoryview cimport PyMemoryView_FromMemory
 
 from cython.operator cimport dereference
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int32_t, uint8_t
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
