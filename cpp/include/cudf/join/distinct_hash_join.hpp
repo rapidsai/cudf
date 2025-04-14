@@ -73,7 +73,7 @@ class distinct_hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   [[deprecated]] distinct_hash_join(cudf::table_view const& build,
-                                    null_equality compare_nulls  = null_equality::EQUAL,
+                                    null_equality compare_nulls,
                                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
@@ -84,8 +84,8 @@ class distinct_hash_join {
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
    */
   distinct_hash_join(cudf::table_view const& build,
-                     null_equality compare_nulls,
-                     double load_factor,
+                     null_equality compare_nulls  = null_equality::EQUAL,
+                     double load_factor           = 0.5,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
