@@ -82,7 +82,7 @@ __device__ int32_t count_common_bytes(cudf::string_view lhs, cudf::string_view r
   return idx;
 }
 
-struct find_duplicates_fn {
+struct find_adjacent_duplicates_fn {
   cudf::device_span<char const> chars_span;
   int32_t width;
   int32_t const* d_indices;
@@ -177,7 +177,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(cudf::device_span<char const
                     thrust::counting_iterator<int64_t>(0),
                     thrust::counting_iterator<int64_t>(indices.size()),
                     sizes.begin(),
-                    find_duplicates_fn{chars_span, min_width, indices.data()});
+                    find_adjacent_duplicates_fn{chars_span, min_width, indices.data()});
 
   auto const dup_count =
     sizes.size() - thrust::count(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
@@ -299,7 +299,7 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
 
 namespace {
 
-struct find_duplicates2_fn {
+struct find_duplicates_fn {
   cudf::device_span<char const> chars_span1;
   cudf::device_span<char const> chars_span2;
   int32_t width;
@@ -346,7 +346,7 @@ struct find_duplicates2_fn {
   }
 };
 
-struct lb_fn {
+struct suffix_to_string_fn {
   cudf::device_span<char const> chars;
   __device__ cudf::string_view operator()(cudf::size_type idx) const
   {
@@ -365,7 +365,7 @@ struct prefix_string_fn {
   }
 };
 
-struct mini_fn {
+struct suffix_to_prefix_fn {
   cudf::device_span<char const> chars;
   __device__ uint32_t operator()(cudf::size_type idx) const
   {
@@ -404,28 +404,32 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   auto const chars_span1 = cudf::device_span<char const>(d_input_chars1, chars_size1);
   auto const chars_span2 = cudf::device_span<char const>(d_input_chars2, chars_size2);
 
-  auto itr1 = thrust::make_transform_iterator(indices1.begin(), mini_fn{chars_span1});
-  auto end1 = itr1 + indices1.size();
-  auto itr2 = thrust::make_transform_iterator(indices2.begin(), lb_fn{chars_span2});
-  auto end2 = itr2 + indices2.size();
+  auto const itr1 =
+    thrust::make_transform_iterator(indices1.begin(), suffix_to_prefix_fn{chars_span1});
+  auto const end1 = itr1 + indices1.size();
+  auto const itr2 =
+    thrust::make_transform_iterator(indices2.begin(), suffix_to_string_fn{chars_span2});
+  auto const end2 = itr2 + indices2.size();
 
-  auto pd1 = rmm::device_uvector<uint32_t>(indices2.size(), stream);  // 4x
-  thrust::transform(rmm::exec_policy_nosync(stream), itr2, end2, pd1.begin(), prefix_string_fn{});
+  auto prefixes = rmm::device_uvector<uint32_t>(indices2.size(), stream);  // 4x input2
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), itr2, end2, prefixes.begin(), prefix_string_fn{});
 
-  auto lb1 = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x
+  auto lb_ids = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x input1
   thrust::lower_bound(
-    rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, lb1.begin());
-  auto ub1 = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x
+    rmm::exec_policy_nosync(stream), prefixes.begin(), prefixes.end(), itr1, end1, lb_ids.begin());
+  auto ub_ids = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x input1
   thrust::upper_bound(
-    rmm::exec_policy_nosync(stream), pd1.begin(), pd1.end(), itr1, end1, ub1.begin());
+    rmm::exec_policy_nosync(stream), prefixes.begin(), prefixes.end(), itr1, end1, ub_ids.begin());
 
-  auto fd2 = find_duplicates2_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb1, ub1};
-  auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);  // 2x
+  auto fd_fn =
+    find_duplicates_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb_ids, ub_ids};
+  auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);  // 2x input1
   thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<int32_t>(0),
                     thrust::counting_iterator<int32_t>(sizes.size()),
                     sizes.begin(),
-                    fd2);
+                    fd_fn);
 
   // candidate duplicates from input1 have matched the input2 data at least min_width;
   // this means any duplicates in both inputs should be reflected in indices1/sizes;
