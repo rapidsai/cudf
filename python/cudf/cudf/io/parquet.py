@@ -769,6 +769,7 @@ def read_parquet(
     nrows=None,
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
+    dtype_backend="numpy_nullable",
     *args,
     **kwargs,
 ):
@@ -918,6 +919,7 @@ def read_parquet(
         nrows=nrows,
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+        dtype_backend=dtype_backend,
         **kwargs,
     )
     # Apply filters row-wise (if any are defined), and return
@@ -1048,6 +1050,7 @@ def _parquet_to_frame(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    dtype_backend="numpy_nullable",
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -1059,6 +1062,7 @@ def _parquet_to_frame(
             skip_rows=skip_rows,
             *args,
             row_groups=row_groups,
+            dtype_backend=dtype_backend,
             **kwargs,
         )
 
@@ -1096,6 +1100,7 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
+                dtype_backend=dtype_backend,
                 **kwargs,
             )
         )
@@ -1152,6 +1157,7 @@ def _read_parquet(
     nrows: int | None = None,
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
+    dtype_backend="numpy_nullable",
     *args,
     **kwargs,
 ) -> cudf.DataFrame:
@@ -1277,6 +1283,7 @@ def _read_parquet(
                 use_pandas_metadata,
                 nrows=nrows,
                 skip_rows=skip_rows,
+                dtype_backend=dtype_backend,
             )
             return df
     else:
@@ -1291,6 +1298,7 @@ def _read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
                 engine=engine,
+                dtype_backend=dtype_backend,
                 *args,
                 **kwargs,
             )
@@ -2220,6 +2228,7 @@ def _process_metadata(
     use_pandas_metadata: bool,
     nrows: int = -1,
     skip_rows: int = 0,
+    dtype_backend="numpy_nullable",
 ) -> cudf.DataFrame:
     index_col = None
     is_range_index = True
@@ -2256,12 +2265,19 @@ def _process_metadata(
             col_meta["name"]: col_meta for col_meta in meta["columns"]
         }
 
+        if dtype_backend == "numpy_nullable":
+            dtype_enum = 3
+        elif dtype_backend == "pyarrow":
+            dtype_enum = 2
+        else:
+            raise ValueError(f"Unknown dtype_backend: {dtype_backend}")
         # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = meta_data_per_column[col][
                     "metadata"
                 ]["precision"]
+            df._data[col].dtype_enum = dtype_enum
             # if "numpy_type" in meta_data_per_column[col]:
             #     df._data[col].dtype_enum = get_dtype_enum(
             #         cudf.api.types.pandas_dtype(

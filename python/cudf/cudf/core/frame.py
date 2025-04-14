@@ -1081,10 +1081,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for (name, col), (_, dtype) in zip(
-            self._column_labels_and_values, other._dtypes
+        for (name, self_col), (_, other_col) in zip(
+            self._column_labels_and_values, other._column_labels_and_values
         ):
-            self._data.set_by_label(name, col._with_type_metadata(dtype))
+            self._data.set_by_label(
+                name,
+                self_col._with_type_metadata(
+                    other_col.dtype, dtype_enum=other_col.dtype_enum
+                ),
+            )
 
         return self
 

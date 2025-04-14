@@ -1606,6 +1606,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             index_descriptors.append(descr)
 
     df_meta = table.head(0)
+
     if materialize_index:
         df_meta.index = df_meta.index._as_int_index()
     metadata = pa.pandas_compat.construct_metadata(
