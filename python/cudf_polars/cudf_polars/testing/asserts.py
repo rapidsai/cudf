@@ -21,8 +21,9 @@ __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# command-line argument
+# and `--scheduler` command-line argument
 Executor = None
+Scheduler = "synchronous"
 
 
 def assert_gpu_result_equal(
@@ -89,7 +90,14 @@ def assert_gpu_result_equal(
         If GPU collection failed in some way.
     """
     if engine is None:
-        engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
+        executor = executor or Executor
+        engine = GPUEngine(
+            raise_on_fail=True,
+            executor=executor,
+            executor_options=(
+                {"scheduler": Scheduler} if executor == "streaming" else {}
+            ),
+        )
 
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs

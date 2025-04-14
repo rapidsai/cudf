@@ -9,7 +9,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +53,8 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
     q = scan_fn(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
+        executor_options={"scheduler": Scheduler},
     )
     assert_gpu_result_equal(q, engine=engine)
 
@@ -65,8 +66,8 @@ def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"parquet_blocksize": blocksize},
+        executor="streaming",
+        executor_options={"parquet_blocksize": blocksize, "scheduler": Scheduler},
     )
     assert_gpu_result_equal(q, engine=engine)
 

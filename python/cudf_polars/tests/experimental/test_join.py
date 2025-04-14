@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
@@ -20,10 +20,12 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
+            "scheduler": Scheduler,
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": broadcast_join_limit,
+            "shuffle_method": "tasks",
         },
     )
     left = pl.LazyFrame(
@@ -65,10 +67,12 @@ def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
 def test_broadcast_join_limit(broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
             "broadcast_join_limit": broadcast_join_limit,
+            "scheduler": Scheduler,
+            "shuffle_method": "tasks",
         },
     )
     left = pl.LazyFrame(

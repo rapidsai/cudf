@@ -121,9 +121,11 @@ class ConfigOptions:
         )
 
         # Validate executor_options
-        executor = config.get("executor", "pylibcudf")
-        if executor == "dask-experimental":
+        executor = config.get("executor", "in-memory")
+        if executor == "streaming":
             unsupported = config.get("executor_options", {}).keys() - {
+                "scheduler",
+                "scheduler_options",
                 "fallback_mode",
                 "max_rows_per_partition",
                 "parquet_blocksize",

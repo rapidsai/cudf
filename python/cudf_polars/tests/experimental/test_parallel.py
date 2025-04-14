@@ -13,19 +13,24 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.testing.asserts import Scheduler
 
 
-def test_evaluate_dask():
+def test_evaluate_streaming():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
     got_gpu = q.collect(engine=GPUEngine(raise_on_fail=True))
-    got_dask = q.collect(
-        engine=GPUEngine(raise_on_fail=True, executor="dask-experimental")
+    got_streaming = q.collect(
+        engine=GPUEngine(
+            raise_on_fail=True,
+            executor="streaming",
+            executor_options={"scheduler": Scheduler},
+        )
     )
     assert_frame_equal(expected, got_gpu)
-    assert_frame_equal(expected, got_dask)
+    assert_frame_equal(expected, got_streaming)
 
 
 @pytest.mark.parametrize(

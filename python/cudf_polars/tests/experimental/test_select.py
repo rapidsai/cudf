@@ -9,15 +9,15 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 3},
+        executor="streaming",
+        executor_options={"max_rows_per_partition": 3, "scheduler": Scheduler},
     )
 
 
@@ -42,10 +42,11 @@ def test_select(df, engine):
 def test_select_reduce_fallback(df, fallback_mode):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 3,
+            "scheduler": Scheduler,
         },
     )
     match = "This selection not support for multiple partitions."
