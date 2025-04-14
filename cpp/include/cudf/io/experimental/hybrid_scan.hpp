@@ -28,14 +28,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io {
-/**
- * @addtogroup io_readers
- * @{
- * @file
- */
-
-namespace parquet::experimental {
+namespace io::parquet::experimental {
 
 namespace detail {
 
@@ -46,6 +39,12 @@ namespace detail {
 class impl;
 
 }  // namespace detail
+
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief The experimental parquet reader class to optimally read parquet files subject to
@@ -247,6 +246,6 @@ class hybrid_scan_reader {
   std::unique_ptr<detail::impl> _impl;
 };
 
-}  // namespace parquet::experimental
-}  // namespace io
+/** @} */  // end of group
+}  // namespace io::parquet::experimental
 }  // namespace CUDF_EXPORT cudf
