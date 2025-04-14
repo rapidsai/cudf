@@ -16,7 +16,7 @@
 
 #include "cudf_jni_apis.hpp"
 
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
 
 extern "C" {
 

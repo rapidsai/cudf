@@ -314,10 +314,33 @@ class orc_column_view {
   std::optional<uint32_t> _parent_index;
 };
 
-size_type orc_table_view::num_rows() const noexcept
-{
-  return columns.empty() ? 0 : columns.front().size();
-}
+/**
+ * Non-owning view of a cuDF table that includes ORC-related information.
+ *
+ * Columns hierarchy is flattened and stored in pre-order.
+ */
+struct orc_table_view {
+  std::vector<orc_column_view> columns;
+  rmm::device_uvector<orc_column_device_view> d_columns;
+  std::vector<uint32_t> string_column_indices;
+  rmm::device_uvector<uint32_t> d_string_column_indices;
+
+  auto num_columns() const noexcept { return columns.size(); }
+  [[nodiscard]] size_type num_rows() const noexcept
+  {
+    return columns.empty() ? 0 : columns.front().size();
+  }
+  auto num_string_columns() const noexcept { return string_column_indices.size(); }
+
+  auto& column(uint32_t idx) { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
+
+  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
+  {
+    return columns.at(string_column_indices.at(idx));
+  }
+};
 
 namespace {
 struct string_length_functor {
