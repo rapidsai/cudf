@@ -32,13 +32,11 @@ dependencies:
 - fastavro>=0.22.9
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
-- gcc_linux-64=11.*
+- gcc_linux-aarch64=11.*
 - hypothesis
 - identify>=2.5.20
 - ipython
 - jupyter_client
-- libcufile-dev=1.4.0.31
-- libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
 - libcurand=10.3.0.86
 - libkvikio==25.6.*,>=0.0.0a0
@@ -58,7 +56,7 @@ dependencies:
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcc_linux-64=11.8
+- nvcc_linux-aarch64=11.8
 - nvcomp==4.2.0.11
 - nvtx>=0.2.1
 - openpyxl
@@ -96,8 +94,8 @@ dependencies:
 - sphinx>=8.1.0
 - sphinxcontrib-websupport
 - streamz
-- sysroot_linux-64==2.28
+- sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
-name: all_cuda-118_arch-x86_64
+name: all_cuda-118_arch-aarch64
