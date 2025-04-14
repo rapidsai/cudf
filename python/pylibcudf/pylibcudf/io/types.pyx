@@ -1,27 +1,38 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+
+from cython.operator cimport dereference
+
+from libc.stdint cimport uint8_t
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from pylibcudf.io.datasource cimport Datasource
+
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
     column_encoding,
     column_in_metadata,
     column_name_info,
+    const_byte,
     host_buffer,
     partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
-    column_in_metadata,
-    table_input_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
+
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.stream cimport Stream
 
 import codecs
 import errno
@@ -32,18 +43,13 @@ import re
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
 from pylibcudf.libcudf.io.types import (
-    compression_type as CompressionType,  # no-cython-lint
     column_encoding as ColumnEncoding,  # no-cython-lint
+    compression_type as CompressionType,  # no-cython-lint
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
     quote_style as QuoteStyle,  # no-cython-lint
-    statistics_freq as StatisticsFreq, # no-cython-lint
+    statistics_freq as StatisticsFreq,  # no-cython-lint
 )
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
-from rmm.pylibrmm.stream cimport Stream
-from pylibcudf.utils cimport _get_stream
+
 __all__ = [
     "ColumnEncoding",
     "ColumnInMetadata",
@@ -494,6 +500,8 @@ cdef class SourceInfo:
         cdef bint empty_buffer = False
         cdef list new_sources = []
 
+        cdef device_span[const_byte] d_span
+        cdef vector[device_span[const_byte]] d_spans
         if isinstance(sources[0], io.StringIO):
             for buffer in sources:
                 if not isinstance(buffer, io.StringIO):
@@ -518,6 +526,18 @@ cdef class SourceInfo:
                 c_buffer = bio.getbuffer()  # check if empty?
                 c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
                                                      c_buffer.shape[0]))
+        elif isinstance(sources[0], DeviceBuffer):
+            if not all(isinstance(s, DeviceBuffer) for s in sources):
+                raise ValueError("All sources must be of the same type!")
+            self.device_sources = sources
+            for buf in sources:
+                d_buf = <DeviceBuffer>buf
+                d_span = device_span[const_byte](
+                    <const_byte *>d_buf.c_data(), d_buf.c_size()
+                )
+                d_spans.push_back(d_span)
+            self.c_obj = move(source_info(host_span[device_span[const_byte]](d_spans)))
+            return
         else:
             raise ValueError("Sources must be a list of str/paths, "
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
