@@ -717,11 +717,10 @@ chunksize : integer, default None
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
+    bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
+    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
 byte_range : list or tuple, default None
 
@@ -864,6 +863,8 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+compression : {'gzip', 'snappy', 'zstd'}, default None
+    For on-the-fly compression of the output data. Set to None for no compression.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the `pandas` engine
     will be selected.
