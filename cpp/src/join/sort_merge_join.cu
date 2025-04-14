@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "join_common_utils.hpp"
-
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -28,6 +26,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/sort_merge_join.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
@@ -53,7 +52,9 @@
 
 namespace cudf {
 
+#ifndef SORT_MERGE_JOIN_DEBUG
 #define SORT_MERGE_JOIN_DEBUG 0
+#endif
 
 namespace {
 
@@ -128,7 +129,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> sort(table_view cons
 template <typename SmallerIt, typename LargerIt>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge(table_view const& smaller,
+local_merge(table_view const& smaller,
       SmallerIt sorted_smaller_order_begin,
       SmallerIt sorted_smaller_order_end,
       table_view const& larger,
@@ -152,7 +153,7 @@ merge(table_view const& smaller,
         dremel_device_views.push_back(dremel_data.back());
       }
     }
-    auto d_dremel_device_views = detail::make_device_uvector_sync(
+    auto d_dremel_device_views = detail::make_device_uvector(
       dremel_device_views, stream, cudf::get_current_device_resource_ref());
     return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
   };
@@ -179,7 +180,7 @@ merge(table_view const& smaller,
                       thrust::make_counting_iterator(0) + larger_numrows,
                       lb1.begin(),
                       comp_);
-  debug_print<size_type>("h_lb1", cudf::detail::make_host_vector_sync(lb1, stream));
+  debug_print<size_type>("h_lb1", cudf::detail::make_host_vector(lb1, stream));
 
   rmm::device_uvector<size_type> ub1(larger_numrows, stream, mr);
   comp_._d_ptr = d_ub_type.data();
@@ -190,7 +191,7 @@ merge(table_view const& smaller,
                       thrust::make_counting_iterator(0) + larger_numrows,
                       ub1.begin(),
                       comp_);
-  debug_print<size_type>("h_ub1", cudf::detail::make_host_vector_sync(ub1, stream));
+  debug_print<size_type>("h_ub1", cudf::detail::make_host_vector(ub1, stream));
 #endif
 
   row_comparator comp(
@@ -208,7 +209,7 @@ merge(table_view const& smaller,
 
 #if SORT_MERGE_JOIN_DEBUG
   debug_print<size_type>("h_match_counts",
-                         cudf::detail::make_host_vector_sync(match_counts, stream));
+                         cudf::detail::make_host_vector(match_counts, stream));
 #endif
 
   comp._d_ptr                 = d_lb_type.data();
@@ -228,7 +229,7 @@ merge(table_view const& smaller,
 
 #if SORT_MERGE_JOIN_DEBUG
   debug_print<size_type>("h_match_counts",
-                         cudf::detail::make_host_vector_sync(match_counts, stream));
+                         cudf::detail::make_host_vector(match_counts, stream));
 #endif
 
   auto count_matches_it = thrust::make_transform_iterator(
@@ -247,7 +248,7 @@ merge(table_view const& smaller,
 #if SORT_MERGE_JOIN_DEBUG
   std::printf("count_matches = %d\n", count_matches);
   debug_print<size_type>("h_nonzero_matches",
-                         cudf::detail::make_host_vector_sync(nonzero_matches, stream));
+                         cudf::detail::make_host_vector(nonzero_matches, stream));
 #endif
 
   thrust::exclusive_scan(
@@ -272,7 +273,7 @@ merge(table_view const& smaller,
 
 #if SORT_MERGE_JOIN_DEBUG
   debug_print<size_type>("h_match_counts",
-                         cudf::detail::make_host_vector_sync(match_counts, stream));
+                         cudf::detail::make_host_vector(match_counts, stream));
   rmm::device_uvector<size_type> dlb(nonzero_matches.size(), stream, mr);
   thrust::lower_bound(rmm::exec_policy(stream),
                       sorted_smaller_order_begin,
@@ -281,7 +282,7 @@ merge(table_view const& smaller,
                       nonzero_matches.end(),
                       dlb.begin(),
                       comp);
-  debug_print<size_type>("h_dlb", cudf::detail::make_host_vector_sync(dlb, stream));
+  debug_print<size_type>("h_dlb", cudf::detail::make_host_vector(dlb, stream));
 #endif
 
   // populate smaller indices
@@ -319,9 +320,9 @@ merge(table_view const& smaller,
 
 #if SORT_MERGE_JOIN_DEBUG
   debug_print<size_type>("h_larger_indices",
-                         cudf::detail::make_host_vector_sync(larger_indices, stream));
+                         cudf::detail::make_host_vector(larger_indices, stream));
   debug_print<size_type>("h_smaller_indices",
-                         cudf::detail::make_host_vector_sync(smaller_indices, stream));
+                         cudf::detail::make_host_vector(smaller_indices, stream));
 #endif
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
@@ -518,6 +519,78 @@ postprocess_indices(table_view const& left,
 
 }  // anonymous namespace
 
+void sort_merge_join::preprocessed_table::populate_nonnull_filter(
+                  rmm::cuda_stream_view stream,
+                  rmm::device_async_resource_ref mr)
+{
+  auto tbl = this->raw_tbl_view;
+  // remove rows that have nulls at any nesting level
+  // step 1: identify nulls at root level
+  auto [validity_mask, num_nulls] = cudf::bitmask_and(tbl, stream, mr);
+  // step 2: identify nulls at non-root levels
+  for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
+    auto col = tbl.column(col_idx);
+    if (col.type().id() == type_id::LIST) {
+      auto lcv     = lists_column_view(col);
+      auto offsets = lcv.offsets();
+      auto child   = lcv.child();
+
+      rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, mr);
+      rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, mr);
+      auto unique_end = thrust::unique_by_key_copy(
+        rmm::exec_policy(stream),
+        thrust::make_reverse_iterator(lcv.offsets_end()),
+        thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
+        thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
+        thrust::make_reverse_iterator(offsets_subset.end()),
+        thrust::make_reverse_iterator(child_positions.end()));
+      auto subset_size   = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()),
+                                          thrust::get<0>(unique_end));
+      auto subset_offset = offsets.size() - subset_size;
+
+      auto [reduced_validity_mask, num_nulls] =
+        detail::segmented_null_mask_reduction(lcv.child().null_mask(),
+                                              offsets_subset.data() + subset_offset,
+                                              offsets_subset.data() + offsets_subset.size() - 1,
+                                              offsets_subset.data() + subset_offset + 1,
+                                              null_policy::INCLUDE,
+                                              std::nullopt,
+                                              stream,
+                                              mr);
+
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(0) + subset_size,
+        [validity_mask         = static_cast<bitmask_type*>(validity_mask.data()),
+         reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
+         child_positions       = child_positions.begin() + subset_offset] __device__(auto idx) {
+          if (!bit_is_set(reduced_validity_mask, idx))
+            clear_bit(validity_mask, child_positions[idx]);
+        });
+    }
+  }
+  this->raw_num_nulls =
+    null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
+  this->raw_validity_mask = std::move(validity_mask);
+}
+
+void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  // construct bool column to apply mask
+  cudf::scalar_type_t<bool> true_scalar(true);
+  auto bool_mask = cudf::make_column_from_scalar(true_scalar, raw_tbl_view.num_rows(), stream, mr);
+  CUDF_EXPECTS(raw_validity_mask.has_value() && raw_num_nulls.has_value(), "Something went wrong while dropping nulls in the raw tables");
+  bool_mask->set_null_mask(raw_validity_mask.value(), raw_num_nulls.value(), stream);
+
+  tbl = apply_boolean_mask(raw_tbl_view, *bool_mask, stream, mr);
+  tbl_view = tbl.value()->view();
+}
+
+void sort_merge_join::preprocessed_table::preprocess_raw_table(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  populate_nonnull_filter(stream, mr);
+  apply_nonnull_filter(stream, mr);
+}
+
 void sort_merge_join::preprocess_tables(table_view const left,
                   table_view const right,
                   null_equality compare_nulls,
@@ -525,87 +598,21 @@ void sort_merge_join::preprocess_tables(table_view const left,
                   rmm::device_async_resource_ref mr)
 {
   if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left_view = left;
-    preprocessed_right_view = right;
-    preprocessed_left = std::nullopt;
-    preprocessed_right = std::nullopt;
+    ptleft.tbl_view = left;
+    ptright.tbl_view = right;
   }
 
-  auto preprocess_table = [stream, mr](table_view const& tbl) {
-    // remove rows that have nulls at any nesting level
-    // step 1: identify nulls at root level
-    auto [validity_mask, num_nulls] = cudf::bitmask_and(tbl, stream, mr);
-    // step 2: identify nulls at non-root levels
-    for (size_type col_idx = 0; col_idx < tbl.num_columns(); col_idx++) {
-      auto col = tbl.column(col_idx);
-      if (col.type().id() == type_id::LIST) {
-        auto lcv     = lists_column_view(col);
-        auto offsets = lcv.offsets();
-        auto child   = lcv.child();
-
-        rmm::device_uvector<int32_t> offsets_subset(offsets.size(), stream, mr);
-        rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, mr);
-        auto unique_end = thrust::unique_by_key_copy(
-          rmm::exec_policy(stream),
-          thrust::make_reverse_iterator(lcv.offsets_end()),
-          thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
-          thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
-          thrust::make_reverse_iterator(offsets_subset.end()),
-          thrust::make_reverse_iterator(child_positions.end()));
-        auto subset_size   = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()),
-                                            thrust::get<0>(unique_end));
-        auto subset_offset = offsets.size() - subset_size;
-
-        auto [reduced_validity_mask, num_nulls] =
-          detail::segmented_null_mask_reduction(lcv.child().null_mask(),
-                                                offsets_subset.data() + subset_offset,
-                                                offsets_subset.data() + offsets_subset.size() - 1,
-                                                offsets_subset.data() + subset_offset + 1,
-                                                null_policy::INCLUDE,
-                                                std::nullopt,
-                                                stream,
-                                                mr);
-
-        thrust::for_each(
-          rmm::exec_policy(stream),
-          thrust::make_counting_iterator(0),
-          thrust::make_counting_iterator(0) + subset_size,
-          [validity_mask         = static_cast<bitmask_type*>(validity_mask.data()),
-           reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
-           child_positions       = child_positions.begin() + subset_offset] __device__(auto idx) {
-            if (!bit_is_set(reduced_validity_mask, idx))
-              clear_bit(validity_mask, child_positions[idx]);
-          });
-      }
-    }
-    // step 3: construct bool column to apply mask
-    cudf::scalar_type_t<bool> true_scalar(true);
-    auto bool_mask = cudf::make_column_from_scalar(true_scalar, tbl.num_rows(), stream, mr);
-    num_nulls =
-      null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
-    bool_mask->set_null_mask(std::move(validity_mask), num_nulls);
-
-    auto non_null_tbl = apply_boolean_mask(tbl, *bool_mask, stream, mr);
-    return non_null_tbl;
-  };
-
-  preprocessed_left = preprocess_table(left);
-  preprocessed_right = preprocess_table(right);
-  preprocessed_left_view = preprocessed_left->view();
-  preprocessed_right_view = preprocessed_right->view();
+  ptleft.preprocess_raw_table(stream, mr);
+  ptright.preprocess_raw_table(stream, mr);
 }
 
-std::unique_ptr<column> sort_merge_join::sort(table_view const& tbl,
-                                                                 rmm::cuda_stream_view stream,
-                                                                 rmm::device_async_resource_ref mr)
+void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  std::vector<cudf::order> column_order(tbl.num_columns(), cudf::order::ASCENDING);
-  std::vector<cudf::null_order> null_precedence(tbl.num_columns(), cudf::null_order::BEFORE);
-  auto sorted_tbl_order_col = cudf::sorted_order(tbl, column_order, null_precedence, stream, mr);
-
-  return std::move(sorted_tbl_order_col);
+  std::vector<cudf::order> column_order(tbl_view.num_columns(), cudf::order::ASCENDING);
+  std::vector<cudf::null_order> null_precedence(tbl_view.num_columns(), cudf::null_order::BEFORE);
+  this->tbl_sorted_order = cudf::sorted_order(tbl_view, column_order, null_precedence, stream, mr);
 }
 
 
@@ -613,13 +620,97 @@ sort_merge_join::sort_merge_join(table_view const &left, bool is_left_sorted, ta
                   null_equality compare_nulls,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr) {
+
+  // Sanity checks
+  CUDF_EXPECTS(left.num_columns() == right.num_columns(),
+               "Number of columns must match for a join");
+
+  ptleft.raw_tbl_view = left;
+  ptright.raw_tbl_view = right;
+  this->compare_nulls = compare_nulls;
   preprocess_tables(left, right, compare_nulls, stream, mr);
+
   if(!is_left_sorted) {
-    preprocessed_left_sorted_order = sort(preprocessed_left_view, stream, mr);
+    ptleft.get_sorted_order(stream, mr); 
   }
   if(!is_right_sorted) {
-    preprocessed_right_sorted_order = sort(preprocessed_right_view, stream, mr);
+    ptright.get_sorted_order(stream, mr); 
   }
+}
+
+rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_raw(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  CUDF_EXPECTS(raw_validity_mask.has_value() && raw_num_nulls.has_value(), "Mapping is not possible");
+  rmm::device_uvector<size_type> tbl_mapping(raw_tbl_view.num_rows() - raw_num_nulls.value(), stream, mr);
+  thrust::copy_if(rmm::exec_policy(stream),
+                  thrust::counting_iterator<cudf::size_type>(0),
+                  thrust::counting_iterator<cudf::size_type>(raw_tbl_view.num_rows()),
+                  tbl_mapping.begin(),
+                  [mask = static_cast<bitmask_type*>(raw_validity_mask.value().data())] __device__(
+                    size_type idx) { return cudf::bit_is_set(mask, idx); });
+  return tbl_mapping;
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::postprocess_indices(
+                    std::unique_ptr<rmm::device_uvector<size_type>> smaller_indices,
+                    std::unique_ptr<rmm::device_uvector<size_type>> larger_indices,
+                    null_equality compare_nulls,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
+{
+  bool is_left_smaller           = ptleft.tbl_view.num_rows() < ptright.tbl_view.num_rows();
+  if (compare_nulls == null_equality::EQUAL) {
+    if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
+    return {std::move(larger_indices), std::move(smaller_indices)};
+  }
+
+  auto left_mapping  = ptleft.map_tbl_to_raw(stream, mr);
+  auto right_mapping = ptright.map_tbl_to_raw(stream, mr);
+
+  if (is_left_smaller) {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      smaller_indices->begin(),
+      smaller_indices->end(),
+      smaller_indices->begin(),
+      [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+    thrust::transform(
+      rmm::exec_policy(stream),
+      larger_indices->begin(),
+      larger_indices->end(),
+      larger_indices->begin(),
+      [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
+    return {std::move(smaller_indices), std::move(larger_indices)};
+  }
+  thrust::transform(
+    rmm::exec_policy(stream),
+    smaller_indices->begin(),
+    smaller_indices->end(),
+    smaller_indices->begin(),
+    [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    larger_indices->begin(),
+    larger_indices->end(),
+    larger_indices->begin(),
+    [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+  return {std::move(larger_indices), std::move(smaller_indices)};
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+
+  // we passed pre-sorted tables
+  if(!ptleft.tbl_sorted_order.has_value()) {
+    cudf::merge obj(ptleft.tbl_view, thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + ptleft.tbl_view.num_rows(), ptright.tbl_view, thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + ptright.tbl_view.num_rows());
+    auto [smaller_indices, larger_indices] = obj(stream, mr);
+    return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), compare_nulls, stream, mr);
+  }
+  cudf::merge obj(ptleft.tbl_view, ptleft.tbl_sorted_order.value()->view().begin<size_type>(), ptleft.tbl_sorted_order.value()->view().end<size_type>(), ptright.tbl_view, ptright.tbl_sorted_order.value()->view().begin<size_type>(), ptright.tbl_sorted_order.value()->view().end<size_type>());
+  auto [smaller_indices, larger_indices] = obj(stream, mr);
+  return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), compare_nulls, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -649,7 +740,7 @@ sort_merge_inner_join(table_view const& left,
   auto& sorted_larger_order_col = !is_left_smaller ? sorted_left_order_col : sorted_right_order_col;
 
   auto [smaller_indices, larger_indices] =
-    merge(smaller,
+    local_merge(smaller,
           sorted_smaller_order_col->view().begin<size_type>(),
           sorted_smaller_order_col->view().end<size_type>(),
           larger,
@@ -692,7 +783,7 @@ merge_inner_join(table_view const& sorted_left,
   auto& larger  = !is_sorted_left_smaller ? sorted_left : sorted_right;
 
   auto [smaller_indices, larger_indices] =
-    merge(smaller,
+    local_merge(smaller,
           thrust::make_counting_iterator(0),
           thrust::make_counting_iterator(0) + smaller.num_rows(),
           larger,

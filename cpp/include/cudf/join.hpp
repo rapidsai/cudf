@@ -1309,43 +1309,5 @@ std::size_t conditional_left_anti_join_size(
   ast::expression const& binary_predicate,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-class sort_merge_join {
- public:
-  sort_merge_join(table_view const &left, bool is_left_sorted, table_view const &right, bool is_right_sorted,
-                    null_equality compare_nulls,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr);
- private:
-  table_view preprocessed_left_view;
-  table_view preprocessed_right_view;
-  std::optional<std::unique_ptr<table>> preprocessed_left = std::nullopt;
-  std::optional<std::unique_ptr<table>> preprocessed_right = std::nullopt;
-  std::optional<std::unique_ptr<column>> preprocessed_left_sorted_order = std::nullopt;
-  std::optional<std::unique_ptr<column>> preprocessed_right_sorted_order = std::nullopt;
-
-  void preprocess_tables(table_view const left,
-                  table_view const right,
-                  null_equality compare_nulls,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr);
-
-  std::unique_ptr<column> sort(table_view const& tbl, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
-
-  template <typename SmallerIt, typename LargerIt>
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  merge(table_view const& smaller,
-        SmallerIt sorted_smaller_order_begin,
-        SmallerIt sorted_smaller_order_end,
-        table_view const& larger,
-        LargerIt sorted_larger_order_begin,
-        LargerIt sorted_larger_order_end,
-        null_equality compare_nulls,
-        rmm::cuda_stream_view stream,
-        rmm::device_async_resource_ref mr);
-  
-};
-
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
