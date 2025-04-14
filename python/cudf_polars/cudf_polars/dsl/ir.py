@@ -57,6 +57,7 @@ __all__ = [
     "Filter",
     "GroupBy",
     "HConcat",
+    "HConcatBcast",
     "HStack",
     "Join",
     "MapFunction",
@@ -2022,4 +2023,23 @@ class HConcat(IR):
                     for df in dfs
                 )
             )
+        )
+
+
+class HConcatBcast(IR):
+    """Concatenate dataframes horizontally with broadcasting."""
+
+    __slots__ = ()
+    _non_child = ("schema",)
+
+    def __init__(self, schema: Schema, *children: IR):
+        self.schema = schema
+        self._non_child_args = ()
+        self.children = children
+
+    @classmethod
+    def do_evaluate(cls, *dfs: DataFrame) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        return DataFrame(
+            broadcast(*itertools.chain.from_iterable(df.columns for df in dfs))
         )
