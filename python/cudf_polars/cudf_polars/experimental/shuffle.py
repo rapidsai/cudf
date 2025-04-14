@@ -35,7 +35,7 @@ _SHUFFLE_METHODS = ("rapidsmpf", "tasks")
 
 
 # Experimental rapidsmpf shuffler integration
-class RMPIntegration:  # pragma: no cover
+class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
@@ -263,7 +263,7 @@ def _(
                 shuffle_on,
                 partition_info[ir.children[0]].count,
                 partition_info[ir].count,
-                RMPIntegration,
+                RMPFIntegration,
             )
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed
