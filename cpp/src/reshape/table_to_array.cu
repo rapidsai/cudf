@@ -104,8 +104,8 @@ void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream
   auto const item_size   = sizeof(T);
   auto* base_ptr         = static_cast<cuda::std::byte*>(output);
 
-  std::vector<void*> h_srcs(num_columns);
-  std::vector<void*> h_dsts(num_columns);
+  auto h_srcs = make_host_vector<void*>(num_columns, stream);
+  auto h_dsts = make_host_vector<void*>(num_columns, stream);
 
   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
                "All columns must have the same data type",
