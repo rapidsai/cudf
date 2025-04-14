@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>

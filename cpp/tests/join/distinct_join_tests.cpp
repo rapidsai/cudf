@@ -20,7 +20,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
