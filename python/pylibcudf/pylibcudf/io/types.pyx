@@ -455,10 +455,18 @@ cdef class SourceInfo:
 
     Parameters
     ----------
-    sources : List[Union[str, os.PathLike, bytes, io.BytesIO, DataSource]]
-        A homogeneous list of sources to read from.
-
-        Mixing different types of sources will raise a `ValueError`.
+    sources : List[
+        Union[
+            str,
+            os.PathLike,
+            bytes,
+            io.BytesIO,
+            DataSource,
+            rmm.DeviceBuffer,
+        ]
+    ]
+        A homogeneous list of sources to read from. Mixing different types
+        of sources will raise a `ValueError`.
     """
     # Regular expression that match remote file paths supported by libcudf
     _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
