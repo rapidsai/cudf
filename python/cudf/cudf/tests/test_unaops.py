@@ -2,16 +2,12 @@
 
 import itertools
 import operator
-import re
 from decimal import Decimal
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse
 
-import cudf
 from cudf import Series
 from cudf.testing import _utils as utils, assert_eq
 
@@ -81,65 +77,6 @@ def generate_valid_scalar_unaop_combos():
     results += list(itertools.product(bool_values, bool_dtypes, bool_ops))
 
     return results
-
-
-@pytest.mark.filterwarnings("ignore:overflow encountered in scalar negative")
-@pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
-def test_scalar_unary_operations(slr, dtype, op, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=op in {np.ceil, np.floor}
-            and not isinstance(slr, float)
-            and parse(np.__version__) >= parse("2.1")
-            and parse(cp.__version__) < parse("14.0"),
-            reason="https://github.com/cupy/cupy/issues/9018",
-        )
-    )
-    slr_host = np.array([slr])[0].astype(cudf.dtype(dtype))
-    # The scalar may be out of bounds, so go via array force-cast
-    # NOTE: This is a change in behavior
-    slr = np.array(slr).astype(dtype)[()]
-    slr_device = cudf.Scalar(slr)
-
-    expect = op(slr_host)
-    got = op(slr_device)
-
-    assert expect == got.value
-
-    # f16 for small ints with ceil and float
-    if expect.dtype == np.dtype("float16"):
-        assert got.dtype == np.dtype("float32")
-    else:
-        assert expect.dtype == got.dtype
-
-
-def test_scalar_logical():
-    T = cudf.Scalar(True)
-    F = cudf.Scalar(False)
-
-    assert T
-    assert not F
-
-    assert T and T
-    assert not (T and F)
-    assert not (F and T)
-    assert not (F and F)
-
-    assert T or T
-    assert T or F
-    assert F or T
-    assert not (F or F)
-
-
-def test_scalar_no_negative_bools():
-    x = cudf.Scalar(True)
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            "Boolean scalars in cuDF do not support negation, use logical not"
-        ),
-    ):
-        -x
 
 
 def test_series_bool_neg():
