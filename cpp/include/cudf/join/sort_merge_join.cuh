@@ -166,14 +166,6 @@ class sort_merge_join {
     void get_sorted_order(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
     rmm::device_uvector<size_type> map_tbl_to_raw(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
   };
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  postprocess_indices(
-                      std::unique_ptr<rmm::device_uvector<size_type>> smaller_indices,
-                      std::unique_ptr<rmm::device_uvector<size_type>> larger_indices,
-                      null_equality compare_nulls,
-                      rmm::cuda_stream_view stream,
-                      rmm::device_async_resource_ref mr);
  private:
   preprocessed_table ptleft;
   preprocessed_table ptright;
@@ -184,6 +176,14 @@ class sort_merge_join {
                   null_equality compare_nulls,
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr);
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  postprocess_indices(
+                      std::unique_ptr<rmm::device_uvector<size_type>> smaller_indices,
+                      std::unique_ptr<rmm::device_uvector<size_type>> larger_indices,
+                      null_equality compare_nulls,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr);
 };
 
 template <typename Iterator>

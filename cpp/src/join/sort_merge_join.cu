@@ -20,13 +20,12 @@
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/sort_merge_join.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/sort_merge_join.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
