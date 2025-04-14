@@ -491,4 +491,77 @@ TEST_F(StringOperationTest, MixedTypes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(StringOperationTest, Output)
+{
+  auto a = cudf::test::strings_column_wrapper{"this", "b", "c", "d", "e", "f"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "is", "dd", "ddd", "e", "fff"};
+  auto c = cudf::test::strings_column_wrapper{"a", "b", "the", "dddd", "e", "fff"};
+  auto d = cudf::test::strings_column_wrapper{"a", "b", "d", "largest", "lexicographical", "test"};
+
+  std::string cuda = R"***(
+    __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b, cudf::string_view c, cudf::string_view d){
+      *out =  std::max(std::max(std::max(a, b), c), d);
+    }
+    )***";
+
+  auto expected =
+    cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
+  auto result = cudf::transform({a, b, c, d},
+                                cuda,
+                                cudf::data_type(cudf::type_id::STRING),
+                                false,
+                                cudf::transform_type::STRING_VIEW);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, StringConcat)
+{
+  auto first_name =
+    cudf::test::strings_column_wrapper{"John", "Mia", "Abd", "Mendes", "Arya", "John"};
+  auto last_name =
+    cudf::test::strings_column_wrapper{"Doe", "Folk", "Louis", "Xi", "Serenity", "Scott"};
+  auto offsets = cudf::test::fixed_width_column_wrapper<int64_t>{0, 100, 200, 300, 400, 500};
+  auto sizes   = cudf::test::fixed_width_column_wrapper<int64_t>{100, 100, 100, 100, 100, 100};
+  rmm::device_buffer scratch(100 * 6, cudf::get_default_stream());
+
+  std::string cuda = R"***(
+__device__ void transform(cudf::string_view* out,
+                          cudf::string_view first_name,
+                          cudf::string_view last_name,
+                          int64_t offset,
+                          int64_t size,
+                          void* scratch)
+{
+  auto begin                = reinterpret_cast<char*>(scratch) + offset;
+  [[maybe_unused]] auto end = begin + size;
+  auto it                   = begin;
+
+  // assume the scratch buffer is large enough based on statistics
+
+  memcpy(it, first_name.data(), first_name.size_bytes());
+  it += first_name.size_bytes();
+
+  memcpy(it, " ", 1);
+  it += 1;
+
+  memcpy(it, last_name.data(), last_name.size_bytes());
+  it += last_name.size_bytes();
+
+  *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - begin)};
+}
+    )***";
+
+  auto expected = cudf::test::strings_column_wrapper{
+    "John Doe", "Mia Folk", "Abd Louis", "Mendes Xi", "Arya Serenity", "John Scott"};
+  auto result = cudf::transform({first_name, last_name, offsets, sizes},
+                                cuda,
+                                cudf::data_type(cudf::type_id::STRING),
+                                false,
+                                cudf::transform_type::STRING_VIEW,
+                                {scratch.data()});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 }  // namespace transformation

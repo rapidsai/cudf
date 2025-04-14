@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/raw_column_device_view.cuh>
+#include <cudf/jit/raw_span.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -41,25 +42,43 @@ struct column_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* outputs,
                                            [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
-    return views[index].element<T>(row);
+    return outputs[index].element<T>(row);
   }
 
-  static __device__ decltype(auto) element(cudf::raw_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::raw_column_device_view const* inputs,
                                            [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
-    return views[index].element<T>(row);
+    return inputs[index].element<T>(row);
   }
 
-  static __device__ void assign(cudf::raw_mutable_column_device_view const* views,
+  static __device__ void assign(cudf::raw_mutable_column_device_view const* outputs,
                                 cudf::size_type row,
                                 T value)
   {
-    views[index].assign<T>(row, value);
+    outputs[index].assign<T>(row, value);
+  }
+};
+
+template <typename T, int32_t Index>
+struct span_accessor {
+  using type                     = T;
+  static constexpr int32_t index = Index;
+
+  static __device__ type& element(raw_span<T> const* spans,
+                                  [[maybe_unused]] void* const* user_data,
+                                  cudf::size_type row)
+  {
+    return spans[index][row];
+  }
+
+  static __device__ void assign(raw_span<T> const* outputs, cudf::size_type row, T value)
+  {
+    outputs[index][row] = value;
   }
 };
 
@@ -68,24 +87,11 @@ struct user_data_accessor {
   using type                     = void*;
   static constexpr int32_t index = Index;
 
-  static __device__ void* element([[maybe_unused]] cudf::mutable_column_device_view const* views,
+  static __device__ void* element([[maybe_unused]] cudf::raw_column_device_view const* inputs,
                                   void* const* user_data,
                                   [[maybe_unused]] cudf::size_type row)
   {
     return user_data[index];
-  }
-
-  static __device__ void* element([[maybe_unused]] cudf::column_device_view const* views,
-                                  void* const* user_data,
-                                  [[maybe_unused]] cudf::size_type row)
-  {
-    return user_data[index];
-  }
-
-  static __device__ void assign([[maybe_unused]] cudf::mutable_column_device_view const* views,
-                                [[maybe_unused]] cudf::size_type row,
-                                [[maybe_unused]] type value)
-  {
   }
 };
 
@@ -94,30 +100,30 @@ struct scalar {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
-  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* outputs,
                                            void* const* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(views, user_data, 0);
+    return Accessor::element(outputs, user_data, 0);
   }
 
-  static __device__ decltype(auto) element(cudf::raw_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::raw_column_device_view const* inputs,
                                            void* const* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(views, user_data, 0);
+    return Accessor::element(inputs, user_data, 0);
   }
 
-  static __device__ void assign(cudf::raw_mutable_column_device_view const* views,
+  static __device__ void assign(cudf::raw_mutable_column_device_view const* outputs,
                                 cudf::size_type row,
                                 type value)
   {
-    return Accessor::assign(views, 0, value);
+    return Accessor::assign(outputs, 0, value);
   }
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::raw_mutable_column_device_view const* output,
+CUDF_KERNEL void kernel(cudf::raw_mutable_column_device_view const* outputs,
                         cudf::raw_column_device_view const* inputs,
                         void* const* user_data)
 {
@@ -126,15 +132,16 @@ CUDF_KERNEL void kernel(cudf::raw_mutable_column_device_view const* output,
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
-  thread_index_type const size   = output->size();
+  thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(&Out::element(output, i), In::element(inputs, user_data, i)...);
+    GENERIC_TRANSFORM_OP(&Out::element(outputs, user_data, i),
+                         In::element(inputs, user_data, i)...);
   }
 }
 
 template <typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::raw_mutable_column_device_view const* output,
+CUDF_KERNEL void fixed_point_kernel(cudf::raw_mutable_column_device_view const* outputs,
                                     cudf::raw_column_device_view const* inputs,
                                     void* const* user_data)
 {
@@ -143,36 +150,19 @@ CUDF_KERNEL void fixed_point_kernel(cudf::raw_mutable_column_device_view const* 
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
-  thread_index_type const size   = output->size();
-  auto const output_scale        = static_cast<numeric::scale_type>(output->type().scale());
+  thread_index_type const size   = outputs[0].size();
+  auto const output_scale        = static_cast<numeric::scale_type>(outputs[0].type().scale());
 
   for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
     GENERIC_TRANSFORM_OP(&result, In::element(inputs, user_data, i)...);
-    Out::assign(output, i, result);
+    Out::assign(outputs, i, result);
   }
 }
 
-template <typename... In>
-CUDF_KERNEL void substr_kernel(cudf::device_span<cudf::string_view>* output,
-                               cudf::column_device_view const* inputs,
-                               void* const* user_data)
-{
-  // cannot use global_thread_id utility due to a JIT build issue by including
-  // the `cudf/detail/utilities/cuda.cuh` header
-  auto const block_size          = static_cast<thread_index_type>(blockDim.x);
-  thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
-  thread_index_type const stride = block_size * gridDim.x;
-  thread_index_type const size   = output->size();
-
-  for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(&(*output)[i], In::element(inputs, user_data, i)...);
-  }
-}
-
-template <typename... In>
-CUDF_KERNEL void void_kernel(cudf::column_device_view const* base,
-                             cudf::column_device_view const* inputs,
+template <typename Out, typename... In>
+CUDF_KERNEL void span_kernel(raw_span<typename Out::type> const* outputs,
+                             cudf::raw_column_device_view const* inputs,
                              void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
@@ -180,10 +170,11 @@ CUDF_KERNEL void void_kernel(cudf::column_device_view const* base,
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
   thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
   thread_index_type const stride = block_size * gridDim.x;
-  thread_index_type const size   = base->size();
+  thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(In::element(inputs, user_data, i)...);
+    GENERIC_TRANSFORM_OP(&Out::element(outputs, user_data, i),
+                         In::element(inputs, user_data, i)...);
   }
 }
 

@@ -24,6 +24,12 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
+
+enum class transform_type : int32_t {
+  COLUMN      = 0,  ///< A transforms that outputs fixed-width types
+  STRING_VIEW = 1   ///< A transform that outputs string-views that should be converted to strings
+};
+
 /**
  * @addtogroup transformation_transform
  * @{
@@ -60,8 +66,10 @@ std::unique_ptr<column> transform(
   std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  transform_type type                 = transform_type::COLUMN,
+  std::vector<void*> const& user_data = {},
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
