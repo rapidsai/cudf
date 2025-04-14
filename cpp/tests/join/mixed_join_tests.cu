@@ -20,7 +20,8 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -31,7 +32,6 @@
 #include <thrust/sort.h>
 
 #include <algorithm>
-#include <iostream>
 #include <numeric>
 #include <random>
 #include <stdexcept>
