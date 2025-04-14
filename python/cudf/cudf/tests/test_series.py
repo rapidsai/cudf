@@ -1791,6 +1791,7 @@ def test_series_truncate_datetimeindex():
         pd.Series([0.0, 1.0, None, 10.0]),
         [None, None, None, None],
         [np.nan, None, -1, 2, 3],
+        [1, 2],
     ],
 )
 @pytest.mark.parametrize(
@@ -1805,6 +1806,7 @@ def test_series_truncate_datetimeindex():
         [None, None, None],
         ["0", "12", "14"],
         ["0", "12", "14", "a"],
+        [1.0, 2.5],
     ],
 )
 def test_isin_numeric(data, values):
