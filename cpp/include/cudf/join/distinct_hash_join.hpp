@@ -72,9 +72,9 @@ class distinct_hash_join {
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  distinct_hash_join(cudf::table_view const& build,
-                     null_equality compare_nulls  = null_equality::EQUAL,
-                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+  [[deprecated]] distinct_hash_join(cudf::table_view const& build,
+                                    null_equality compare_nulls  = null_equality::EQUAL,
+                                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)

@@ -107,10 +107,10 @@ class hash_join {
    *
    * @deprecated Deprecated constructor. Use the new load factor overload instead.
    */
-  hash_join(cudf::table_view const& build,
-            nullable_join has_nulls,
-            null_equality compare_nulls,
-            rmm::cuda_stream_view stream = cudf::get_default_stream());
+  [[deprecated]] hash_join(cudf::table_view const& build,
+                           nullable_join has_nulls,
+                           null_equality compare_nulls,
+                           rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
