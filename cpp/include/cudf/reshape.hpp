@@ -21,6 +21,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <cuda/functional>
 
 #include <memory>
 
@@ -110,20 +113,24 @@ std::unique_ptr<column> byte_cast(
 /**
  * @brief Copies a table into a contiguous column-major device array.
  *
- * This function copies a table_view with columns of the same type
- * into a 2D device array in column-major order. The output buffer must be
- * preallocated and large enough to hold `num_rows * num_columns` values of `output_dtype`.
+ * This function copies a `table_view` with columns of the same fixed-width type
+ * into a 2D device array stored in column-major order.
  *
- * @throws cudf::logic_error if column types do not match `output_dtype`
+ * The output buffer must be preallocated and passed as a `device_span` using
+ * a `device_span<cuda::std::byte>`. It must be large enough to hold
+ * `num_rows * num_columns * size_of(output_dtype)` bytes.
+ *
+ * @throws cudf::logic_error if columns do not all have the same type as `output_dtype`
  * @throws cudf::logic_error if `output_dtype` is not a fixed-width type
+ * @throws std::invalid_argument if the output span is too small
  *
  * @param input A table with fixed-width, non-nullable columns of the same type
- * @param output Pointer to device memory sized to hold `num_rows * num_columns` values
- * @param output_dtype The data type of the output array
+ * @param output A span representing preallocated device memory for the output
+ * @param output_dtype The data type of the output elements
  * @param stream CUDA stream used for memory operations
  */
 void table_to_array(table_view const& input,
-                    void* output,
+                    device_span<cuda::std::byte> output,
                     cudf::data_type output_dtype,
                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 

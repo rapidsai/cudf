@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -39,81 +40,31 @@ namespace cudf {
 namespace detail {
 namespace {
 
-// template <typename T>
-// void table_to_array_impl(cudf::table_view const& input,
-//                             void* output,
-//                             rmm::cuda_stream_view stream)
-// {
-//   auto const num_columns = input.num_columns();
-//   auto const num_rows    = input.num_rows();
-//   auto const item_size   = sizeof(T);
-
-//   std::vector<void*> dsts(num_columns);
-//   std::vector<void*> srcs(num_columns);
-//   std::vector<size_t> sizes(num_columns, item_size * num_rows);
-
-//   auto* base_ptr = static_cast<uint8_t*>(output);
-
-//   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
-//               "All columns must have the same data type",
-//               cudf::data_type_error);
-//   CUDF_EXPECTS( !cudf::has_nulls(input),
-//               "All columns must contain no nulls",
-//               std::invalid_argument);
-
-//   std::transform(input.begin(), input.end(), srcs.begin(),
-//   [](auto const& col) {
-//     return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
-//   });
-//   for (int i = 0; i < num_columns; ++i) {
-//     dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
-//   }
-
-// #if defined(CUDA_VERSION) && CUDA_VERSION >= 12080
-//   // std::vector<cudaMemcpyAttributes> attrs(1);
-//   // attrs[0].srcAccessOrder = cudaMemcpySrcAccessOrderStream;
-//   // std::vector<size_t> attr_idxs(num_columns, 0);
-//   // size_t fail_idx = SIZE_MAX;
-
-//   // CUDF_CUDA_TRY(cudaMemcpyBatchAsync(dsts.data(),
-//   //                                     const_cast<void**>(srcs.data()),
-//   //                                     sizes.data(),
-//   //                                     num_columns,
-//   //                                     attrs.data(),
-//   //                                     attr_idxs.data(),
-//   //                                     attrs.size(),
-//   //                                     &fail_idx,
-//   //                                     stream.value()));
-//   for (int i = 0; i < num_columns; ++i) {
-//     CUDF_CUDA_TRY(
-//       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
-//   }
-// #else
-//   for (int i = 0; i < num_columns; ++i) {
-//     CUDF_CUDA_TRY(
-//       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDeviceToDevice, stream.value()));
-//   }
-// #endif
-// }
-
 template <typename T>
-void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream_view stream)
+void table_to_array_impl(table_view const& input,
+                         device_span<cuda::std::byte> output,
+                         rmm::cuda_stream_view stream)
 {
   auto const num_columns = input.num_columns();
   auto const num_rows    = input.num_rows();
   auto const item_size   = sizeof(T);
-  auto* base_ptr         = static_cast<cuda::std::byte*>(output);
+  auto const total_bytes = num_columns * num_rows * item_size;
 
-  auto h_srcs = make_host_vector<void*>(num_columns, stream);
-  auto h_dsts = make_host_vector<void*>(num_columns, stream);
-
+  CUDF_EXPECTS(output.size() >= total_bytes, "Output span is too small", std::invalid_argument);
   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
                "All columns must have the same data type",
                cudf::data_type_error);
   CUDF_EXPECTS(!cudf::has_nulls(input), "All columns must contain no nulls", std::invalid_argument);
+
+  auto* base_ptr = output.data();
+
+  auto h_srcs = make_host_vector<void*>(num_columns, stream);
+  auto h_dsts = make_host_vector<void*>(num_columns, stream);
+
   std::transform(input.begin(), input.end(), h_srcs.begin(), [](auto& col) {
     return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
   });
+
   for (int i = 0; i < num_columns; ++i) {
     h_dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
   }
@@ -136,7 +87,6 @@ void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream
                              stream.value());
 
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-
   cub::DeviceMemcpy::Batched(temp_storage.data(),
                              temp_storage_bytes,
                              d_srcs.begin(),
@@ -148,7 +98,7 @@ void table_to_array_impl(table_view const& input, void* output, rmm::cuda_stream
 
 struct table_to_array_dispatcher {
   table_view const& input;
-  void* output;
+  device_span<cuda::std::byte> output;
   rmm::cuda_stream_view stream;
 
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
@@ -167,11 +117,10 @@ struct table_to_array_dispatcher {
 }  // namespace
 
 void table_to_array(table_view const& input,
-                    void* output,
+                    device_span<cuda::std::byte> output,
                     data_type output_dtype,
                     rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(output != nullptr, "Output pointer cannot be null.", std::invalid_argument);
   CUDF_EXPECTS(
     input.num_columns() > 0, "Input must have at least one column.", std::invalid_argument);
 
@@ -182,7 +131,7 @@ void table_to_array(table_view const& input,
 }  // namespace detail
 
 void table_to_array(table_view const& input,
-                    void* output,
+                    device_span<cuda::std::byte> output,
                     data_type output_dtype,
                     rmm::cuda_stream_view stream)
 {

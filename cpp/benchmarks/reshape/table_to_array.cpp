@@ -18,6 +18,9 @@
 
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <cuda/functional>
 
 #include <nvbench/nvbench.cuh>
 
@@ -42,13 +45,15 @@ static void bench_table_to_array(nvbench::state& state)
   auto dtype      = cudf::data_type{cudf::type_id::INT32};
 
   rmm::device_buffer output(num_rows * num_cols * sizeof(int32_t), stream);
+  auto span = cudf::device_span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
+                                                 output.size());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.add_global_memory_reads<int32_t>(num_rows * num_cols);   // all bytes are read
   state.add_global_memory_writes<int32_t>(num_rows * num_cols);  // all bytes are written
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::table_to_array(input_view, output.data(), dtype, stream);
+    cudf::table_to_array(input_view, span, dtype, stream);
   });
 }
 
