@@ -29,7 +29,7 @@
 #include <type_traits>
 
 /**
- * @file raw_column_device_view.cuh
+ * @file column_device_view_base.cuh
  * @brief Column device view class definitions
  */
 
@@ -343,8 +343,8 @@ struct mutable_value_accessor;
  */
 class alignas(16) column_device_view_core : public detail::column_device_view_base {
  public:
-  column_device_view_core()                              = delete;
-  ~column_device_view_core()                             = default;
+  column_device_view_core()                               = delete;
+  ~column_device_view_core()                              = default;
   column_device_view_core(column_device_view_core const&) = default;  ///< Copy constructor
   column_device_view_core(column_device_view_core&&)      = default;  ///< Move constructor
   /**
@@ -388,15 +388,15 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @return A slice of this column
    */
   [[nodiscard]] CUDF_HOST_DEVICE column_device_view_core slice(size_type offset,
-                                                              size_type size) const noexcept
+                                                               size_type size) const noexcept
   {
     return column_device_view_core{this->type(),
-                                  size,
-                                  this->head(),
-                                  this->null_mask(),
-                                  this->offset() + offset,
-                                  static_cast<column_device_view_core*>(d_children),
-                                  this->num_child_columns()};
+                                   size,
+                                   this->head(),
+                                   this->null_mask(),
+                                   this->offset() + offset,
+                                   static_cast<column_device_view_core*>(d_children),
+                                   this->num_child_columns()};
   }
 
   /**
@@ -499,12 +499,12 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @param num_children The number of child columns
    */
   CUDF_HOST_DEVICE column_device_view_core(data_type type,
-                                          size_type size,
-                                          void const* data,
-                                          bitmask_type const* null_mask,
-                                          size_type offset,
-                                          column_device_view_core* children,
-                                          size_type num_children)
+                                           size_type size,
+                                           void const* data,
+                                           bitmask_type const* null_mask,
+                                           size_type offset,
+                                           column_device_view_core* children,
+                                           size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
       _num_children(num_children)
@@ -513,10 +513,10 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
 
  protected:
   column_device_view_core* d_children{};  ///< Array of `raw_column_device_view`
-                                         ///< objects in device memory.
-                                         ///< Based on element type, children
-                                         ///< may contain additional data
-  size_type _num_children{};             ///< The number of child columns
+                                          ///< objects in device memory.
+                                          ///< Based on element type, children
+                                          ///< may contain additional data
+  size_type _num_children{};              ///< The number of child columns
 };
 
 /**
@@ -530,8 +530,9 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   mutable_column_device_view_core()  = delete;
   ~mutable_column_device_view_core() = default;
   mutable_column_device_view_core(mutable_column_device_view_core const&) =
-    default;                                                                   ///< Copy constructor
-  mutable_column_device_view_core(mutable_column_device_view_core&&) = default;  ///< Move constructor
+    default;  ///< Copy constructor
+  mutable_column_device_view_core(mutable_column_device_view_core&&) =
+    default;  ///< Move constructor
   /**
    * @brief Copy assignment operator
    *
@@ -730,12 +731,12 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @param num_children The number of child columns
    */
   CUDF_HOST_DEVICE mutable_column_device_view_core(data_type type,
-                                                  size_type size,
-                                                  void const* data,
-                                                  bitmask_type const* null_mask,
-                                                  size_type offset,
-                                                  mutable_column_device_view_core* children,
-                                                  size_type num_children)
+                                                   size_type size,
+                                                   void const* data,
+                                                   bitmask_type const* null_mask,
+                                                   size_type offset,
+                                                   mutable_column_device_view_core* children,
+                                                   size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
       _num_children(num_children)
@@ -743,10 +744,10 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   }
 
   mutable_column_device_view_core* d_children{};  ///< Array of `raw_mutable_column_device_view`
-                                                 ///< objects in device memory.
-                                                 ///< Based on element type, children
-                                                 ///< may contain additional data
-  size_type _num_children{};                     ///< The number of child columns
+                                                  ///< objects in device memory.
+                                                  ///< Based on element type, children
+                                                  ///< may contain additional data
+  size_type _num_children{};                      ///< The number of child columns
 };
 
 }  // namespace CUDF_EXPORT cudf
