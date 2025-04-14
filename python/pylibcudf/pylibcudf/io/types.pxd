@@ -1,5 +1,4 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
-from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
