@@ -1044,6 +1044,9 @@ class DatetimeColumn(column.ColumnBase):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
+        if self.dtype_enum in {2} or arrow_type:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
@@ -1094,7 +1097,7 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable:
+        if arrow_type or nullable or self.dtype_enum in {2}:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(

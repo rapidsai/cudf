@@ -193,7 +193,7 @@ class TimeDeltaColumn(ColumnBase):
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
-        if arrow_type:
+        if self.dtype_enum == 2 or arrow_type:
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
             # Workaround for timedelta types until the following issue is fixed:

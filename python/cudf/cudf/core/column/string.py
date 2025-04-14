@@ -9,7 +9,6 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
 
     import cupy
     import numba.cuda
+    import pandas as pd
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -6132,11 +6132,11 @@ class StringColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if nullable and not arrow_type:
-            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            return pd.Index(pandas_array, copy=False)
-        else:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        # if nullable and not arrow_type:
+        #     pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+        #     return pd.Index(pandas_array, copy=False)
+        # else:
+        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:

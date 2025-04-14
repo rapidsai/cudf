@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -31,12 +30,13 @@ from cudf.utils.dtypes import (
     find_common_type,
     min_signed_type,
     min_unsigned_type,
-    np_dtypes_to_pandas_dtypes,
 )
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    import pandas as pd
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -698,26 +698,27 @@ class NumericalColumn(NumericalBaseColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type and nullable:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif arrow_type:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif (
-            nullable
-            and (
-                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
-                    self.dtype
-                )
-            )
-            is not None
-        ):
-            arrow_array = self.to_arrow()
-            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
-            return pd.Index(pandas_array, copy=False)
-        elif self.dtype.kind in set("iuf") and not self.has_nulls():
-            return pd.Index(self.values_host, copy=False)
-        else:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        # import pdb;pdb.set_trace()
+        # if arrow_type and nullable:
+        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        # elif arrow_type:
+        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        # elif (
+        #     nullable
+        #     and (
+        #         pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+        #             self.dtype
+        #         )
+        #     )
+        #     is not None
+        # ):
+        #     arrow_array = self.to_arrow()
+        #     pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
+        #     return pd.Index(pandas_array, copy=False)
+        # elif self.dtype.kind in set("iuf") and not self.has_nulls():
+        #     return pd.Index(self.values_host, copy=False)
+        # else:
+        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         if reduction_op in {"sum", "product"}:

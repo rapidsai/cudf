@@ -71,6 +71,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
+    np_dtypes_to_pandas_dtypes,
 )
 from cudf.utils.utils import (
     _array_ufunc,
@@ -651,11 +652,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
+        # elif nullable:
+        #     raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
-        if arrow_type:
+        # if self.dtype_enum == 1:
+        #     # Numpy
+
+        if arrow_type or self.dtype_enum == 2:
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+        elif (nullable or self.dtype_enum == 3) and (
+            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(self.dtype)
+        ) is not None:
+            pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)  # type: ignore[attr-defined]
+            return pd.Index(pandas_array, copy=False)
         else:
             return pd.Index(pa_array.to_pandas())
 
@@ -2710,18 +2719,21 @@ def as_column(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
         elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if cudf.get_option("mode.pandas_compatible"):
-                raise NotImplementedError("not supported")
+            dtype_enum = get_dtype_enum(arbitrary.dtype)
+            # if cudf.get_option("mode.pandas_compatible"):
+            #     raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
                 arbitrary = arbitrary.array
-            return as_column(
+            result = as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
                 dtype=dtype,
                 length=length,
             )
+            result.dtype_enum = dtype_enum
+            return result
         elif isinstance(
             arbitrary.dtype,
             (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),

@@ -2230,6 +2230,7 @@ def _process_metadata(
         if b"pandas" not in single_file:
             continue
         json_str = single_file[b"pandas"].decode("utf-8")
+
         meta = json.loads(json_str)
         file_is_range_index, index_col, column_index_type = _parse_metadata(
             meta
@@ -2261,6 +2262,12 @@ def _process_metadata(
                 df._data[col].dtype.precision = meta_data_per_column[col][
                     "metadata"
                 ]["precision"]
+            # if "numpy_type" in meta_data_per_column[col]:
+            #     df._data[col].dtype_enum = get_dtype_enum(
+            #         cudf.api.types.pandas_dtype(
+            #             meta_data_per_column[col]["numpy_type"]
+            #         )
+            #     )
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:
