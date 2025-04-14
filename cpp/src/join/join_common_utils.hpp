@@ -18,7 +18,6 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
-#include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <cuco/static_multimap.cuh>
