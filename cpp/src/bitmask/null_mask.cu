@@ -47,6 +47,8 @@
 #include <numeric>
 #include <type_traits>
 
+namespace cg = cooperative_groups;
+
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
 {
@@ -100,21 +102,34 @@ rmm::device_buffer create_null_mask(size_type size,
 }
 
 namespace {
+
+/**
+ * @brief Sets a range of bits in a null mask in parallel using the threads in cooperative group
+ *
+ * @tparam ThreadGroup Typename of the cooperative group (inferred)
+ *
+ * @param[out] destination Pointer to the null mask
+ * @param[in]  begin_bit The starting bit index (inclusive)
+ * @param[in]  end_bit The ending bit index (exclusive)
+ * @param[in]  valid Whether to set/unset the bits
+ * @param[in]  number_of_mask_words The total number of 32-bit words in the null mask
+ * @param[in]  group Cooperative group (1d grid or thread block)
+ */
+template <typename ThreadGroup>
 __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
-                                   thread_index_type initial_word_index,
-                                   thread_index_type stride,
                                    size_type begin_bit,
                                    size_type end_bit,
                                    bool valid,
-                                   size_type number_of_mask_words)
+                                   size_type number_of_mask_words,
+                                   ThreadGroup const& group)
 {
   auto x                            = destination + word_index(begin_bit);
   thread_index_type const last_word = word_index(end_bit) - word_index(begin_bit);
   bitmask_type fill_value           = valid ? 0xffff'ffff : 0;
 
-  for (thread_index_type destination_word_index = initial_word_index;
+  for (thread_index_type destination_word_index = group.thread_rank();
        destination_word_index < number_of_mask_words;
-       destination_word_index += stride) {
+       destination_word_index += group.num_threads()) {
     if (destination_word_index == 0 || destination_word_index == last_word) {
       bitmask_type mask = ~bitmask_type{0};
       if (destination_word_index == 0) {
@@ -138,16 +153,14 @@ CUDF_KERNEL void set_null_mask_bulk_kernel(
   cudf::device_span<bool const> valids,
   cudf::device_span<size_type const> numbers_of_mask_words)
 {
-  namespace cg = cooperative_groups;
-
   auto const block_rank = cg::this_grid().block_rank();
+  auto block            = cg::this_thread_block();
   set_null_mask_impl(destinations[block_rank],
-                     cg::this_thread_block().thread_rank(),
-                     cg::this_thread_block().size(),
                      begin_bits[block_rank],
                      end_bits[block_rank],
                      valids[block_rank],
-                     numbers_of_mask_words[block_rank]);
+                     numbers_of_mask_words[block_rank],
+                     block);
 }
 
 CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
@@ -156,13 +169,8 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                       bool valid,
                                       size_type number_of_mask_words)
 {
-  set_null_mask_impl(destination,
-                     grid_1d::global_thread_id(),
-                     cudf::detail::grid_1d::grid_stride(),
-                     begin_bit,
-                     end_bit,
-                     valid,
-                     number_of_mask_words);
+  auto grid = cg::this_grid();
+  set_null_mask_impl(destination, begin_bit, end_bit, valid, number_of_mask_words, grid);
 }
 }  // namespace
 

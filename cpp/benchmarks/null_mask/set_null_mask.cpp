@@ -58,7 +58,31 @@ void BM_setnullmask_bulk(benchmark::State& state)
     cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size * num_masks / 8);
+}
+
+class SetNullmaskLoop : public cudf::benchmark {};
+
+void BM_setnullmask_loop(benchmark::State& state)
+{
+  cudf::size_type const size{(cudf::size_type)state.range(0)};
+  cudf::size_type const num_masks{(cudf::size_type)state.range(1)};
+
+  std::vector<rmm::device_buffer> masks(num_masks);
+  std::vector<cudf::bitmask_type*> masks_ptr(num_masks);
+  for (cudf::size_type i = 0; i < num_masks; ++i) {
+    masks[i]     = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    masks_ptr[i] = static_cast<cudf::bitmask_type*>(masks[i].data());
+  }
+
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    for (auto i = 0; i < num_masks; ++i) {
+      cudf::set_null_mask(masks_ptr[i], 0, size, true);
+    }
+  }
+
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size * num_masks / 8);
 }
 
 #define NBM_BENCHMARK_DEFINE(name)                                                             \
@@ -68,17 +92,18 @@ void BM_setnullmask_bulk(benchmark::State& state)
     ->Range(1 << 10, 1 << 30)                                                                  \
     ->UseManualTime();
 
-#define NBM_BULK_BENCHMARK_DEFINE(name)                                     \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)         \
-  {                                                                         \
-    BM_setnullmask_bulk(state);                                             \
-  }                                                                         \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                                   \
-    ->ArgsProduct({                                                         \
-      benchmark::CreateRange(1 << 5, 1 << 20, 1 << 5), /* Powers of 1024 */ \
-      benchmark::CreateRange(1 << 2, 1 << 8, 1 << 2)   /* Powers of 4 */    \
-    })                                                                      \
+#define NBM_BULK_BENCHMARK_DEFINE(name)                                    \
+  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)        \
+  {                                                                        \
+    BM_setnullmask_bulk(state);                                            \
+  }                                                                        \
+  BENCHMARK_REGISTER_F(SetNullmask, name)                                  \
+    ->ArgsProduct({                                                        \
+      benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), /* Powers of 32 */ \
+      benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4)   /* Powers of 8 */  \
+    })                                                                     \
     ->UseManualTime();
 
 NBM_BENCHMARK_DEFINE(SetNullMaskKernel);
 NBM_BULK_BENCHMARK_DEFINE(SetNullMaskBulkKernel);
+NBM_BULK_BENCHMARK_DEFINE(SetNullMaskLoopKernel);
