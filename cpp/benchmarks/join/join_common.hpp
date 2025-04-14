@@ -24,7 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
