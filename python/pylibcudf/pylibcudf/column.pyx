@@ -7,6 +7,8 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
 )
 
+from libc.stdint cimport uintptr_t
+
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
@@ -97,7 +99,7 @@ cdef class OwnerWithCAI:
             # streams of the appropriate size. This matches what we currently get from
             # rmm.DeviceBuffer
             "typestr": "|u1",
-            "data": (<Py_ssize_t> cv.head[char](), False),
+            "data": (<uintptr_t> cv.head[char](), False),
             "version": 3,
         }
         return obj
@@ -121,7 +123,7 @@ cdef class OwnerMaskWithCAI:
             # streams of the appropriate size. This matches what we currently get from
             # rmm.DeviceBuffer
             "typestr": "|u1",
-            "data": (<Py_ssize_t> cv.null_mask(), False),
+            "data": (<uintptr_t> cv.null_mask(), False),
             "version": 3,
         }
         return obj
