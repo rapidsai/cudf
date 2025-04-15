@@ -37,7 +37,7 @@ writer_compression_statistics collect_compression_statistics(
       return res.status == compression_status::SUCCESS ? res.bytes_written : 0;
     }),
     0ul,
-    thrust::plus<size_t>());
+    cuda::std::plus<size_t>());
 
   auto input_size_with_status = [inputs, results, stream](compression_status status) {
     auto const zipped_begin =
@@ -52,7 +52,7 @@ writer_compression_statistics collect_compression_statistics(
         return thrust::get<1>(tup).status == status ? thrust::get<0>(tup).size() : 0;
       }),
       0ul,
-      thrust::plus<size_t>());
+      cuda::std::plus<size_t>());
   };
 
   return writer_compression_statistics{input_size_with_status(compression_status::SUCCESS),
