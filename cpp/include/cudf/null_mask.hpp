@@ -126,9 +126,9 @@ void set_null_mask(bitmask_type* bitmask,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
-                         cudf::host_span<size_type const> h_begin_bits,
-                         cudf::host_span<size_type const> h_end_bits,
-                         cudf::host_span<bool const> h_valids,
+                         cudf::host_span<size_type const> begin_bits,
+                         cudf::host_span<size_type const> end_bits,
+                         cudf::host_span<bool const> valids,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**

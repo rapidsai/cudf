@@ -178,32 +178,32 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
 
 // Set pre-allocated null masks of given bit ranges [begin_bit, end_bit) to valids, if valid==true,
 // or null, otherwise;
-void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
-                         cudf::host_span<size_type const> h_begin_bits,
-                         cudf::host_span<size_type const> h_end_bits,
-                         cudf::host_span<bool const> h_valids,
+void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
+                         cudf::host_span<size_type const> begin_bits,
+                         cudf::host_span<size_type const> end_bits,
+                         cudf::host_span<bool const> valids,
                          rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
-  auto const num_bitmasks = h_destinations.size();
+  auto const num_bitmasks = destinations.size();
 
-  CUDF_EXPECTS(num_bitmasks == h_begin_bits.size(),
+  CUDF_EXPECTS(num_bitmasks == begin_bits.size(),
                "Number of bitmasks and begin bits must be equal.");
-  CUDF_EXPECTS(num_bitmasks == h_end_bits.size(), "Number of bitmasks and end bits must be equal.");
-  CUDF_EXPECTS(num_bitmasks == h_valids.size(), "Number of bitmasks and valids must be equal.");
+  CUDF_EXPECTS(num_bitmasks == end_bits.size(), "Number of bitmasks and end bits must be equal.");
+  CUDF_EXPECTS(num_bitmasks == valids.size(), "Number of bitmasks and valids must be equal.");
 
   size_t average_nullmask_words = 0;
   auto h_number_of_mask_words   = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
-      CUDF_EXPECTS(h_begin_bits[i] >= 0, "Invalid range.");
-      CUDF_EXPECTS(h_begin_bits[i] <= h_end_bits[i], "Invalid bit range.");
+      CUDF_EXPECTS(begin_bits[i] >= 0, "Invalid range.");
+      CUDF_EXPECTS(begin_bits[i] <= end_bits[i], "Invalid bit range.");
       // Return 0 if bitmask is empty
-      if (h_begin_bits[i] == h_end_bits[i]) { return size_t{0}; }
+      if (begin_bits[i] == end_bits[i]) { return size_t{0}; }
       // Number of words in this bitmask
       auto const num_words =
-        num_bitmask_words(h_end_bits[i]) - h_begin_bits[i] / detail::size_in_bits<bitmask_type>();
+        num_bitmask_words(end_bits[i]) - begin_bits[i] / detail::size_in_bits<bitmask_type>();
       // Divide by num_bitmasks and update average here to avoid overflow
       average_nullmask_words +=
         cudf::util::div_rounding_up_safe<size_type>(num_words, num_bitmasks);
@@ -212,11 +212,11 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
 
   // Create device vectors from host spans
   auto const mr = rmm::mr::get_current_device_resource_ref();
-  auto destinations =
-    cudf::detail::make_device_uvector_async<bitmask_type*>(h_destinations, stream, mr);
-  auto const begin_bits = cudf::detail::make_device_uvector_async(h_begin_bits, stream, mr);
-  auto const end_bits   = cudf::detail::make_device_uvector_async(h_end_bits, stream, mr);
-  auto const valids     = cudf::detail::make_device_uvector_async(h_valids, stream, mr);
+  auto d_destinations =
+    cudf::detail::make_device_uvector_async<bitmask_type*>(destinations, stream, mr);
+  auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
+  auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);
+  auto const d_valids     = cudf::detail::make_device_uvector_async(valids, stream, mr);
   auto const number_of_mask_words =
     cudf::detail::make_device_uvector_async(h_number_of_mask_words, stream, mr);
 
@@ -231,7 +231,7 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
   block_size = std::min<size_t>(block_size, 1024);
 
   set_null_mask_bulk_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
-    destinations, begin_bits, end_bits, valids, number_of_mask_words);
+    d_destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
 
@@ -281,12 +281,12 @@ void set_null_mask(bitmask_type* bitmask,
 
 // Bulk set pre-allocated null masks to corresponding valid state in the corresponding bit ranges
 void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
-                         cudf::host_span<size_type const> h_begin_bits,
-                         cudf::host_span<size_type const> h_end_bits,
-                         cudf::host_span<bool const> h_valids,
+                         cudf::host_span<size_type const> begin_bits,
+                         cudf::host_span<size_type const> end_bits,
+                         cudf::host_span<bool const> valids,
                          rmm::cuda_stream_view stream)
 {
-  return detail::set_null_masks_bulk(destinations, h_begin_bits, h_end_bits, h_valids, stream);
+  return detail::set_null_masks_bulk(destinations, begin_bits, end_bits, valids, stream);
 }
 
 namespace detail {
