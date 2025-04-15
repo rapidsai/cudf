@@ -283,7 +283,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
     offsets_column->mutable_view().data<cudf::size_type>(),
     [strings_count] __device__(auto idx) { return strings_count; },
     cudf::size_type{0},
-    thrust::plus<cudf::size_type>());
+    cuda::std::plus<cudf::size_type>());
   return cudf::make_lists_column(strings_count,
                                  std::move(offsets_column),
                                  std::move(results),

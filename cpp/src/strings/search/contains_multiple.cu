@@ -213,7 +213,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
     auto keys_out  = first_bytes.begin();
     auto vals_out  = indices.begin();
     auto num_items = targets.size();
-    auto cmp_op    = thrust::less();
+    auto cmp_op    = cuda::std::less();
     auto sv        = stream.value();
 
     std::size_t tmp_bytes = 0;
