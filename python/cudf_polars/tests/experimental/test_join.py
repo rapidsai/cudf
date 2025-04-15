@@ -11,6 +11,7 @@ from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
@@ -93,7 +94,10 @@ def test_broadcast_join_limit(broadcast_join_limit):
     q = left.join(right, on="y", how="inner")
     shuffle_nodes = [
         type(node)
-        for node in lower_ir_graph(Translator(q._ldf.visit(), engine).translate_ir())[1]
+        for node in lower_ir_graph(
+            Translator(q._ldf.visit(), engine).translate_ir(),
+            ConfigOptions(engine.config),
+        )[1]
         if isinstance(node, Shuffle)
     ]
 

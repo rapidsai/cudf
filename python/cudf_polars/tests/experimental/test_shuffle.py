@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import copy
-
 import pytest
 
 import polars as pl
@@ -48,7 +46,7 @@ def test_hash_shuffle(df, engine):
 
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
-    options = ConfigOptions(copy.deepcopy(engine.config))
+    options = ConfigOptions(engine.config)
     qir1 = Shuffle(qir.schema, keys, options, qir)
 
     # Add second Shuffle node (on the same keys)
@@ -56,7 +54,7 @@ def test_hash_shuffle(df, engine):
 
     # Check that sequential shuffles on the same keys
     # are replaced with a single shuffle node
-    partition_info = lower_ir_graph(qir2)[1]
+    partition_info = lower_ir_graph(qir2, options)[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 1
 
     # Add second Shuffle node (on different keys)
@@ -65,7 +63,7 @@ def test_hash_shuffle(df, engine):
 
     # Check that we have an additional shuffle
     # node after shuffling on different keys
-    partition_info = lower_ir_graph(qir3)[1]
+    partition_info = lower_ir_graph(qir3, options)[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that streaming evaluation works

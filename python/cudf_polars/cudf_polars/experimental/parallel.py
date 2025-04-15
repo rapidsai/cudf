@@ -22,7 +22,6 @@ from cudf_polars.experimental.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
-from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -30,6 +29,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 @lower_ir_node.register(IR)
@@ -48,7 +48,7 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions | None = None
+    ir: IR, config_options: ConfigOptions
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -75,7 +75,6 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    config_options = config_options or ConfigOptions({})
     mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
     return mapper(ir)
 

@@ -10,6 +10,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +39,7 @@ def test_parallel_dataframescan(df, max_rows_per_partition):
 
     # Check partitioning
     qir = Translator(df._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir)
+    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
     count = info[ir].count
     if max_rows_per_partition < total_row_count:
         assert count > 1
