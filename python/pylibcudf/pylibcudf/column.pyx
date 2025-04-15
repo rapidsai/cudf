@@ -18,7 +18,7 @@ from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.interop cimport ArrowArray, ArrowSchema, arrow_column
 from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
-from pylibcudf.libcudf.utilities.traits cimport is_fixed_width, is_fixed_point
+from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
 from pylibcudf.libcudf.interop cimport (
@@ -77,7 +77,7 @@ cdef class OwnerWithCAI:
         cdef unique_ptr[scalar] last_offset
         if cv.type().id() == type_id.EMPTY:
             size = cv.size()
-        elif is_fixed_width(cv.type()) or is_fixed_point(cv.type()):
+        elif is_fixed_width(cv.type()):
             size = cv.size() * cpp_size_of(cv.type())
         elif cv.type().id() == type_id.STRING:
             # The size of the character array in the parent is the offsets size
