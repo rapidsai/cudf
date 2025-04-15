@@ -465,6 +465,7 @@ cdef class SourceInfo:
             rmm.DeviceBuffer,
         ]
     ]
+
         A homogeneous list of sources to read from. Mixing different types
         of sources will raise a `ValueError`.
     """
