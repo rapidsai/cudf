@@ -1,10 +1,12 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
+
 from pylibcudf.libcudf cimport transform as cpp_transform
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -18,7 +20,6 @@ from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
-from .utils cimport int_to_bitmask_ptr
 
 __all__ = [
     "bools_to_mask",
@@ -123,7 +124,7 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
         Boolean column of the bitmask from [begin_bit, end_bit]
     """
     cdef unique_ptr[column] c_result
-    cdef bitmask_type * bitmask_ptr = int_to_bitmask_ptr(bitmask)
+    cdef bitmask_type * bitmask_ptr = <bitmask_type*>bitmask
 
     with nogil:
         c_result = cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit)
