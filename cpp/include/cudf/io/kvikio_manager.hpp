@@ -22,6 +22,20 @@ namespace CUDF_EXPORT cudf {
 //! KvikIO manager
 namespace io {
 
+namespace detail {
+/**
+ * @brief Utility class for data source and sink.
+ *
+ * Use this class as a data member to create a CUDA context if it has not existed, and create a
+ * instance of kvikio_manager.
+ */
+class kvikio_initializer {
+ public:
+  kvikio_initializer();
+};
+
+}  // namespace detail
+
 /**
  * @addtogroup io_kvikio_manager
  * @{

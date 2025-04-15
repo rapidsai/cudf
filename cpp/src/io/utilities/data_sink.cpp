@@ -34,7 +34,6 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
-    kvikio_manager::instance();
     _kvikio_file = kvikio::FileHandle(filepath, "w");
     CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
     CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
@@ -86,6 +85,8 @@ class file_sink : public data_sink {
   {
     return device_write_async(gpu_data, size, stream).get();
   }
+
+  detail::kvikio_initializer _;
 
  private:
   size_t _bytes_written = 0;

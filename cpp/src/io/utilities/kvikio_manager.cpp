@@ -22,16 +22,28 @@
 
 #include <cuda_runtime.h>
 
-namespace cudf {
-namespace io {
+#include <mutex>
+
+namespace cudf::io {
+
+namespace detail {
+
+kvikio_initializer::kvikio_initializer()
+{
+  static std::once_flag flag{};
+  std::call_once(flag, [] {
+    // Call before any cuFile API calls to ensure the CUDA context is initialized.
+    // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
+    // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
+    // initialized.
+    cudaFree(nullptr);
+    kvikio_manager::instance();
+  });
+}
+}  // namespace detail
 
 kvikio_manager::kvikio_manager()
 {
-  // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
-  // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
-  // initialized.
-  cudaFree(nullptr);
-
   auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
   kvikio::defaults::set_compat_mode(compat_mode);
 
@@ -92,5 +104,4 @@ unsigned int kvikio_manager::get_default_num_io_threads()
   return 4u;
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io

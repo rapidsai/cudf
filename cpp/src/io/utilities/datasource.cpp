@@ -48,11 +48,6 @@ namespace {
  */
 template <typename HandleT>
 class kvikio_source : public datasource {
-  class kvikio_initializer {
-   public:
-    kvikio_initializer() { kvikio_manager::instance(); }
-  };
-
   std::pair<std::vector<uint8_t>, std::future<size_t>> clamped_read_to_vector(size_t offset,
                                                                               size_t size)
   {
@@ -145,7 +140,7 @@ class kvikio_source : public datasource {
 
   [[nodiscard]] size_t size() const override { return _kvikio_handle.nbytes(); }
 
-  kvikio_initializer _;
+  detail::kvikio_initializer _;
 
  protected:
   HandleT _kvikio_handle;
