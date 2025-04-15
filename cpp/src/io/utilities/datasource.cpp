@@ -54,7 +54,8 @@ class kvikio_source : public datasource {
     // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     std::vector<uint8_t> v(read_size);
-    return {std::move(v), _kvikio_handle.pread(v.data(), read_size, offset)};
+    auto v_data = v.data();
+    return {std::move(v), _kvikio_handle.pread(v_data, read_size, offset)};
   }
 
  public:
