@@ -229,8 +229,6 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
-  std::cout << "average_nullmask_words: " << average_nullmask_words
-            << ", Block size: " << block_size << std::endl;
   set_null_mask_bulk_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
     destinations, begin_bits, end_bits, valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
