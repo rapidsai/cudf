@@ -228,9 +228,8 @@ def _(
         # TODO: with versioning, rename on the rust side
         skip_rows, n_rows = n_rows
 
-    if file_options.include_file_paths is not None:
-        raise NotImplementedError("No support for including file path in scan")
     row_index = file_options.row_index
+    include_file_paths = file_options.include_file_paths
     return ir.Scan(
         schema,
         typ,
@@ -242,6 +241,7 @@ def _(
         skip_rows,
         n_rows,
         row_index,
+        include_file_paths,
         translate_named_expr(translator, n=node.predicate)
         if node.predicate is not None
         else None,
@@ -252,7 +252,9 @@ def _(
 def _(
     node: pl_ir.Cache, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Cache(schema, node.id_, translator.translate_ir(n=node.input))
+    return ir.Cache(
+        schema, node.id_, node.cache_hits, translator.translate_ir(n=node.input)
+    )
 
 
 @_translate_ir.register
@@ -546,16 +548,19 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }:
             column, chars = (translator.translate_expr(n=n) for n in node.input)
             if isinstance(chars, expr.Literal):
-                if chars.value == pa.scalar(""):
-                    # No-op in polars, but libcudf uses empty string
-                    # as signifier to remove whitespace.
-                    return column
-                elif chars.value == pa.scalar(None):
+                # We check for null first because we want to use the
+                # chars pyarrow type, but it is invalid to try and
+                # produce a string scalar with a null dtype.
+                if chars.value == pa.scalar(None, type=pa.null()):
                     # Polars uses None to mean "strip all whitespace"
                     chars = expr.Literal(
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
+                elif chars.value == pa.scalar("", type=chars.value.type):
+                    # No-op in polars, but libcudf uses empty string
+                    # as signifier to remove whitespace.
+                    return column
             return expr.StringFunction(
                 dtype,
                 expr.StringFunction.Name.from_polars(name),
@@ -662,7 +667,9 @@ def _(node: pl_expr.Window, translator: Translator, dtype: plc.DataType) -> expr
 @_translate_expr.register
 def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        data = pl.Series._from_pyseries(node.value).to_arrow()
+        data = pl.Series._from_pyseries(node.value).to_arrow(
+            compat_level=dtypes.TO_ARROW_COMPAT_LEVEL
+        )
         return expr.LiteralColumn(
             dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
         )

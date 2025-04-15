@@ -314,10 +314,33 @@ class orc_column_view {
   std::optional<uint32_t> _parent_index;
 };
 
-size_type orc_table_view::num_rows() const noexcept
-{
-  return columns.empty() ? 0 : columns.front().size();
-}
+/**
+ * Non-owning view of a cuDF table that includes ORC-related information.
+ *
+ * Columns hierarchy is flattened and stored in pre-order.
+ */
+struct orc_table_view {
+  std::vector<orc_column_view> columns;
+  rmm::device_uvector<orc_column_device_view> d_columns;
+  std::vector<uint32_t> string_column_indices;
+  rmm::device_uvector<uint32_t> d_string_column_indices;
+
+  auto num_columns() const noexcept { return columns.size(); }
+  [[nodiscard]] size_type num_rows() const noexcept
+  {
+    return columns.empty() ? 0 : columns.front().size();
+  }
+  auto num_string_columns() const noexcept { return string_column_indices.size(); }
+
+  auto& column(uint32_t idx) { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
+
+  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
+  {
+    return columns.at(string_column_indices.at(idx));
+  }
+};
 
 namespace {
 struct string_length_functor {
@@ -809,7 +832,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       }
     });
 
-  aligned_rgs.device_to_host_sync(stream);
+  aligned_rgs.device_to_host(stream);
 
   std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
   h_aligned_rgs.reserve(segmentation.num_rowgroups());
@@ -1012,7 +1035,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
     encode_orc_column_data(chunks, chunk_streams, stream);
   }
-  chunk_streams.device_to_host_sync(stream);
+  chunk_streams.device_to_host(stream);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
@@ -1091,7 +1114,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   // TODO: use cub::DeviceMemcpy::Batched
   compact_orc_data_streams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host_async(stream);
-  enc_data->streams.device_to_host_sync(stream);
+  enc_data->streams.device_to_host(stream);
 
   // move the gathered stripes to encoded_data.data for lifetime management
   for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
@@ -1133,7 +1156,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
                         num_stat_blobs,
                         stream);
   stats_merge_groups.device_to_host_async(stream);
-  blobs.device_to_host_sync(stream);
+  blobs.device_to_host(stream);
   return blobs;
 }
 
@@ -1845,7 +1868,7 @@ orc_table_view make_orc_table_view(table_view const& table,
   return {std::move(orc_columns),
           std::move(d_orc_columns),
           str_col_indexes,
-          cudf::detail::make_device_uvector_sync(
+          cudf::detail::make_device_uvector(
             str_col_indexes, stream, cudf::get_current_device_resource_ref())};
 }
 
@@ -1892,7 +1915,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           }
         });
     });
-  rowgroup_bounds.device_to_host_sync(stream);
+  rowgroup_bounds.device_to_host(stream);
 
   return rowgroup_bounds;
 }
@@ -2014,7 +2037,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
                        orc_table.d_string_column_indices,
                        stream);
 
-  auto const h_counts = cudf::detail::make_host_vector_sync(counts, stream);
+  auto const h_counts = cudf::detail::make_host_vector(counts, stream);
 
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
@@ -2121,7 +2144,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   map_storage->initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
   populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
   // Copy the entry counts and char counts from the device to the host
-  stripe_dicts.device_to_host_sync(stream);
+  stripe_dicts.device_to_host(stream);
 
   // Data owners; can be cleared after encode
   std::vector<rmm::device_uvector<uint32_t>> dict_data_owner;
@@ -2164,7 +2187,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
     }
   }
   // Synchronize to ensure the copy is complete before we clear `map_slots`
-  stripe_dicts.host_to_device_sync(stream);
+  stripe_dicts.host_to_device(stream);
 
   collect_map_entries(stripe_dicts, stream);
   get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
@@ -2237,8 +2260,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       return lhs.stream_size < rhs.stream_size;
     }));
 
-  auto const h_longest_stream = cudf::detail::make_host_vector_sync(
-    device_span<stripe_stream const>{longest_stream, 1}, stream);
+  auto const h_longest_stream =
+    cudf::detail::make_host_vector(device_span<stripe_stream const>{longest_stream, 1}, stream);
   return h_longest_stream[0].stream_size;
 }
 
@@ -2384,7 +2407,7 @@ auto convert_table_to_orc_data(table_view const& input,
     enc_data.data.clear();
 
     strm_descs.device_to_host_async(stream);
-    comp_results.device_to_host_sync(stream);
+    comp_results.device_to_host(stream);
   }
 
   auto const max_out_stream_size = [&]() {

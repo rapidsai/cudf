@@ -13,7 +13,6 @@ from cudf import NA
 from cudf.api.types import is_scalar
 from cudf.core.column.column import column_empty
 from cudf.testing import assert_eq
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
@@ -667,41 +666,6 @@ def test_concatenate_list_with_nonlist():
 def test_list_getitem(data):
     list_sr = cudf.Series([data])
     assert list_sr[0] == data
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3],
-        [[1, 2, 3], [4, 5, 6]],
-        ["a", "b", "c"],
-        [["a", "b", "c"], ["d", "e", "f"]],
-        [1.1, 2.2, 3.3],
-        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
-        [1, NA, 3],
-        [[1, NA, 3], [4, 5, NA]],
-        ["a", NA, "c"],
-        [["a", NA, "c"], ["d", "e", NA]],
-        [1.1, NA, 3.3],
-        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
-    ],
-)
-def test_list_scalar_host_construction(data):
-    slr = cudf.Scalar(data)
-    assert slr.value == data
-
-
-@pytest.mark.parametrize(
-    "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
-)
-@pytest.mark.parametrize("nesting_level", [1, 2, 3])
-def test_list_scalar_host_construction_null(elem_type, nesting_level):
-    dtype = cudf.ListDtype(elem_type)
-    for level in range(nesting_level - 1):
-        dtype = cudf.ListDtype(dtype)
-
-    slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is (cudf.NaT if slr.dtype.kind in "mM" else cudf.NA)
 
 
 @pytest.mark.parametrize(
