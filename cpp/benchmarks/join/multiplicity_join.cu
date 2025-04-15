@@ -16,13 +16,18 @@
 
 #include <benchmarks/join/join_common.hpp>
 
+#include <cudf/join/sort_merge_join.hpp>
+
 void nvbench_inner_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
-    return cudf::sort_merge_inner_join(left_input, right_input, compare_nulls);
+    auto stream = cudf::get_default_stream();
+    auto mr     = cudf::get_current_device_resource_ref();
+    cudf::sort_merge_join obj(left_input, false, right_input, false, compare_nulls, stream, mr);
+    return obj.inner_join(stream, mr);
   };
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }
