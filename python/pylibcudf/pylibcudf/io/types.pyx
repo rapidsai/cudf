@@ -449,25 +449,23 @@ cdef class TableWithMetadata:
 
 
 cdef class SourceInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details on a source to read from.
 
     For details, see :cpp:class:`cudf::io::source_info`.
 
     Parameters
     ----------
-    sources : List[
-        Union[
-            str,
-            os.PathLike,
-            bytes,
-            io.BytesIO,
-            DataSource,
-            rmm.DeviceBuffer,
-        ]
-    ]
-
-        A homogeneous list of sources to read from. Mixing different types
-        of sources will raise a `ValueError`.
+    sources : List[Union[
+        str,
+        os.PathLike,
+        bytes,
+        io.BytesIO,
+        DataSource,
+        rmm.DeviceBuffer,
+    ]]
+        A homogeneous list of sources to read from. Mixing
+        different types of sources will raise a `ValueError`.
     """
     # Regular expression that match remote file paths supported by libcudf
     _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
