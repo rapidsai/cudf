@@ -125,7 +125,7 @@ void set_null_mask(bitmask_type* bitmask,
  * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
+void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
                          cudf::host_span<size_type const> begin_bits,
                          cudf::host_span<size_type const> end_bits,
                          cudf::host_span<bool const> valids,
