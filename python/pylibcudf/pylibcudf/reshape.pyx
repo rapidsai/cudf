@@ -86,15 +86,17 @@ cpdef void table_to_array(
     Stream stream=None
 ):
     """
-    Copy a table to a column-major device array in-place into
-    a preallocated DeviceBuffer.
+    Copy a table into a preallocated column-major device array.
 
     Parameters
     ----------
     input_table : Table
         A table with fixed-width, non-nullable columns of the same type.
-    output : DeviceBuffer
-        A preallocated buffer large enough to hold all data.
+    ptr : uintptr_t
+        A device pointer to the beginning of the output buffer.
+    size : size_type
+        The total number of bytes available at `ptr`.
+        Must be at least `num_rows * num_columns * sizeof(dtype)`.
     dtype : DataType
         The fixed-width type of the output elements.
     stream : Stream | None
