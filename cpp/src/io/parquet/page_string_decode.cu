@@ -1012,7 +1012,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      pages.device_end(),
                                                      page_sizes,
                                                      0L,
-                                                     thrust::plus<int64_t>{});
+                                                     cuda::std::plus<int64_t>{});
 
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
@@ -1023,7 +1023,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
                                      page_string_offsets.begin(),
                                      page_sizes,
                                      0L,
-                                     thrust::plus<int64_t>{});
+                                     cuda::std::plus<int64_t>{});
 
     // allocate the temp space
     temp_string_buf.resize(total_size, stream);
