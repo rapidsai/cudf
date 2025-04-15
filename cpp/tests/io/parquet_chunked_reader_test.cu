@@ -35,6 +35,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -47,7 +48,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
 
 #include <fstream>
 #include <type_traits>

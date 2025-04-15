@@ -294,7 +294,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto const d_integers = cudf::detail::make_device_uvector_sync(
+  auto const d_integers = cudf::detail::make_device_uvector(
     h_integers, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());

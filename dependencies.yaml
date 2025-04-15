@@ -4,7 +4,7 @@ files:
     output: conda
     matrix:
       cuda: ["11.8", "12.8"]
-      arch: [x86_64]
+      arch: [x86_64, aarch64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
       # version conflicts with the rest of RAPIDS as well as its own
@@ -388,6 +388,7 @@ files:
       - test_python_cudf
       - depends_on_cudf
       - depends_on_cudf_polars
+      - depends_on_narwhals
 channels:
   - rapidsai
   - rapidsai-nightly
@@ -812,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.27
+          - polars>=1.24,<1.28
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -878,6 +879,7 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+          - pytest-rerunfailures
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -929,10 +931,11 @@ dependencies:
           - cramjam
           - fastavro>=0.22.9
           - hypothesis
+          - mmh3
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
-          - mmh3
+          - zstandard
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
@@ -1233,3 +1236,8 @@ dependencies:
       - output_types: conda
         packages:
           - cudf-polars==25.6.*,>=0.0.0a0
+  depends_on_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - narwhals==1.33

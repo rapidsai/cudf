@@ -9,7 +9,7 @@ from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, bitmask_type
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
@@ -17,7 +17,7 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr, _get_stream
+from .utils cimport _get_stream
 
 from functools import cache
 
@@ -90,9 +90,9 @@ cdef class Column:
         cdef const bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -127,9 +127,9 @@ cdef class Column:
         cdef bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
@@ -366,10 +366,13 @@ cdef class Column:
 
         Raises
         ------
+        TypeError
+            If the object does not support __cuda_array_interface__.
         ValueError
             If the object is not 1D or 2D, or is not C-contiguous.
-        ImportError
-            If the data is 2D and NumPy is not installed.
+            If the number of rows exceeds size_type limit.
+        NotImplementedError
+            If the object has a mask.
         """
         try:
             iface = obj.__cuda_array_interface__
@@ -377,7 +380,7 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         if iface.get("mask") is not None:
-            raise ValueError("mask not yet supported")
+            raise NotImplementedError("mask not yet supported")
 
         typestr = iface["typestr"][1:]
         data_type = _datatype_from_dtype_desc(typestr)
@@ -391,20 +394,12 @@ cdef class Column:
             size = shape[0]
             return cls(data_type, size, data, None, 0, 0, [])
         elif len(shape) == 2:
-            try:
-                import numpy as np
-            except ImportError:
-                raise ImportError(
-                    "NumPy must be installed to use this method on 2D data"
-                )
             num_rows, num_cols = shape
             if num_rows < numeric_limits[size_type].max():
-                # TODO: Add a new Scalar.from_py(value, dtype) API so
-                # we can specify the dtype (size_type in this case) too.
                 offsets_col = sequence(
                     num_rows + 1,
-                    Scalar.from_numpy(np.int32(0)),
-                    Scalar.from_numpy(np.int32(num_cols))
+                    Scalar.from_py(0, DataType(type_id.INT32)),
+                    Scalar.from_py(num_cols, DataType(type_id.INT32)),
                 )
             else:
                 raise ValueError(
