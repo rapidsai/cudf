@@ -97,4 +97,5 @@ dependencies:
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
+- zstandard
 name: all_cuda-118_arch-aarch64
