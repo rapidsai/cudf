@@ -155,14 +155,15 @@ CUDF_KERNEL void set_null_mask_bulk_kernel(
   cudf::device_span<bool const> valids,
   cudf::device_span<size_type const> numbers_of_mask_words)
 {
-  auto const block_rank = cg::this_grid().block_rank();
-  auto block            = cg::this_thread_block();
-  set_null_mask_impl(destinations[block_rank],
-                     begin_bits[block_rank],
-                     end_bits[block_rank],
-                     valids[block_rank],
-                     numbers_of_mask_words[block_rank],
-                     block);
+  auto const bitmask_idx = cg::this_grid().block_rank();
+  // Return early if nothing to do
+  if (begin_bits[bitmask_idx] == end_bits[bitmask_idx]) { return; }
+  set_null_mask_impl(destinations[bitmask_idx],
+                     begin_bits[bitmask_idx],
+                     end_bits[bitmask_idx],
+                     valids[bitmask_idx],
+                     numbers_of_mask_words[bitmask_idx],
+                     cg::this_thread_block());
 }
 
 CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
@@ -171,8 +172,7 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
                                       bool valid,
                                       size_type number_of_mask_words)
 {
-  auto grid = cg::this_grid();
-  set_null_mask_impl(destination, begin_bit, end_bit, valid, number_of_mask_words, grid);
+  set_null_mask_impl(destination, begin_bit, end_bit, valid, number_of_mask_words, cg::this_grid());
 }
 }  // namespace
 
@@ -188,30 +188,39 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
 
   auto const num_bitmasks = h_destinations.size();
 
-  CUDF_EXPECTS(num_bitmasks == h_begin_bits.size(), "Invalid size.");
-  CUDF_EXPECTS(num_bitmasks == h_end_bits.size(), "Invalid sizes.");
-  CUDF_EXPECTS(num_bitmasks == h_valids.size(), "Invalid size.");
+  CUDF_EXPECTS(num_bitmasks == h_begin_bits.size(),
+               "Number of bitmasks and begin bits must be equal.");
+  CUDF_EXPECTS(num_bitmasks == h_end_bits.size(), "Number of bitmasks and end bits must be equal.");
+  CUDF_EXPECTS(num_bitmasks == h_valids.size(), "Number of bitmasks and valids must be equal.");
 
   size_t average_nullmask_words = 0;
   auto h_number_of_mask_words   = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
+      CUDF_EXPECTS(h_begin_bits[i] >= 0, "Invalid range.");
+      CUDF_EXPECTS(h_begin_bits[i] <= h_end_bits[i], "Invalid bit range.");
+      // Return 0 if bitmask is empty
+      if (h_begin_bits[i] == h_end_bits[i]) { return size_t{0}; }
+      // Number of words in this bitmask
       auto const num_words =
         num_bitmask_words(h_end_bits[i]) - h_begin_bits[i] / detail::size_in_bits<bitmask_type>();
+      // Divide by num_bitmasks and update average here to avoid overflow
       average_nullmask_words +=
         cudf::util::div_rounding_up_safe<size_type>(num_words, num_bitmasks);
       return num_words;
     });
 
-  auto mr = rmm::mr::get_current_device_resource_ref();
+  // Create device vectors from host spans
+  auto const mr = rmm::mr::get_current_device_resource_ref();
   auto destinations =
     cudf::detail::make_device_uvector_async<bitmask_type*>(h_destinations, stream, mr);
-  auto begin_bits = cudf::detail::make_device_uvector_async(h_begin_bits, stream, mr);
-  auto end_bits   = cudf::detail::make_device_uvector_async(h_end_bits, stream, mr);
-  auto valids     = cudf::detail::make_device_uvector_async(h_valids, stream, mr);
-  auto number_of_mask_words =
+  auto const begin_bits = cudf::detail::make_device_uvector_async(h_begin_bits, stream, mr);
+  auto const end_bits   = cudf::detail::make_device_uvector_async(h_end_bits, stream, mr);
+  auto const valids     = cudf::detail::make_device_uvector_async(h_valids, stream, mr);
+  auto const number_of_mask_words =
     cudf::detail::make_device_uvector_async(h_number_of_mask_words, stream, mr);
 
+  // Compute block size and launch kernel
   auto block_size = std::max<uint32_t>(256, (average_nullmask_words / 256));
   block_size      = uint32_t{1} << (numeric::detail::count_significant_bits(block_size) - 1);
   block_size      = std::min(block_size, uint32_t{1024});
