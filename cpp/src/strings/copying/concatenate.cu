@@ -101,7 +101,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),
                                    chars_size_transform{},
-                                   thrust::plus{});
+                                   cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
