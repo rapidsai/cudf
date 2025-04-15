@@ -125,7 +125,6 @@ class ConfigOptions:
         if executor == "streaming":
             unsupported = config.get("executor_options", {}).keys() - {
                 "scheduler",
-                "scheduler_options",
                 "fallback_mode",
                 "max_rows_per_partition",
                 "parquet_blocksize",

@@ -130,9 +130,6 @@ def task_graph(
 def get_scheduler(config_options: ConfigOptions) -> Any:
     """Get appropriate task scheduler."""
     scheduler = config_options.get("executor_options.scheduler", default="synchronous")
-    scheduler_options = config_options.get(
-        "executor_options.scheduler_options", default={}
-    )
     if (
         scheduler == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
@@ -140,18 +137,12 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 
         from cudf_polars.experimental.dask_serialize import SerializerManager
 
-        if scheduler_options:  # pragma: no cover
-            raise ValueError(f"scheduler_options not supported: {scheduler_options}")
-
         client = get_client()
         SerializerManager.register_serialize()
         SerializerManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
         from dask import get
-
-        if scheduler_options:  # pragma: no cover
-            raise ValueError(f"scheduler_options not supported: {scheduler_options}")
 
         return get
     else:  # pragma: no cover
