@@ -17,6 +17,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/io/kvikio_manager.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <kvikio/defaults.hpp>
 
@@ -39,4 +40,9 @@ TEST(KvikIOManagerTest, ChangeSettings)
     auto actual_setting = kvikio::defaults::thread_pool_nthreads();
     EXPECT_EQ(actual_setting, initial_setting);
   }
+}
+
+TEST(KvikIOManagerTest, InvalidSettings)
+{
+  EXPECT_THROW({ cudf::io::kvikio_manager::set_num_io_threads(0u); }, cudf::logic_error);
 }

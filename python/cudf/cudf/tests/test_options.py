@@ -147,6 +147,14 @@ def test_option_io_num_threads_nested_settings():
 
 
 def test_option_io_num_threads_invalid_settings():
+    # setting should be an integer
+    with pytest.raises(ValueError):
+        cudf.set_option("io.num_threads", 1.234)
+
+    with pytest.raises(ValueError):
+        cudf.set_option("io.num_threads", [4])
+
+    # setting should be positive
     with pytest.raises(ValueError):
         with cudf.option_context("io.num_threads", -1):
             pass
