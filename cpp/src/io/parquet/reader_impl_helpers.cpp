@@ -410,9 +410,9 @@ std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::ini
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), 0l, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), int64_t{0}, [](auto sum, auto& pfm) {
       auto const rowgroup_rows = std::accumulate(
-        pfm.row_groups.cbegin(), pfm.row_groups.cend(), 0l, [](auto& rg_sum, auto& rg) {
+        pfm.row_groups.cbegin(), pfm.row_groups.cend(), int64_t{0}, [](auto rg_sum, auto& rg) {
           return rg_sum + rg.num_rows;
         });
       CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
@@ -424,7 +424,7 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   auto const total_row_groups = std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
 
@@ -1073,7 +1073,7 @@ aggregate_reader_metadata::select_row_groups(
         std::accumulate(row_group_indices.begin(),
                         row_group_indices.end(),
                         size_t{0},
-                        [](size_t& sum, auto const& pfm) { return sum + pfm.size(); });
+                        [](size_t sum, auto const& pfm) { return sum + pfm.size(); });
 
       // Check if we have less than 2B total row groups.
       CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
