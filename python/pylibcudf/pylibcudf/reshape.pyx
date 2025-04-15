@@ -1,4 +1,5 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
+from libc.stdint cimport uintptr_t
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -6,17 +7,22 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reshape cimport (
     interleave_columns as cpp_interleave_columns,
     tile as cpp_tile,
+    table_to_array as cpp_table_to_array
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.reshape cimport byte
+from pylibcudf.libcudf.utilities.span cimport device_span
+
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream
+from .types cimport DataType
 
 
-__all__ = ["interleave_columns", "tile"]
+__all__ = ["interleave_columns", "tile", "table_to_array"]
 
 cpdef Column interleave_columns(Table source_table):
     """Interleave columns of a table into a single column.
@@ -72,9 +78,10 @@ cpdef Table tile(Table source_table, size_type count):
     return Table.from_libcudf(move(c_result))
 
 
-cpdef table_to_array(
+cpdef void table_to_array(
     Table input_table,
-    DeviceBuffer output,
+    uintptr_t ptr,
+    size_type size,
     DataType dtype,
     Stream stream=None
 ):
@@ -96,8 +103,12 @@ cpdef table_to_array(
     stream = _get_stream(stream)
 
     cdef device_span[byte] span = device_span[byte](
-        <byte*> output.ptr, output.size()
+        <byte*> ptr, size
     )
 
     with nogil:
-        cpp_table_to_array(table.view(), span, dtype.c_obj(), stream)
+        cpp_table_to_array(
+            input_table.view(),
+            span, dtype.c_obj,
+            stream.view()
+        )
