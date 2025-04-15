@@ -41,7 +41,7 @@ namespace {
 
 constexpr size_type NUM_SPECIAL_CHARS = 112;
 
-// These characters have unique title-case values that are different from than their
+// These characters have unique title-case values that are different from their
 // upper-case counterparts. The lookup uses binary_search so they must be sorted here.
 __constant__ cuda::std::array<uint16_t, NUM_SPECIAL_CHARS> title_case_table = {
   0x00df, 0x01c4, 0x01c6, 0x01c7, 0x01c9, 0x01ca, 0x01cc, 0x01f1, 0x01f3, 0x0587, 0x10d0, 0x10d1,
