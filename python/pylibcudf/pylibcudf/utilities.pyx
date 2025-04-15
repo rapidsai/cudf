@@ -1,6 +1,6 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 from libcpp cimport bool
-from pylibcudf.libcudf cimport utilities
+from pylibcudf.libcudf.utilities cimport default_stream
 
 __all__ = ["is_ptds_enabled"]
 
@@ -10,4 +10,4 @@ cpdef bool is_ptds_enabled():
 
     For details, see :cpp:func:`is_ptds_enabled`.
     """
-    return utilities.is_ptds_enabled()
+    return default_stream.is_ptds_enabled()
