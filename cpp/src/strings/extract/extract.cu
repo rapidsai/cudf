@@ -56,7 +56,7 @@ struct extract_fn {
 
   __device__ void operator()(size_type const idx,
                              reprog_device const d_prog,
-                             int32_t const prog_idx)
+                             int32_t const prog_idx) const
   {
     auto const groups = d_prog.group_counts();
     auto d_output     = d_indices[idx];
@@ -134,7 +134,7 @@ struct extract_single_fn {
 
   __device__ string_index_pair operator()(size_type const idx,
                                           reprog_device const d_prog,
-                                          int32_t const prog_idx)
+                                          int32_t const prog_idx) const
   {
     auto result = string_index_pair{nullptr, 0};
     if (d_strings.is_valid(idx)) {
