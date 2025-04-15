@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -23,7 +23,7 @@ def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "scheduler": Scheduler,
+            "scheduler": DEFAULT_SCHEDULER,
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": broadcast_join_limit,
             "shuffle_method": "tasks",
@@ -72,7 +72,7 @@ def test_broadcast_join_limit(broadcast_join_limit):
         executor_options={
             "max_rows_per_partition": 3,
             "broadcast_join_limit": broadcast_join_limit,
-            "scheduler": Scheduler,
+            "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
         },
     )

@@ -41,8 +41,8 @@ def pytest_configure(config):
     ):
         raise pytest.UsageError("Distributed scheduler requires --executor='streaming'")
 
-    cudf_polars.testing.asserts.Executor = config.getoption("--executor")
-    cudf_polars.testing.asserts.Scheduler = config.getoption("--scheduler")
+    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
 
 
 def pytest_sessionstart(session):

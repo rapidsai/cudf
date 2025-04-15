@@ -9,7 +9,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import Scheduler, assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
@@ -17,7 +17,7 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={"max_rows_per_partition": 3, "scheduler": Scheduler},
+        executor_options={"max_rows_per_partition": 3, "scheduler": DEFAULT_SCHEDULER},
     )
 
 
@@ -46,7 +46,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 3,
-            "scheduler": Scheduler,
+            "scheduler": DEFAULT_SCHEDULER,
         },
     )
     match = "This selection not support for multiple partitions."
@@ -62,7 +62,7 @@ def test_select_reduce_fallback(df, fallback_mode):
         ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
     elif fallback_mode == "foo":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError, match="not a supported 'fallback_mode' option"
+            pl.exceptions.ComputeError, match="Unsupported fallback_mode option"
         )
     else:
         ctx = pytest.warns(UserWarning, match=match)

@@ -10,21 +10,11 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping, Sequence
+
     from typing_extensions import Self
 
 __all__ = ["ConfigOptions"]
-
-
-_STREAMING_DEFAULTS = {
-    "scheduler": "synchronous",
-    "fallback_mode": "warn",
-    "max_rows_per_partition": 1_000_000,
-    "parquet_blocksize": 1_000_000_000,
-    "cardinality_factor": {},
-    "groupby_n_ary": 32,
-    "broadcast_join_limit": 16,
-    "shuffle_method": None,
-}
 
 
 class ConfigOptions:
@@ -138,10 +128,10 @@ class ConfigOptions:
         # Validate executor_options
         executor = config.get("executor", "in-memory")
         if executor == "streaming":
-            executor_options = _STREAMING_DEFAULTS.copy()
-            executor_options.update(config.get("executor_options", {}))
+            executor_options, unsupported = _valid_streaming_options(
+                config["executor_options"]
+            )
             config["executor_options"] = executor_options
-            unsupported = executor_options.keys() - set(_STREAMING_DEFAULTS)
         else:
             unsupported = config.get("executor_options", {}).keys()
         if unsupported:
@@ -150,3 +140,74 @@ class ConfigOptions:
             )
 
         return config
+
+
+def _valid_option(
+    options: MutableMapping[str, Any],
+    key: str,
+    *,
+    default: Any,
+    choices: Sequence[Any] | None = None,
+    astype: type | None = None,
+) -> MutableMapping[str, Any]:
+    """Return a valid configuration option."""
+    value = options.get(key, default)
+    if astype is not None:
+        value = astype(value)
+    if choices is not None and value not in choices:
+        raise ValueError(f"Unsupported {key} option: {value}")
+    options[key] = value
+    return options
+
+
+def _valid_streaming_options(
+    options: MutableMapping[str, Any],
+) -> tuple[MutableMapping[str, Any], set[str]]:
+    """Return valid options for the streaming executor."""
+    default: Any
+    choices: Sequence[Any]
+    for key in (
+        _STREAMING_OPTIONS := (
+            "scheduler",  # Validate scheduler first
+            "fallback_mode",
+            "max_rows_per_partition",
+            "parquet_blocksize",
+            "cardinality_factor",
+            "groupby_n_ary",
+            "broadcast_join_limit",
+            "shuffle_method",
+        )
+    ):
+        match key:
+            case "scheduler":
+                options = _valid_option(
+                    options,
+                    key,
+                    default="synchronous",
+                    choices=("synchronous", "distributed"),
+                )
+            case "fallback_mode":
+                options = _valid_option(
+                    options, key, default="warn", choices=("warn", "raise", "silent")
+                )
+            case "max_rows_per_partition":
+                options = _valid_option(options, key, default=1_000_000, astype=int)
+            case "parquet_blocksize":
+                options = _valid_option(options, key, default=1_000_000_000, astype=int)
+            case "cardinality_factor":
+                options = _valid_option(options, key, default={}, astype=dict)
+            case "groupby_n_ary":
+                options = _valid_option(options, key, default=32, astype=int)
+            case "broadcast_join_limit":
+                default = 4 if options["scheduler"] == "distributed" else 32
+                options = _valid_option(options, key, default=default, astype=int)
+            case "shuffle_method":
+                if options["scheduler"] != "distributed":
+                    default = "tasks"
+                    choices = (None, "tasks")
+                else:
+                    default = None
+                    choices = (None, "tasks", "rapidsmpf")
+                options = _valid_option(options, key, default=default, choices=choices)
+
+    return options, options.keys() - set(_STREAMING_OPTIONS)

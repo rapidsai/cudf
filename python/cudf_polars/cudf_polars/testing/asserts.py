@@ -21,9 +21,9 @@ __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# and `--scheduler` command-line argument
-Executor = None
-Scheduler = "synchronous"
+# and `--scheduler` command-line arguments
+DEFAULT_EXECUTOR = "in-memory"
+DEFAULT_SCHEDULER = "synchronous"
 
 
 def assert_gpu_result_equal(
@@ -90,12 +90,12 @@ def assert_gpu_result_equal(
         If GPU collection failed in some way.
     """
     if engine is None:
-        executor = executor or Executor
+        executor = executor or DEFAULT_EXECUTOR
         engine = GPUEngine(
             raise_on_fail=True,
             executor=executor,
             executor_options=(
-                {"scheduler": Scheduler} if executor == "streaming" else {}
+                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
             ),
         )
 
