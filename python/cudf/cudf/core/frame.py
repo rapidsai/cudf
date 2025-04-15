@@ -35,7 +35,11 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
+    find_common_type,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -516,6 +520,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 matrix[:, i] = to_array(col, dtype)
             return matrix
 
+    @_performance_tracking
+    def to_pylibcudf(self) -> tuple[plc.Table, dict[str, Any]]:
+        """
+        Converts Frame to a pylibcudf.Table.
+
+        Note: This method should not be called directly on a Frame object
+        Instead, it should be defined in subclasses like DataFrame/Series.
+        """
+        raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
     # TODO: As of now, calling cupy.asarray is _much_ faster than calling
     # to_cupy. We should investigate the reasons why and whether we can provide
     # a more efficient method here by exploiting __cuda_array_interface__. In
@@ -548,6 +562,31 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
+        if (
+            self._num_columns > 0
+            and na_value is None
+            and all(
+                not col.nullable and col.dtype == self._columns[0].dtype
+                for col in self._columns
+            )
+        ):
+            if dtype is None:
+                dtype = np.dtype(self._columns[0].dtype)
+
+            shape = (len(self), self._num_columns)
+            out = cupy.empty(shape, dtype=dtype, order="F")
+
+            table = self.to_pylibcudf()[0]
+            if isinstance(table, plc.Column):
+                table = plc.Table([table])
+            plc.reshape.table_to_array(
+                table,
+                out.data.ptr,
+                out.nbytes,
+                plc.types.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype]),
+            )
+
+            return out
         return self._to_array(
             lambda col: col.values,
             cupy,
