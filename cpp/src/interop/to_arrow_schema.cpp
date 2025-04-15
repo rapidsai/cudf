@@ -227,7 +227,7 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
     child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
-      ArrowSchemaSetType(child, NANOARROW_TYPE_NA);
+      NANOARROW_THROW_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));
     } else {
       NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
         col.type(), detail::dispatch_to_arrow_type{}, col, metadata[i], child));
