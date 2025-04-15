@@ -64,10 +64,13 @@ class kvikio_manager {
   /**
    * @brief Set the number of IO threads used by the KvikIO manager.
    *
-   * If the new value is different from the previous value, then this method will block the calling
-   * thread until KvikIO completes all existing I/O tasks, destroys the previous thread pool, and
-   * creates a new one with the specified value. Otherwise, the existing thread pool will be used
-   * for subsequent I/O operations.
+   * If the new value differs from the current one, the following happens in sequence:
+   *
+   * - The calling thread is blocked until all pending I/O tasks complete.
+   * - The old thread pool is destroyed.
+   * - A new pool is created.
+   *
+   * Otherwise, the existing thread pool will be used for subsequent I/O operations.
    *
    * @param num_io_threads The number of IO threads to be used.
    *
@@ -82,7 +85,7 @@ class kvikio_manager {
    *
    * @note This function instantiates the kvikio_manager if it does not exist.
    */
-  static unsigned int get_num_io_threads();
+  [[nodiscard]] static unsigned int num_io_threads();
 
   /**
    * @brief Get the default number of IO threads derived by cuDF.
@@ -91,7 +94,7 @@ class kvikio_manager {
    *
    * @note This function does not instantiate the kvikio_manager if it does not exist.
    */
-  static unsigned int get_default_num_io_threads();
+  [[nodiscard]] static unsigned int default_num_io_threads();
 
  private:
   /**

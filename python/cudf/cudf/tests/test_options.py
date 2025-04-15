@@ -129,18 +129,34 @@ def test_options_context_error():
             pass
 
 
-def test_num_io_threads():
+def test_option_io_num_threads_nested_settings():
     old_setting = 8
-    cudf.set_option("num_io_threads", old_setting)
+    cudf.set_option("io.num_threads", old_setting)
 
     new_setting_1 = 16
     new_setting_2 = 2
     new_setting_3 = 20
-    with cudf.option_context("num_io_threads", new_setting_1):
-        with cudf.option_context("num_io_threads", new_setting_2):
-            with cudf.option_context("num_io_threads", new_setting_3):
-                assert cudf.get_option("num_io_threads") == new_setting_3
-            assert cudf.get_option("num_io_threads") == new_setting_2
-        assert cudf.get_option("num_io_threads") == new_setting_1
+    with cudf.option_context("io.num_threads", new_setting_1):
+        with cudf.option_context("io.num_threads", new_setting_2):
+            with cudf.option_context("io.num_threads", new_setting_3):
+                assert cudf.get_option("io.num_threads") == new_setting_3
+            assert cudf.get_option("io.num_threads") == new_setting_2
+        assert cudf.get_option("io.num_threads") == new_setting_1
 
-    assert cudf.get_option("num_io_threads") == old_setting
+    assert cudf.get_option("io.num_threads") == old_setting
+
+
+def test_option_io_num_threads_invalid_settings():
+    with pytest.raises(ValueError):
+        with cudf.option_context("io.num_threads", -1):
+            pass
+
+    with pytest.raises(ValueError):
+        with cudf.option_context("io.num_threads", 0):
+            pass
+
+    with pytest.raises(ValueError):
+        cudf.set_option("io.num_threads", -1)
+
+    with pytest.raises(ValueError):
+        cudf.set_option("io.num_threads", 0)

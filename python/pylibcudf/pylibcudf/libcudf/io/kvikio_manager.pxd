@@ -12,7 +12,7 @@ cdef extern from "cudf/io/kvikio_manager.hpp" \
             except +libcudf_exception_handler
 
         @staticmethod
-        unsigned int get_num_io_threads() except +libcudf_exception_handler
+        unsigned int num_io_threads() except +libcudf_exception_handler
 
         @staticmethod
-        unsigned int get_default_num_io_threads() except +libcudf_exception_handler
+        unsigned int default_num_io_threads() except +libcudf_exception_handler

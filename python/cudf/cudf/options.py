@@ -209,6 +209,13 @@ def _integer_and_none_validator(val):
         )
 
 
+def _positive_integer_validator(val):
+    if not (isinstance(val, int) and val > 0):
+        raise ValueError(
+            f"{val} is not a valid option. Must be a positive integer."
+        )
+
+
 _register_option(
     "default_integer_bitwidth",
     None,
@@ -390,37 +397,39 @@ _register_option(
 
 
 def _num_io_threads_set_callback():
-    plc.io.kvikio_manager.set_num_io_threads(_OPTIONS["num_io_threads"].value)
+    plc.io.kvikio_manager.set_num_io_threads(_OPTIONS["io.num_threads"].value)
 
 
 def _num_io_threads_get_callback():
-    actual_result = plc.io.kvikio_manager.get_num_io_threads()
-    expected_result = _OPTIONS["num_io_threads"].value
-    assert actual_result == expected_result
+    actual_result = plc.io.kvikio_manager.num_io_threads()
+    expected_result = _OPTIONS["io.num_threads"].value
+    assert actual_result == expected_result, (
+        f"Mismatch in num_io_threads: Expected: {expected_result}, Actual: {actual_result}"
+    )
 
 
 _register_option(
-    "num_io_threads",
-    plc.io.kvikio_manager.get_num_io_threads(),
+    "io.num_threads",
+    plc.io.kvikio_manager.num_io_threads(),
     textwrap.dedent(
         """
         The number of IO threads used by the KvikIO library.
         There are different ways to set this value. In descending order of
         override priority:
             - cuDF option API
-                - cudf.set_option("num_io_threads", value) to set the value
+                - `cudf.set_option("io.num_threads", value)` to set the value
                 globally
-                - cudf.option_context("num_io_threads", value) to set the value
-                in a context manager
-            - Environment variable KVIKIO_NTHREADS
+                - `cudf.option_context("io.num_threads", value)` to set the value
+                temporarily
+            - Environment variable `KVIKIO_NTHREADS`
             - cuDF's default number of IO threads
-                cuDF derives a default platform-dependent value, which
-                can be queried by the method
-                pylibcudf.io.kvikio_manager.get_default_num_io_threads().
+                cuDF uses a platform-dependent default if nothing is specified
+                Query this default using:
+                `pylibcudf.io.kvikio_manager.default_num_io_threads()`
         \tValid values are integers. Default is a platform-dependent value.
     """
     ),
-    _integer_validator,
+    _positive_integer_validator,
     _num_io_threads_set_callback,
     _num_io_threads_get_callback,
 )

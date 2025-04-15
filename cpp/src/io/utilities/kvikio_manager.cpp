@@ -37,6 +37,11 @@ kvikio_initializer::kvikio_initializer()
     // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
     // initialized.
     cudaFree(nullptr);
+
+    // Touch the instance to ensure the kvikio_manager is instantiated and KvikIO properly set up.
+    // Note that the above CUDA context management step cannot be moved to kvikio_manager's
+    // constructor. This is because cudf Python API mandates that, when importing the cudf module,
+    // no CUDA context shall be created.
     kvikio_manager::instance();
   });
 }
@@ -63,7 +68,7 @@ kvikio_manager::kvikio_manager()
     // If the env var KVIKIO_NTHREADS is not set, KvikIO will create the thread pool with its own
     // default value M. Here if cuDF's derived default value N is not equal to M, the existing
     // thread pool will be destroyed and a new one with N threads created.
-    _num_io_threads = get_default_num_io_threads();
+    _num_io_threads = default_num_io_threads();
     std::stringstream ss;
     ss << _num_io_threads;
     CUDF_LOG_INFO(
@@ -86,18 +91,26 @@ kvikio_manager& kvikio_manager::instance()
 
 void kvikio_manager::set_num_io_threads(unsigned int num_io_threads)
 {
+  CUDF_EXPECTS(num_io_threads > 0, "The number of I/O threads must be positive.");
   auto old_setting = instance()._num_io_threads;
   if (num_io_threads != old_setting) {
     instance()._num_io_threads = num_io_threads;
     kvikio::defaults::set_thread_pool_nthreads(num_io_threads);
+    CUDF_LOG_INFO(
+      "Set the number of I/O threads. Old value: %u, new value: %u. Thread pool re-created.",
+      old_setting,
+      num_io_threads);
+  } else {
+    CUDF_LOG_INFO(
+      "Set the number of I/O threads. Setting unchanged: %u threads. Reusing the existing thread "
+      "pool",
+      old_setting);
   }
-  CUDF_LOG_INFO(
-    "Set the number of I/O threads. Old value: %u, new value: %u", old_setting, num_io_threads);
 }
 
-unsigned int kvikio_manager::get_num_io_threads() { return instance()._num_io_threads; }
+[[nodiscard]] unsigned int kvikio_manager::num_io_threads() { return instance()._num_io_threads; }
 
-unsigned int kvikio_manager::get_default_num_io_threads()
+[[nodiscard]] unsigned int kvikio_manager::default_num_io_threads()
 {
   // todo: provide a platform-dependent, default setting that can achieve decent performance for
   // single-process and multi-process benchmarks.
