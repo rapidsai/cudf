@@ -89,7 +89,7 @@ namespace detail {
 class alignas(16) column_device_view_base {
  public:
   // TODO: merge this offsets column index with `strings_column_view::offsets_column_index`
-  static constexpr size_type string_offsets_column_index{0};  ///< Child index of the offsets column
+  static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
 
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
@@ -438,7 +438,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
-    auto const offsets    = child(string_offsets_column_index);
+    auto const offsets    = child(offsets_column_index);
     auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
     auto const offset     = itr[index];
     return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
