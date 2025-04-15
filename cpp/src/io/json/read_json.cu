@@ -104,9 +104,11 @@ class compressed_host_buffer_source final : public datasource {
       auto decompressed_hbuf = cudf::io::detail::decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
-      if (!partial_read)
+      if (!partial_read) {
+        auto decompressed_hbuf_data = decompressed_hbuf.data();
         return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
-          std::move(decompressed_hbuf), decompressed_hbuf.data() + offset, count);
+          std::move(decompressed_hbuf), decompressed_hbuf_data + offset, count);
+      }
       _decompressed_buffer = std::move(decompressed_hbuf);
     }
     auto const count = std::min(size, _decompressed_buffer.size() - offset);
@@ -335,10 +337,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
       "LIBCUDF_JSON_BATCH_SIZE", static_cast<std::size_t>(std::numeric_limits<int32_t>::max()));
     if (static_cast<std::size_t>(next_delim_pos - first_delim_pos - shift_for_nonzero_offset) <
         batch_size) {
+      auto buffer_data = buffer.data();
       return std::make_pair(
         datasource::owning_buffer<rmm::device_buffer>(
           std::move(buffer),
-          reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+          reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
           next_delim_pos - first_delim_pos - shift_for_nonzero_offset + 1),
         std::nullopt);
     }
@@ -363,15 +366,17 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
       last_line_size + 1,
       stream);
 
+    auto buffer_data        = buffer.data();
+    auto second_buffer_data = second_buffer.data();
+    auto second_buffer_size = second_buffer.size();
     return std::make_pair(
       datasource::owning_buffer<rmm::device_buffer>(
         std::move(buffer),
-        reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+        reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
         next_delim_pos - first_delim_pos - shift_for_nonzero_offset - last_line_size),
-      datasource::owning_buffer<rmm::device_buffer>(
-        std::move(second_buffer),
-        reinterpret_cast<uint8_t*>(second_buffer.data()),
-        second_buffer.size()));
+      datasource::owning_buffer<rmm::device_buffer>(std::move(second_buffer),
+                                                    reinterpret_cast<uint8_t*>(second_buffer_data),
+                                                    second_buffer_size));
   }
 
   // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
@@ -384,10 +389,11 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     num_chars++;
   }
 
+  auto buffer_data = buffer.data();
   return std::make_pair(
     datasource::owning_buffer<rmm::device_buffer>(
       std::move(buffer),
-      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+      reinterpret_cast<uint8_t*>(buffer_data) + first_delim_pos + shift_for_nonzero_offset,
       num_chars),
     std::nullopt);
 }
