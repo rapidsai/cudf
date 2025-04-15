@@ -1713,7 +1713,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
                           null_mask + pd_masks.back().size(),
                           parent_pd_mask,
                           pd_masks.back().data(),
-                          thrust::bit_and<bitmask_type>());
+                          cuda::std::bit_and<bitmask_type>());
       }
     }
     if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
@@ -1893,7 +1893,8 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           // Root column
           if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
-            auto const rows_end = thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
+            auto const rows_end =
+              cuda::std::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
             return rowgroup_rows{rows_begin, rows_end};
           } else {
             // Child column
