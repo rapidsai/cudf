@@ -173,11 +173,11 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     -------
     A cudf-polars DataFrame object.
     """
-    get = get_scheduler(config_options)
-
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info)
+
+    get = get_scheduler(config_options)
     return get(graph, key)
 
 
