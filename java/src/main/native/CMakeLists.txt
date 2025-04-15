@@ -20,10 +20,6 @@ include(rapids-find)
 include(rapids-cpm)
 rapids_cpm_init()
 
-# Use GPU_ARCHS if it is defined
-if(DEFINED GPU_ARCHS)
-  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-endif()
 rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
