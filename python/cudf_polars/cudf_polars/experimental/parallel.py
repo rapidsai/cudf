@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Multi-partition Dask execution."""
+"""Multi-partition evaluation."""
 
 from __future__ import annotations
 
@@ -168,8 +168,7 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     graph, key = task_graph(ir, partition_info)
 
-    get = get_scheduler(config_options)
-    return get(graph, key)
+    return get_scheduler(config_options)(graph, key)
 
 
 @generate_ir_tasks.register(IR)
