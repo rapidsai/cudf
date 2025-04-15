@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -44,6 +45,7 @@
 #include <thrust/tabulate.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <numeric>
 #include <type_traits>
 
@@ -190,11 +192,15 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
   CUDF_EXPECTS(num_bitmasks == h_end_bits.size(), "Invalid sizes.");
   CUDF_EXPECTS(num_bitmasks == h_valids.size(), "Invalid size.");
 
-  auto h_number_of_mask_words = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
+  size_t average_nullmask_words = 0;
+  auto h_number_of_mask_words   = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
-      return num_bitmask_words(h_end_bits[i]) -
-             h_begin_bits[i] / detail::size_in_bits<bitmask_type>();
+      auto const num_words =
+        num_bitmask_words(h_end_bits[i]) - h_begin_bits[i] / detail::size_in_bits<bitmask_type>();
+      average_nullmask_words +=
+        cudf::util::div_rounding_up_safe<size_type>(num_words, num_bitmasks);
+      return num_words;
     });
 
   auto mr = rmm::mr::get_current_device_resource_ref();
@@ -206,7 +212,10 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
   auto number_of_mask_words =
     cudf::detail::make_device_uvector_async(h_number_of_mask_words, stream, mr);
 
-  set_null_mask_bulk_kernel<<<num_bitmasks, 256, 0, stream.value()>>>(
+  auto block_size = std::max<uint32_t>(256, (average_nullmask_words / 256));
+  block_size      = uint32_t{1} << (numeric::detail::count_significant_bits(block_size) - 1);
+  block_size      = std::min(block_size, uint32_t{1024});
+  set_null_mask_bulk_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
     destinations, begin_bits, end_bits, valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
@@ -255,8 +264,7 @@ void set_null_mask(bitmask_type* bitmask,
   return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, stream);
 }
 
-// Bulk set pre-allocated null masks of given bit ranges [begin_bit, end_bit) to valids, if
-// valid == true, or nulls, otherwise;
+// Bulk set pre-allocated null masks to corresponding valid state in the corresponding bit ranges
 void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
                          cudf::host_span<size_type const> h_begin_bits,
                          cudf::host_span<size_type const> h_end_bits,

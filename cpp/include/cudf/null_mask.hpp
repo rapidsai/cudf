@@ -95,7 +95,7 @@ rmm::device_buffer create_null_mask(
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range
- *  `[begin_bit, end_bit)`
+ * `[begin_bit, end_bit)`.
  *
  * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
@@ -113,16 +113,16 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
- * @brief Sets a vector of pre-allocated bitmask buffers to given states in the given ranges
- *  `[begin_bit, end_bit)` in bulk
+ * @brief Sets a vector of pre-allocated bitmask buffers to given states in the corresponding ranges
+ * in bulk.
  *
- * Sets `[begin_bit, end_bit)` bits of each bitmask to valid if `valid==true`
- * or null otherwise.
+ * Sets `[begin_bit, end_bit)` bits of each given bitmasks to corresponding valid state. This
+ * utility is particularly advantageous if setting many small size bitmasks.
  *
- * @param bitmasks A host span of pointers to bitmasks (e.g. returned by `column_viewnull_mask()`)
- * @param begin_bits A host span of indices of the first bit to set (inclusive)
- * @param end_bits A host span of indices of the last bit to set (exclusive)
- * @param valids A host span of booleans indicating if the bitmask should be set to valid or null
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_viewnull_mask()`)
+ * @param begin_bits Indices of the first bits to set (inclusive)
+ * @param end_bits Indices of the last bits to set (exclusive)
+ * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void set_null_masks_bulk(cudf::host_span<bitmask_type*> destinations,
