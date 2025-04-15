@@ -236,7 +236,7 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
     ArrowArray* child_ptr = tmp->children[i];
     auto& child           = contents.children[i];
     if (child->type().id() == cudf::type_id::EMPTY) {
-      NANOARROW_RETURN_NOT_OK(handle_empty(child_ptr, *child));
+      NANOARROW_RETURN_NOT_OK(handle_empty_type_column(child_ptr, *child));
     } else {
       NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
         child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
@@ -266,7 +266,7 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
 
   auto& child = contents.children[cudf::lists_column_view::child_column_index];
   if (child->type().id() == cudf::type_id::EMPTY) {
-    NANOARROW_RETURN_NOT_OK(handle_empty(tmp->children[0], *child));
+    NANOARROW_RETURN_NOT_OK(handle_empty_type_column(tmp->children[0], *child));
   } else {
     NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
       child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
