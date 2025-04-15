@@ -29,7 +29,7 @@
 #include <type_traits>
 
 /**
- * @file raw_column_device_view.cuh
+ * @file column_device_view_base.cuh
  * @brief Column device view class definitions
  */
 
@@ -341,24 +341,24 @@ struct mutable_value_accessor;
  *
  * @ingroup column_classes
  */
-class alignas(16) raw_column_device_view : public detail::column_device_view_base {
+class alignas(16) column_device_view_core : public detail::column_device_view_base {
  public:
-  raw_column_device_view()                              = delete;
-  ~raw_column_device_view()                             = default;
-  raw_column_device_view(raw_column_device_view const&) = default;  ///< Copy constructor
-  raw_column_device_view(raw_column_device_view&&)      = default;  ///< Move constructor
+  column_device_view_core()                               = delete;
+  ~column_device_view_core()                              = default;
+  column_device_view_core(column_device_view_core const&) = default;  ///< Copy constructor
+  column_device_view_core(column_device_view_core&&)      = default;  ///< Move constructor
   /**
    * @brief Copy assignment operator
    *
    * @return Reference to this object
    */
-  raw_column_device_view& operator=(raw_column_device_view const&) = default;
+  column_device_view_core& operator=(column_device_view_core const&) = default;
   /**
    * @brief Move assignment operator
    *
    * @return Reference to this object (after transferring ownership)
    */
-  raw_column_device_view& operator=(raw_column_device_view&&) = default;
+  column_device_view_core& operator=(column_device_view_core&&) = default;
 
   /**
    * @brief Creates an instance of this class using the specified host memory
@@ -369,7 +369,7 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    */
-  raw_column_device_view(column_view column, void* h_ptr, void* d_ptr);
+  column_device_view_core(column_view column, void* h_ptr, void* d_ptr);
 
   /**
    * @brief Get a new raw_column_device_view which is a slice of this column.
@@ -387,16 +387,16 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
    * @param size The number of elements in the slice
    * @return A slice of this column
    */
-  [[nodiscard]] CUDF_HOST_DEVICE raw_column_device_view slice(size_type offset,
-                                                              size_type size) const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE column_device_view_core slice(size_type offset,
+                                                               size_type size) const noexcept
   {
-    return raw_column_device_view{this->type(),
-                                  size,
-                                  this->head(),
-                                  this->null_mask(),
-                                  this->offset() + offset,
-                                  static_cast<raw_column_device_view*>(d_children),
-                                  this->num_child_columns()};
+    return column_device_view_core{this->type(),
+                                   size,
+                                   this->head(),
+                                   this->null_mask(),
+                                   this->offset() + offset,
+                                   static_cast<column_device_view_core*>(d_children),
+                                   this->num_child_columns()};
   }
 
   /**
@@ -470,9 +470,9 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  [[nodiscard]] __device__ raw_column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ column_device_view_core child(size_type child_index) const noexcept
   {
-    return static_cast<raw_column_device_view*>(d_children)[child_index];
+    return static_cast<column_device_view_core*>(d_children)[child_index];
   }
 
   /**
@@ -498,13 +498,13 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
    * @param children Pointer to the device memory containing child data
    * @param num_children The number of child columns
    */
-  CUDF_HOST_DEVICE raw_column_device_view(data_type type,
-                                          size_type size,
-                                          void const* data,
-                                          bitmask_type const* null_mask,
-                                          size_type offset,
-                                          raw_column_device_view* children,
-                                          size_type num_children)
+  CUDF_HOST_DEVICE column_device_view_core(data_type type,
+                                           size_type size,
+                                           void const* data,
+                                           bitmask_type const* null_mask,
+                                           size_type offset,
+                                           column_device_view_core* children,
+                                           size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
       _num_children(num_children)
@@ -512,11 +512,11 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
   }
 
  protected:
-  raw_column_device_view* d_children{};  ///< Array of `raw_column_device_view`
-                                         ///< objects in device memory.
-                                         ///< Based on element type, children
-                                         ///< may contain additional data
-  size_type _num_children{};             ///< The number of child columns
+  column_device_view_core* d_children{};  ///< Array of `raw_column_device_view`
+                                          ///< objects in device memory.
+                                          ///< Based on element type, children
+                                          ///< may contain additional data
+  size_type _num_children{};              ///< The number of child columns
 };
 
 /**
@@ -525,25 +525,26 @@ class alignas(16) raw_column_device_view : public detail::column_device_view_bas
  *
  * @ingroup column_classes
  */
-class alignas(16) raw_mutable_column_device_view : public detail::column_device_view_base {
+class alignas(16) mutable_column_device_view_core : public detail::column_device_view_base {
  public:
-  raw_mutable_column_device_view()  = delete;
-  ~raw_mutable_column_device_view() = default;
-  raw_mutable_column_device_view(raw_mutable_column_device_view const&) =
-    default;                                                                   ///< Copy constructor
-  raw_mutable_column_device_view(raw_mutable_column_device_view&&) = default;  ///< Move constructor
+  mutable_column_device_view_core()  = delete;
+  ~mutable_column_device_view_core() = default;
+  mutable_column_device_view_core(mutable_column_device_view_core const&) =
+    default;  ///< Copy constructor
+  mutable_column_device_view_core(mutable_column_device_view_core&&) =
+    default;  ///< Move constructor
   /**
    * @brief Copy assignment operator
    *
    * @return Reference to this object
    */
-  raw_mutable_column_device_view& operator=(raw_mutable_column_device_view const&) = default;
+  mutable_column_device_view_core& operator=(mutable_column_device_view_core const&) = default;
   /**
    * @brief Move assignment operator
    *
    * @return Reference to this object (after transferring ownership)
    */
-  raw_mutable_column_device_view& operator=(raw_mutable_column_device_view&&) = default;
+  mutable_column_device_view_core& operator=(mutable_column_device_view_core&&) = default;
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
@@ -655,10 +656,10 @@ class alignas(16) raw_mutable_column_device_view : public detail::column_device_
    * @param child_index The index of the desired child
    * @return The requested child `column_view`
    */
-  [[nodiscard]] __device__ raw_mutable_column_device_view
+  [[nodiscard]] __device__ mutable_column_device_view_core
   child(size_type child_index) const noexcept
   {
-    return static_cast<raw_mutable_column_device_view*>(d_children)[child_index];
+    return static_cast<mutable_column_device_view_core*>(d_children)[child_index];
   }
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
@@ -729,24 +730,53 @@ class alignas(16) raw_mutable_column_device_view : public detail::column_device_
    * @param children Pointer to the device memory containing child data
    * @param num_children The number of child columns
    */
-  CUDF_HOST_DEVICE raw_mutable_column_device_view(data_type type,
-                                                  size_type size,
-                                                  void const* data,
-                                                  bitmask_type const* null_mask,
-                                                  size_type offset,
-                                                  raw_mutable_column_device_view* children,
-                                                  size_type num_children)
+  CUDF_HOST_DEVICE mutable_column_device_view_core(data_type type,
+                                                   size_type size,
+                                                   void const* data,
+                                                   bitmask_type const* null_mask,
+                                                   size_type offset,
+                                                   mutable_column_device_view_core* children,
+                                                   size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
       _num_children(num_children)
   {
   }
 
-  raw_mutable_column_device_view* d_children{};  ///< Array of `raw_mutable_column_device_view`
-                                                 ///< objects in device memory.
-                                                 ///< Based on element type, children
-                                                 ///< may contain additional data
-  size_type _num_children{};                     ///< The number of child columns
+  mutable_column_device_view_core* d_children{};  ///< Array of `raw_mutable_column_device_view`
+                                                  ///< objects in device memory.
+                                                  ///< Based on element type, children
+                                                  ///< may contain additional data
+  size_type _num_children{};                      ///< The number of child columns
 };
 
+namespace detail {
+
+#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
+
+/**
+ * @brief Convenience function to get offset word from a bitmask
+ *
+ * @see copy_offset_bitmask
+ * @see offset_bitmask_binop
+ */
+__device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
+                                                    size_type destination_word_index,
+                                                    size_type source_begin_bit,
+                                                    size_type source_end_bit)
+{
+  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
+  bitmask_type curr_word      = source[source_word_index];
+  bitmask_type next_word      = 0;
+  if (word_index(source_end_bit - 1) >
+      word_index(source_begin_bit +
+                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
+    next_word = source[source_word_index + 1];
+  }
+  return __funnelshift_r(curr_word, next_word, source_begin_bit);
+}
+
+#endif
+
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

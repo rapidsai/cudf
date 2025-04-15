@@ -31,13 +31,13 @@
 namespace cudf {
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-  : raw_column_device_view{source.type(),
-                           source.size(),
-                           source.head(),
-                           source.null_mask(),
-                           source.offset(),
-                           nullptr,
-                           source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
 
 {
 }
@@ -90,13 +90,13 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
 column_device_view::column_device_view(column_view source, void* h_ptr, void* d_ptr)
-  : raw_column_device_view{source.type(),
-                           source.size(),
-                           source.head(),
-                           source.null_mask(),
-                           source.offset(),
-                           nullptr,
-                           source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
 {
   d_children = detail::child_columns_to_device_array<column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
@@ -126,26 +126,26 @@ std::size_t column_device_view::extent(column_view const& source)
 
 // For use with inplace-new to pre-fill memory to be copied to device
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source)
-  : raw_mutable_column_device_view{source.type(),
-                                   source.size(),
-                                   source.head(),
-                                   source.null_mask(),
-                                   source.offset(),
-                                   nullptr,
-                                   source.num_children()}
+  : mutable_column_device_view_core{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
 }
 
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source,
                                                        void* h_ptr,
                                                        void* d_ptr)
-  : raw_mutable_column_device_view{source.type(),
-                                   source.size(),
-                                   source.head(),
-                                   source.null_mask(),
-                                   source.offset(),
-                                   nullptr,
-                                   source.num_children()}
+  : mutable_column_device_view_core{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
   d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);

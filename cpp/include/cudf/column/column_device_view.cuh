@@ -15,8 +15,8 @@
  */
 #pragma once
 
+#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/column/raw_column_device_view.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -46,9 +46,9 @@ namespace CUDF_EXPORT cudf {
  *
  * @ingroup column_classes
  */
-class alignas(16) column_device_view : public raw_column_device_view {
+class alignas(16) column_device_view : public column_device_view_core {
  public:
-  using base = raw_column_device_view;  ///< Base type
+  using base = column_device_view_core;  ///< Base type
 
   column_device_view()                          = delete;
   ~column_device_view()                         = default;
@@ -582,7 +582,7 @@ class alignas(16) column_device_view : public raw_column_device_view {
                                       size_type offset,
                                       column_device_view* children,
                                       size_type num_children)
-    : raw_column_device_view{type, size, data, null_mask, offset, children, num_children}
+    : column_device_view_core{type, size, data, null_mask, offset, children, num_children}
   {
   }
 
@@ -605,9 +605,9 @@ class alignas(16) column_device_view : public raw_column_device_view {
  *
  * @ingroup column_classes
  */
-class alignas(16) mutable_column_device_view : public raw_mutable_column_device_view {
+class alignas(16) mutable_column_device_view : public mutable_column_device_view_core {
  public:
-  using base = raw_mutable_column_device_view;  ///< Base class
+  using base = mutable_column_device_view_core;  ///< Base class
 
   mutable_column_device_view()                                  = delete;
   ~mutable_column_device_view()                                 = default;
@@ -776,40 +776,14 @@ class alignas(16) mutable_column_device_view : public raw_mutable_column_device_
   mutable_column_device_view(mutable_column_view source);
 };
 
-static_assert(sizeof(column_device_view) == sizeof(raw_column_device_view),
+static_assert(sizeof(column_device_view) == sizeof(column_device_view_core),
               "column_device_view and raw_column_device_view must be bitwise-compatible");
 
 static_assert(
-  sizeof(mutable_column_device_view) == sizeof(raw_mutable_column_device_view),
+  sizeof(mutable_column_device_view) == sizeof(mutable_column_device_view_core),
   "mutable_column_device_view and raw_mutable_column_device_view must be bitwise-compatible");
 
 namespace detail {
-
-#ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
-
-/**
- * @brief Convenience function to get offset word from a bitmask
- *
- * @see copy_offset_bitmask
- * @see offset_bitmask_binop
- */
-__device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restrict__ source,
-                                                    size_type destination_word_index,
-                                                    size_type source_begin_bit,
-                                                    size_type source_end_bit)
-{
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit - 1) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
-  return __funnelshift_r(curr_word, next_word, source_begin_bit);
-}
-
-#endif
 
 /**
  * @brief value accessor of column without null bitmask

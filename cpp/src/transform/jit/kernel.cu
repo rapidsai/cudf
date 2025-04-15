@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/raw_column_device_view.cuh>
+#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/jit/raw_span.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
@@ -42,21 +42,21 @@ struct column_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* outputs,
+  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
                                            [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
     return outputs[index].element<T>(row);
   }
 
-  static __device__ decltype(auto) element(cudf::raw_column_device_view const* inputs,
+  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
                                            [[maybe_unused]] void* const* user_data,
                                            cudf::size_type row)
   {
     return inputs[index].element<T>(row);
   }
 
-  static __device__ void assign(cudf::raw_mutable_column_device_view const* outputs,
+  static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
                                 cudf::size_type row,
                                 T value)
   {
@@ -87,7 +87,7 @@ struct user_data_accessor {
   using type                     = void*;
   static constexpr int32_t index = Index;
 
-  static __device__ void* element([[maybe_unused]] cudf::raw_column_device_view const* inputs,
+  static __device__ void* element([[maybe_unused]] cudf::column_device_view_core const* inputs,
                                   void* const* user_data,
                                   [[maybe_unused]] cudf::size_type row)
   {
@@ -100,21 +100,21 @@ struct scalar {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
-  static __device__ decltype(auto) element(cudf::raw_mutable_column_device_view const* outputs,
+  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
                                            void* const* user_data,
                                            cudf::size_type row)
   {
     return Accessor::element(outputs, user_data, 0);
   }
 
-  static __device__ decltype(auto) element(cudf::raw_column_device_view const* inputs,
+  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
                                            void* const* user_data,
                                            cudf::size_type row)
   {
     return Accessor::element(inputs, user_data, 0);
   }
 
-  static __device__ void assign(cudf::raw_mutable_column_device_view const* outputs,
+  static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
                                 cudf::size_type row,
                                 type value)
   {
@@ -123,8 +123,8 @@ struct scalar {
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::raw_mutable_column_device_view const* outputs,
-                        cudf::raw_column_device_view const* inputs,
+CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
+                        cudf::column_device_view_core const* inputs,
                         void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
@@ -141,8 +141,8 @@ CUDF_KERNEL void kernel(cudf::raw_mutable_column_device_view const* outputs,
 }
 
 template <typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::raw_mutable_column_device_view const* outputs,
-                                    cudf::raw_column_device_view const* inputs,
+CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
+                                    cudf::column_device_view_core const* inputs,
                                     void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
@@ -162,7 +162,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::raw_mutable_column_device_view const* 
 
 template <typename Out, typename... In>
 CUDF_KERNEL void span_kernel(raw_span<typename Out::type> const* outputs,
-                             cudf::raw_column_device_view const* inputs,
+                             cudf::column_device_view_core const* inputs,
                              void* const* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
