@@ -1,11 +1,9 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
-
 from libcpp.memory cimport make_unique
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
-from pylibcudf.libcudf.types cimport mask_state, size_type
-from pylibcudf.utils cimport int_to_bitmask_ptr
+from pylibcudf.libcudf.types cimport mask_state, size_type, bitmask_type
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -172,4 +170,4 @@ cpdef size_type null_count(Py_ssize_t bitmask, size_type start, size_type stop):
         The number of null elements in the specified range.
     """
     with nogil:
-        return cpp_null_mask.null_count(int_to_bitmask_ptr(bitmask), start, stop)
+        return cpp_null_mask.null_count(<bitmask_type*>bitmask, start, stop)
