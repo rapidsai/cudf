@@ -127,6 +127,17 @@ cdef extern from *:
       delete array;
     }
     """
+    # The `to_*_raw` functions are all defined in the above extern block as wrappers
+    # around libcudf functions that return unique_ptrs with non-default deleters, which
+    # are nontrivial to wrap in Cython. Since we need to manage them as raw pointers in
+    # Cython anyway, the inline C++ functions above are the simplest way to bridge the
+    # gap from a language syntax perspective.
+    #
+    # The corresponding `release_*_raw` functions are needed because while the arrow
+    # types are pure C structs, we allocate them with new in C++ and need to use delete
+    # to free them. Unfortunately, unless we lie to Cython and tell it that these types
+    # are cppclasses, Cython will not allow the usage of the del Python keyword to
+    # generate the delete call, so inline C++ is again the best option.
     cdef ArrowSchema *to_arrow_schema_raw(
         const table_view& tbl,
         const vector[column_metadata]& metadata,
