@@ -23,8 +23,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/jit/raw_span.cuh>
 #include <cudf/jit/runtime_support.hpp>
+#include <cudf/jit/span.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -285,13 +285,12 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(
-    std::vector{raw_span<T>{output.data(), static_cast<size_type>(output.size())}}, stream, mr);
+  auto outputs = to_device_vector(std::vector{span<T>{output.data(), output.size()}}, stream, mr);
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
   auto user_data = to_device_vector(user_data_host, stream, mr);
 
-  raw_span<T> const* outputs_ptr       = outputs.data();
+  span<T> const* outputs_ptr           = outputs.data();
   column_device_view const* inputs_ptr = inputs.data();
   void* const* user_data_ptr           = user_data.data();
 
