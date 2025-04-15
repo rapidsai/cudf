@@ -32,7 +32,6 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
-from .utils cimport int_to_void_ptr
 
 
 __all__ = [
@@ -382,7 +381,7 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
     # Extract the raw data pointers
     cdef const uint8_t[::1] _metadata = metadata
     cdef const uint8_t* metadata_ptr = &_metadata[0]
-    cdef const uint8_t* gpu_data_ptr = <uint8_t*>int_to_void_ptr(gpu_data.ptr)
+    cdef const uint8_t* gpu_data_ptr = <uint8_t*>gpu_data.ptr
 
     cdef table_view v
     with nogil:
