@@ -117,7 +117,7 @@ void set_null_mask(bitmask_type* bitmask,
  * in bulk.
  *
  * Sets `[begin_bit, end_bit)` bits of each given bitmasks to corresponding valid state. This
- * utility is particularly advantageous if setting many small size bitmasks.
+ * utility is particularly advantageous if setting 16 or more bitmasks sized 2^24 bits or less.
  *
  * @param bitmasks Pointers to bitmasks (e.g. returned by `column_viewnull_mask()`)
  * @param begin_bits Indices of the first bits to set (inclusive)
