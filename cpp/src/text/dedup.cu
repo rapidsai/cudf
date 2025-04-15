@@ -17,16 +17,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/sorting.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -41,11 +36,9 @@
 #include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/remove.h>
-#include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 #include <thrust/unique.h>
-
-#include <cmath>
 
 namespace nvtext {
 namespace detail {
@@ -53,6 +46,13 @@ namespace {
 
 using string_index = cudf::strings::detail::string_index_pair;
 
+/**
+ * @brief Comparator used for building the suffix array
+ *
+ * Each string is created using the substring of the chars_span
+ * between the given index/offset (lhs or rhs) and the end of the
+ * chars_span.
+ */
 struct sort_comparator_fn {
   cudf::device_span<char const> chars_span;
   __device__ bool operator()(int32_t lhs, int32_t rhs) const
@@ -68,6 +68,9 @@ struct sort_comparator_fn {
   }
 };
 
+/**
+ * @brief Utility counts the number of common bytes between the 2 given strings
+ */
 __device__ int32_t count_common_bytes(cudf::string_view lhs, cudf::string_view rhs)
 {
   auto const size1 = lhs.size_bytes();
@@ -82,6 +85,10 @@ __device__ int32_t count_common_bytes(cudf::string_view lhs, cudf::string_view r
   return idx;
 }
 
+/**
+ * @brief Uses the sorted array of indices (suffix array) to compare common
+ * bytes between adjacent strings and return the count if greater than width.
+ */
 struct find_adjacent_duplicates_fn {
   cudf::device_span<char const> chars_span;
   int32_t width;
@@ -108,6 +115,13 @@ struct find_adjacent_duplicates_fn {
   }
 };
 
+/**
+ * @brief Resolves any overlapping duplicate strings found in find_adjacent_duplicates_fn
+ *
+ * Adjacent strings with common bytes greater than width may produce a sliding window of
+ * duplicates which can be collapsed into a single duplicate pattern instead.
+ * Care is also taken to preserve adjacent strings which may be larger than max(int16).
+ */
 struct collapse_overlaps_fn {
   char const* d_chars;
   int32_t const* d_offsets;
@@ -149,7 +163,7 @@ std::unique_ptr<rmm::device_uvector<int32_t>> build_suffix_array_fn(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const size = static_cast<int32_t>(chars_span.size()) - min_width + 1;
+  auto const size = static_cast<int32_t>(chars_span.size()) - min_width + (min_width > 0);
   auto indices    = rmm::device_uvector<int32_t>(size, stream);
 
   auto const cmp_op = sort_comparator_fn{chars_span};
@@ -215,7 +229,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(cudf::device_span<char const
         rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
     stream);
 
-  // sort result by size descending (should be very fast)
+  // sort the result by size descending (should be very fast)
   thrust::sort(rmm::exec_policy_nosync(stream),
                duplicates.begin(),
                duplicates.end(),
@@ -299,6 +313,19 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
 
 namespace {
 
+/**
+ * @brief Resolves duplicates between two strings chars
+ *
+ * Searches chars_span2 for each string in chars_span1 (idx) using the sorted array
+ * indices for both. The d_indices1 provides the target string while d_indices2 is
+ * searched for a common string.
+ *
+ * The search uses lower-bound to locate a common string but limited to the prefix search
+ * output provided in the lb_indices/ub_indices. This improves the search by 2x over
+ * executing lower-bound over the entire sorted indices.
+ *
+ * Returns the size of the common bytes found only if greater than width.
+ */
 struct find_duplicates_fn {
   cudf::device_span<char const> chars_span1;
   cudf::device_span<char const> chars_span2;
@@ -346,7 +373,10 @@ struct find_duplicates_fn {
   }
 };
 
-struct suffix_to_string_fn {
+/**
+ * @brief Builds a string_view from a chars index
+ */
+struct index_to_string_fn {
   cudf::device_span<char const> chars;
   __device__ cudf::string_view operator()(cudf::size_type idx) const
   {
@@ -355,7 +385,10 @@ struct suffix_to_string_fn {
   }
 };
 
-struct prefix_string_fn {
+/**
+ * @brief Builds a prefix string from a string_view
+ */
+struct string_to_prefix_fn {
   __device__ uint32_t operator()(cudf::string_view str) const
   {
     uint32_t data   = 0;
@@ -365,7 +398,10 @@ struct prefix_string_fn {
   }
 };
 
-struct suffix_to_prefix_fn {
+/**
+ * @brief Builds a prefix string from a chars index
+ */
+struct index_to_prefix_fn {
   cudf::device_span<char const> chars;
   __device__ uint32_t operator()(cudf::size_type idx) const
   {
@@ -405,16 +441,17 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   auto const chars_span2 = cudf::device_span<char const>(d_input_chars2, chars_size2);
 
   auto const itr1 =
-    thrust::make_transform_iterator(indices1.begin(), suffix_to_prefix_fn{chars_span1});
+    thrust::make_transform_iterator(indices1.begin(), index_to_prefix_fn{chars_span1});
   auto const end1 = itr1 + indices1.size();
   auto const itr2 =
-    thrust::make_transform_iterator(indices2.begin(), suffix_to_string_fn{chars_span2});
+    thrust::make_transform_iterator(indices2.begin(), index_to_string_fn{chars_span2});
   auto const end2 = itr2 + indices2.size();
 
+  // vectorized lower-bound and upper-bound of prefix strings improves performance of the
+  // transform(find_duplicates_fn) by 2x
   auto prefixes = rmm::device_uvector<uint32_t>(indices2.size(), stream);  // 4x input2
   thrust::transform(
-    rmm::exec_policy_nosync(stream), itr2, end2, prefixes.begin(), prefix_string_fn{});
-
+    rmm::exec_policy_nosync(stream), itr2, end2, prefixes.begin(), string_to_prefix_fn{});
   auto lb_ids = rmm::device_uvector<int32_t>(indices1.size(), stream);  // 4x input1
   thrust::lower_bound(
     rmm::exec_policy_nosync(stream), prefixes.begin(), prefixes.end(), itr1, end1, lb_ids.begin());
@@ -422,6 +459,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   thrust::upper_bound(
     rmm::exec_policy_nosync(stream), prefixes.begin(), prefixes.end(), itr1, end1, ub_ids.begin());
 
+  // resolve duplicates by searching for input2 with strings from input1
   auto fd_fn =
     find_duplicates_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb_ids, ub_ids};
   auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);  // 2x input1
@@ -501,7 +539,6 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair(cudf::strings_column_view 
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
-  // check for duplicates between the 2 suffix arrays
   // force the 2nd input to be the smaller one
   return (indices1.size() < indices2.size())
            ? resolve_duplicates_pair_impl(input2, indices2, input1, indices1, min_width, stream, mr)
