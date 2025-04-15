@@ -221,9 +221,10 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> h_destinations,
     cudf::detail::make_device_uvector_async(h_number_of_mask_words, stream, mr);
 
   // Compute block size using heuristic and launch kernel
-  constexpr size_t max_words_per_thread = 128;
-  // Use minimum 256 threads per block
-  auto block_size = std::max<size_t>(256, (average_nullmask_words / max_words_per_thread));
+  constexpr size_t max_words_per_thread  = 128;
+  constexpr size_t min_threads_per_block = 256;
+  auto block_size =
+    std::max<size_t>(min_threads_per_block, (average_nullmask_words / max_words_per_thread));
   // Round block size to nearest (ceil) power of 2
   block_size = size_t{1} << (numeric::detail::count_significant_bits(block_size) - 1);
   // Cap block size to 1024 threads
