@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 import polars as pl
@@ -46,7 +48,7 @@ def test_hash_shuffle(df, engine):
 
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
-    options = ConfigOptions(engine.config)
+    options = ConfigOptions(copy.deepcopy(engine.config))
     qir1 = Shuffle(qir.schema, keys, options, qir)
 
     # Add second Shuffle node (on the same keys)

@@ -107,26 +107,6 @@ class Shuffle(IR):
         self._non_child_args = (schema, keys, config_options)
         self.children = (df,)
 
-        # Check shuffle-method configuration
-        scheduler = config_options.get(
-            "executor_options.scheduler", default="synchronous"
-        )
-        shuffle_method = config_options.get(
-            "executor_options.shuffle_method", default=None
-        )
-        if scheduler != "distributed" and shuffle_method != "tasks":
-            if shuffle_method is None:
-                config_options.set("executor_options.shuffle_method", "tasks")
-            else:
-                raise ValueError(
-                    f"{shuffle_method} shuffle requires scheduler='distributed'."
-                )
-        if shuffle_method not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
-            raise ValueError(
-                f"{shuffle_method} is not a supported shuffle method. "
-                f"Expected one of: {_SHUFFLE_METHODS}."
-            )
-
     @classmethod
     def do_evaluate(
         cls,
@@ -255,8 +235,12 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
+    scheduler = ir.config_options.get(
+        "executor_options.scheduler", default="synchronous"
+    )
     shuffle_method = ir.config_options.get(
-        "executor_options.shuffle_method", default=None
+        "executor_options.shuffle_method",
+        default=None if scheduler == "distributed" else "tasks",
     )
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle

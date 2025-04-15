@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 import operator
-from functools import partial, reduce
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.groupby
@@ -147,12 +147,6 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         SerializerManager.register_serialize()
         SerializerManager.run_on_cluster(client)
         return client.get
-    elif scheduler == "threads":  # pragma: no cover; threaded scheduler not tested yet
-        from dask.threaded import get
-
-        kwargs = {"num_workers": 2}
-        kwargs.update(scheduler_options)
-        return partial(get, **kwargs)
     elif scheduler == "synchronous":
         from dask import get
 
