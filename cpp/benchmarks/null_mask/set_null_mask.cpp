@@ -119,26 +119,26 @@ void BM_setnullmask_loop(benchmark::State& state)
     ->Range(1 << 10, 1 << 30)                                                                  \
     ->UseManualTime();
 
-#define NBM_BULK_BENCHMARK_DEFINE(name)                                                 \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)                     \
-  {                                                                                     \
-    BM_setnullmask_bulk(state);                                                         \
-  }                                                                                     \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                                               \
-    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), /* Powers of 32 */ \
-                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  /* Powers of 16 */ \
-                   benchmark::CreateDenseRange(0, 1, 1)})            /* Booleans */     \
+#define NBM_BULK_BENCHMARK_DEFINE(name)                              \
+  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)  \
+  {                                                                  \
+    BM_setnullmask_bulk(state);                                      \
+  }                                                                  \
+  BENCHMARK_REGISTER_F(SetNullmask, name)                            \
+    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), \
+                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  \
+                   benchmark::CreateDenseRange(0, 1, 1)})            \
     ->UseManualTime();
 
-#define NBM_LOOP_BENCHMARK_DEFINE(name)                                                 \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)                     \
-  {                                                                                     \
-    BM_setnullmask_loop(state);                                                         \
-  }                                                                                     \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                                               \
-    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), /* Powers of 32 */ \
-                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  /* Powers of 16 */ \
-                   benchmark::CreateDenseRange(0, 1, 1)})            /* Booleans */     \
+#define NBM_LOOP_BENCHMARK_DEFINE(name)                              \
+  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)  \
+  {                                                                  \
+    BM_setnullmask_loop(state);                                      \
+  }                                                                  \
+  BENCHMARK_REGISTER_F(SetNullmask, name)                            \
+    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), \
+                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  \
+                   benchmark::CreateDenseRange(0, 1, 1)})            \
     ->UseManualTime();
 
 NBM_BENCHMARK_DEFINE(SetNullMaskKernel);
