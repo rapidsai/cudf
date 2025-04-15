@@ -29,7 +29,7 @@ namespace CUDF_EXPORT cudf {
 
 namespace io {
 /**
- * @addtogroup io_types
+ * @addtogroup io_readers
  * @{
  * @file
  */

@@ -81,7 +81,7 @@ class hybrid_scan_reader {
    *
    * @return Parquet file footer metadata
    */
-  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
 
   /**
    * @brief Get the byte range of the `PageIndex` in the Parquet file
@@ -131,8 +131,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::io::text::byte_range_info>>
+  [[nodiscard]] std::pair<std::vector<text::byte_range_info>, std::vector<text::byte_range_info>>
   get_secondary_filters(cudf::host_span<size_type const> row_group_indices,
                         parquet_reader_options const& options) const;
 
@@ -190,7 +189,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_filter_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<text::byte_range_info> get_filter_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
@@ -221,7 +220,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_payload_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<text::byte_range_info> get_payload_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
