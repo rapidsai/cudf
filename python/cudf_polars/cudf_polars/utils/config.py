@@ -155,7 +155,7 @@ def _valid_option(
     if astype is not None:
         value = astype(value)
     if choices is not None and value not in choices:
-        raise ValueError(f"Unsupported {key} option: {value}")
+        raise ValueError(f"Unsupported {key} option: {value}. Choices are: {choices}")
     options[key] = value
     return options
 
@@ -205,7 +205,7 @@ def _valid_streaming_options(
                 if options["scheduler"] != "distributed":
                     default = "tasks"
                     choices = (None, "tasks")
-                else:
+                else:  # pragma: no cover; Requires distributed testing.
                     default = None
                     choices = (None, "tasks", "rapidsmpf")
                 options = _valid_option(options, key, default=default, choices=choices)
