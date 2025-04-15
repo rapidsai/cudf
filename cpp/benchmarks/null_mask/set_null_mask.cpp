@@ -21,6 +21,25 @@
 
 #include <random>
 
+namespace {
+
+std::vector<cudf::size_type> generate_end_bits(cudf::size_type num_masks,
+                                               cudf::size_type mask_size,
+                                               bool generate_random_sizes)
+{
+  std::vector<cudf::size_type> end_bits(num_masks);
+  if (generate_random_sizes) {
+    std::default_random_engine generator;
+    std::uniform_int_distribution<cudf::size_type> dist(1, mask_size);
+    std::generate(end_bits.begin(), end_bits.end(), [&]() { return dist(generator); });
+  } else {
+    std::fill(end_bits.begin(), end_bits.end(), mask_size);
+  }
+  return end_bits;
+}
+
+}  // namespace
+
 class SetNullmask : public cudf::benchmark {};
 
 void BM_setnullmask(benchmark::State& state)
@@ -43,27 +62,19 @@ void BM_setnullmask_bulk(benchmark::State& state)
 {
   srand(31337);
 
-  cudf::size_type const size{(cudf::size_type)state.range(0)};
+  cudf::size_type const mask_size{(cudf::size_type)state.range(0)};
   cudf::size_type const num_masks{(cudf::size_type)state.range(1)};
-  bool const use_random_sizes{static_cast<bool>(state.range(2))};
+  bool const random_end_bits{static_cast<bool>(state.range(2))};
 
   std::vector<cudf::size_type> begin_bits(num_masks, 0);
-  std::vector<cudf::size_type> end_bits(num_masks);
-
-  if (use_random_sizes) {
-    std::default_random_engine generator;
-    std::uniform_int_distribution<cudf::size_type> dist(1, size);
-    std::generate(end_bits.begin(), end_bits.end(), [&]() { return dist(generator); });
-  } else {
-    std::fill(end_bits.begin(), end_bits.end(), size);
-  }
+  std::vector<cudf::size_type> end_bits = generate_end_bits(num_masks, mask_size, random_end_bits);
 
   auto valids = thrust::host_vector<bool>(num_masks, true);
 
   std::vector<rmm::device_buffer> masks(num_masks);
   std::vector<cudf::bitmask_type*> masks_ptr(num_masks);
   for (cudf::size_type i = 0; i < num_masks; ++i) {
-    masks[i]     = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    masks[i]     = cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED);
     masks_ptr[i] = static_cast<cudf::bitmask_type*>(masks[i].data());
   }
 
@@ -72,7 +83,7 @@ void BM_setnullmask_bulk(benchmark::State& state)
     cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size * num_masks / 8);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * mask_size * num_masks / 8);
 }
 
 class SetNullmaskLoop : public cudf::benchmark {};
@@ -81,24 +92,16 @@ void BM_setnullmask_loop(benchmark::State& state)
 {
   srand(31337);
 
-  cudf::size_type const size{(cudf::size_type)state.range(0)};
+  cudf::size_type const mask_size{(cudf::size_type)state.range(0)};
   cudf::size_type const num_masks{(cudf::size_type)state.range(1)};
-  bool const use_random_sizes{static_cast<bool>(state.range(2))};
+  bool const random_end_bits{static_cast<bool>(state.range(2))};
 
-  std::vector<cudf::size_type> end_bits(num_masks);
-
-  if (use_random_sizes) {
-    std::default_random_engine generator;
-    std::uniform_int_distribution<cudf::size_type> dist(1, size);
-    std::generate(end_bits.begin(), end_bits.end(), [&]() { return dist(generator); });
-  } else {
-    std::fill(end_bits.begin(), end_bits.end(), size);
-  }
+  std::vector<cudf::size_type> end_bits = generate_end_bits(num_masks, mask_size, random_end_bits);
 
   std::vector<rmm::device_buffer> masks(num_masks);
   std::vector<cudf::bitmask_type*> masks_ptr(num_masks);
   for (cudf::size_type i = 0; i < num_masks; ++i) {
-    masks[i]     = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    masks[i]     = cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED);
     masks_ptr[i] = static_cast<cudf::bitmask_type*>(masks[i].data());
   }
 
@@ -109,7 +112,7 @@ void BM_setnullmask_loop(benchmark::State& state)
     }
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size * num_masks / 8);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * mask_size * num_masks / 8);
 }
 
 #define NBM_BENCHMARK_DEFINE(name)                                                             \
