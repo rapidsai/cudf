@@ -28,7 +28,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
-#include <cudf/join/sort_merge_join.cuh>
+#include <cudf/join/sort_merge_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -2205,10 +2205,14 @@ struct JoinParameterizedTestLists : public JoinTestLists,
                   cudf::null_equality nulls_equal,
                   algorithm algo)
   {
+    auto join_lambda = [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality compare_nulls, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) -> JoinResult {
+      cudf::sort_merge_join obj(left, false, right, false, compare_nulls, stream, mr);
+      return obj.inner_join(stream, mr);
+    };
     join(left_gold_map,
          right_gold_map,
          nulls_equal,
-         algo == algorithm::HASH ? cudf::inner_join : cudf::sort_merge_inner_join,
+         algo == algorithm::HASH ? cudf::inner_join : join_lambda,
          cudf::out_of_bounds_policy::DONT_CHECK);
   }
 };

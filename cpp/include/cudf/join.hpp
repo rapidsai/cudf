@@ -24,4 +24,4 @@
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
-#include <cudf/join/sort_merge_join.cuh>
+#include <cudf/join/sort_merge_join.hpp>
