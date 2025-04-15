@@ -63,7 +63,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.24,<1.27
+- polars>=1.24,<1.28
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
@@ -72,6 +72,7 @@ dependencies:
 - pytest-benchmark<5.1.0
 - pytest-cases>=3.8.2
 - pytest-cov
+- pytest-rerunfailures
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=2.8.0,<2.9.0a0
@@ -97,4 +98,5 @@ dependencies:
 - tokenizers==0.15.2
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
+- zstandard
 name: all_cuda-128_arch-aarch64

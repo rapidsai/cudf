@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../rapids_config.cmake)
+include(../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -934,7 +934,7 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)

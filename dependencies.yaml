@@ -813,7 +813,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.27
+          - polars>=1.24,<1.28
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -879,6 +879,7 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
+          - pytest-rerunfailures
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -930,6 +931,7 @@ dependencies:
           - cramjam
           - fastavro>=0.22.9
           - hypothesis
+          - mmh3
           # Version 5.1 is incompatible with pytest<8.2.
           # https://github.com/ionelmc/pytest-benchmark/commit/8dfeeeca8a5c640a4dc4455904ace4f97f62e655
           # Remove upper bound when we unbound pytest
@@ -940,7 +942,7 @@ dependencies:
           - pytest-benchmark<5.1.0
           - pytest-cases>=3.8.2
           - scipy
-          - mmh3
+          - zstandard
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0

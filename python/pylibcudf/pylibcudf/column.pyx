@@ -15,7 +15,7 @@ from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.interop cimport ArrowArray, ArrowSchema, arrow_column
 from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
-from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of
+from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width, is_fixed_point
 from pylibcudf.libcudf.copying cimport get_element
 
@@ -34,13 +34,14 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr, _get_stream
-from .null_mask cimport bitmask_allocation_size_bytes
 from ._interop_helpers cimport (
     _release_schema,
     _release_array,
     _metadata_to_libcudf,
 )
+from .null_mask cimport bitmask_allocation_size_bytes
+from .utils cimport _get_stream
+
 from ._interop_helpers import ColumnMetadata
 
 import functools
@@ -241,9 +242,9 @@ cdef class Column:
         cdef const bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -278,9 +279,9 @@ cdef class Column:
         cdef bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
