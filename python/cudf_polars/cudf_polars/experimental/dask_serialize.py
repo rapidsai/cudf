@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 __all__ = ["SerializerManager", "register"]
 
 
-class SerializerManager:
+class SerializerManager:  # pragma: no cover; Only used with Distributed scheduler
     """Manager to ensure ensure serializer is only registered once."""
 
     _serializer_registered: bool = False
@@ -42,9 +42,7 @@ class SerializerManager:
     @classmethod
     def run_on_cluster(cls, client: Client) -> None:
         """Run serializer registration on the workers and scheduler."""
-        if (
-            client.id not in cls._client_run_executed
-        ):  # pragma: no cover; Only executes with Distributed scheduler
+        if client.id not in cls._client_run_executed:
             client.run(cls.register_serialize)
             client.run_on_scheduler(cls.register_serialize)
             cls._client_run_executed.add(client.id)
