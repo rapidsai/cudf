@@ -179,7 +179,7 @@ struct dispatch_compute_indices {
                         all_itr,
                         all_itr + all_indices.size(),
                         result_itr,
-                        thrust::less<Element>());
+                        cuda::std::less<Element>());
 #else
     // There is a problem with thrust::lower_bound and the output_indexalator.
     // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
