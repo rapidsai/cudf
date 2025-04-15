@@ -360,7 +360,7 @@ struct from_durations_fn {
         return (item.length != -1) ? item.length : format_length(item.value, &timeparts);
       },
       size_type{0},
-      thrust::plus<size_type>());
+      cuda::std::plus<size_type>());
   }
 
   __device__ void set_chars(size_type idx)
