@@ -89,16 +89,13 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   void test_null_partition_bulk(cudf::size_type size, cudf::size_type middle, bool valid)
   {
     thrust::host_vector<bool> expected1(size);
-    std::generate(expected1.begin(), expected1.end(), [n = 0, middle, valid]() mutable {
-      auto i = n++;
-      return (!valid) ^ (i < middle);
-    });
     thrust::host_vector<bool> expected2(size);
-    std::generate(expected2.begin(), expected2.end(), [n = 0, middle, valid]() mutable {
-      auto i = n++;
-      return (valid) ^ (i < middle);
-    });
-
+    std::for_each(thrust::counting_iterator<cudf::size_type>{0},
+                  thrust::counting_iterator<cudf::size_type>{size},
+                  [&](auto i) {
+                    expected1[i] = (!valid) ^ (i < middle);
+                    expected2[i] = (valid) ^ (i < middle);
+                  });
     // TEST
     rmm::device_buffer mask1 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
     rmm::device_buffer mask2 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
