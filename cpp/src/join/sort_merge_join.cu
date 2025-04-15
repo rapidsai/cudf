@@ -456,7 +456,7 @@ sort_merge_join::sort_merge_join(table_view const& left,
   ptleft.raw_tbl_view  = left;
   ptright.raw_tbl_view = right;
   this->compare_nulls  = compare_nulls;
-  preprocess_tables(left, right, compare_nulls, stream, mr);
+  preprocess_tables(left, right, stream, mr);
 
   if (!is_left_sorted) { ptleft.get_sorted_order(stream, mr); }
   if (!is_right_sorted) { ptright.get_sorted_order(stream, mr); }
@@ -534,8 +534,7 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
               thrust::make_counting_iterator(0),
               thrust::make_counting_iterator(0) + ptright.tbl_view.num_rows());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
-    return postprocess_indices(
-      std::move(smaller_indices), std::move(larger_indices), compare_nulls, stream, mr);
+    return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), stream, mr);
   }
   CUDF_EXPECTS(ptleft.tbl_sorted_order.has_value() && ptright.tbl_sorted_order.has_value(),
                "Need to get the sorted order of the tables first");
@@ -546,8 +545,7 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
             ptright.tbl_sorted_order.value()->view().begin<size_type>(),
             ptright.tbl_sorted_order.value()->view().end<size_type>());
   auto [smaller_indices, larger_indices] = obj(stream, mr);
-  return postprocess_indices(
-    std::move(smaller_indices), std::move(larger_indices), compare_nulls, stream, mr);
+  return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), stream, mr);
 }
 
 }  // namespace cudf
