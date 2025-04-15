@@ -190,7 +190,6 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
 template <typename PatternIterator>
 CUDF_KERNEL void like_kernel(column_device_view d_strings,
                              PatternIterator pattern_itr,
-                             // string_view d_pattern,
                              string_view d_escape,
                              bool* results)
 {
