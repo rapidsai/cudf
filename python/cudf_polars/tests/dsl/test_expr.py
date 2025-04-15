@@ -104,3 +104,6 @@ def test_reconstruct_named_expr():
     assert ne1.name == ne2.name
     assert ne1 != ne2
     assert ne2.value == new_value
+
+    ne3 = ne2.reconstruct(ne2.value)
+    assert ne3 is ne2
