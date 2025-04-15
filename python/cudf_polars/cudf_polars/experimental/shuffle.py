@@ -235,13 +235,7 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    scheduler = ir.config_options.get(
-        "executor_options.scheduler", default="synchronous"
-    )
-    shuffle_method = ir.config_options.get(
-        "executor_options.shuffle_method",
-        default=None if scheduler == "distributed" else "tasks",
-    )
+    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"

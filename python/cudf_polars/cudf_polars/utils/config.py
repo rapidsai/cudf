@@ -15,6 +15,18 @@ if TYPE_CHECKING:
 __all__ = ["ConfigOptions"]
 
 
+_STREAMING_DEFAULTS = {
+    "scheduler": "synchronous",
+    "fallback_mode": "warn",
+    "max_rows_per_partition": 1_000_000,
+    "parquet_blocksize": 1_000_000_000,
+    "cardinality_factor": {},
+    "groupby_n_ary": 32,
+    "broadcast_join_limit": 16,
+    "shuffle_method": None,
+}
+
+
 class ConfigOptions:
     """
     GPUEngine configuration-option manager.
@@ -29,8 +41,7 @@ class ConfigOptions:
     """The underlying (nested) config-option dictionary."""
 
     def __init__(self, options: dict[str, Any]):
-        self.validate(options)
-        self.config_options = options
+        self.config_options = self.validate(copy.deepcopy(options))
 
     def set(self, name: str, value: Any) -> Self:
         """
@@ -95,7 +106,7 @@ class ConfigOptions:
             return self._hash_value
 
     @staticmethod
-    def validate(config: dict) -> None:
+    def validate(config: dict) -> dict:
         """
         Validate a configuration-option dictionary.
 
@@ -103,6 +114,10 @@ class ConfigOptions:
         ----------
         config
             GPUEngine configuration options to validate.
+
+        Returns
+        -------
+        Valid config-option dictionary.
 
         Raises
         ------
@@ -123,19 +138,15 @@ class ConfigOptions:
         # Validate executor_options
         executor = config.get("executor", "in-memory")
         if executor == "streaming":
-            unsupported = config.get("executor_options", {}).keys() - {
-                "scheduler",
-                "fallback_mode",
-                "max_rows_per_partition",
-                "parquet_blocksize",
-                "cardinality_factor",
-                "groupby_n_ary",
-                "broadcast_join_limit",
-                "shuffle_method",
-            }
+            executor_options = _STREAMING_DEFAULTS.copy()
+            executor_options.update(config.get("executor_options", {}))
+            config["executor_options"] = executor_options
+            unsupported = executor_options.keys() - set(_STREAMING_DEFAULTS)
         else:
             unsupported = config.get("executor_options", {}).keys()
         if unsupported:
             raise ValueError(
                 f"Unsupported executor_options for {executor}: {unsupported}"
             )
+
+        return config
