@@ -499,6 +499,9 @@ source_properties get_source_properties(compression_type compression, host_span<
       if (compression != compression_type::AUTO) { break; }
       [[fallthrough]];
     }
+    // Snappy is detected after ZSTD since the
+    // magic characters checked at the beginning of the input buffer
+    // are valid for ZSTD compression as well.
     case compression_type::SNAPPY: {
       uncomp_len     = 0;
       auto cur       = src.begin();
