@@ -130,12 +130,12 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
 
 
 @singledispatch
-def to_arrow(cudf_object, metadata=None):
+def to_arrow(plc_object, metadata=None):
     """Convert to a PyArrow object.
 
     Parameters
     ----------
-    cudf_object : Union[Column, Table, Scalar]
+    plc_object : Union[Column, Table, Scalar]
         The cudf object to convert.
     metadata : list
         The metadata to attach to the columns of the table.
@@ -145,11 +145,11 @@ def to_arrow(cudf_object, metadata=None):
     Union[pyarrow.Array, pyarrow.Table, pyarrow.Scalar]
         The converted object of type corresponding to the input type in PyArrow.
     """
-    raise TypeError(f"Unsupported type {type(cudf_object)} for conversion to arrow")
+    raise TypeError(f"Unsupported type {type(plc_object)} for conversion to arrow")
 
 
 @to_arrow.register(DataType)
-def _to_arrow_datatype(cudf_object, **kwargs):
+def _to_arrow_datatype(plc_object, **kwargs):
     """
     Convert a datatype to arrow.
 
@@ -160,20 +160,20 @@ def _to_arrow_datatype(cudf_object, **kwargs):
     - When translating a struct type, provide ``fields``
     - When translating a list type, provide the wrapped ``value_type``
     """
-    if cudf_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
+    if plc_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
         if not (precision := kwargs.get("precision")):
             raise ValueError(
                 "Precision must be provided for decimal types"
             )
             # no pa.decimal32 or pa.decimal64
-        return pa.decimal128(precision, -cudf_object.scale())
-    elif cudf_object.id() == type_id.STRUCT:
+        return pa.decimal128(precision, -plc_object.scale())
+    elif plc_object.id() == type_id.STRUCT:
         if not (fields := kwargs.get("fields")):
             raise ValueError(
                 "Fields must be provided for struct types"
             )
         return pa.struct(fields)
-    elif cudf_object.id() == type_id.LIST:
+    elif plc_object.id() == type_id.LIST:
         if not (value_type := kwargs.get("value_type")):
             raise ValueError(
                 "Value type must be provided for list types"
@@ -181,10 +181,10 @@ def _to_arrow_datatype(cudf_object, **kwargs):
         return pa.list_(value_type)
     else:
         try:
-            return LIBCUDF_TO_ARROW_TYPES[cudf_object.id()]
+            return LIBCUDF_TO_ARROW_TYPES[plc_object.id()]
         except KeyError:
             raise TypeError(
-                f"Unable to convert {cudf_object.id()} to arrow datatype"
+                f"Unable to convert {plc_object.id()} to arrow datatype"
             )
 
 
@@ -198,22 +198,22 @@ class _ObjectWithArrowMetadata:
 
 
 @to_arrow.register(Table)
-def _to_arrow_table(cudf_object, metadata=None):
+def _to_arrow_table(plc_object, metadata=None):
     """Create a PyArrow table from a pylibcudf table."""
-    return pa.table(_ObjectWithArrowMetadata(cudf_object, metadata))
+    return pa.table(_ObjectWithArrowMetadata(plc_object, metadata))
 
 
 @to_arrow.register(Column)
-def _to_arrow_array(cudf_object, metadata=None):
+def _to_arrow_array(plc_object, metadata=None):
     """Create a PyArrow array from a pylibcudf column."""
-    return pa.array(_ObjectWithArrowMetadata(cudf_object, metadata))
+    return pa.array(_ObjectWithArrowMetadata(plc_object, metadata))
 
 
 @to_arrow.register(Scalar)
-def _to_arrow_scalar(cudf_object, metadata=None):
+def _to_arrow_scalar(plc_object, metadata=None):
     # Note that metadata for scalars is primarily important for preserving
     # information on nested types since names are otherwise irrelevant.
-    return to_arrow(Column.from_scalar(cudf_object, 1), metadata=metadata)[0]
+    return to_arrow(Column.from_scalar(plc_object, 1), metadata=metadata)[0]
 
 
 cpdef Table from_dlpack(object managed_tensor):
