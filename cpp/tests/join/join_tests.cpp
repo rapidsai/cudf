@@ -28,6 +28,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
+#include <cudf/join/sort_merge_join.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -50,12 +51,9 @@ constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 enum class algorithm { HASH, SORT_MERGE, MERGE };
 
-// This function is a wrapper around cudf's join APIs that takes the gather map
-// from join APIs and materializes the table that would be created by gathering
-// from the joined tables. Join APIs originally returned tables like this, but
-// they were modified in https://github.com/rapidsai/cudf/pull/7454. This
-// helper function allows us to avoid rewriting all our tests in terms of
-// gather maps.
+using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                            
 template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>> (*join_impl)(
             cudf::table_view const& left_keys,
@@ -104,10 +102,18 @@ std::unique_ptr<cudf::table> inner_join(
   algorithm algo                    = algorithm::HASH)
 {
   if (algo == algorithm::SORT_MERGE) {
-    return join_and_gather<cudf::sort_merge_inner_join>(
+    auto join_lambda = [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality compare_nulls, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) -> JoinResult {
+      cudf::sort_merge_join obj(left, false, right, false, compare_nulls, stream, mr);
+      return obj.inner_join(stream, mr);
+    };
+    return join_and_gather<join_lambda>(
       left_input, right_input, left_on, right_on, compare_nulls);
   } else if (algo == algorithm::MERGE) {
-    return join_and_gather<cudf::merge_inner_join>(
+    auto join_lambda = [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality compare_nulls, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) -> JoinResult {
+      cudf::sort_merge_join obj(left, true, right, true, compare_nulls, stream, mr);
+      return obj.inner_join(stream, mr);
+    };
+    return join_and_gather<join_lambda>(
       left_input, right_input, left_on, right_on, compare_nulls);
   }
   return join_and_gather<cudf::inner_join>(

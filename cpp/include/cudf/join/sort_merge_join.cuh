@@ -57,6 +57,24 @@ class merge {
  private:
   enum class bound_type { UPPER, LOWER };
 
+  template <typename T>
+  void debug_print(std::string str, host_span<const T> span)
+  {
+    std::cout << str << " : ";
+    for (const auto& element : span) {
+      std::cout << element << " ";
+    }
+    std::cout << std::endl;
+  }
+
+  table_view smaller;
+  table_view larger;
+  Iterator sorted_smaller_order_begin;
+  Iterator sorted_smaller_order_end;
+  Iterator sorted_larger_order_begin;
+  Iterator sorted_larger_order_end;
+
+ public:
   struct row_comparator {
     row_comparator(table_device_view const lhs,
                    table_device_view const rhs,
@@ -92,24 +110,6 @@ class merge {
     cudf::experimental::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
   };
 
-  template <typename T>
-  void debug_print(std::string str, host_span<const T> span)
-  {
-    std::cout << str << " : ";
-    for (const auto& element : span) {
-      std::cout << element << " ";
-    }
-    std::cout << std::endl;
-  }
-
-  table_view smaller;
-  table_view larger;
-  Iterator sorted_smaller_order_begin;
-  Iterator sorted_smaller_order_end;
-  Iterator sorted_larger_order_begin;
-  Iterator sorted_larger_order_end;
-
- public:
   merge(table_view const &left, Iterator sorted_left_order_col_begin, Iterator sorted_left_order_col_end, table_view const &right, Iterator sorted_right_order_col_begin, Iterator sorted_right_order_col_end) {
     bool is_left_smaller           = left.num_rows() < right.num_rows();
     if(is_left_smaller) {
@@ -207,7 +207,7 @@ merge<Iterator>::operator()(
         dremel_device_views.push_back(dremel_data.back());
       }
     }
-    auto d_dremel_device_views = detail::make_device_uvector_sync(
+    auto d_dremel_device_views = detail::make_device_uvector(
       dremel_device_views, stream, cudf::get_current_device_resource_ref());
     return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
   };

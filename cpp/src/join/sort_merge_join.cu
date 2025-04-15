@@ -649,6 +649,14 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_r
   return tbl_mapping;
 }
 
+struct mapping_functor {
+  device_span<size_type> mapping;
+  __device__ size_type operator()(size_type idx)
+  {
+    return mapping[idx];
+  }
+};
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::postprocess_indices(
@@ -673,13 +681,13 @@ sort_merge_join::postprocess_indices(
       smaller_indices->begin(),
       smaller_indices->end(),
       smaller_indices->begin(),
-      [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+      mapping_functor{left_mapping});
     thrust::transform(
       rmm::exec_policy(stream),
       larger_indices->begin(),
       larger_indices->end(),
       larger_indices->begin(),
-      [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
+      mapping_functor{right_mapping});
     return {std::move(smaller_indices), std::move(larger_indices)};
   }
   thrust::transform(
@@ -687,13 +695,13 @@ sort_merge_join::postprocess_indices(
     smaller_indices->begin(),
     smaller_indices->end(),
     smaller_indices->begin(),
-    [right_mapping = right_mapping.begin()] __device__(auto idx) { return right_mapping[idx]; });
+    mapping_functor{right_mapping});
   thrust::transform(
     rmm::exec_policy(stream),
     larger_indices->begin(),
     larger_indices->end(),
     larger_indices->begin(),
-    [left_mapping = left_mapping.begin()] __device__(auto idx) { return left_mapping[idx]; });
+    mapping_functor{left_mapping});
   return {std::move(larger_indices), std::move(smaller_indices)};
 }
 
