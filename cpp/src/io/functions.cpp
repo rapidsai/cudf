@@ -48,7 +48,12 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) {
+    CUDF_LOG_WARN(
+      "Auto detection of compression type is supported only for file type buffers. For other "
+      "buffer types, AUTO compression type assumes uncompressed input.");
+    return compression_type::NONE;
+  }
 
   auto filepath = info.filepaths()[0];
 
