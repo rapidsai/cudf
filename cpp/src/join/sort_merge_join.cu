@@ -55,7 +55,7 @@ namespace {
 
 #define SORT_MERGE_JOIN_DEBUG 0
 
-template <typename Iterator>
+template <typename LargerIterator, typename SmallerIterator>
 class merge {
  private:
   template <typename T>
@@ -70,10 +70,10 @@ class merge {
 
   table_view smaller;
   table_view larger;
-  Iterator sorted_smaller_order_begin;
-  Iterator sorted_smaller_order_end;
-  Iterator sorted_larger_order_begin;
-  Iterator sorted_larger_order_end;
+  SmallerIterator sorted_smaller_order_begin;
+  SmallerIterator sorted_smaller_order_end;
+  LargerIterator sorted_larger_order_begin;
+  LargerIterator sorted_larger_order_end;
 
  public:
   enum class bound_type { UPPER, LOWER };
@@ -113,6 +113,15 @@ class merge {
     cudf::experimental::row::lexicographic::device_row_comparator<true, bool> lb_comparator;
   };
 
+  merge(table_view const& smaller,
+        SmallerIterator sorted_smaller_order_begin,
+        SmallerIterator sorted_smaller_order_end,
+        table_view const& larger,
+        LargerIterator sorted_larger_order_begin,
+        LargerIterator sorted_larger_order_end) 
+    : smaller{smaller}, sorted_smaller_order_begin{sorted_smaller_order_begin}, sorted_smaller_order_end{sorted_smaller_order_end}, larger{larger}, sorted_larger_order_begin{sorted_larger_order_begin}, sorted_larger_order_end{sorted_larger_order_end} {}
+
+  /*
   merge(table_view const& left,
         Iterator sorted_left_order_col_begin,
         Iterator sorted_left_order_col_end,
@@ -137,16 +146,17 @@ class merge {
       sorted_smaller_order_end   = sorted_right_order_col_end;
     }
   }
+  */
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
 
-template <typename Iterator>
+template <typename LargerIterator, typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge<Iterator>::operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
   auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
@@ -422,12 +432,32 @@ void sort_merge_join::preprocess_tables(table_view const left,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
+  // if a table has no nullable column, then there's no preprocessing to be done
+  auto is_nullable_table = [](table_view const &t) {
+    for (auto&& col : t) {
+      if (col.nullable()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   if (compare_nulls == null_equality::EQUAL) {
     ptleft.tbl_view  = left;
     ptright.tbl_view = right;
   } else {
-    ptleft.preprocess_raw_table(stream, mr);
-    ptright.preprocess_raw_table(stream, mr);
+    auto is_left_nullable = is_nullable_table(left);
+    auto is_right_nullable = is_nullable_table(right);
+    if(is_left_nullable) {
+      ptleft.preprocess_raw_table(stream, mr);
+    } else {
+      ptleft.tbl_view  = left;
+    }
+    if(is_right_nullable) {
+      ptright.preprocess_raw_table(stream, mr);
+    } else {
+      ptright.tbl_view = right;
+    }
   }
 }
 
@@ -487,37 +517,58 @@ sort_merge_join::postprocess_indices(
   rmm::device_async_resource_ref mr)
 {
   bool is_left_smaller = ptleft.tbl_view.num_rows() < ptright.tbl_view.num_rows();
+  // if a table has no nullable column, then there's no postprocessing to be done
+  auto is_nullable_table = [](table_view const &t) {
+    for (auto&& col : t) {
+      if (col.nullable()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   if (compare_nulls == null_equality::EQUAL) {
     if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
     return {std::move(larger_indices), std::move(smaller_indices)};
   }
 
-  auto left_mapping  = ptleft.map_tbl_to_raw(stream, mr);
-  auto right_mapping = ptright.map_tbl_to_raw(stream, mr);
-
-  if (is_left_smaller) {
-    thrust::transform(rmm::exec_policy(stream),
-                      smaller_indices->begin(),
-                      smaller_indices->end(),
-                      smaller_indices->begin(),
-                      mapping_functor{left_mapping});
-    thrust::transform(rmm::exec_policy(stream),
-                      larger_indices->begin(),
-                      larger_indices->end(),
-                      larger_indices->begin(),
-                      mapping_functor{right_mapping});
-    return {std::move(smaller_indices), std::move(larger_indices)};
+  auto is_left_nullable = is_nullable_table(ptleft.tbl_view);
+  auto is_right_nullable = is_nullable_table(ptright.tbl_view);
+  if(is_left_nullable) {
+    auto left_mapping  = ptleft.map_tbl_to_raw(stream, mr);
+    if (is_left_smaller) {
+      thrust::transform(rmm::exec_policy(stream),
+                        smaller_indices->begin(),
+                        smaller_indices->end(),
+                        smaller_indices->begin(),
+                        mapping_functor{left_mapping});
+    }
+    else {
+      thrust::transform(rmm::exec_policy(stream),
+                        larger_indices->begin(),
+                        larger_indices->end(),
+                        larger_indices->begin(),
+                        mapping_functor{left_mapping});
+    }
   }
-  thrust::transform(rmm::exec_policy(stream),
-                    smaller_indices->begin(),
-                    smaller_indices->end(),
-                    smaller_indices->begin(),
-                    mapping_functor{right_mapping});
-  thrust::transform(rmm::exec_policy(stream),
-                    larger_indices->begin(),
-                    larger_indices->end(),
-                    larger_indices->begin(),
-                    mapping_functor{left_mapping});
+  if(is_right_nullable) {
+    auto right_mapping = ptright.map_tbl_to_raw(stream, mr);
+    if (is_left_smaller) {
+      thrust::transform(rmm::exec_policy(stream),
+                        larger_indices->begin(),
+                        larger_indices->end(),
+                        larger_indices->begin(),
+                        mapping_functor{right_mapping});
+    }
+    else {
+      thrust::transform(rmm::exec_policy(stream),
+                        smaller_indices->begin(),
+                        smaller_indices->end(),
+                        smaller_indices->begin(),
+                        mapping_functor{right_mapping});
+    }
+  }
+  if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
   return {std::move(larger_indices), std::move(smaller_indices)};
 }
 
@@ -525,25 +576,27 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  // we passed pre-sorted tables
-  if (!ptleft.tbl_sorted_order.has_value()) {
-    merge obj(ptleft.tbl_view,
-              thrust::make_counting_iterator(0),
-              thrust::make_counting_iterator(0) + ptleft.tbl_view.num_rows(),
-              ptright.tbl_view,
-              thrust::make_counting_iterator(0),
-              thrust::make_counting_iterator(0) + ptright.tbl_view.num_rows());
+  // TODO: what if one is sorted but not the other?
+  bool is_left_smaller = ptleft.tbl_view.num_rows() < ptright.tbl_view.num_rows();
+  auto &smaller = is_left_smaller ? ptleft : ptright;
+  auto &larger = is_left_smaller ? ptright : ptleft;
+  if(smaller.tbl_sorted_order.has_value() && larger.tbl_sorted_order.has_value()) {
+    merge obj(smaller.tbl_view,
+              smaller.tbl_sorted_order.value()->view().begin<size_type>(),
+              smaller.tbl_sorted_order.value()->view().end<size_type>(),
+              larger.tbl_view,
+              larger.tbl_sorted_order.value()->view().begin<size_type>(),
+              larger.tbl_sorted_order.value()->view().end<size_type>());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
     return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), stream, mr);
   }
-  CUDF_EXPECTS(ptleft.tbl_sorted_order.has_value() && ptright.tbl_sorted_order.has_value(),
-               "Need to get the sorted order of the tables first");
-  merge obj(ptleft.tbl_view,
-            ptleft.tbl_sorted_order.value()->view().begin<size_type>(),
-            ptleft.tbl_sorted_order.value()->view().end<size_type>(),
-            ptright.tbl_view,
-            ptright.tbl_sorted_order.value()->view().begin<size_type>(),
-            ptright.tbl_sorted_order.value()->view().end<size_type>());
+  // we passed pre-sorted tables
+  merge obj(smaller.tbl_view,
+            thrust::make_counting_iterator(0),
+            thrust::make_counting_iterator(smaller.tbl_view.num_rows()),
+            larger.tbl_view,
+            thrust::make_counting_iterator(0),
+            thrust::make_counting_iterator(larger.tbl_view.num_rows()));
   auto [smaller_indices, larger_indices] = obj(stream, mr);
   return postprocess_indices(std::move(smaller_indices), std::move(larger_indices), stream, mr);
 }

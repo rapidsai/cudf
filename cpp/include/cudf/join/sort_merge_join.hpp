@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -23,7 +25,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <optional>
+#include <variant>
 
 namespace CUDF_EXPORT cudf {
 
@@ -96,7 +101,7 @@ class sort_merge_join {
 
     std::optional<std::unique_ptr<column>> tbl_sorted_order =
       std::nullopt;  ///< optional reordering if we are given pre-sorted tables
-
+                    
     /**
      * @brief Mark rows in raw table with nulls at root or child levels by populating the
      * raw_validity_mask
