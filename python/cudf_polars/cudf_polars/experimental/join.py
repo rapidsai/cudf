@@ -127,8 +127,7 @@ def _should_bcast_join(
         and small_count
         <= ir.config_options.get(
             # Maximum number of "small"-table partitions to bcast
-            "executor_options.broadcast_join_limit",
-            default=16,
+            "executor_options.broadcast_join_limit"
         )
         and (
             ir.options[0] == "Inner"

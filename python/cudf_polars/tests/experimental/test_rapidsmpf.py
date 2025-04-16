@@ -11,37 +11,38 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
-def test_join_rapidsmp(max_rows_per_partition: int) -> None:
+def test_join_rapidsmpf(max_rows_per_partition: int) -> None:
     # Check that we have a distributed cluster running.
     # This tests must be run with:
-    # --executor='dask-experimental' --dask-cluster --rapidsmp
+    # --executor='streaming' --scheduler='distributed'
     distributed = pytest.importorskip("distributed")
     try:
         client = distributed.get_client()
     except ValueError:
         pytest.skip(reason="Requires distributed execution.")
 
-    # check that we have a rapidsmp cluster running
-    pytest.importorskip("rapidsmp")
+    # check that we have a rapidsmpf cluster running
+    pytest.importorskip("rapidsmpf")
     try:
         # This will result in a ValueError if the
-        # scheduler isn't compatible with rapidsmp.
+        # scheduler isn't compatible with rapidsmpf.
         # Otherwise, it's a no-op if the cluster
         # was already bootstrapped.
-        from rapidsmp.integrations.dask import bootstrap_dask_cluster
+        from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
         bootstrap_dask_cluster(client)
     except ValueError:
-        pytest.skip(reason="Requires rapidsmp cluster.")
+        pytest.skip(reason="Requires a rapidsmpf-bootstrapped cluster.")
 
     # Setup the GPUEngine config
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": 2,
-            "shuffle_method": "rapidsmp",
+            "shuffle_method": "rapidsmpf",
+            "scheduler": "distributed",
         },
     )
 
