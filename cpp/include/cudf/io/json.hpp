@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -964,6 +964,8 @@ class json_writer_options {
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
   std::optional<table_metadata> _metadata;  // Optional column names
+  // Indicates whether to unescape UTF-8 characters in JSON output
+  bool _enable_utf8_unescaped = false;
 
   /**
    * @brief Constructor from sink and table.
@@ -1044,6 +1046,26 @@ class json_writer_options {
    * @return `true` if JSON lines is used for records format
    */
   [[nodiscard]] bool is_enabled_lines() const { return _lines; }
+
+  /**
+   * @brief Enable or disable writing unescaped UTF-8 characters in JSON output.
+   *
+   * Example:
+   * With `enable_utf8_unescaped(true)`, the string `"ẅ"` is written as-is instead of:
+   * `"\u1e85"`.
+   *
+   * @note Enabling this is useful for producing more human-readable JSON.
+   *
+   * @param val Boolean value to enable/disable UTF-8 unescaped output
+   */
+  void enable_utf8_unescaped(bool val) { _enable_utf8_unescaped = val; }
+
+  /**
+   * @brief Check whether UTF-8 unescaped output is enabled.
+   *
+   * @return true if UTF-8 unescaped output is enabled, false otherwise
+   */
+  [[nodiscard]] bool is_enabled_utf8_unescaped() const { return _enable_utf8_unescaped; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
@@ -1214,6 +1236,20 @@ class json_writer_options_builder {
   json_writer_options_builder& include_nulls(bool val)
   {
     options._include_nulls = val;
+    return *this;
+  }
+
+  /**
+   * @brief Enables/Disable UTF-8 unescaped output for string fields.
+   *
+   * Default is `false`, which escapes all non-ASCII characters.
+   *
+   * @param val Boolean value to enable/disable unescaped UTF-8 output
+   * @return this for chaining
+   */
+  json_writer_options_builder& utf8_unescaped(bool val)
+  {
+    options._enable_utf8_unescaped = val;
     return *this;
   }
 

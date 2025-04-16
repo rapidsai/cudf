@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -576,22 +576,24 @@ TEST_P(JsonCompressedWriterTest, StructAllNullCombinations)
   run_test(out_options, expected);
 }
 
-TEST_P(JsonCompressedWriterTest, Unicode)
+auto make_unicode_table()
 {
-  //                                       UTF-8,                      UTF-16
   cudf::test::strings_column_wrapper col1{"\"\\/\b\f\n\r\t", "ராபிட்ஸ்", "$€𐐷𤭢", "C𝞵𝓓𝒻"};
-  // Unicode
-  // 0000-FFFF     Basic Multilingual Plane
-  // 10000-10FFFF  Supplementary Plane
-  cudf::test::strings_column_wrapper col2{
-    "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
-    "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
-    "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
-    "𰾑𱔈𲍉"};                                         // 30000-3FFFF
+  cudf::test::strings_column_wrapper col2{"CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",
+                                          "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",
+                                          "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",
+                                          "𰾑𱔈𲍉"};
   cudf::test::fixed_width_column_wrapper<int16_t> col3{{1, 2, 3, 4},
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3}};
   cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  return std::make_pair(tbl_view, mt);
+}
+
+TEST_P(JsonCompressedWriterTest, Unicode)
+{
+  auto [tbl_view, mt] = make_unicode_table();
 
   std::vector<char> out_buffer;
   auto destination = cudf::io::sink_info(&out_buffer);
@@ -609,6 +611,31 @@ TEST_P(JsonCompressedWriterTest, Unicode)
 {"col1":"C\ud835\udfb5\ud835\udcd3\ud835\udcbb","col2":"\ud883\udf91\ud885\udd08\ud888\udf49","int16":4}
 )";
   run_test(out_options, expected);
+}
+
+TEST_P(JsonCompressedWriterTest, UnicodeUnescaped)
+{
+  auto [tbl_view, mt] = make_unicode_table();
+
+  std::vector<char> out_buffer;
+  auto destination = cudf::io::sink_info(&out_buffer);
+  auto out_options = cudf::io::json_writer_options_builder(destination, tbl_view)
+                       .include_nulls(true)
+                       .metadata(mt)
+                       .lines(true)
+                       .na_rep("null")
+                       .utf8_unescaped(true)
+                       .build();
+
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
+  std::string const output_string(out_buffer.data(), out_buffer.size());
+
+  EXPECT_TRUE(output_string.find("ராபிட்ஸ்") != std::string::npos);
+  EXPECT_TRUE(output_string.find("𐐷") != std::string::npos);
+  EXPECT_TRUE(output_string.find("𝞵") != std::string::npos);
+
+  EXPECT_TRUE(output_string.find("\\\"") != std::string::npos);
+  EXPECT_TRUE(output_string.find("\\n") != std::string::npos);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

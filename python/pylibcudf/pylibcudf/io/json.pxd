@@ -94,6 +94,7 @@ cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptionsBuilder include_nulls(self, bool val)
     cpdef JsonWriterOptionsBuilder lines(self, bool val)
     cpdef JsonWriterOptionsBuilder compression(self, compression_type comptype)
+    cpdef JsonWriterOptionsBuilder utf8_unescaped(self, bool val)
     cpdef JsonWriterOptions build(self)
 
 cpdef void write_json(JsonWriterOptions options, Stream stream = *)
