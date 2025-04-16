@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import IR
@@ -46,19 +47,21 @@ def _(
     ir: Repartition, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Repartition an IR node.
-    # Only supports N -> 1 rapartitioning (for now).
-
-    if partition_info[ir].count > 1:  # pragma: no cover
-        raise NotImplementedError(
-            f"Repartition -> {partition_info[ir].count} not supported."
-        )
+    # Only supports rapartitioning to fewer (for now).
 
     (child,) = ir.children
-    key_name = get_key_name(ir)
-    child_name = get_key_name(child)
-    return {
-        (key_name, 0): (
-            _concat,
-            *((child_name, idx) for idx in range(partition_info[child].count)),
+    count_in = partition_info[child].count
+    count_out = partition_info[ir].count
+
+    if count_out > count_in:  # pragma: no cover
+        raise NotImplementedError(
+            f"Repartition {count_in} -> {count_out} not supported."
         )
+
+    key_name = get_key_name(ir)
+    stride = math.ceil(count_in / count_out)
+    child_keys = tuple(partition_info[child].keys(child))
+    return {
+        (key_name, i): (_concat, *child_keys[k : k + stride])
+        for i, k in enumerate(range(0, count_in, stride))
     }
