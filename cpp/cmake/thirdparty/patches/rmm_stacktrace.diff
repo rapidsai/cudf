@@ -1,0 +1,109 @@
+diff --git a/cpp/include/rmm/error.hpp b/cpp/include/rmm/error.hpp
+index 75bf1fbe..c91a33ef 100644
+--- a/cpp/include/rmm/error.hpp
++++ b/cpp/include/rmm/error.hpp
+@@ -21,6 +21,68 @@
+ #include <stdexcept>
+ #include <string>
+ 
++#if defined(__GNUC__)
++#include <cxxabi.h>
++#include <execinfo.h>
++
++#include <cstdlib>
++#include <cstring>
++#include <sstream>
++#else
++#error "Attempted to implement stacktrace with non-gcc compiler."
++#endif
++
++// The struct to store the current stacktrace upon its construction.
++// This should not be declared inside rmm namespace to avoid symbol visibility issue.
++struct rmm_stacktrace_recorder {
++  rmm_stacktrace_recorder() : _stacktrace{get_stacktrace()} {}
++ public:
++  [[nodiscard]] char const* stacktrace() const { return _stacktrace.c_str(); }
++ protected:
++  std::string const _stacktrace;
++ private:
++  std::string get_stacktrace()
++  {
++    constexpr int max_stack_depth = 64;
++    void* stack[max_stack_depth];
++    auto const depth   = backtrace(stack, max_stack_depth);
++    auto const modules = backtrace_symbols(stack, depth);
++    if (modules == nullptr) { return "No stacktrace could be captured!"; }
++    std::stringstream ss;
++    // Skip one more depth to avoid including the stackframe of this function.
++    constexpr int skip_depth = 2;  // this function + the exception constructor
++    for (auto i = skip_depth; i < depth; ++i) {
++      // Each modules[i] string contains a mangled name in the format like following:
++      // `module_name(function_name+0x012) [0x01234567890a]`
++      // We need to extract function name and function offset.
++      char* begin_func_name   = std::strstr(modules[i], "(");
++      char* begin_func_offset = std::strstr(modules[i], "+");
++      char* end_func_offset   = std::strstr(modules[i], ")");
++      auto const frame_idx = i - skip_depth;
++      if (begin_func_name && begin_func_offset && end_func_offset &&
++          begin_func_name < begin_func_offset) {
++        // Split `modules[i]` into separate null-terminated strings.
++        // After this, mangled function name will then be [begin_func_name, begin_func_offset), and
++        // function offset is in [begin_func_offset, end_func_offset).
++        *(begin_func_name++)   = 0;
++        *(begin_func_offset++) = 0;
++        *end_func_offset       = 0;
++        // We need to demangle function name.
++        int status{0};
++        char* func_name = abi::__cxa_demangle(begin_func_name, nullptr, nullptr, &status);
++        ss << "#" << frame_idx << ": " << modules[i] << " : "
++           << (status == 0 /*demangle success*/ ? func_name : begin_func_name) << "+"
++           << begin_func_offset << "\n";
++        free(func_name);
++      } else {
++        ss << "#" << frame_idx << ": " << modules[i] << "\n";
++      }
++    }
++    free(modules);
++    return ss.str();
++  }
++};
++
+ namespace RMM_NAMESPACE {
+ 
+ /**
+@@ -32,7 +94,7 @@ namespace RMM_NAMESPACE {
+  * RMM_EXPECTS macro.
+  *
+  */
+-struct logic_error : public std::logic_error {
++struct logic_error : public std::logic_error, public rmm_stacktrace_recorder {
+   using std::logic_error::logic_error;
+ };
+ 
+@@ -42,7 +104,7 @@ struct logic_error : public std::logic_error {
+  * @ingroup errors
+  *
+  */
+-struct cuda_error : public std::runtime_error {
++struct cuda_error : public std::runtime_error, public rmm_stacktrace_recorder {
+   using std::runtime_error::runtime_error;
+ };
+ 
+@@ -52,7 +114,7 @@ struct cuda_error : public std::runtime_error {
+  * @ingroup errors
+  *
+  */
+-class bad_alloc : public std::bad_alloc {
++class bad_alloc : public std::bad_alloc, public rmm_stacktrace_recorder {
+  public:
+   /**
+    * @brief Constructs a bad_alloc with the error message.
+@@ -107,7 +169,7 @@ class out_of_memory : public bad_alloc {
+  * @ingroup errors
+  *
+  */
+-class out_of_range : public std::out_of_range {
++class out_of_range : public std::out_of_range, public rmm_stacktrace_recorder {
+   using std::out_of_range::out_of_range;
+ };
+ 

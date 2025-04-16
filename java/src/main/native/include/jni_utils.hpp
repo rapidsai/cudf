@@ -912,6 +912,8 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
     stacktrace = st->stacktrace();                                                                 \
   } else if (auto const st = dynamic_cast<thrust_stacktrace_recorder const*>(&e); st != nullptr) { \
     stacktrace = st->stacktrace();                                                                 \
+  } else if (auto const st = dynamic_cast<rmm_stacktrace_recorder const*>(&e); st != nullptr) {    \
+    stacktrace = st->stacktrace();                                                                 \
   }
 inline char const* get_stacktrace(char const* str) { return str; }
 #else  // CUDF_BUILD_STACKTRACE_DEBUG
@@ -920,13 +922,6 @@ inline char const* get_stacktrace(char const*) { return nullptr; }
 #endif
 
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                 \
-  catch (rmm::out_of_memory const& e)                                                             \
-  {                                                                                               \
-    JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                   \
-    auto const what =                                                                             \
-      std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what());  \
-    JNI_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                              \
-  }                                                                                               \
   catch (cudf::fatal_cuda_error const& e)                                                         \
   {                                                                                               \
     JNI_CHECK_THROW_CUDA_EXCEPTION(env,                                                           \

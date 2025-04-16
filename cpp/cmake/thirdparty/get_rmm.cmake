@@ -16,6 +16,12 @@
 function(find_and_configure_rmm)
   include(${rapids-cmake-dir}/cpm/rmm.cmake)
 
+  if(CUDF_BUILD_STACKTRACE_DEBUG)
+    include(${rapids-cmake-dir}/cpm/package_override.cmake)
+    set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+    rapids_cpm_package_override("${cudf_patch_dir}/rmm_override.json")
+  endif()
+
   # Find or install RMM
   rapids_cpm_rmm(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 

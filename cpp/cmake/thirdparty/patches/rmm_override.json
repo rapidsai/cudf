@@ -1,0 +1,14 @@
+
+{
+  "packages" : {
+    "rmm" : {
+      "patches" : [
+        {
+          "file" : "${current_json_dir}/rmm_stacktrace.diff",
+          "issue" : "Attach a stacktrace to rmm exceptions",
+          "fixed_in" : ""
+        }
+      ]
+    }
+  }
+}
