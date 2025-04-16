@@ -22,7 +22,7 @@ package ai.rapids.cudf;
  */
 public class CudaFatalException extends CudaException {
   CudaFatalException(String message, int errorCode) {
-    this(message, errorCode);
+    super(message, errorCode);
   }
 
   CudaFatalException(String message, String nativeStacktrace, int errorCode) {
