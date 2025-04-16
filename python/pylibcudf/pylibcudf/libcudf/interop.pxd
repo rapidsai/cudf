@@ -126,7 +126,6 @@ cdef extern from *:
     }
 
     void release_arrow_device_array_raw(ArrowDeviceArray *array) {
-      // TODO: Probably needs a sync
       if (array->array.release != nullptr) {
         array->array.release(&array->array);
       }
@@ -140,8 +139,6 @@ cdef extern from *:
 
     void PylibcudfArrowDeviceArrayRelease(ArrowArray* array)
     {
-      // TODO: Figure out if synchronization needs to be handled here in addition to the
-      // parent. It probably does because we'll allocate an extra level of it.
       auto private_data = reinterpret_cast<PylibcudfArrowDeviceArrayPrivateData*>(
         array->private_data);
       Py_DECREF(private_data->owner);
@@ -156,8 +153,6 @@ cdef extern from *:
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
       auto tmp = cudf::to_arrow_device(obj, stream, mr);
-
-      // TODO: Technically need to call the sync event before we do anything.
 
       // Instead of moving the whole device array, we move the underlying ArrowArray
       // into the custom private data struct for managing its data then create a new
