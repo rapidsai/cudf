@@ -152,7 +152,8 @@ struct base_fn {
     // first, check for the special title-case characters
     auto tc_itr = thrust::upper_bound(
       thrust::seq, title_case_table.begin(), title_case_table.end(), code_point);
-    if (*(tc_itr - (tc_itr > title_case_table.begin())) == code_point) {
+    tc_itr -= (tc_itr != title_case_table.begin());
+    if (*tc_itr == code_point) {
       // result is encoded with up to 3 Unicode (16-bit) characters
       auto const result = title_case_chars[cuda::std::distance(title_case_table.begin(), tc_itr)];
       auto const count  = ((result & 0x0FFFF00000000) > 0) + ((result & 0x0000FFFF0000) > 0) +
