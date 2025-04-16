@@ -15,19 +15,21 @@ from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
-from pylibcudf.libcudf.interop cimport ArrowArray, ArrowSchema, arrow_column
+from pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowSchema,
+    ArrowDeviceArray,
+    arrow_column,
+    column_metadata,
+    to_arrow_host_raw,
+    to_arrow_device_raw,
+    to_arrow_schema_raw,
+)
 from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
-from pylibcudf.libcudf.interop cimport (
-    ArrowArray,
-    ArrowSchema,
-    column_metadata,
-    to_arrow_host_raw,
-    to_arrow_schema_raw,
-)
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -40,6 +42,7 @@ from .types cimport DataType, size_of, type_id
 from ._interop_helpers cimport (
     _release_schema,
     _release_array,
+    _release_device_array,
     _metadata_to_libcudf,
 )
 from .null_mask cimport bitmask_allocation_size_bytes
@@ -752,11 +755,36 @@ cdef class Column:
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
+    def _to_device_array(self):
+        cdef ArrowDeviceArray* raw_device_array_ptr
+        with nogil:
+            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+
+        return PyCapsule_New(
+            <void*>raw_device_array_ptr,
+            "arrow_device_array",
+            _release_device_array
+        )
+
     def __arrow_c_array__(self, requested_schema=None):
         if requested_schema is not None:
             raise ValueError("pylibcudf.Column does not support alternative schema")
 
         return self._to_schema(), self._to_host_array()
+
+    def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Column does not support alternative schema")
+
+        non_default_kwargs = [
+            name for name, value in kwargs.items() if value is not None
+        ]
+        if non_default_kwargs:
+            raise NotImplementedError(
+                f"Received unsupported keyword argument(s): {non_default_kwargs}"
+            )
+
+        return self._to_schema(), self._to_device_array()
 
 
 cdef class ListColumnView:

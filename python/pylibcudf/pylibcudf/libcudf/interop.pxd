@@ -103,23 +103,13 @@ cdef extern from *:
       delete schema;
     }
 
+    template <typename ViewType>
     ArrowArray* to_arrow_host_raw(
-      cudf::table_view const& tbl,
+      ViewType const& obj,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
       ArrowArray *arr = new ArrowArray();
-      auto device_arr = cudf::to_arrow_host(tbl, stream, mr);
-      ArrowArrayMove(&device_arr->array, arr);
-      return arr;
-    }
-
-    ArrowArray* to_arrow_host_raw(
-      cudf::column_view const& col,
-      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      // Assumes the sync event is null and the data is already on the host.
-      ArrowArray *arr = new ArrowArray();
-      auto device_arr = cudf::to_arrow_host(col, stream, mr);
+      auto device_arr = cudf::to_arrow_host(obj, stream, mr);
       ArrowArrayMove(&device_arr->array, arr);
       return arr;
     }
@@ -155,12 +145,13 @@ cdef extern from *:
       array->release = nullptr;
     }
 
+    template <typename ViewType>
     ArrowDeviceArray* to_arrow_device_raw(
-      cudf::table_view const& tbl,
+      ViewType const& obj,
       PyObject* owner,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      auto tmp = cudf::to_arrow_device(tbl, stream, mr);
+      auto tmp = cudf::to_arrow_device(obj, stream, mr);
 
       // TODO: Technically need to call the sync event before we do anything.
 
@@ -219,5 +210,9 @@ cdef extern from *:
     ) except +libcudf_exception_handler nogil
     cdef ArrowDeviceArray* to_arrow_device_raw(
         const table_view& tbl,
+        object owner,
+    ) except +libcudf_exception_handler nogil
+    cdef ArrowDeviceArray* to_arrow_device_raw(
+        const column_view& tbl,
         object owner,
     ) except +libcudf_exception_handler nogil

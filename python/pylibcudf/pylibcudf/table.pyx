@@ -14,8 +14,6 @@ from libcpp.vector cimport vector
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.table.table cimport table
-
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
@@ -27,6 +25,7 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_host_raw,
     to_arrow_schema_raw,
 )
+from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .utils cimport _get_stream
