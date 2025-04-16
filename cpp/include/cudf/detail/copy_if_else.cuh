@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      rmm::device_async_resource_ref mr)
 {
   // This is the type of the cuda::std::optional element in the passed iterators
-  using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
+  using Element = cuda::std::iter_value_t<LeftIter>::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, cudf::detail::warp_size);

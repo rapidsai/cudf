@@ -75,7 +75,7 @@ struct minmax_pair {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 auto reduce_device(InputIterator d_in,
                    size_type num_items,
                    Op binary_op,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ template <typename InputIterator,
           typename OffsetIterator,
           typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
+          typename OutputType = cuda::std::iter_value_t<OutputIterator>,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
 void segmented_reduce(InputIterator d_in,
@@ -99,7 +99,7 @@ template <typename InputIterator,
           typename OffsetIterator,
           typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
+          typename OutputType = cuda::std::iter_value_t<OutputIterator>,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
 void segmented_reduce(InputIterator,
@@ -146,8 +146,8 @@ void segmented_reduce(InputIterator d_in,
                       size_type* d_valid_counts,
                       rmm::cuda_stream_view stream)
 {
-  using OutputType       = typename thrust::iterator_value<OutputIterator>::type;
-  using IntermediateType = typename thrust::iterator_value<InputIterator>::type;
+  using OutputType       = cuda::std::iter_value_t<OutputIterator>;
+  using IntermediateType = cuda::std::iter_value_t<InputIterator>;
   auto num_segments      = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
   auto const initial_value = op.template get_identity<IntermediateType>();
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());

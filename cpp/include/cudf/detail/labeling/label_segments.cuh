@@ -77,7 +77,7 @@ void label_segments(InputIterator offsets_begin,
   if (num_labels == 0) { return; }
 
   // When the output array is not empty, always fill it with `0` value first.
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  using OutputType = cuda::std::iter_value_t<OutputIterator>;
   thrust::uninitialized_fill(rmm::exec_policy(stream), label_begin, label_end, OutputType{0});
 
   // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
@@ -87,24 +87,23 @@ void label_segments(InputIterator offsets_begin,
   // very large segment.
   if (cuda::std::distance(offsets_begin, offsets_end) <= 2) { return; }
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    offsets_begin + 1,  // exclude the first offset value
-    offsets_end - 1,    // exclude the last offset value
-    [num_labels = static_cast<typename thrust::iterator_value<InputIterator>::type>(num_labels),
-     offsets    = offsets_begin,
-     output     = label_begin] __device__(auto const idx) {
-      // Zero-normalized offsets.
-      auto const dst_idx = idx - (*offsets);
+  thrust::for_each(rmm::exec_policy(stream),
+                   offsets_begin + 1,  // exclude the first offset value
+                   offsets_end - 1,    // exclude the last offset value
+                   [num_labels = static_cast<cuda::std::iter_value_t<InputIterator>>(num_labels),
+                    offsets    = offsets_begin,
+                    output     = label_begin] __device__(auto const idx) {
+                     // Zero-normalized offsets.
+                     auto const dst_idx = idx - (*offsets);
 
-      // Scatter value `1` to the index at (idx - offsets[0]).
-      // Note that we need to check for out of bound, since the offset values may be invalid due to
-      // empty segments at the end.
-      // In case we have repeated offsets (i.e., we have empty segments), this `atomicAdd` call will
-      // make sure the label values corresponding to these empty segments will be skipped in the
-      // output.
-      if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
-    });
+                     // Scatter value `1` to the index at (idx - offsets[0]).
+                     // Note that we need to check for out of bound, since the offset values may be
+                     // invalid due to empty segments at the end. In case we have repeated offsets
+                     // (i.e., we have empty segments), this `atomicAdd` call will make sure the
+                     // label values corresponding to these empty segments will be skipped in the
+                     // output.
+                     if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
+                   });
   thrust::inclusive_scan(rmm::exec_policy(stream), label_begin, label_end, label_begin);
 }
 
@@ -146,7 +145,7 @@ void labels_to_offsets(InputIterator labels_begin,
                        rmm::cuda_stream_view stream)
 {
   // Always fill the entire output array with `0` value regardless of the input.
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  using OutputType = cuda::std::iter_value_t<OutputIterator>;
   thrust::uninitialized_fill(rmm::exec_policy(stream), offsets_begin, offsets_end, OutputType{0});
 
   // If there is not any label value, we will have zero segment or all empty segments. We should
