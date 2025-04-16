@@ -785,6 +785,7 @@ add_library(
   src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/nvml_shim.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -945,7 +946,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow zstd CUDA::nvml
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
