@@ -101,7 +101,7 @@ class sort_merge_join {
 
     std::optional<std::unique_ptr<column>> tbl_sorted_order =
       std::nullopt;  ///< optional reordering if we are given pre-sorted tables
-                    
+
     /**
      * @brief Mark rows in raw table with nulls at root or child levels by populating the
      * raw_validity_mask
