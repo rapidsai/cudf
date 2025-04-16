@@ -43,11 +43,12 @@ __all__ = ["Table"]
 
 
 class _ArrowLikeMeta(type):
-    # We cannot separate stream and array via singledispatch because the
-    # dispatch will often be ambiguous when objects expose both protocols.
+    # We cannot separate these types via singledispatch because the dispatch
+    # will often be ambiguous when objects expose multiple protocols.
     def __subclasscheck__(cls, other):
         return (
             hasattr(other, "__arrow_c_stream__")
+            or hasattr(other, "__arrow_c_device_stream__")
             or hasattr(other, "__arrow_c_array__")
             or hasattr(other, "__arrow_c_device_array__")
         )
@@ -91,9 +92,7 @@ cdef class Table:
         cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
-        if hasattr(arrow_like, "__arrow_c_device_stream__"):
-            raise NotImplementedError("Device streams not yet supported")
-        elif hasattr(arrow_like, "__arrow_c_device_array__"):
+        if hasattr(arrow_like, "__arrow_c_device_array__"):
             schema, array = arrow_like.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_array = (
@@ -122,8 +121,10 @@ cdef class Table:
 
             tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
             self._columns = tmp.columns()
+        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+            raise NotImplementedError("Device streams not yet supported")
         elif hasattr(arrow_like, "__arrow_c_array__"):
-            raise NotImplementedError("arrays not yet supported")
+            raise NotImplementedError("Arrow host arrays not yet supported")
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.

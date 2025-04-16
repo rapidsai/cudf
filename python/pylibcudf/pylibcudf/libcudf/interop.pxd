@@ -54,6 +54,10 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
             ArrowSchema&& schema,
             ArrowArray&& array
         ) except +libcudf_exception_handler
+        arrow_column(
+            ArrowSchema&& schema,
+            ArrowDeviceArray&& array
+        ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
     cdef cppclass arrow_table:

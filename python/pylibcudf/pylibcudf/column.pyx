@@ -58,7 +58,12 @@ __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
 class _ArrowLikeMeta(type):
     def __subclasscheck__(cls, other):
-        return hasattr(other, "__arrow_c_array__")
+        # We cannot separate these types via singledispatch because the dispatch
+        # will often be ambiguous when objects expose multiple protocols.
+        return (
+            hasattr(other, "__arrow_c_array__")
+            or hasattr(other, "__arrow_c_device_array__")
+        )
 
 
 class _ArrowLike(metaclass=_ArrowLikeMeta):
@@ -210,32 +215,59 @@ cdef class Column:
 
     @_init.register(_ArrowLike)
     def _(self, arrow_like):
-        schema, array = arrow_like.__arrow_c_array__()
-        cdef ArrowSchema* c_schema = (
-            <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-        )
-        cdef ArrowArray* c_array = (
-            <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
-        )
-
-        cdef _ArrowColumnHolder result = _ArrowColumnHolder()
+        cdef ArrowSchema* c_schema
+        cdef ArrowArray* c_array
+        cdef ArrowDeviceArray* c_device_array
+        cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
-        with nogil:
-            c_result = make_unique[arrow_column](
-                move(dereference(c_schema)), move(dereference(c_array))
-            )
+        if hasattr(arrow_like, "__arrow_c_array__"):
+            schema, array = arrow_like.__arrow_c_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_schema)), move(dereference(c_array))
+                )
             result.col.swap(c_result)
 
-        tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-        self._init(
-            tmp.type(),
-            tmp.size(),
-            tmp.data(),
-            tmp.null_mask(),
-            tmp.null_count(),
-            tmp.offset(),
-            tmp.children(),
-        )
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
+        elif hasattr(arrow_like, "__arrow_c_device_array__"):
+            schema, array = arrow_like.__arrow_c_device_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_device_array = (
+                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+            )
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_schema)), move(dereference(c_device_array))
+                )
+            result.col.swap(c_result)
+
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
+        else:
+            raise ValueError("Invalid Arrow-like object")
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
