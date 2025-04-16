@@ -922,9 +922,21 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - &fastavro fastavro>=0.22.9
-          - nanoarrow
           - *numpy
           - pandas
+      - output_types: [requirements, pyproject]
+        packages:
+          - nanoarrow
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              arch: aarch64
+            packages:
+          - matrix:
+              arch: x86_64
+            packages:
+              - nanoarrow
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]

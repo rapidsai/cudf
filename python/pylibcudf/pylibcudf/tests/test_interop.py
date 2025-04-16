@@ -1,8 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import cupy as cp
-import nanoarrow
-import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -125,15 +123,17 @@ def test_from_dlpack_error():
 
 
 def test_device_interop_column():
+    nad = pytest.importorskip("nanoarrow.device")
     pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
     plc_col = plc.Column(pa_arr)
 
-    na_arr = nanoarrow.device.c_device_array(plc_col)
+    na_arr = nad.c_device_array(plc_col)
     new_col = plc.Column(na_arr)
     assert_column_eq(pa_arr, new_col)
 
 
 def test_device_interop_table():
+    nad = pytest.importorskip("nanoarrow.device")
     # Have to manually construct the schema to ensure that names match. pyarrow will
     # assign names to nested types automatically otherwise.
     schema = pa.schema(
@@ -157,7 +157,7 @@ def test_device_interop_table():
     )
     plc_table = plc.Table(pa_tbl)
 
-    na_arr = nanoarrow.device.c_device_array(plc_table)
+    na_arr = nad.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)
     assert actual_schema.equals(pa_tbl.schema)
 
