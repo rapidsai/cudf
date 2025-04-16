@@ -9,7 +9,6 @@ from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_registry
 from numba import cuda
 from numba.core.datamodel import default_manager
-
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
     GroupView,
@@ -253,16 +252,47 @@ def cuda_lower_add(context, builder, sig, args):
     output.meminfo = mi
     return output._getvalue()
 
+@cuda_lower("ManagedGroupViewType.sum", ManagedGroupViewType(GroupViewType(types.int64)))
+def managed_group_reduction_impl_basic(context, builder, sig, args):
+    """
+    Instruction boilerplate used for calling a groupby reduction
+    __device__ function. Centers around a forward declaration of
+    this function and adds the pre/post processing instructions
+    necessary for calling it.
+    """
+    # return type
+    retty = sig.return_type
+    # a variable logically corresponding to the calling `Group`
+    grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    grp_view = cgutils.create_struct_proxy(GroupViewType(types.int64))(context, builder, value=grp.group_view)
+
+    # what specific (numba) GroupType
+    grp_type = sig.args[0]
+
+    func = call_cuda_functions['sum'][(types.int64, types.int64)]
+
+    # insert the forward declaration and return its result
+    # pass it the data pointer and the group's size
+    return context.compile_internal(
+        builder,
+        func,
+        nb_signature(retty, types.CPointer(types.int64), types.int64),
+        (grp_view.group_data, grp_view.size),
+    )
+
+
 
 @cuda_registry.lower_cast(ManagedGroupViewType(GroupViewType(types.int64)), GroupViewType(types.int64))
 def cast_managed_group_view_to_group_view(
     context, builder, fromty, toty, val
-):
+):#
 
     managed = cgutils.create_struct_proxy(fromty)(
         context, builder, value=val
     )
 
     result = cgutils.create_struct_proxy(toty)(context, builder, value=managed.group_view)
-
+    context.nrt.incref(builder, fromty, val)
     return result._getvalue()

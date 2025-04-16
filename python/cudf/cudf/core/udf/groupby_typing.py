@@ -432,9 +432,25 @@ for attr in ("group_data", "index", "size"):
 #for op in arith_ops + comparison_ops + unary_ops:
 #    cuda_registry.register_global(op)(GroupOpBase)
 
+
+class ManagedGroupViewSumTyping(AbstractTemplate):
+    key = f"ManagedGroupViewType.sum"
+    def generic(self, args, kws):
+        return nb_signature(
+            self.this.group_scalar_type,
+            recvr=self.this,
+        )
+
+
 @cuda_registry.register_attr
 class ManagedGroupViewTypeAttrs(GroupViewAttr):
     key = ManagedGroupViewType(GroupViewType(types.int64))
+
+    def resolve_sum(self, mod):
+        return types.BoundFunction(
+            ManagedGroupViewSumTyping,
+            ManagedGroupViewType(GroupViewType(mod.group_scalar_type)),
+        )
 
 _group_sum_binaryop = cuda.declare_device(
     "group_sum_binaryop",

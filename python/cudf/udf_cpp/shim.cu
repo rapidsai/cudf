@@ -731,26 +731,26 @@ column) and the size of the group itslef
 */
 
 __device__ int64_t* block_alloc(size_t size) {
-    __shared__ int64_t* ptr;
+    //__shared__ int64_t* ptr;
 
-    if (threadIdx.x == 0) {
-        ptr = (int64_t*)malloc(size * sizeof(int64_t));
-        printf("[block_alloc] malloc bytes at %p\n", ptr);
-        //free(ptr);
-        if (ptr == nullptr) {
-          printf("[block_alloc] malloc failed!\n");
-        }
-    }
+//    if (threadIdx.x == 0) {
+//        ptr = (int64_t*)malloc(size * sizeof(int64_t));
+//        printf("[block_alloc] malloc bytes at %p\n", ptr);
+//        if (ptr == nullptr) {
+//          printf("[block_alloc] malloc failed!\n");
+//        }
+//    }
 
-    __syncthreads();  // all threads wait for ptr to be written
-    
-    return ptr;  // all threads return the same pointer
+//    __syncthreads();  // all threads wait for ptr to be written
+//    int64_t* out = ptr;
+    auto out = (int64_t*)malloc(size*sizeof(int64_t));
+    return out;  // all threads return the same pointer
 }
 
 __device__ void block_free(int64_t* ptr) {
     if (threadIdx.x == 0) {
-      //printf("[block_free] freeing pointer %p\n", ptr);
-        //free(ptr);
+      printf("[block_free] freeing pointer %p\n", ptr);
+        free(ptr);
     }
 }
 
