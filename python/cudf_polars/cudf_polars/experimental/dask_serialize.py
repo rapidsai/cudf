@@ -129,9 +129,9 @@ def register() -> None:
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
 
-    # Register rapidsmp serializer if it's installed.
+    # Register rapidsmpf serializer if it's installed.
     try:
-        from rapidsmp.integrations.dask.spilling import register_dask_serialize
+        from rapidsmpf.integrations.dask.spilling import register_dask_serialize
 
         register_dask_serialize()
     except ImportError:
