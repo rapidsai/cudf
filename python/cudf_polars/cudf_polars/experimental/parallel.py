@@ -1,73 +1,35 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Multi-partition Dask execution."""
+"""Multi-partition evaluation."""
 
 from __future__ import annotations
 
 import itertools
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import (
-    IR,
-    Cache,
-    Filter,
-    HStack,
-    Projection,
-    Select,
-    Union,
-)
+from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
-from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
-from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from typing import Any
 
-    from distributed import Client
-
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-
-
-class SerializerManager:
-    """Manager to ensure ensure serializer is only registered once."""
-
-    _serializer_registered: bool = False
-    _client_run_executed: ClassVar[set[str]] = set()
-
-    @classmethod
-    def register_serialize(cls) -> None:
-        """Register Dask/cudf-polars serializers in calling process."""
-        if not cls._serializer_registered:
-            from cudf_polars.experimental.dask_serialize import register
-
-            register()
-            cls._serializer_registered = True
-
-    @classmethod
-    def run_on_cluster(cls, client: Client) -> None:
-        """Run serializer registration on the workers and scheduler."""
-        if (
-            client.id not in cls._client_run_executed
-        ):  # pragma: no cover; Only executes with Distributed scheduler
-            client.run(cls.register_serialize)
-            client.run_on_scheduler(cls.register_serialize)
-            cls._client_run_executed.add(client.id)
+    from cudf_polars.utils.config import ConfigOptions
 
 
 @lower_ir_node.register(IR)
@@ -86,7 +48,7 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions | None = None
+    ir: IR, config_options: ConfigOptions
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -113,7 +75,6 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    config_options = config_options or ConfigOptions({})
     mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
     return mapper(ir)
 
@@ -162,47 +123,82 @@ def task_graph(
         return graph, (key_name, 0)
 
 
-# The true type signature for get_client() needs an overload. Not worth it.
+# The true type signature for get_scheduler() needs an overload. Not worth it.
 
 
-def get_client() -> Any:
-    """Get appropriate Dask client or scheduler."""
-    SerializerManager.register_serialize()
-
-    try:  # pragma: no cover; block depends on executor type and Distributed cluster
+def get_scheduler(config_options: ConfigOptions) -> Any:
+    """Get appropriate task scheduler."""
+    scheduler = config_options.get("executor_options.scheduler")
+    if (
+        scheduler == "distributed"
+    ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
+        from cudf_polars.experimental.dask_serialize import SerializerManager
+
         client = get_client()
+        SerializerManager.register_serialize()
         SerializerManager.run_on_cluster(client)
-    except (
-        ImportError,
-        ValueError,
-    ):  # pragma: no cover; block depends on Dask local scheduler
+        return client.get
+    elif scheduler == "synchronous":
         from dask import get
 
         return get
-    else:  # pragma: no cover; block depends on executor type and Distributed cluster
-        return client.get
+    else:  # pragma: no cover
+        raise ValueError(f"{scheduler} not a supported scheduler option.")
 
 
-def evaluate_dask(ir: IR, config_options: ConfigOptions | None = None) -> DataFrame:
-    """Evaluate an IR graph with partitioning."""
+def post_process_task_graph(
+    graph: MutableMapping[Any, Any],
+    key: str | tuple[str, int],
+    config_options: ConfigOptions,
+) -> MutableMapping[Any, Any]:
+    """
+    Post-process the task graph.
+
+    Parameters
+    ----------
+    graph
+        Task graph to pre-process.
+    key
+        Output key for the graph.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    graph
+        A Dask-compatible task graph.
+    """
+    if config_options.get("executor_options.rapidsmpf_spill"):
+        from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
+
+        return wrap_dataframe_in_spillable(graph, ignore_key=key)
+    return graph
+
+
+def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+    """
+    Evaluate an IR graph with partitioning.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
     ir, partition_info = lower_ir_graph(ir, config_options)
 
-    get = get_client()
     graph, key = task_graph(ir, partition_info)
 
-    if (
-        True
-        if config_options is None
-        else config_options.get(
-            "spill.enable",
-            default=True,
-        )
-    ):
-        graph = wrap_dataframe_in_spillable(graph, ignore_key=key)
+    graph = post_process_task_graph(graph, key, config_options)
 
-    return get(graph, key)
+    return get_scheduler(config_options)(graph, key)
 
 
 @generate_ir_tasks.register(IR)
