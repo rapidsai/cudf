@@ -917,7 +917,10 @@ inline nullptr_t del_global_ref(JNIEnv* env, jobject jobj)
   }
 inline char const* get_stacktrace(char const* str) { return str; }
 #else  // CUDF_BUILD_STACKTRACE_DEBUG
+// Define a no-op macro.
 #define GET_STACKTRACE_FROM_EXCEPTION
+// When the stacktrace build is disabled, the generated stacktrace string is not a null string
+// and needs to be excluded from processing.
 inline char const* get_stacktrace(char const*) { return nullptr; }
 #endif
 
