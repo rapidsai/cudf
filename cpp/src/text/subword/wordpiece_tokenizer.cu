@@ -548,7 +548,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                    device_tokens_per_word.data() + num_code_points,
                                    token_id_counts,
                                    tranform_fn{},
-                                   thrust::plus<uint32_t>());
+                                   cuda::std::plus<uint32_t>());
 
   // Update the device_strings_offsets using the token_id_counts
   thrust::for_each_n(rmm::exec_policy(stream),
