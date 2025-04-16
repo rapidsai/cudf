@@ -652,11 +652,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
-        # elif nullable:
-        #     raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
-        # if self.dtype_enum == 1:
-        #     # Numpy
 
         if arrow_type or self.dtype_enum == 2:
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
@@ -2672,7 +2668,7 @@ def as_column(
             data,
             dtype=arbitrary.dtype,
             mask=mask,
-            dtype_enum=get_dtype_enum(arbitrary.dtype),
+            dtype_enum=get_dtype_enum(arbitrary.dtype) if cudf.get_option("mode.pandas_compatible") else None,
         )
         if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
@@ -2720,8 +2716,8 @@ def as_column(
             )
         elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
             dtype_enum = get_dtype_enum(arbitrary.dtype)
-            # if cudf.get_option("mode.pandas_compatible"):
-            #     raise NotImplementedError("not supported")
+            if cudf.get_option("mode.pandas_compatible"):
+                raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
@@ -2959,7 +2955,7 @@ def as_column(
                 data=buffer,
                 mask=mask,
                 dtype=arbitrary.dtype,
-                dtype_enum=get_dtype_enum(arbitrary.dtype),
+                dtype_enum=get_dtype_enum(arbitrary.dtype) if cudf.get_option("mode.pandas_compatible") else None,
             )
             if dtype:
                 col = col.astype(dtype)
