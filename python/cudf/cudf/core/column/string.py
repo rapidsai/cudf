@@ -6132,10 +6132,6 @@ class StringColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # if nullable and not arrow_type:
-        #     pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-        #     return pd.Index(pandas_array, copy=False)
-        # else:
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:

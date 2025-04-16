@@ -124,7 +124,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[ColumnBase, ...] = (),
-        dtype_enum=None,
+        dtype_enum: int | None = None,
     ) -> None:
         if size < 0:
             raise ValueError("size must be >=0")
@@ -485,7 +485,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def from_pylibcudf(
         cls, col: plc.Column, data_ptr_exposed: bool = False
     ) -> Self:
-        # TODO: PREM
         """Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
@@ -982,7 +981,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         dtype : Dtype object
             The dtype to view the data as
         """
-        # TODO: PREM
         if dtype.kind in ("o", "u", "s"):
             raise TypeError(
                 "Bytes viewed as str without metadata is ambiguous"
@@ -2353,7 +2351,6 @@ def column_empty(
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
     """
-    # TODO: PREM
     children: tuple[ColumnBase, ...] = ()
 
     if isinstance(dtype, StructDtype):
