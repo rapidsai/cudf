@@ -355,6 +355,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
     return path_or_buf
 
 
+def get_bytes_from_source(source):
+    if isinstance(source, (str, os.PathLike)):
+        with open(source, "rb") as f:
+            return f.read()
+    elif isinstance(source, io.BytesIO):
+        return source.getbuffer()
+    else:
+        raise TypeError(f"Unsupported source type: {type(source)}")
+
+
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
 STRING_PA_TYPES = [pa.string()]
 BOOL_PA_TYPES = [pa.bool_()]

@@ -36,8 +36,7 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     rows_per_partition = ir.config_options.get(
-        "executor_options.max_rows_per_partition",
-        default=1_000_000,
+        "executor_options.max_rows_per_partition"
     )
 
     nrows = max(ir.df.shape()[0], 1)
@@ -99,10 +98,7 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            blocksize: int = ir.config_options.get(
-                "executor_options.parquet_blocksize",
-                default=1024**3,
-            )
+            blocksize: int = ir.config_options.get("executor_options.parquet_blocksize")
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
