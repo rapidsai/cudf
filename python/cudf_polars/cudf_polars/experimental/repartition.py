@@ -28,8 +28,8 @@ class Repartition(IR):
     Repartitioning means that we are not modifying any
     data, nor are we reordering or shuffling rows. We
     are only changing the overall partition count. For
-    now, we only support an N -> 1 repartitioning. The
-    new partition count is tracked outside the object
+    now, we only support an N -> [1, N] repartitioning.
+    The new partition count is tracked outside the object
     (using PartitionInfo).
     """
 

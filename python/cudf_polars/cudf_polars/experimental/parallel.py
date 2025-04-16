@@ -14,7 +14,16 @@ import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
-from cudf_polars.dsl.ir import IR, Cache, GroupBy, Filter, HStack, Projection, Select, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    Cache,
+    Filter,
+    GroupBy,
+    HStack,
+    Projection,
+    Select,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
