@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
-from polars.testing.asserts import assert_frame_equal
+
+from cudf_polars.testing.asserts import (
+    assert_sink_ir_translation_raises,
+    assert_sink_result_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -23,28 +27,16 @@ def df():
 @pytest.mark.parametrize("line_terminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("separator", [",", "|"])
 def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, separator):
-    path_polars = tmp_path / "polars.csv"
-    path_cudf = tmp_path / "cudf.csv"
-
-    df.sink_csv(
-        str(path_polars),
-        include_header=include_header,
-        null_value=null_value,
-        line_terminator=line_terminator,
-        separator=separator,
+    assert_sink_result_equal(
+        df,
+        tmp_path / "out.csv",
+        write_kwargs={
+            "include_header": include_header,
+            "null_value": null_value,
+            "line_terminator": line_terminator,
+            "separator": separator,
+        },
     )
-    df.sink_csv(
-        str(path_cudf),
-        engine="gpu",
-        include_header=include_header,
-        null_value=null_value,
-        line_terminator=line_terminator,
-        separator=separator,
-    )
-
-    expected = path_polars.read_text()
-    result = path_cudf.read_text()
-    assert result == expected
 
 
 @pytest.mark.parametrize(
@@ -61,43 +53,32 @@ def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, sep
     ],
 )
 def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
-    path = tmp_path / "unsupported.csv"
-    with pytest.raises(pl.exceptions.ComputeError):
-        df.sink_csv(
-            str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
-        )
+    assert_sink_ir_translation_raises(
+        df,
+        tmp_path / "unsupported.csv",
+        {kwarg: value},
+        NotImplementedError,
+    )
 
 
 def test_sink_ndjson(df, tmp_path):
-    path_polars = tmp_path / "polars.json"
-    path_cudf = tmp_path / "cudf.json"
-
-    df.sink_ndjson(str(path_polars))
-    df.sink_ndjson(str(path_cudf), engine="gpu")
-
-    expected = path_polars.read_text()
-    result = path_cudf.read_text()
-    # TODO: Limitation in cuDF write_json?
-    result = result.replace("\\u1e85", "ẅ")
-    assert result == expected
+    assert_sink_result_equal(
+        df,
+        tmp_path / "out.ndjson",
+    )
 
 
 def test_sink_parquet(df, tmp_path):
-    path_polars = tmp_path / "polars.pq"
-    path_cudf = tmp_path / "cudf.pq"
-
-    df.sink_parquet(str(path_polars))
-    df.sink_parquet(str(path_cudf), engine="gpu")
-
-    result = pl.read_parquet(str(path_cudf))
-    expected = pl.read_parquet(str(path_polars))
-    assert_frame_equal(result, expected)
+    assert_sink_result_equal(
+        df,
+        tmp_path / "out.parquet",
+    )
 
 
-@pytest.mark.parametrize("kwarg, value", [("compression_level", 10)])
-def test_sink_parquet_unsupported_kwargs(df, tmp_path, kwarg, value):
-    path = tmp_path / "unsupported.pq"
-    with pytest.raises(pl.exceptions.ComputeError):
-        df.sink_parquet(
-            str(path), engine=pl.GPUEngine(raise_on_fail=True), **{kwarg: value}
-        )
+def test_sink_parquet_unsupported_kwargs(df, tmp_path):
+    assert_sink_ir_translation_raises(
+        df,
+        tmp_path / "unsupported.parquet",
+        {"compression_level": 10},
+        NotImplementedError,
+    )

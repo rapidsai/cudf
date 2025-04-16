@@ -499,7 +499,16 @@ def _(
 def _(
     node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Sink(schema, node.payload, translator.translate_ir(n=node.input))
+    payload = json.loads(node.payload)
+    file = payload["File"]
+    sink_kind, options = next(iter(file["file_type"].items()))
+    return ir.Sink(
+        schema=schema,
+        kind=sink_kind,
+        path=file["target"],
+        options=options,
+        df=translator.translate_ir(n=node.input),
+    )
 
 
 def translate_named_expr(

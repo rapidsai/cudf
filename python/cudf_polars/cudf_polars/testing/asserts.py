@@ -5,20 +5,25 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import polars as pl
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
-    import polars as pl
-
     from cudf_polars.typing import OptimizationArgs
 
-__all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
+__all__: list[str] = [
+    "assert_gpu_result_equal",
+    "assert_ir_translation_raises",
+    "assert_sink_ir_translation_raises",
+    "assert_sink_result_equal",
+]
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
 # and `--scheduler` command-line arguments
@@ -244,3 +249,121 @@ def assert_collect_raises(
     else:
         if cudf_except != ():
             raise AssertionError(f"GPU execution DID NOT RAISE {cudf_except}")
+
+
+def _resolve_sink_format(path: Path) -> str:
+    """Returns valid sink format for assert utilities."""
+    suffix = path.suffix.lower()
+    supported_ext = {
+        ".csv": "csv",
+        ".pq": "parquet",
+        ".parquet": "parquet",
+        ".json": "ndjson",
+        ".ndjson": "ndjson",
+    }
+    if suffix not in supported_ext:
+        raise ValueError(f"Unsupported file format: {suffix}")
+    return supported_ext[suffix]
+
+
+def assert_sink_result_equal(
+    lazydf: pl.LazyFrame,
+    path: str | Path,
+    *,
+    engine: str | GPUEngine = "gpu",
+    read_kwargs: dict | None = None,
+    write_kwargs: dict | None = None,
+) -> None:
+    """
+    Assert that writing a LazyFrame via sink produces the same output.
+
+    Parameters
+    ----------
+    lazydf
+        The LazyFrame to sink.
+    path
+        The file path to use. Suffix must be one of:
+        '.csv', '.parquet', '.pq', '.json', '.ndjson'.
+    engine
+        The GPU engine to use for the sink operation.
+    read_kwargs
+        Optional keyword arguments to pass to the corresponding `pl.read_*` function.
+    write_kwargs
+        Optional keyword arguments to pass to the corresponding `sink_*` function.
+
+    Raises
+    ------
+    AssertionError
+        If the outputs from CPU and GPU sink differ.
+    ValueError
+        If the file extension is not one of the supported formats.
+    """
+    path = Path(path)
+    read_kwargs = read_kwargs or {}
+    write_kwargs = write_kwargs or {}
+
+    fmt = _resolve_sink_format(path)
+
+    cpu_path = path.with_name(f"{path.stem}_cpu{path.suffix}")
+    gpu_path = path.with_name(f"{path.stem}_gpu{path.suffix}")
+
+    sink_fn = getattr(lazydf, f"sink_{fmt}")
+    read_fn = getattr(pl, f"read_{fmt}")
+
+    sink_fn(cpu_path, **write_kwargs)
+    sink_fn(
+        gpu_path,
+        engine=GPUEngine(raise_on_fail=True) if engine == "gpu" else engine,
+        **write_kwargs,
+    )
+
+    expected = read_fn(cpu_path, **read_kwargs)
+    result = read_fn(gpu_path, **read_kwargs)
+
+    assert_frame_equal(expected, result)
+
+
+def assert_sink_ir_translation_raises(
+    lazydf: pl.LazyFrame,
+    path: str | Path,
+    write_kwargs: dict,
+    *exceptions: type[Exception],
+) -> None:
+    """
+    Assert that translation of a sink query raises an exception.
+
+    Parameters
+    ----------
+    lazydf
+        The LazyFrame to sink.
+    path
+        The file path. Must have one of the supported suffixes.
+    write_kwargs
+        Keyword arguments to pass to the `sink_*` method.
+    *exceptions
+        One or more expected exception types that should be raised during translation.
+
+    Raises
+    ------
+    AssertionError
+        If translation does not raise any of the expected exceptions.
+        If an exception occurs before translation begins.
+    ValueError
+        If the file extension is not one of the supported formats.
+    """
+    path = Path(path)
+    fmt = _resolve_sink_format(path)
+
+    try:
+        lazy_sink = getattr(lazydf, f"sink_{fmt}")(
+            path,
+            engine="gpu",
+            lazy=True,
+            **write_kwargs,
+        )
+    except Exception as e:
+        raise AssertionError(
+            f"Sink function raised an exception before translation: {e}"
+        ) from e
+
+    assert_ir_translation_raises(lazy_sink, *exceptions)
