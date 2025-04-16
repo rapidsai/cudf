@@ -239,16 +239,7 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    if (
-        shuffle_method := ir.config_options.get(
-            "executor_options.shuffle_method",
-            default=None,
-        )
-    ) not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
-        raise ValueError(
-            f"{shuffle_method} is not a supported shuffle method. "
-            f"Expected one of: {_SHUFFLE_METHODS}."
-        )
+    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"

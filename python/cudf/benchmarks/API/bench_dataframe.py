@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Benchmarks of DataFrame methods."""
 
@@ -6,10 +6,17 @@ import string
 
 import numba.cuda
 import numpy
+import pyarrow as pa
 import pytest
 import pytest_cases
 from config import cudf, cupy
 from utils import benchmark_with_object
+
+
+@pytest.mark.parametrize("N", [100, 1_000_000, 100_000_000])
+def bench_from_arrow(benchmark, N):
+    rng = numpy.random.default_rng(seed=10)
+    benchmark(cudf.DataFrame, {None: pa.array(rng.random(N))})
 
 
 @pytest.mark.parametrize("N", [100, 1_000_000])

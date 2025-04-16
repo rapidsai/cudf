@@ -181,16 +181,16 @@ struct bin_type_dispatcher {
     rmm::device_async_resource_ref mr)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less_equal<T>, thrust::less_equal<T>>(
+      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less_equal<T>, thrust::less<T>>(
+      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less<T>, thrust::less_equal<T>>(
+      return label_bins<T, cuda::std::less<T>, cuda::std::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less<T>, thrust::less<T>>(
+      return label_bins<T, cuda::std::less<T>, cuda::std::less<T>>(
         input, left_edges, right_edges, stream, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
