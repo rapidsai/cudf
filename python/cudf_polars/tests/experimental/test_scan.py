@@ -9,7 +9,8 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +54,8 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
     q = scan_fn(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
+        executor_options={"scheduler": DEFAULT_SCHEDULER},
     )
     assert_gpu_result_equal(q, engine=engine)
 
@@ -65,14 +67,17 @@ def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"parquet_blocksize": blocksize},
+        executor="streaming",
+        executor_options={
+            "parquet_blocksize": blocksize,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
     )
     assert_gpu_result_equal(q, engine=engine)
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir)
+    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
