@@ -469,8 +469,12 @@ std::string encoding_to_string(Encoding encoding)
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   });
-  uint32_t const unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                        pages.begin(),
+                                                        pages.end(),
+                                                        to_mask,
+                                                        0U,
+                                                        cuda::std::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -527,7 +531,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              page_keys.begin(),
                              page_keys.end(),
                              sort_indices.begin(),
-                             thrust::less<int>());
+                             cuda::std::less<int>());
   auto pass_pages =
     cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
   thrust::transform(
@@ -566,7 +570,7 @@ void decode_page_headers(pass_intermediate_data& pass,
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
     size_t{0},
-    thrust::plus<size_t>{});
+    cuda::std::plus<size_t>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -655,7 +659,7 @@ __device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
   auto const is_binary =
-    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+    chunk.physical_type == Type::BYTE_ARRAY or chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return is_binary and not is_decimal;
 }
 
@@ -924,7 +928,7 @@ void reader::impl::allocate_nesting_info()
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
             to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
-          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
+          pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
         // move up the hierarchy

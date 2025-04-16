@@ -59,7 +59,8 @@ class kvikio_source : public datasource {
     // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     std::vector<uint8_t> v(read_size);
-    return {std::move(v), _kvikio_handle.pread(v.data(), read_size, offset)};
+    auto v_data = v.data();
+    return {std::move(v), _kvikio_handle.pread(v_data, read_size, offset)};
   }
 
  public:
@@ -110,7 +111,18 @@ class kvikio_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, this->size() - offset);
-    return _kvikio_handle.pread(dst, read_size, offset);
+
+    if constexpr (std::is_same_v<HandleT, kvikio::FileHandle>) {
+      return _kvikio_handle.pread(dst,
+                                  read_size,
+                                  offset,
+                                  kvikio::defaults::task_size(),
+                                  kvikio::defaults::gds_threshold(),
+                                  false /* not to sync_default_stream */);
+    } else {
+      // HandleT is kvikio::RemoteHandle
+      return _kvikio_handle.pread(dst, read_size, offset);
+    }
   }
 
   size_t device_read(size_t offset,
