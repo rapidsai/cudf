@@ -1,8 +1,8 @@
 diff --git a/thrust/thrust/system/system_error.h b/thrust/thrust/system/system_error.h
-index ba77c0bc5..015222a67 100644
+index ba77c0bc5..9acd7636e 100644
 --- a/thrust/thrust/system/system_error.h
 +++ b/thrust/thrust/system/system_error.h
-@@ -35,6 +35,79 @@
+@@ -35,6 +35,68 @@
  #include <stdexcept>
  #include <string>
  
@@ -21,27 +21,20 @@ index ba77c0bc5..015222a67 100644
 +// This should not be declared inside thrust namespace to avoid symbol visibility issue.
 +struct thrust_stacktrace_recorder {
 +  thrust_stacktrace_recorder() : _stacktrace{get_stacktrace()} {}
-+
 + public:
 +  [[nodiscard]] char const* stacktrace() const { return _stacktrace.c_str(); }
-+
 + protected:
 +  std::string const _stacktrace;
-+
 + private:
 +  std::string get_stacktrace()
 +  {
 +    constexpr int max_stack_depth = 64;
 +    void* stack[max_stack_depth];
-+
 +    auto const depth   = backtrace(stack, max_stack_depth);
 +    auto const modules = backtrace_symbols(stack, depth);
-+
 +    if (modules == nullptr) { return "No stacktrace could be captured!"; }
-+
 +    std::stringstream ss;
-+
-+            // Skip one more depth to avoid including the stackframe of this function.
++    // Skip one more depth to avoid including the stackframe of this function.
 +    constexpr int skip_depth = 2;  // this function + the exception constructor
 +    for (auto i = skip_depth; i < depth; ++i) {
 +      // Each modules[i] string contains a mangled name in the format like following:
@@ -50,7 +43,6 @@ index ba77c0bc5..015222a67 100644
 +      char* begin_func_name   = std::strstr(modules[i], "(");
 +      char* begin_func_offset = std::strstr(modules[i], "+");
 +      char* end_func_offset   = std::strstr(modules[i], ")");
-+
 +      auto const frame_idx = i - skip_depth;
 +      if (begin_func_name && begin_func_offset && end_func_offset &&
 +          begin_func_name < begin_func_offset) {
@@ -60,11 +52,9 @@ index ba77c0bc5..015222a67 100644
 +        *(begin_func_name++)   = 0;
 +        *(begin_func_offset++) = 0;
 +        *end_func_offset       = 0;
-+
-+                // We need to demangle function name.
++        // We need to demangle function name.
 +        int status{0};
 +        char* func_name = abi::__cxa_demangle(begin_func_name, nullptr, nullptr, &status);
-+
 +        ss << "#" << frame_idx << ": " << modules[i] << " : "
 +           << (status == 0 /*demangle success*/ ? func_name : begin_func_name) << "+"
 +           << begin_func_offset << "\n";
@@ -73,7 +63,6 @@ index ba77c0bc5..015222a67 100644
 +        ss << "#" << frame_idx << ": " << modules[i] << "\n";
 +      }
 +    }
-+
 +    free(modules);
 +    return ss.str();
 +  }
@@ -82,7 +71,7 @@ index ba77c0bc5..015222a67 100644
  THRUST_NAMESPACE_BEGIN
  
  namespace system
-@@ -95,4 +168,4 @@ namespace system
+@@ -95,4 +157,4 @@ namespace system
 -class system_error : public std::runtime_error
 +class system_error : public std::runtime_error, public thrust_stacktrace_recorder
  {
