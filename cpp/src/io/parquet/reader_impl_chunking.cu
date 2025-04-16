@@ -1399,7 +1399,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                      dst_offsets.begin(),
                                      get_span_size_by_index{page_indices},
                                      0,
-                                     thrust::plus<size_t>{});
+                                     cuda::std::plus<size_t>{});
     thrust::for_each(
       rmm::exec_policy_nosync(_stream),
       iter,

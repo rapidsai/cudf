@@ -69,7 +69,7 @@ dependencies:
 - pydata-sphinx-theme>=0.15.4
 - pynvjitlink>=0.0.0a0
 - pynvml>=12.0.0,<13.0.0a0
-- pytest-benchmark
+- pytest-benchmark<5.1.0
 - pytest-cases>=3.8.2
 - pytest-cov
 - pytest-rerunfailures

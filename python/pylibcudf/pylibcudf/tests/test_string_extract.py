@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -33,7 +33,5 @@ def test_extract_all_record():
         ),
     )
     result = plc.interop.to_arrow(plc_result)
-    expected = pa.chunked_array(
-        [pa.array([["a", "1"], ["b", "2"], None], type=result.type)]
-    )
+    expected = pa.array([["a", "1"], ["b", "2"], None], type=result.type)
     assert result.equals(expected)
