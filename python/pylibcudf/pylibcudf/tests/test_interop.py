@@ -6,7 +6,7 @@ import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
-from utils import assert_table_eq
+from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
 
@@ -124,6 +124,15 @@ def test_from_dlpack_error():
         plc.interop.from_dlpack(1)
 
 
+def test_device_interop_column():
+    pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
+    plc_col = plc.Column(pa_arr)
+
+    na_arr = nanoarrow.device.c_device_array(plc_col)
+    new_col = plc.Column(na_arr)
+    assert_column_eq(pa_arr, new_col)
+
+
 def test_device_interop_table():
     # Have to manually construct the schema to ensure that names match. pyarrow will
     # assign names to nested types automatically otherwise.
@@ -146,7 +155,7 @@ def test_device_interop_table():
         ],
         schema=schema,
     )
-    plc_table = plc.interop.from_arrow(pa_tbl)
+    plc_table = plc.Table(pa_tbl)
 
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)

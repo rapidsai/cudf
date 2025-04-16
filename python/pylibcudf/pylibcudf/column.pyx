@@ -220,15 +220,17 @@ cdef class Column:
         cdef ArrowDeviceArray* c_device_array
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
-        if hasattr(arrow_like, "__arrow_c_array__"):
-            schema, array = arrow_like.__arrow_c_array__()
+        if hasattr(arrow_like, "__arrow_c_device_array__"):
+            schema, array = arrow_like.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+            c_device_array = (
+                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+            )
 
             result = _ArrowColumnHolder()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_schema)), move(dereference(c_array))
+                    move(dereference(c_schema)), move(dereference(c_device_array))
                 )
             result.col.swap(c_result)
 
@@ -242,17 +244,15 @@ cdef class Column:
                 tmp.offset(),
                 tmp.children(),
             )
-        elif hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, array = arrow_like.__arrow_c_device_array__()
+        elif hasattr(arrow_like, "__arrow_c_array__"):
+            schema, array = arrow_like.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-            c_device_array = (
-                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
-            )
+            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
 
             result = _ArrowColumnHolder()
             with nogil:
                 c_result = make_unique[arrow_column](
-                    move(dereference(c_schema)), move(dereference(c_device_array))
+                    move(dereference(c_schema)), move(dereference(c_array))
                 )
             result.col.swap(c_result)
 
