@@ -1,12 +1,19 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+
+from cython.operator cimport dereference
+
+from libc.stdint cimport int32_t, uint8_t
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from pylibcudf.io.datasource cimport Datasource
+
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
@@ -18,11 +25,13 @@ from pylibcudf.libcudf.io.types cimport (
     source_info,
     table_input_metadata,
     table_with_metadata,
-    column_in_metadata,
-    table_input_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport host_span
+from pylibcudf.libcudf.utilities.span cimport host_span, device_span
+
+from pylibcudf.utils cimport _get_stream
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.stream cimport Stream
 
 import codecs
 import errno
@@ -33,18 +42,13 @@ import re
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
 from pylibcudf.libcudf.io.types import (
-    compression_type as CompressionType,  # no-cython-lint
     column_encoding as ColumnEncoding,  # no-cython-lint
+    compression_type as CompressionType,  # no-cython-lint
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
     quote_style as QuoteStyle,  # no-cython-lint
-    statistics_freq as StatisticsFreq, # no-cython-lint
+    statistics_freq as StatisticsFreq,  # no-cython-lint
 )
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
-from cython.operator cimport dereference
-from pylibcudf.libcudf.types cimport size_type
-from rmm.pylibrmm.stream cimport Stream
-from pylibcudf.utils cimport _get_stream
+
 __all__ = [
     "ColumnEncoding",
     "ColumnInMetadata",
@@ -444,16 +448,23 @@ cdef class TableWithMetadata:
 
 
 cdef class SourceInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details on a source to read from.
 
     For details, see :cpp:class:`cudf::io::source_info`.
 
     Parameters
     ----------
-    sources : List[Union[str, os.PathLike, bytes, io.BytesIO, DataSource]]
-        A homogeneous list of sources to read from.
-
-        Mixing different types of sources will raise a `ValueError`.
+    sources : List[Union[
+        str,
+        os.PathLike,
+        bytes,
+        io.BytesIO,
+        DataSource,
+        rmm.DeviceBuffer,
+    ]]
+        A homogeneous list of sources to read from. Mixing
+        different types of sources will raise a `ValueError`.
     """
     # Regular expression that match remote file paths supported by libcudf
     _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
@@ -494,6 +505,8 @@ cdef class SourceInfo:
         cdef vector[host_span[const_byte]] hspans
         self._hspans = hspans
 
+        cdef device_span[const_byte] d_span
+        cdef vector[device_span[const_byte]] d_spans
         if isinstance(sources[0], io.StringIO):
             for buffer in sources:
                 if not isinstance(buffer, io.StringIO):
@@ -506,6 +519,18 @@ cdef class SourceInfo:
             self._init_byte_like_sources(sources, bytes)
         elif isinstance(sources[0], io.BytesIO):
             self._init_byte_like_sources(sources, io.BytesIO)
+        elif isinstance(sources[0], DeviceBuffer):
+            if not all(isinstance(s, DeviceBuffer) for s in sources):
+                raise ValueError("All sources must be of the same type!")
+            self.device_sources = sources
+            for buf in sources:
+                d_buf = <DeviceBuffer>buf
+                d_span = device_span[const_byte](
+                    <const_byte *>d_buf.c_data(), d_buf.c_size()
+                )
+                d_spans.push_back(d_span)
+            self.c_obj = move(source_info(host_span[device_span[const_byte]](d_spans)))
+            return
         else:
             raise ValueError("Sources must be a list of str/paths, "
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
