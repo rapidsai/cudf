@@ -785,9 +785,9 @@ class CategoricalColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if nullable or self.dtype_enum in {2}:
+        if arrow_type or self.dtype_enum in {2}:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif arrow_type:
+        elif nullable:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         if self.categories.dtype.kind == "f":

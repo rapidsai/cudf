@@ -120,8 +120,7 @@ class StructColumn(ColumnBase):
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        # if arrow_type or nullable:
-        if self.dtype_enum in {2, 3}:
+        if arrow_type or nullable or self.dtype_enum in {2, 3}:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")

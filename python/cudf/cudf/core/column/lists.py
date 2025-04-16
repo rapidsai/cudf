@@ -337,8 +337,10 @@ class ListColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable or self.dtype_enum in {2, 3}:
+        if arrow_type or self.dtype_enum in {2, 3}:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable:
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 

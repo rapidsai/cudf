@@ -698,27 +698,7 @@ class NumericalColumn(NumericalBaseColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # import pdb;pdb.set_trace()
-        # if arrow_type and nullable:
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        # elif arrow_type:
-        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        # elif (
-        #     nullable
-        #     and (
-        #         pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
-        #             self.dtype
-        #         )
-        #     )
-        #     is not None
-        # ):
-        #     arrow_array = self.to_arrow()
-        #     pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
-        #     return pd.Index(pandas_array, copy=False)
-        # elif self.dtype.kind in set("iuf") and not self.has_nulls():
-        #     return pd.Index(self.values_host, copy=False)
-        # else:
-        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         if reduction_op in {"sum", "product"}:

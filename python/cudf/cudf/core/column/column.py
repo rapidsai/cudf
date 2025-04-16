@@ -2668,7 +2668,9 @@ def as_column(
             data,
             dtype=arbitrary.dtype,
             mask=mask,
-            dtype_enum=get_dtype_enum(arbitrary.dtype) if cudf.get_option("mode.pandas_compatible") else None,
+            dtype_enum=get_dtype_enum(arbitrary.dtype)
+            if cudf.get_option("mode.pandas_compatible")
+            else None,
         )
         if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
@@ -2718,7 +2720,7 @@ def as_column(
             if cudf.get_option("mode.pandas_compatible"):
                 dtype_enum = get_dtype_enum(arbitrary.dtype)
             else:
-                raise NotImplementedError("not supported")
+                dtype_enum = None
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion
@@ -2956,7 +2958,9 @@ def as_column(
                 data=buffer,
                 mask=mask,
                 dtype=arbitrary.dtype,
-                dtype_enum=get_dtype_enum(arbitrary.dtype) if cudf.get_option("mode.pandas_compatible") else None,
+                dtype_enum=get_dtype_enum(arbitrary.dtype)
+                if cudf.get_option("mode.pandas_compatible")
+                else None,
             )
             if dtype:
                 col = col.astype(dtype)
