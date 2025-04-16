@@ -102,25 +102,11 @@ std::unique_ptr<cudf::table> inner_join(
   algorithm algo                    = algorithm::HASH)
 {
   if (algo == algorithm::SORT_MERGE) {
-    auto join_lambda = [](cudf::table_view const& left,
-                          cudf::table_view const& right,
-                          cudf::null_equality compare_nulls,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr) -> JoinResult {
-      cudf::sort_merge_join obj(left, false, right, false, compare_nulls, stream, mr);
-      return obj.inner_join(stream, mr);
-    };
-    return join_and_gather<join_lambda>(left_input, right_input, left_on, right_on, compare_nulls);
+    return join_and_gather<cudf::sort_merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
   } else if (algo == algorithm::MERGE) {
-    auto join_lambda = [](cudf::table_view const& left,
-                          cudf::table_view const& right,
-                          cudf::null_equality compare_nulls,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr) -> JoinResult {
-      cudf::sort_merge_join obj(left, true, right, true, compare_nulls, stream, mr);
-      return obj.inner_join(stream, mr);
-    };
-    return join_and_gather<join_lambda>(left_input, right_input, left_on, right_on, compare_nulls);
+    return join_and_gather<cudf::merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
   }
   return join_and_gather<cudf::inner_join>(
     left_input, right_input, left_on, right_on, compare_nulls);

@@ -560,4 +560,16 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
   return obj.inner_join(stream, mr);
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+merge_inner_join(cudf::table_view const& left_keys,
+                 cudf::table_view const& right_keys,
+                 null_equality compare_nulls,
+                 rmm::cuda_stream_view stream,
+                 rmm::device_async_resource_ref mr)
+{
+  cudf::sort_merge_join obj(left_keys, true, right_keys, true, compare_nulls, stream, mr);
+  return obj.inner_join(stream, mr);
+}
+
 }  // namespace cudf

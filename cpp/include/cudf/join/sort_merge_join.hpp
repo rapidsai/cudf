@@ -238,5 +238,46 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Assumes pre-sorted inputs and performs only the merge step. Returns a pair of row index
+ * vectors corresponding to an inner join between the specified tables.
+ *
+ * The first returned vector contains the row indices from the left
+ * table that have a match in the right table (in unspecified order).
+ * The corresponding values in the second returned vector are
+ * the matched row indices from the right table.
+ *
+ * @code{.pseudo}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{1, 2}, {0, 1}}
+ *
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{1}, {0}}
+ * @endcode
+ *
+ * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
+ * mismatch.
+ *
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
+ * @param[in] compare_nulls controls whether null join-key values
+ * should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing an inner join between two tables with `left_keys` and `right_keys`
+ * as the join keys .
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+merge_inner_join(cudf::table_view const& left_keys,
+                 cudf::table_view const& right_keys,
+                 null_equality compare_nulls       = null_equality::EQUAL,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
