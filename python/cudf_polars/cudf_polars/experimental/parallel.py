@@ -159,7 +159,7 @@ def post_process_task_graph(
     Parameters
     ----------
     graph
-        Task graph to pre-process.
+        Task graph to post-process.
     key
         Output key for the graph.
     config_options
