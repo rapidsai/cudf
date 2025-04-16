@@ -15,9 +15,11 @@
  */
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <random>
 
@@ -40,34 +42,36 @@ std::vector<cudf::size_type> generate_end_bits(cudf::size_type num_masks,
 
 }  // namespace
 
-class SetNullmask : public cudf::benchmark {};
-
-void BM_setnullmask(benchmark::State& state)
+void BM_setnullmask(nvbench::state& state)
 {
-  cudf::size_type const size{(cudf::size_type)state.range(0)};
-  rmm::device_buffer mask = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
-  auto begin = 0, end = size;
+  auto const mask_size    = static_cast<cudf::size_type>(state.get_int64("mask_size"));
+  rmm::device_buffer mask = cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED);
+  auto begin = 0, end = mask_size;
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, true);
-  }
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, true);
+               timer.stop();
+             });
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count((static_cast<double>(mask_size) / (8 * 1024 * 1024)) / time,
+                          "Mbytes_per_second");
 }
 
-class SetNullmaskBulk : public cudf::benchmark {};
-
-void BM_setnullmask_bulk(benchmark::State& state)
+void BM_setnullmask_bulk(nvbench::state& state)
 {
   srand(31337);
 
-  cudf::size_type const mask_size{(cudf::size_type)state.range(0)};
-  cudf::size_type const num_masks{(cudf::size_type)state.range(1)};
-  bool const random_end_bits{static_cast<bool>(state.range(2))};
+  auto const mask_size = static_cast<cudf::size_type>(state.get_int64("max_mask_size"));
+  auto const num_masks = static_cast<cudf::size_type>(state.get_int64("num_masks"));
+  bool const use_variable_mask_sizes = static_cast<bool>(state.get_int64("use_variable_mask_size"));
 
   std::vector<cudf::size_type> begin_bits(num_masks, 0);
-  std::vector<cudf::size_type> end_bits = generate_end_bits(num_masks, mask_size, random_end_bits);
+  std::vector<cudf::size_type> end_bits =
+    generate_end_bits(num_masks, mask_size, use_variable_mask_sizes);
 
   auto valids = thrust::host_vector<bool>(num_masks, true);
 
@@ -78,25 +82,31 @@ void BM_setnullmask_bulk(benchmark::State& state)
     masks_ptr[i] = static_cast<cudf::bitmask_type*>(masks[i].data());
   }
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
-  }
-
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * mask_size * num_masks / 8);
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
+               timer.stop();
+             });
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count((static_cast<double>(mask_size) / (8 * 1024 * 1024)) * num_masks / time,
+                          "Mbytes_per_second");
 }
 
-class SetNullmaskLoop : public cudf::benchmark {};
-
-void BM_setnullmask_loop(benchmark::State& state)
+void BM_setnullmask_loop(nvbench::state& state)
 {
   srand(31337);
 
-  cudf::size_type const mask_size{(cudf::size_type)state.range(0)};
-  cudf::size_type const num_masks{(cudf::size_type)state.range(1)};
-  bool const random_end_bits{static_cast<bool>(state.range(2))};
+  auto const mask_size = static_cast<cudf::size_type>(state.get_int64("max_mask_size"));
+  auto const num_masks = static_cast<cudf::size_type>(state.get_int64("num_masks"));
+  bool const use_variable_mask_sizes = static_cast<bool>(state.get_int64("use_variable_mask_size"));
 
-  std::vector<cudf::size_type> end_bits = generate_end_bits(num_masks, mask_size, random_end_bits);
+  std::vector<cudf::size_type> begin_bits(num_masks, 0);
+  std::vector<cudf::size_type> end_bits =
+    generate_end_bits(num_masks, mask_size, use_variable_mask_sizes);
+
+  auto valids = thrust::host_vector<bool>(num_masks, true);
 
   std::vector<rmm::device_buffer> masks(num_masks);
   std::vector<cudf::bitmask_type*> masks_ptr(num_masks);
@@ -105,45 +115,35 @@ void BM_setnullmask_loop(benchmark::State& state)
     masks_ptr[i] = static_cast<cudf::bitmask_type*>(masks[i].data());
   }
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    for (auto i = 0; i < num_masks; ++i) {
-      cudf::set_null_mask(masks_ptr[i], 0, end_bits[i], true);
-    }
-  }
-
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * mask_size * num_masks / 8);
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               for (auto i = 0; i < num_masks; ++i) {
+                 cudf::set_null_mask(masks_ptr[i], 0, end_bits[i], true);
+               }
+               timer.stop();
+             });
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count((static_cast<double>(mask_size) / (8 * 1024 * 1024)) * num_masks / time,
+                          "Mbytes_per_second");
 }
 
-#define NBM_BENCHMARK_DEFINE(name)                                                             \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state) { BM_setnullmask(state); } \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                                                      \
-    ->RangeMultiplier(1 << 10)                                                                 \
-    ->Range(1 << 10, 1 << 30)                                                                  \
-    ->UseManualTime();
+NVBENCH_BENCH(BM_setnullmask)
+  .set_name("set_nullmask")
+  .set_min_samples(4)
+  .add_int64_power_of_two_axis("mask_size", nvbench::range(10, 30, 10));
 
-#define NBM_BULK_BENCHMARK_DEFINE(name)                              \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)  \
-  {                                                                  \
-    BM_setnullmask_bulk(state);                                      \
-  }                                                                  \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                            \
-    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), \
-                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  \
-                   benchmark::CreateDenseRange(0, 1, 1)})            \
-    ->UseManualTime();
+NVBENCH_BENCH(BM_setnullmask_bulk)
+  .set_name("set_nullmasks_bulk")
+  .set_min_samples(4)
+  .add_int64_power_of_two_axis("max_mask_size", nvbench::range(10, 25, 5))
+  .add_int64_power_of_two_axis("num_masks", nvbench::range(4, 12, 4))
+  .add_int64_axis("use_variable_mask_size", {0, 1});
 
-#define NBM_LOOP_BENCHMARK_DEFINE(name)                              \
-  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state)  \
-  {                                                                  \
-    BM_setnullmask_loop(state);                                      \
-  }                                                                  \
-  BENCHMARK_REGISTER_F(SetNullmask, name)                            \
-    ->ArgsProduct({benchmark::CreateRange(1 << 10, 1 << 25, 1 << 5), \
-                   benchmark::CreateRange(1 << 4, 1 << 12, 1 << 4),  \
-                   benchmark::CreateDenseRange(0, 1, 1)})            \
-    ->UseManualTime();
-
-NBM_BENCHMARK_DEFINE(SetNullMaskKernel);
-NBM_BULK_BENCHMARK_DEFINE(SetNullMaskBulkKernel);
-NBM_LOOP_BENCHMARK_DEFINE(SetNullMaskLoopKernel);
+NVBENCH_BENCH(BM_setnullmask_loop)
+  .set_name("set_nullmasks_loop")
+  .set_min_samples(4)
+  .add_int64_power_of_two_axis("max_mask_size", nvbench::range(10, 25, 5))
+  .add_int64_power_of_two_axis("num_masks", nvbench::range(4, 12, 4))
+  .add_int64_axis("use_variable_mask_size", {0, 1});
