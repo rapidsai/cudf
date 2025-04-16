@@ -26,7 +26,7 @@
 //! NVText APIs
 namespace CUDF_EXPORT nvtext {
 /**
- * @addtogroup nvtext_replace
+ * @addtogroup nvtext_dedup
  * @{
  * @file
  */
@@ -40,15 +40,15 @@ namespace CUDF_EXPORT nvtext {
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once in the entire input.
  *
- * @param input Strings column to dedup
- * @param min_width Minimum number of bytes must match to specify a duplicate
+ * @param input Strings column to identify duplicates
+ * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with updated strings
  */
 std::unique_ptr<cudf::column> substring_duplicates(
   cudf::strings_column_view const& input,
-  int32_t min_width,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -56,18 +56,18 @@ std::unique_ptr<cudf::column> substring_duplicates(
  * @brief Builds a suffix array for the input strings column
  *
  * The internal implementation creates a suffix array of the input which
- * requires ~4 the input size for temporary memory. The output is an additional
+ * requires ~4x the input size for temporary memory. The output is an additional
  * 4x of the input size.
  *
  * @param input Strings column to build suffix array for
- * @param min_width Minimum number of bytes must match to specify a duplicate
+ * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted suffix array and corresponding sizes
  */
-std::unique_ptr<rmm::device_uvector<int32_t>> build_suffix_array(
+std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   cudf::strings_column_view const& input,
-  int32_t min_width,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -77,17 +77,20 @@ std::unique_ptr<rmm::device_uvector<int32_t>> build_suffix_array(
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once in the entire input.
  *
+ * The result is undefined if the indices were not created on the same input
+ * provided here.
+ *
  * @param input Strings column for indices
  * @param indices Suffix array from nvtext::build_suffix_array
- * @param min_width Minimum number of bytes must match to specify a duplicate
+ * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with updated strings
  */
 std::unique_ptr<cudf::column> resolve_duplicates(
   cudf::strings_column_view const& input,
-  cudf::device_span<int32_t const> indices,
-  int32_t min_width,
+  cudf::device_span<cudf::size_type const> indices,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -97,21 +100,24 @@ std::unique_ptr<cudf::column> resolve_duplicates(
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once between input1 and input2.
  *
+ * The result is undefined if the indices were not created on the same input
+ * provided here.
+ *
  * @param input1 Strings column for indices1
- * @param indices1 Suffix array from nvtext::build_suffix_array
+ * @param indices1 Suffix array from nvtext::build_suffix_array for input1
  * @param input2 Strings column for indices2
- * @param indices2 Suffix array from nvtext::build_suffix_array
- * @param min_width Minimum number of bytes must match to specify a duplicate
+ * @param indices2 Suffix array from nvtext::build_suffix_array for input2
+ * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with updated strings
  */
 std::unique_ptr<cudf::column> resolve_duplicates_pair(
   cudf::strings_column_view const& input1,
-  cudf::device_span<int32_t const> indices1,
+  cudf::device_span<cudf::size_type const> indices1,
   cudf::strings_column_view const& input2,
-  cudf::device_span<int32_t const> indices2,
-  int32_t min_width,
+  cudf::device_span<cudf::size_type const> indices2,
+  cudf::size_type min_width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
