@@ -2715,8 +2715,9 @@ def as_column(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
         elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            dtype_enum = get_dtype_enum(arbitrary.dtype)
             if cudf.get_option("mode.pandas_compatible"):
+                dtype_enum = get_dtype_enum(arbitrary.dtype)
+            else:
                 raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
