@@ -19,20 +19,18 @@ T = TypeVar("T")
 
 
 class _Callable[T](Protocol):
-    """Generic callable."""
-
     def __call__(self, *args: Any) -> T: ...
 
 
 @overload
-def wrap_dataframe(obj: DataFrame) -> SpillableWrapper[DataFrame]: ...
+def wrap_arg(obj: DataFrame) -> SpillableWrapper[DataFrame]: ...
 
 
 @overload
-def wrap_dataframe(obj: T) -> T: ...
+def wrap_arg(obj: T) -> T: ...
 
 
-def wrap_dataframe(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
+def wrap_arg(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
     """
     Make `obj` spillable if it is a DataFrame.
 
@@ -103,7 +101,7 @@ def wrap_func_spillable(
     def wrapper(*args: Any) -> T:
         ret: Any = func(*(unwrap_arg(arg) for arg in args))
         if make_func_output_spillable:
-            ret = wrap_dataframe(ret)
+            ret = wrap_arg(ret)
         return ret
 
     return wrapper
