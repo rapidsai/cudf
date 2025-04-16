@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ package ai.rapids.cudf;
  */
 public class CudaFatalException extends CudaException {
   CudaFatalException(String message, int errorCode) {
-    this(message, "No native stacktrace is available.", errorCode);
+    this(message, errorCode);
   }
 
   CudaFatalException(String message, String nativeStacktrace, int errorCode) {

@@ -36,20 +36,13 @@ public class CudaException extends RuntimeException {
   }
 
   CudaException(String message, String nativeStacktrace, int errorCode) {
-    super(getExceptionMessage(message, nativeStacktrace));
+    super(ExceptionUtils.combineMessage(message, nativeStacktrace));
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
   CudaException(String message, String nativeStacktrace, int errorCode, Throwable cause) {
-    super(getExceptionMessage(message, nativeStacktrace), cause);
+    super(ExceptionUtils.combineMessage(message, nativeStacktrace), cause);
     cudaError = CudaError.parseErrorCode(errorCode);
-  }
-
-  private static String getExceptionMessage(String message, String nativeStacktrace) {
-    if (nativeStacktrace == null) {
-      return message;
-    }
-    return message + "\n\t========== native stack frame ==========\n" + nativeStacktrace;
   }
 
   public CudaError getCudaError() {
