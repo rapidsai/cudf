@@ -18,10 +18,18 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class _Function[T](Protocol):
+class _Callable[T](Protocol):
     """Generic callable."""
 
     def __call__(self, *args: Any) -> T: ...
+
+
+@overload
+def wrap_dataframe(obj: DataFrame) -> SpillableWrapper[DataFrame]: ...
+
+
+@overload
+def wrap_dataframe(obj: T) -> T: ...
 
 
 def wrap_dataframe(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
@@ -42,9 +50,9 @@ def wrap_dataframe(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
     return obj
 
 
-def unwrap_dataframe(obj: SpillableWrapper[T] | T) -> DataFrame | T:
+def unwrap_arg(obj: SpillableWrapper[T] | T) -> T:
     """
-    Unwraps a SpillableWrapper to retrieve the original DataFrame.
+    Unwraps a SpillableWrapper to retrieve the original object.
 
     Parameters
     ----------
@@ -53,7 +61,7 @@ def unwrap_dataframe(obj: SpillableWrapper[T] | T) -> DataFrame | T:
 
     Returns
     -------
-    The unwrapped DataFrame if obj is a SpillableWrapper, otherwise the original object.
+    The unwrapped obj is a SpillableWrapper, otherwise the original object.
     """
     if isinstance(obj, SpillableWrapper):
         return obj.unspill()
@@ -62,21 +70,21 @@ def unwrap_dataframe(obj: SpillableWrapper[T] | T) -> DataFrame | T:
 
 @overload
 def wrap_func_spillable(
-    func: _Function[DataFrame], *, make_func_output_spillable: Literal[True]
-) -> _Function[SpillableWrapper[DataFrame]]: ...
+    func: _Callable[DataFrame], *, make_func_output_spillable: Literal[True]
+) -> _Callable[SpillableWrapper[DataFrame]]: ...
 
 
 @overload
 def wrap_func_spillable(
-    func: _Function[T], *, make_func_output_spillable: bool
-) -> _Function[T]: ...
+    func: _Callable[T], *, make_func_output_spillable: bool
+) -> _Callable[T]: ...
 
 
 def wrap_func_spillable(
-    func: _Function[T] | _Function[DataFrame],
+    func: _Callable[T] | _Callable[DataFrame],
     *,
     make_func_output_spillable: bool,
-) -> _Function[T] | _Function[SpillableWrapper[DataFrame]]:
+) -> _Callable[T] | _Callable[SpillableWrapper[DataFrame]]:
     """
     Wraps a function to handle spillable DataFrames.
 
@@ -93,7 +101,7 @@ def wrap_func_spillable(
     """
 
     def wrapper(*args: Any) -> T:
-        ret: Any = func(*(unwrap_dataframe(arg) for arg in args))
+        ret: Any = func(*(unwrap_arg(arg) for arg in args))
         if make_func_output_spillable:
             ret = wrap_dataframe(ret)
         return ret
