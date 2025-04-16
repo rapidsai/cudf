@@ -39,6 +39,11 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(
+  CUDF_BUILD_STACKTRACE_DEBUG
+  "Replace the current optimization flags by the options '-rdynamic -Og', useful for debugging with stacktrace retrieval"
+  OFF
+)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
@@ -51,6 +56,13 @@ message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE
         "CUDF_JNI: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}"
 )
+message(
+  VERBOSE
+  "CUDF: Replace the current optimization flags by the options '-rdynamic -Og' (useful for debugging with stacktrace retrieval): ${CUDF_BUILD_STACKTRACE_DEBUG}"
+)
+if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
+  message(FATAL_ERROR "CUDF_BUILD_STACKTRACE_DEBUG is only supported with GCC compiler")
+endif()
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
@@ -171,6 +183,19 @@ if(CUDF_JNI_ENABLE_PROFILING)
   target_compile_definitions(cudfjni PRIVATE CUDF_JNI_ENABLE_PROFILING)
 endif()
 
+if(CUDF_BUILD_STACKTRACE_DEBUG)
+  # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
+  # 'optimize'".
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
+                       "${CMAKE_CUDA_FLAGS_MINSIZEREL}"
+  )
+  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELWITHDEBINFO
+                       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}"
+  )
+endif()
+
 if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
   # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
   # backwards-compatibility for software that expects to find libcudf.so in the JVM environment
@@ -195,6 +220,11 @@ target_include_directories(
 # * compile options
 # ---------------------------------------------------------------------------------
 
+set(CUDFJNI_VISIBILITY_PRESET hidden)
+if(CUDF_BUILD_STACKTRACE_DEBUG)
+  set(CUDFJNI_VISIBILITY_PRESET default)
+endif()
+
 # Override RPATH for cudfjni
 set_target_properties(
   cudfjni
@@ -203,8 +233,10 @@ set_target_properties(
              # set target compile options
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
+             CXX_VISIBILITY_PRESET ${CUDFJNI_VISIBILITY_PRESET}
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
+             CUDA_VISIBILITY_PRESET ${CUDFJNI_VISIBILITY_PRESET}
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )

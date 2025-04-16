@@ -67,7 +67,7 @@ option(
 # human-readable stacktrace for debugging.
 option(
   CUDF_BUILD_STACKTRACE_DEBUG
-  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
+  "Replace the current optimization flags by the options '-rdynamic -Og', useful for debugging with stacktrace retrieval"
   OFF
 )
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
@@ -812,6 +812,11 @@ set_property(
   PROPERTY COMPILE_DEFINITIONS "CUDF_VERSION=${PROJECT_VERSION}"
 )
 
+set(CUDF_VISIBILITY_PRESET hidden)
+if(CUDF_BUILD_STACKTRACE_DEBUG)
+  set(CUDF_VISIBILITY_PRESET default)
+endif()
+
 set_target_properties(
   cudf
   PROPERTIES BUILD_RPATH "\$ORIGIN"
@@ -821,10 +826,10 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
-             CXX_VISIBILITY_PRESET hidden
+             CXX_VISIBILITY_PRESET ${CUDF_VISIBILITY_PRESET}
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
-             CUDA_VISIBILITY_PRESET hidden
+             CUDA_VISIBILITY_PRESET ${CUDF_VISIBILITY_PRESET}
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
              LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
@@ -871,7 +876,8 @@ if(CUDF_BUILD_STACKTRACE_DEBUG)
     cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
     "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
   )
-  target_link_libraries(cudf PRIVATE cudf_backtrace)
+  add_library(cudf::cudf_backtrace ALIAS cudf_backtrace)
+  target_link_libraries(cudf PUBLIC cudf_backtrace)
 endif()
 
 # Specify include paths for the current target and dependents
@@ -1174,6 +1180,15 @@ install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
+# install cudf_backtrace in the same export set with cudf
+if(TARGET cudf_backtrace)
+  install(
+    TARGETS cudf_backtrace
+    DESTINATION ${lib_dir}
+    EXPORT cudf-exports
+  )
+endif()
+
 set(_components_export_string)
 if(TARGET cudftestutil)
   install(
@@ -1225,7 +1240,7 @@ following IMPORTED GLOBAL  targets:
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
+  GLOBAL_TARGETS cudf cudf_backtrace cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
 )
@@ -1246,7 +1261,7 @@ endif()
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
+  GLOBAL_TARGETS cudf cudf_backtrace cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
