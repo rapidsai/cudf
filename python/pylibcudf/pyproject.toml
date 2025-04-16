@@ -41,7 +41,6 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "fastavro>=0.22.9",
-    "hypothesis",
     "nanoarrow",
     "numpy>=1.23,<3.0a0",
     "pandas",

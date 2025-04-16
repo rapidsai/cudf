@@ -86,6 +86,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
@@ -920,17 +921,16 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - fastavro>=0.22.9
-          - hypothesis
+          - &fastavro fastavro>=0.22.9
+          - nanoarrow
           - *numpy
           - pandas
-          - nanoarrow
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cramjam
-          - fastavro>=0.22.9
+          - *fastavro
           - hypothesis
           - mmh3
           # Version 5.1 is incompatible with pytest<8.2.
