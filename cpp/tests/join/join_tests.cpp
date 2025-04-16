@@ -790,129 +790,57 @@ TEST_P(JoinParameterizedTest, InnerJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  // single column
-  {
-    auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
-    auto result_sort_order = cudf::sorted_order(result->view());
-    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+  for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
+    // single column
+    {
+      auto result            = inner_join(t0, t1, {0}, {0}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-    column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
-    strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
-    column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
-    strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
-    column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
-    CVector cols_gold;
-    cols_gold.push_back(col_gold_0.release());
-    cols_gold.push_back(col_gold_1.release());
-    cols_gold.push_back(col_gold_2.release());
-    cols_gold.push_back(col_gold_3.release());
-    cols_gold.push_back(col_gold_4.release());
-    cols_gold.push_back(col_gold_5.release());
-    Table gold(std::move(cols_gold));
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
 
-    auto gold_sort_order = cudf::sorted_order(gold.view());
-    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
-  // multi column
-  {
-    auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
-    auto result_sort_order = cudf::sorted_order(result->view());
-    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
+    // multi column
+    {
+      auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-    column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
-    strcol_wrapper col_gold_1({"s1", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
-    column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
-    strcol_wrapper col_gold_4({"s1", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
-    CVector cols_gold;
-    cols_gold.push_back(col_gold_0.release());
-    cols_gold.push_back(col_gold_1.release());
-    cols_gold.push_back(col_gold_2.release());
-    cols_gold.push_back(col_gold_3.release());
-    cols_gold.push_back(col_gold_4.release());
-    cols_gold.push_back(col_gold_5.release());
-    Table gold(std::move(cols_gold));
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
 
-    auto gold_sort_order = cudf::sorted_order(gold.view());
-    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
-}
-
-TEST_P(JoinParameterizedTest, InnerJoinNoNullsDebug)
-{
-  auto algo = GetParam();
-  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
-  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
-
-  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
-
-  CVector cols0, cols1;
-  cols0.push_back(col0_0.release());
-  cols0.push_back(col0_1.release());
-  cols0.push_back(col0_2.release());
-  cols1.push_back(col1_0.release());
-  cols1.push_back(col1_1.release());
-  cols1.push_back(col1_2.release());
-
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
-
-  // single column
-  {
-    auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::UNEQUAL, algo);
-    auto result_sort_order = cudf::sorted_order(result->view());
-    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
-
-    column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
-    strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
-    column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
-    strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
-    column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
-    CVector cols_gold;
-    cols_gold.push_back(col_gold_0.release());
-    cols_gold.push_back(col_gold_1.release());
-    cols_gold.push_back(col_gold_2.release());
-    cols_gold.push_back(col_gold_3.release());
-    cols_gold.push_back(col_gold_4.release());
-    cols_gold.push_back(col_gold_5.release());
-    Table gold(std::move(cols_gold));
-
-    auto gold_sort_order = cudf::sorted_order(gold.view());
-    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
-  // multi column
-  {
-    auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
-    auto result_sort_order = cudf::sorted_order(result->view());
-    auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
-
-    column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
-    strcol_wrapper col_gold_1({"s1", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
-    column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
-    strcol_wrapper col_gold_4({"s1", "s0", "s0"});
-    column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
-    CVector cols_gold;
-    cols_gold.push_back(col_gold_0.release());
-    cols_gold.push_back(col_gold_1.release());
-    cols_gold.push_back(col_gold_2.release());
-    cols_gold.push_back(col_gold_3.release());
-    cols_gold.push_back(col_gold_4.release());
-    cols_gold.push_back(col_gold_5.release());
-    Table gold(std::move(cols_gold));
-
-    auto gold_sort_order = cudf::sorted_order(gold.view());
-    auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
   }
 }
 
