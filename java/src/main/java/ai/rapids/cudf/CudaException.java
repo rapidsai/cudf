@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,30 +32,29 @@ import java.util.Map;
  */
 public class CudaException extends RuntimeException {
   CudaException(String message, int errorCode) {
-    this(message, "No native stacktrace is available.", errorCode);
+    this(message, null, errorCode);
   }
 
   CudaException(String message, String nativeStacktrace, int errorCode) {
-    super(message);
-    this.nativeStacktrace = nativeStacktrace;
+    super(getExceptionMessage(message, nativeStacktrace));
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
   CudaException(String message, String nativeStacktrace, int errorCode, Throwable cause) {
-    super(message, cause);
-    this.nativeStacktrace = nativeStacktrace;
+    super(getExceptionMessage(message, nativeStacktrace), cause);
     cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  public String getNativeStacktrace() {
-    return nativeStacktrace;
+  private static String getExceptionMessage(String message, String nativeStacktrace) {
+    if (nativeStacktrace == null) {
+      return message;
+    }
+    return message + "\n\t========== native stack frame ==========\n" + nativeStacktrace;
   }
 
   public CudaError getCudaError() {
     return cudaError;
   }
-
-  private final String nativeStacktrace;
 
   private final CudaError cudaError;
 
