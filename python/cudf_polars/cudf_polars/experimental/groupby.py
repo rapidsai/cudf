@@ -23,16 +23,15 @@ from cudf_polars.dsl.expr import (
 )
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import MutableMapping
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
@@ -259,7 +258,7 @@ def _(
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
 
     # Reduction
-    gb_inter: GroupBy | Shuffle
+    gb_inter: GroupBy | Repartition | Shuffle
     if post_aggregation_count > 1:
         # Shuffle reduction
         if ir.maintain_order:  # pragma: no cover
@@ -325,60 +324,3 @@ def _(
     )
     partition_info[new_node] = PartitionInfo(count=post_aggregation_count)
     return new_node, partition_info
-
-
-# def _tree_node(
-#     do_evaluate: Callable[..., DataFrame], nbatch: int, *args: DataFrame
-# ) -> DataFrame:
-#     return do_evaluate(*args[nbatch:], _concat(*args[:nbatch]))
-
-
-# @generate_ir_tasks.register(GroupBy)
-# def _(
-#     ir: GroupBy, partition_info: MutableMapping[IR, PartitionInfo]
-# ) -> MutableMapping[Any, Any]:
-#     (child,) = ir.children
-#     child_count = partition_info[child].count
-#     child_name = get_key_name(child)
-#     output_count = partition_info[ir].count
-
-#     if output_count == child_count:
-#         return {
-#             key: (
-#                 ir.do_evaluate,
-#                 *ir._non_child_args,
-#                 (child_name, i),
-#             )
-#             for i, key in enumerate(partition_info[ir].keys(ir))
-#         }
-#     elif output_count != 1:  # pragma: no cover
-#         raise ValueError(f"Expected single partition, got {output_count}")
-
-#     # Simple N-ary tree reduction
-#     j = 0
-#     n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
-#     graph: MutableMapping[Any, Any] = {}
-#     name = get_key_name(ir)
-#     keys: list[Any] = [(child_name, i) for i in range(child_count)]
-#     while len(keys) > n_ary:
-#         new_keys: list[Any] = []
-#         for i, k in enumerate(range(0, len(keys), n_ary)):
-#             batch = keys[k : k + n_ary]
-#             graph[(name, j, i)] = (
-#                 _tree_node,
-#                 ir.do_evaluate,
-#                 len(batch),
-#                 *batch,
-#                 *ir._non_child_args,
-#             )
-#             new_keys.append((name, j, i))
-#         j += 1
-#         keys = new_keys
-#     graph[(name, 0)] = (
-#         _tree_node,
-#         ir.do_evaluate,
-#         len(keys),
-#         *keys,
-#         *ir._non_child_args,
-#     )
-#     return graph
