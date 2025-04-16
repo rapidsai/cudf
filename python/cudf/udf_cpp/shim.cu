@@ -729,68 +729,47 @@ that corresponds to a groupby group. This class is aware of only two
 things: the pointer to start of the data (an offset within a larger
 column) and the size of the group itslef
 */
-class udf_group {
- public:
-  int64_t* data;
-  size_t size;
 
-  __device__ udf_group(int64_t* data_ptr, size_t size_val)
-      : data(data_ptr), size(size_val) {
-        if (threadIdx.x == 0 and blockIdx.x == 0) {
-          
-          printf("[udf_group constructor]: the data pointer is %p\n", data);
-          for (int64_t i = 0; i < size_val; ++i) {
-            printf("[udf_group] data[%lld] = %lld\n", i, data[i]);
-          }
+__device__ int64_t* block_alloc(size_t size) {
+    __shared__ int64_t* ptr;
+
+    if (threadIdx.x == 0) {
+        ptr = (int64_t*)malloc(size * sizeof(int64_t));
+        printf("[block_alloc] malloc bytes at %p\n", ptr);
+        //free(ptr);
+        if (ptr == nullptr) {
+          printf("[block_alloc] malloc failed!\n");
         }
-      }
-
-  __device__ udf_group() : data(nullptr), size(0) {}
-
-  // utilities
-  __device__ void* block_alloc(size_t size) {
-      __shared__ void* ptr;
-
-      if (threadIdx.x == 0) {
-          ptr = malloc(size * sizeof(int64_t));
-          if (ptr == nullptr) {
-            printf("[block_alloc] malloc failed!\n");
-          }
-      }
-
-      __syncthreads();  // all threads wait for ptr to be written
-
-      return ptr;  // all threads return the same pointer
-  }
-
-  __device__ void block_free(void* ptr) {
-      if (threadIdx.x == 0) {
-        printf("[block_free] freeing pointer %p\n", ptr);
-          free(ptr);
-      }
-  }
-  __device__ udf_group binary_add(udf_group const& other) {
-
-      int64_t* ptr = (int64_t*)block_alloc(size * sizeof(int64_t));
-
-      __syncthreads(); // may help clarify if block_alloc uses shared memory
-
-      for (int i = threadIdx.x; i < size; i += blockDim.x) {
-          ptr[i] = this->data[i] + other.data[i];
-      }
-      udf_group result(ptr, size);
-      return result;
-  }
-<<<<<<< Updated upstream
-    __device__ ~udf_group() {
-      if (data != nullptr) {
-        block_free(data);
-      }
     }
-=======
 
->>>>>>> Stashed changes
-};
+    __syncthreads();  // all threads wait for ptr to be written
+    
+    return ptr;  // all threads return the same pointer
+}
+
+__device__ void block_free(int64_t* ptr) {
+    if (threadIdx.x == 0) {
+      //printf("[block_free] freeing pointer %p\n", ptr);
+        //free(ptr);
+    }
+}
+
+
+__device__ int64_t* binary_add(int64_t* lhs, int64_t* rhs, int64_t size) {
+
+    auto ptr = block_alloc(size * sizeof(int64_t));
+    printf("[binary_add] allocated bytes at %p\n", ptr);
+    __syncthreads(); // may help clarify if block_alloc uses shared memory
+
+    for (int i = threadIdx.x; i < size; i += blockDim.x) {
+        ptr[i] = lhs[i] + rhs[i];
+    }
+
+    __syncthreads();
+    return ptr;
+}
+
+
 
 
 extern "C" 
@@ -799,18 +778,14 @@ __device__ int group_sum_binaryop(
 {
 
   if (threadIdx.x == 0 and blockIdx.x == 0 ) {
-    printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
+    //printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
     for (int64_t i = 0; i < size; ++i) {
-      printf("[group_sum_binaryop] lhs[%lld] = %lld\n", i, lhs[i]);
+      //printf("[group_sum_binaryop] lhs[%lld] = %lld\n", i, lhs[i]);
     }
   }
-  __syncthreads();
-  udf_group lhs_udf_grp = udf_group(lhs, size);
-  udf_group rhs_udf_grp = udf_group(rhs, size);
-  __syncthreads();
-  udf_group out_group = lhs_udf_grp.binary_add(rhs_udf_grp);
-  *numba_return_value = out_group.data;
-
+  int64_t* result = binary_add(lhs, rhs, size);
+  printf("[group_sum_binaryop] result pointer is %p\n", result);
+  *numba_return_value = result;
   return 0;
 }
 
@@ -828,12 +803,14 @@ __device__ int print_group_data(int64_t* numba_return_value, int64_t* group_data
 
 __device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info)
 {
-  free(udf_group_ptr);
+  auto ptr = reinterpret_cast<int64_t*>(udf_group_ptr);
+  block_free(ptr);
 }
 
 extern "C"
 __device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data) {
   if (threadIdx.x == 0) {
+    printf("[meminfo_from_new_udf_group] creating a meminfo around pointer %p\n", group_data);
     *nb_retval = NRT_MemInfo_new(group_data, NULL, udf_group_dtor, NULL);
   } else {
     *nb_retval = nullptr;

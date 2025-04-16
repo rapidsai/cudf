@@ -201,14 +201,6 @@ _print_group_data = cuda.declare_device(
 def call_print_group_data(data_ptr, size):
     _print_group_data(data_ptr, size)
 
-<<<<<<< Updated upstream
-_udf_grp_meminfo = cuda.declare_device(
-    "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))
-)
-
-def make_udf_grp_meminfo(data_ptr):
-    return _udf_grp_meminfo(data_ptr)
-=======
 _udf_grp_meminfo = cuda.declare_device(                                                                                                                                                                                                  
     "meminfo_from_new_udf_group", types.voidptr(types.CPointer(types.int64))                                                                                                                                                             
 )                                                                                                                                                                                                                                        
@@ -216,7 +208,6 @@ _udf_grp_meminfo = cuda.declare_device(
 def make_udf_grp_meminfo(data_ptr):                                                                                                                                                                                                      
     return _udf_grp_meminfo(data_ptr)                                                                                                                                                                                                    
    
->>>>>>> Stashed changes
 
 import operator
 @cuda_lower(operator.add, GroupViewType(types.int64), GroupViewType(types.int64))
