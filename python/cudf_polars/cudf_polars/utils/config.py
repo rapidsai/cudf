@@ -176,6 +176,7 @@ def _valid_streaming_options(
             "groupby_n_ary",
             "broadcast_join_limit",
             "shuffle_method",
+            "rapidsmpf_spill",
         )
     ):
         match key:
@@ -209,5 +210,7 @@ def _valid_streaming_options(
                     default = None
                     choices = (None, "tasks", "rapidsmpf")
                 options = _valid_option(options, key, default=default, choices=choices)
+            case "rampidsmpf_spill":
+                options = _valid_option(options, key, default=False, astype=bool)
 
     return options, options.keys() - set(_STREAMING_OPTIONS)
