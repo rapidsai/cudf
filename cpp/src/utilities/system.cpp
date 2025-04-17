@@ -25,6 +25,8 @@
 
 namespace cudf {
 
+bool is_nvml_available() { return cudf::nvml_shim::instance().exists(); }
+
 bool is_c2c_available()
 {
   // todo: remove this once CUDA 11 support is dropped
@@ -32,8 +34,6 @@ bool is_c2c_available()
   return false;
 #else
   nvmlDevice_t device_handle{};
-
-  nvml_shim::instance().init();
 
   CHECK_NVML(nvml_shim::instance().device_get_handle_by_index(
     rmm::get_current_cuda_device().value(), &device_handle));

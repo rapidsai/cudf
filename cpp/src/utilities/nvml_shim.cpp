@@ -28,8 +28,10 @@ namespace {
 template <typename F>
 void get_symbol(std::function<F>& fp, void* lib_handle, char const* symbol)
 {
-  fp = reinterpret_cast<std::decay_t<F>>(dlsym(lib_handle, symbol));
-  CUDF_EXPECTS(fp != nullptr, "Failed to find symbol " + std::string(symbol));
+  dlerror();  // Clear any previous error
+  fp           = reinterpret_cast<std::decay_t<F>>(dlsym(lib_handle, symbol));
+  auto err_msg = dlerror();  // Check if any error arises
+  CUDF_EXPECTS(err_msg == nullptr, "Failed to find symbol " + std::string(symbol));
 }
 }  // namespace
 
@@ -42,6 +44,8 @@ nvml_shim::nvml_shim()
   get_symbol(error_string, _lib_handle, "nvmlErrorString");
   get_symbol(device_get_handle_by_index, _lib_handle, "nvmlDeviceGetHandleByIndex_v2");
   get_symbol(device_get_field_values, _lib_handle, "nvmlDeviceGetFieldValues");
+
+  CHECK_NVML(init());
 }
 
 nvml_shim& nvml_shim::instance()

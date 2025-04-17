@@ -14,27 +14,15 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <cudf/utilities/system.hpp>
 
-#include <cudf/utilities/export.hpp>
+#include <gtest/gtest.h>
 
-namespace CUDF_EXPORT cudf {
+TEST(SystemTest, Nvml)
+{
+  if (!cudf::is_nvml_available()) {
+    GTEST_SKIP() << "Skipping tests that require the NVML library.";
+  }
 
-/**
- * @addtogroup utility_system
- * @{
- * @file
- */
-
-bool is_nvml_available();
-
-/**
- * @brief Check if the current device has at least one active NVLink-C2C interconnect.
- *
- * @return Boolean answer.
- */
-bool is_c2c_available();
-
-/** @} */
-
-}  // namespace CUDF_EXPORT cudf
+  EXPECT_NO_THROW(cudf::is_c2c_available(););
+}
