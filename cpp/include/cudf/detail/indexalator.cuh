@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
  *                      values->begin<Element>(),
  *                      values->end<Element>(),
  *                      result_itr,
- *                      thrust::less<Element>());
+ *                      cuda::std::less<Element>());
  * @endcode
  */
 struct output_indexalator : base_normalator<output_indexalator, cudf::size_type> {

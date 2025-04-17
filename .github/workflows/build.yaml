@@ -93,6 +93,8 @@ jobs:
       date: ${{ inputs.date }}
       node_type: "cpu16"
       script: ci/build_wheel_libcudf.sh
+      package-type: cpp
+      wheel-name: libcudf
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
@@ -114,6 +116,8 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_pylibcudf.sh
+      package-type: python
+      wheel-name: pylibcudf
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -135,6 +139,8 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_cudf.sh
+      package-type: python
+      wheel-name: cudf
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -158,6 +164,9 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_dask_cudf.sh
+      package-type: python
+      wheel-name: dask_cudf
+      pure-wheel: true
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -181,6 +190,9 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       script: ci/build_wheel_cudf_polars.sh
+      package-type: python
+      wheel-name: cudf_polars
+      pure-wheel: true
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
