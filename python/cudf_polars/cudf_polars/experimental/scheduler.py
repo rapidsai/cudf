@@ -5,14 +5,14 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Any, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import TypeAlias
 
 
-Key: TypeAlias = str | tuple[Union["Key", int], ...]
+Key: TypeAlias = str | tuple[str, int]
 Graph: TypeAlias = MutableMapping[Key, Any]
 T_ = TypeVar("T_")
 
@@ -36,11 +36,8 @@ def _execute_task(arg: Any, cache: MutableMapping) -> Any:
         return arg[0](*(_execute_task(a, cache) for a in arg[1:]))
     else:
         try:
-            if arg in cache:
-                return cache[arg]
-            else:
-                return arg
-        except TypeError:
+            return cache.get(arg, arg)
+        except TypeError:  # Unhashable task argument
             return arg
 
 
