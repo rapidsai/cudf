@@ -2,6 +2,7 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
@@ -31,6 +32,15 @@ cdef class Column:
 
     cdef column_view view(self) nogil
     cdef mutable_column_view mutable_view(self) nogil
+
+    @staticmethod
+    cdef Column from_rmm_buffer(
+        unique_ptr[device_buffer] buff,
+        DataType dtype,
+        size_type size,
+        list children,
+        Stream stream=*,
+    )
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=*)

@@ -11,6 +11,7 @@ from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type, bitmask_type
 
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
@@ -144,6 +145,52 @@ cdef class Column:
         )
 
     @staticmethod
+    cdef Column from_rmm_buffer(
+        unique_ptr[device_buffer] buff,
+        DataType dtype,
+        size_type size,
+        list children,
+        Stream stream=None,
+    ):
+        """
+        Create a Column from an RMM DeviceBuffer.
+
+        Parameters
+        ----------
+        buff : unique_ptr[DeviceBuffer]
+            Pointer to the data rmm.DeviceBuffer.
+        size : size_type
+            The number of rows in the column.
+        dtype : DataType
+            The type of the data in the buffer.
+        children : list
+            List of child columns.
+        stream : Stream, default None
+            The stream to use for the operation.
+
+        Notes
+        -----
+        To provide a mask and null count, use `Column.with_mask` after
+        this method.
+        """
+        stream = _get_stream(stream)
+        cdef DeviceBuffer rmm_buff = DeviceBuffer.c_from_unique_ptr(
+            move(buff), stream
+        )
+        cdef gpumemoryview data = gpumemoryview(rmm_buff)
+
+        return Column(
+            dtype,
+            size,
+            data,
+            None,
+            0,
+            # Initial offset when capturing a C++ column is always 0.
+            0,
+            children,
+        )
+
+    @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=None):
         """Create a Column from a libcudf column.
 
@@ -159,35 +206,30 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
-        # Note that when converting to cudf Column objects we'll need to pull
-        # out the base object.
-        cdef gpumemoryview data = gpumemoryview(
-            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
-        )
-
-        cdef gpumemoryview mask = None
-        if null_count > 0:
-            mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            )
 
         children = []
         if contents.children.size() != 0:
             for i in range(contents.children.size()):
                 children.append(
-                    Column.from_libcudf(move(contents.children[i]))
+                    Column.from_libcudf(move(contents.children[i]), stream)
                 )
 
-        return Column(
+        cdef Column result = Column.from_rmm_buffer(
+            # Note that when converting to cudf Column objects
+            # we'll need to pull  out the base object.
+            move(contents.data),
             dtype,
             size,
-            data,
-            mask,
-            null_count,
-            # Initial offset when capturing a C++ column is always 0.
-            0,
             children,
+            stream,
         )
+        cdef gpumemoryview mask = None
+        if null_count > 0:
+            mask = gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream)
+            )
+            result = result.with_mask(mask, null_count)
+        return result
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.
