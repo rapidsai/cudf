@@ -26,6 +26,12 @@ namespace CUDF_EXPORT cudf {
  * @file
  */
 
+/**
+ * @brief Check whether the NVML shared library exists (the file can be found and the symbols can
+ * be loaded).
+ *
+ * @return Boolean answer.
+ */
 bool is_nvml_available();
 
 /**
