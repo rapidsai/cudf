@@ -493,8 +493,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         elif not (
             is_dtype_obj_numeric(other.dtype)
             or (
-                isinstance(other.dtype, cudf.CategoricalDtype)
-                and is_dtype_obj_numeric(other.categories.dtype)  # type: ignore[attr-defined]
+                isinstance(other, CategoricalIndex)
+                and is_dtype_obj_numeric(other.categories.dtype)
             )
         ):
             return False
