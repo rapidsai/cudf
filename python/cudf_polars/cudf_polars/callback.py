@@ -21,6 +21,7 @@ import rmm
 from rmm._cuda import gpu
 
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.timer import Timer
 from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -248,7 +248,7 @@ def _callback(
 
 
 def execute_with_cudf(
-    nt: NodeTraverser, duration_since_start: int | None, *, config: GPUEngine
+    nt: NodeTraverser, duration_since_start: int | None, *, engine: GPUEngine
 ) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
@@ -262,8 +262,8 @@ def execute_with_cudf(
         Time since the user started executing the query (or None if no
         profiling should occur).
 
-    config
-        GPUEngine configuration object
+    engine
+        GPUEngine object. Configuration is available as ``engine.config``.
 
     Raises
     ------
@@ -281,12 +281,13 @@ def execute_with_cudf(
     else:
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
-    device = config.device
-    memory_resource = config.memory_resource
-    raise_on_fail = config.config.get("raise_on_fail", False)
-    executor = config.config.get("executor", None)
+
+    config = ConfigOptions.from_polars_engine(engine)
+    device = engine.device
+    memory_resource = engine.memory_resource
+
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-        translator = Translator(nt, config)
+        translator = Translator(nt, engine)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if timer is not None:
@@ -305,7 +306,7 @@ def execute_with_cudf(
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if raise_on_fail:
+            if config.raise_on_fail:
                 raise exception
         else:
             if POLARS_VERSION_LT_125:  # pragma: no cover
@@ -316,7 +317,7 @@ def execute_with_cudf(
                         should_time=False,
                         device=device,
                         memory_resource=memory_resource,
-                        executor=executor,
+                        executor=config.executor,
                         config_options=translator.config_options,
                         timer=None,
                     )
@@ -328,7 +329,7 @@ def execute_with_cudf(
                         ir,
                         device=device,
                         memory_resource=memory_resource,
-                        executor=executor,
+                        executor=config.executor,
                         config_options=translator.config_options,
                         timer=timer,
                     )

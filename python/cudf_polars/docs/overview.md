@@ -467,10 +467,28 @@ q = ...
 ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={})
+result = ir.evaluate(cache={}, timer=None)
 
 # Polars dataframe
 host_result = result.to_polars()
 ```
 
 If we get any exceptions, we can then debug as normal in Python.
+
+# Configuration
+
+polars users can configure various options about how the plan is executed
+through the `pl.GPUEngine()`. This includes some configuration options
+defined in polars itself, currently:
+
+- `device`
+- `memory_resource`
+- `raise_on_fail`
+
+All additional keyword arguments are made available to cudf-polars through
+`engine.config`.
+
+To centralize validation and keep things well-typed internally, we model our
+additional configuration as a set of dataclasses defined in
+`cudf_polars/utils/config.py`. To transition from user-provided options to our
+(validated) internal options, use `ConfigOptions.from_polars_engine`.

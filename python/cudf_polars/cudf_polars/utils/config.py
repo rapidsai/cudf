@@ -5,209 +5,122 @@
 
 from __future__ import annotations
 
-import copy
-import json
-from typing import TYPE_CHECKING, Any
+import dataclasses
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
-
     from typing_extensions import Self
+
+    import polars as pl
+
 
 __all__ = ["ConfigOptions"]
 
 
+@dataclasses.dataclass(frozen=True)
+class ParquetOptions:
+    """Configuration for the cudf-polars Parquet engine."""
+
+    chunked: bool = True
+    chunk_read_limit: int = 0
+    pass_read_limit: int = 0
+
+
+FALLBACK_MODE = Literal["warn", "raise"]
+
+
+STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
+    "chunked": False,
+}
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class StreamingExecutor:
+    """
+    Configuration for the cudf-polars streaming executor.
+
+    Parameters
+    ----------
+    scheduler
+        The scheduler to use for the streaming executor.
+
+        "distributed" requires a Dask cluster to be running.
+    """
+
+    name: Literal["streaming"] = "streaming"
+    scheduler: Literal["synchronous", "distributed"] = "synchronous"
+    fallback_mode: FALLBACK_MODE = "warn"
+    max_rows_per_partition: int = 1_000_000
+    cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
+    parquet_blocksize: int = 1_000_000_000  # why isn't this a ParquetOption?
+    groupby_n_ary: int = 32
+    broadcast_join_limit: int = 4
+    shuffle_method: Literal["tasks"] | None = None
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class InMemoryExecutor:
+    """Configuration for the cudf-polars in-memory executor."""
+
+    name: Literal["in-memory"] = "in-memory"
+    scheduler: Literal["synchronous"] = "synchronous"
+    shuffle_method: Literal["tasks", "rapidsmpf"] | None = None
+    broadcast_join_limit: int = 32
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions:
-    """
-    GPUEngine configuration-option manager.
+    """Configuration for the polars GPUEngine."""
 
-    This is a convenience class to help manage the nested
-    dictionary of user-accessible `GPUEngine` options.
-    """
+    raise_on_fail: bool = False
+    # device?
+    # memory resource?
+    parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
+    executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
+        default_factory=InMemoryExecutor
+    )
 
-    __slots__ = ("_hash_value", "config_options")
-    _hash_value: int
-    config_options: dict[str, Any]
-    """The underlying (nested) config-option dictionary."""
-
-    def __init__(self, options: dict[str, Any]):
-        self.config_options = self.validate(copy.deepcopy(options))
-
-    def set(self, name: str, value: Any) -> Self:
+    @classmethod
+    def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
         """
-        Set a user config option.
+        Create a `ConfigOptions` object from a `pl.GPUEngine` object.
 
-        Nested dictionary keys should be separated by periods.
-        For example::
-
-            >>> options = options.set("parquet_options.chunked", False)
-
-        Parameters
-        ----------
-        name
-            Period-separated config name.
-        value
-            New config value.
+        This creates our internal, typed, configuration object from the
+        user-provided `polars.GPUEngine` object.
         """
-        options = config_options = copy.deepcopy(self.config_options)
-        keys = name.split(".")
-        for k in keys[:-1]:
-            assert isinstance(options, dict)
-            if k not in options:
-                options[k] = {}
-            options = options[k]
-        options[keys[-1]] = value
-        return type(self)(config_options)
+        # these are the valid top-level keys in the engine.config that
+        # the user passes as **kwargs to GPUEngine.
+        valid_options = {
+            "executor",
+            "executor_options",
+            "parquet_options",
+        }
 
-    def get(self, name: str, *, default: Any = None) -> Any:
-        """
-        Get a user config option.
+        extra_options = set(engine.config.keys()) - valid_options
+        if extra_options:
+            raise ValueError(f"Unsupported options: {extra_options}")
 
-        Nested dictionary keys should be separated by periods.
-        For example::
+        user_executor = engine.config.get("executor", "in-memory")
+        user_executor_options = engine.config.get("executor_options", {})
+        user_parquet_options = engine.config.get("parquet_options", {})
 
-            >>> chunked = config_options.get("parquet_options.chunked")
+        executor: InMemoryExecutor | StreamingExecutor
+        match user_executor:
+            case "in-memory":
+                executor = InMemoryExecutor(**user_executor_options)
+            case "streaming":
+                executor = StreamingExecutor(**user_executor_options)
+                # Update with the streaming defaults, but user options take precedence.
+                # TODO: test this!
+                user_parquet_options = {
+                    **STREAMING_EXECUTOR_PARQUET_DEFAULTS,
+                    **user_parquet_options,
+                }
+            case _:
+                raise ValueError(f"Unsupported executor: {user_executor}")
 
-        Parameters
-        ----------
-        name
-            Period-separated config name.
-        default
-            Default return value.
-
-        Returns
-        -------
-        The user-specified config value, or `default`
-        if the config is not found.
-        """
-        options = self.config_options
-        keys = name.split(".")
-        for k in keys[:-1]:
-            assert isinstance(options, dict)
-            options = options.get(k, {})
-        return options.get(keys[-1], default)
-
-    def __hash__(self) -> int:
-        """Hash a ConfigOptions object."""
-        try:
-            return self._hash_value
-        except AttributeError:
-            self._hash_value = hash(json.dumps(self.config_options))
-            return self._hash_value
-
-    @staticmethod
-    def validate(config: dict) -> dict:
-        """
-        Validate a configuration-option dictionary.
-
-        Parameters
-        ----------
-        config
-            GPUEngine configuration options to validate.
-
-        Returns
-        -------
-        Valid config-option dictionary.
-
-        Raises
-        ------
-        ValueError
-            If the configuration contains unsupported options.
-        """
-        if unsupported := (
-            config.keys()
-            - {"raise_on_fail", "parquet_options", "executor", "executor_options"}
-        ):
-            raise ValueError(
-                f"Engine configuration contains unsupported settings: {unsupported}"
-            )
-        assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
-            config.get("parquet_options", {})
+        return cls(
+            raise_on_fail=engine.raise_on_fail,
+            parquet_options=ParquetOptions(**user_parquet_options),
+            executor=executor,
         )
-
-        # Validate executor_options
-        executor = config.get("executor", "in-memory")
-        if executor == "streaming":
-            executor_options, unsupported = _valid_streaming_options(
-                config["executor_options"]
-            )
-            config["executor_options"] = executor_options
-        else:
-            unsupported = config.get("executor_options", {}).keys()
-        if unsupported:
-            raise ValueError(
-                f"Unsupported executor_options for {executor}: {unsupported}"
-            )
-
-        return config
-
-
-def _valid_option(
-    options: MutableMapping[str, Any],
-    key: str,
-    *,
-    default: Any,
-    choices: Sequence[Any] | None = None,
-    astype: type | None = None,
-) -> MutableMapping[str, Any]:
-    """Return a valid configuration option."""
-    value = options.get(key, default)
-    if astype is not None:
-        value = astype(value)
-    if choices is not None and value not in choices:
-        raise ValueError(f"Unsupported {key} option: {value}. Choices are: {choices}")
-    options[key] = value
-    return options
-
-
-def _valid_streaming_options(
-    options: MutableMapping[str, Any],
-) -> tuple[MutableMapping[str, Any], set[str]]:
-    """Return valid options for the streaming executor."""
-    default: Any
-    choices: Sequence[Any]
-    for key in (
-        _STREAMING_OPTIONS := (
-            "scheduler",  # Validate scheduler first
-            "fallback_mode",
-            "max_rows_per_partition",
-            "parquet_blocksize",
-            "cardinality_factor",
-            "groupby_n_ary",
-            "broadcast_join_limit",
-            "shuffle_method",
-        )
-    ):
-        match key:
-            case "scheduler":
-                options = _valid_option(
-                    options,
-                    key,
-                    default="synchronous",
-                    choices=("synchronous", "distributed"),
-                )
-            case "fallback_mode":
-                options = _valid_option(
-                    options, key, default="warn", choices=("warn", "raise", "silent")
-                )
-            case "max_rows_per_partition":
-                options = _valid_option(options, key, default=1_000_000, astype=int)
-            case "parquet_blocksize":
-                options = _valid_option(options, key, default=1_000_000_000, astype=int)
-            case "cardinality_factor":
-                options = _valid_option(options, key, default={}, astype=dict)
-            case "groupby_n_ary":
-                options = _valid_option(options, key, default=32, astype=int)
-            case "broadcast_join_limit":
-                default = 4 if options["scheduler"] == "distributed" else 32
-                options = _valid_option(options, key, default=default, astype=int)
-            case "shuffle_method":
-                if options["scheduler"] != "distributed":
-                    default = "tasks"
-                    choices = (None, "tasks")
-                else:  # pragma: no cover; Requires distributed testing.
-                    default = None
-                    choices = (None, "tasks", "rapidsmpf")
-                options = _valid_option(options, key, default=default, choices=choices)
-
-    return options, options.keys() - set(_STREAMING_OPTIONS)

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import math
 import random
@@ -35,9 +36,9 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    rows_per_partition = ir.config_options.get(
-        "executor_options.max_rows_per_partition"
-    )
+    # TODO: determine if InMemoryExecutor can reach here
+    assert ir.config_options.executor.name == "streaming"
+    rows_per_partition = ir.config_options.executor.max_rows_per_partition
 
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -98,7 +99,9 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            blocksize: int = ir.config_options.get("executor_options.parquet_blocksize")
+            # TODO: determine if InMemoryExecutor can reach here
+            assert ir.config_options.executor.name == "streaming"
+            blocksize: int = ir.config_options.executor.parquet_blocksize
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
@@ -283,8 +286,11 @@ def _(
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = ir.config_options.set(
-                name="parquet_options.chunked", value=False
+            config_options = dataclasses.replace(
+                ir.config_options,
+                parquet_options=dataclasses.replace(
+                    ir.config_options.parquet_options, chunked=False
+                ),
             )
 
             slices: list[SplitScan] = []

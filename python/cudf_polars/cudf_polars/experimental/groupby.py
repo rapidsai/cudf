@@ -211,9 +211,13 @@ def _(
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
+
+    # TODO: determine if InMemoryExecutor can reach here
+    assert ir.config_options.executor.name == "streaming"
+
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.get("executor_options.cardinality_factor").items()
+        for c, f in ir.config_options.executor.cardinality_factor.items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -331,7 +335,11 @@ def _(
 
     # Simple N-ary tree reduction
     j = 0
-    n_ary = ir.config_options.get("executor_options.groupby_n_ary")
+
+    # TODO: determine if InMemoryExecutor can reach here
+    assert ir.config_options.executor.name == "streaming"
+
+    n_ary = ir.config_options.executor.groupby_n_ary
     graph: MutableMapping[Any, Any] = {}
     name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]
