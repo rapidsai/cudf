@@ -147,10 +147,12 @@ TEST_F(SetBitmaskTest, null_mask_partition)
 
 TEST_F(SetBitmaskTest, null_mask_partition_bulk)
 {
-  cudf::size_type size = 64;
-  for (auto middle = 1; middle < size; middle++) {
-    this->test_null_partition_bulk(size, middle, true);
-    this->test_null_partition_bulk(size, middle, false);
+  auto const sizes = std::vector<cudf::size_type>{64, 121};
+  for (auto size : sizes) {
+    for (auto middle = 1; middle < size; middle++) {
+      this->test_null_partition_bulk(size, middle, true);
+      this->test_null_partition_bulk(size, middle, false);
+    }
   }
 }
 
