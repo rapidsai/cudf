@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -62,6 +63,13 @@ class StreamingExecutor:
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
             )
+
+    def __hash__(self) -> int:
+        # cardinatlity factory, a dict, isn't natively hashable. We'll dump it
+        # to json and hash that.
+        d = dataclasses.asdict(self)
+        d["cardinality_factor"] = json.dumps(d["cardinality_factor"])
+        return hash(tuple(sorted(d.items())))
 
 
 @dataclasses.dataclass(frozen=True, eq=True)

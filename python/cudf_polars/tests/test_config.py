@@ -103,7 +103,7 @@ def test_explicit_memory_resource():
     assert n_allocations > 0
 
 
-def test_user_streaming_options():
+def test_user_streaming_options() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -127,7 +127,7 @@ def test_user_streaming_options():
     assert config.parquet_options.chunked is True
 
 
-def test_validate_streaming_executor_shuffle_method():
+def test_validate_streaming_executor_shuffle_method() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -159,3 +159,13 @@ def test_validate_streaming_executor_shuffle_method():
                 },
             )
         )
+
+
+@pytest.mark.parametrize("executor", ["in-memory", "streaming"])
+def test_hashable(executor: str) -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor=executor,
+        )
+    )
+    assert hash(config) == hash(config)
