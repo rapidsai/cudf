@@ -35,7 +35,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/reduce.h>
 #include <thrust/scatter.h>
@@ -106,7 +106,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                          overlap_results.begin(),  // out values
                                          cuda::std::equal_to{},  // comp for keys
                                          cuda::std::logical_or{});  // reduction op for values
-  auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
+  auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
@@ -208,8 +208,12 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                     stream,
                                     cudf::get_current_device_resource_ref());
 
-  return cudf::lists::detail::distinct(
-    lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
+  return cudf::lists::detail::distinct(lists_column_view{union_col->view()},
+                                       nulls_equal,
+                                       nans_equal,
+                                       duplicate_keep_option::KEEP_ANY,
+                                       stream,
+                                       mr);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,

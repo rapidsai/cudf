@@ -36,8 +36,7 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     rows_per_partition = ir.config_options.get(
-        "executor_options.max_rows_per_partition",
-        default=1_000_000,
+        "executor_options.max_rows_per_partition"
     )
 
     nrows = max(ir.df.shape()[0], 1)
@@ -99,14 +98,14 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            blocksize: int = ir.config_options.get(
-                "executor_options.parquet_blocksize",
-                default=1024**3,
-            )
+            blocksize: int = ir.config_options.get("executor_options.parquet_blocksize")
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
-            file_size = sum(float(stats[column]) for column in ir.schema)
+            # Some columns (e.g., "include_file_paths") may be present in the schema
+            # but not in the Parquet statistics dict. We use stats.get(column, 0)
+            # to safely fall back to 0 in those cases.
+            file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files
@@ -186,6 +185,7 @@ class SplitScan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -245,6 +245,7 @@ class SplitScan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
 
@@ -299,6 +300,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 slices.extend(
@@ -322,6 +324,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 for i in range(0, len(paths), plan.factor)

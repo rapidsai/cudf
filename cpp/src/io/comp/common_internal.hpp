@@ -36,9 +36,12 @@ constexpr uint8_t fname    = 0x08;  // Original file name present
 constexpr uint8_t fcomment = 0x10;  // Comment present
 };                                  // namespace GZIPHeaderFlag
 
+// Threshold for buffer count where device compression is favored over host in AUTO mode
+constexpr size_t default_host_compression_auto_threshold = 128;
+// Threshold for buffer count where device decompression is favored over host in AUTO mode
+constexpr size_t default_host_decompression_auto_threshold = 128;
+
 [[nodiscard]] std::optional<nvcomp::compression_type> to_nvcomp_compression(
   compression_type compression);
-
-[[nodiscard]] std::string compression_type_name(compression_type compression);
 
 }  // namespace cudf::io::detail

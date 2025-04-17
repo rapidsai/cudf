@@ -43,14 +43,12 @@ namespace io::detail {
  * @param compression Type of compression of the input data
  * @param src         Compressed host buffer
  * @param dst         Destination host span to place decompressed buffer
- * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Size of decompressed output
  */
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst,
-                  rmm::cuda_stream_view stream);
+                  host_span<uint8_t> dst);
 
 /**
  * @brief Decompresses device memory buffers.
@@ -101,7 +99,22 @@ struct decompression_info {
  * data.
  *
  */
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
+                                                    size_t num_buffers);
+
+/**
+ * @brief Computes the uncompressed sizes of Snappy-compressed input data.
+ *
+ * This function takes a collection of Snappy-compressed input data spans and computes
+ * their respective uncompressed sizes. The results are stored in the provided output span.
+ *
+ * @param inputs Compressed device memory buffers
+ * @param uncompressed_sizes Output device memory buffers to store the uncompressed sizes
+ * @param stream CUDA stream to be used for device operations and synchronization.
+ */
+void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<size_t> uncompressed_sizes,
+                                  rmm::cuda_stream_view stream);
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

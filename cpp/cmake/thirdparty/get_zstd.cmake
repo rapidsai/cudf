@@ -24,7 +24,7 @@ function(find_and_configure_zstd)
     GIT_TAG v1.5.7
     GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
     OPTIONS "ZSTD_BUILD_STATIC ON" "ZSTD_BUILD_SHARED OFF" "ZSTD_BUILD_TESTS OFF"
-            "ZSTD_BUILD_PROGRAMS OFF"
+            "ZSTD_BUILD_PROGRAMS OFF" "BUILD_SHARED_LIBS OFF"
   )
 
   if(zstd_ADDED)

@@ -3,8 +3,6 @@
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column import ColumnBase
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 
 
@@ -46,14 +44,4 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    plc_result = plc.io.avro.read_avro(options)
-    data = {
-        name: ColumnBase.from_pylibcudf(col)
-        for name, col in zip(
-            plc_result.column_names(include_children=False),
-            plc_result.columns,
-            strict=True,
-        )
-    }
-    ca = ColumnAccessor(data, rangeindex=len(data) == 0)
-    return cudf.DataFrame._from_data(ca)
+    return cudf.DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))

@@ -15,9 +15,10 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest narwhals"
-git clone https://github.com/narwhals-dev/narwhals --depth=1 -b stable
+NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
+git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals || exit 1
-rapids-pip-retry install -U -e ".[dev]"
+rapids-pip-retry install -U -e . pytest-env hypothesis
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
@@ -38,12 +39,22 @@ test_eager_only_sqlframe or \
 test_series_only_sqlframe \
 "
 
+# Temporarily skipping these tests in 25.04 and will unskip them in 25.06, which will support Polars 1.26.
+# Will also prioritize https://github.com/rapidsai/cudf/issues/18191, which will switch us to testing against
+# Narwhals tags instead of the "stable" branch for 25.06. That change will allow us to require all
+# Narwhals tests to pass consistently for supported versions.
+TEMPORARILY_SKIP=" \
+test_rolling_std_expr_lazy_ungrouped or \
+test_rolling_var_expr_lazy_ungrouped \
+"
+
 rapids-logger "Run narwhals tests for cuDF Polars"
 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -k "not ( \
-        ${TEST_THAT_NEED_NARWHALS_FIX} \
+        ${TEST_THAT_NEED_NARWHALS_FIX} or \
+        ${TEMPORARILY_SKIP} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \

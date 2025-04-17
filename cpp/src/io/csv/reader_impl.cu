@@ -447,6 +447,9 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
                  "Reading compressed data using `byte range` is unsupported");
   }
+
+  CUDF_EXPECTS(range_offset <= source->size(), "Invalid byte range offset", std::invalid_argument);
+
   // TODO: Allow parsing the header outside the mapped range
   CUDF_EXPECTS((range_offset == 0 || reader_opts.get_header() < 0),
                "byte_range offset with header not supported");
@@ -670,7 +673,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     d_valid_counts,
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_host_vector_sync(d_valid_counts, stream);
+  auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }
