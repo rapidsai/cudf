@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "cudf/utilities/error.hpp"
-
 #include <cudf/utilities/export.hpp>
 
 #include <nvml.h>
@@ -25,6 +23,13 @@
 #include <functional>
 #include <sstream>
 
+/**
+ * @brief Macro for checking the error code of the NVML API call.
+ *
+ * @param err_code The error code of the NVML API call.
+ *
+ * @throws std::runtime_error if the NVML API call fails.
+ */
 #define CHECK_NVML(err_code) cudf::check_nvml(err_code, __FILE__, __LINE__)
 
 namespace CUDF_EXPORT cudf {
@@ -65,7 +70,7 @@ class nvml_shim {
    * This function uses dlopen to dynamically load the shared library and check if the loading is
    * successful or not. The order of search conducted by dlopen is documented at
    * https://man7.org/linux/man-pages/man3/dlopen.3.html . Most commonly, the library is located at
-   * /usr/lib/<arch>/libnvidia-ml.so.1 .
+   * `/usr/lib/<arch>/libnvidia-ml.so.1` .
    *
    * @return Boolean answer.
    */
@@ -110,7 +115,7 @@ class nvml_shim {
  * @param file The source file name where the NVML API call fails.
  * @param line The line number where the NVML API call fails.
  *
- * @throws std::runtime_error is the NVML API call fails.
+ * @throws std::runtime_error if the NVML API call fails.
  */
 inline void check_nvml(nvmlReturn_t err_code, const char* file, int line)
 {
