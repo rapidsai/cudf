@@ -16,6 +16,8 @@
 
 #include <benchmarks/join/join_common.hpp>
 
+#include <cudf/join/join.hpp>
+
 void nvbench_inner_join(nvbench::state& state)
 {
   auto const multiplicity = static_cast<cudf::size_type>(state.get_int64("multiplicity"));
