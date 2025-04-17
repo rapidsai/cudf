@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 DTYPE_ENUM_MAP = {
     PANDAS_NUMPY_DTYPE: 1,
-    pd.core.dtypes.dtypes.ArrowDtype: 2,
+    pd.ArrowDtype: 2,
     pd.core.dtypes.dtypes.ExtensionDtype: 3,
 }
 
