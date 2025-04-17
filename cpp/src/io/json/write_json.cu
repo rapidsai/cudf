@@ -603,9 +603,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{.d_column       = *d_column,
-                             .append_colon   = false,
-                             .unescaped_utf8 = options_.is_enabled_utf8_unescaped()}
+    return escape_strings_fn{
+      *d_column, false, nullptr, nullptr, {}, options_.is_enabled_utf8_unescaped()}
       .get_escaped_strings(column_v, stream_, mr_);
   }
 
