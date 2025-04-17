@@ -141,13 +141,13 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
       if (utf8_char > 0x0000'00FF) {
-        // multi-byte char
-        uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (unescaped_utf8) {
           // write original utf8 character if unescaping is enabled
           write_char(utf8_char, d_buffer, bytes);
           continue;
         }
+        // multi-byte char
+        uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (codepoint <= 0x0000'FFFF) {
           // write \uXXXX utf-8 codepoint
           write_utf8_codepoint(codepoint, d_buffer, bytes);
