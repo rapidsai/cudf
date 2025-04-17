@@ -342,14 +342,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  if (base_column.is_empty()) {
-    return make_fixed_width_column(data_type{type_id::STRING},
-                                   base_column.size(),
-                                   copy_bitmask(base_column, stream, mr),
-                                   base_column.null_count(),
-                                   stream,
-                                   mr);
-  }
+  if (base_column.is_empty()) { return make_empty_column(data_type{type_id::STRING}); }
 
   auto kernel = build_span_kernel("cudf::transformation::jit::span_kernel",
                                   base_column.size(),
@@ -374,13 +367,11 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
 void perform_checks(column_view base_column,
                     data_type output_type,
-                    transform_type type,
                     std::vector<column_view> const& inputs)
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
-  CUDF_EXPECTS(is_fixed_width(output_type) ||
-                 (type == transform_type::STRING_VIEW && output_type.id() == type_id::STRING),
-               "Transforms only support output of fixed-width types and string-views");
+  CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
+               "Transforms only support output of fixed-width types and string");
   CUDF_EXPECTS(std::all_of(inputs.begin(),
                            inputs.end(),
                            [](auto& input) {
@@ -416,8 +407,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   std::string const& udf,
                                   data_type output_type,
                                   bool is_ptx,
-                                  transform_type type,
-                                  std::vector<void*> const& user_data,
+                                  std::optional<void*> user_data,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
@@ -426,17 +416,19 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
   auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
 
-  transformation::jit::perform_checks(*base_column, output_type, type, inputs);
+  transformation::jit::perform_checks(*base_column, output_type, inputs);
 
-  switch (type) {
-    case transform_type::COLUMN:
-      return transformation::jit::transform_operation(
-        *base_column, output_type, inputs, udf, is_ptx, user_data, stream, mr);
-    case transform_type::STRING_VIEW:
-      return transformation::jit::string_view_operation(
-        *base_column, inputs, udf, is_ptx, user_data, stream, mr);
+  std::vector<void*> user_data_vec;
+  if (user_data.has_value()) { user_data_vec.push_back(*user_data); }
 
-    default: CUDF_UNREACHABLE("Invalid transform type");
+  if (is_fixed_width(output_type)) {
+    return transformation::jit::transform_operation(
+      *base_column, output_type, inputs, udf, is_ptx, user_data_vec, stream, mr);
+  } else if (output_type.id() == type_id::STRING) {
+    return transformation::jit::string_view_operation(
+      *base_column, inputs, udf, is_ptx, user_data_vec, stream, mr);
+  } else {
+    CUDF_FAIL("Unsupported output type for transform operation");
   }
 }
 
@@ -446,13 +438,12 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   std::string const& udf,
                                   data_type output_type,
                                   bool is_ptx,
-                                  transform_type type,
-                                  std::vector<void*> const& user_data,
+                                  std::optional<void*> user_data,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(inputs, udf, output_type, is_ptx, type, user_data, stream, mr);
+  return detail::transform(inputs, udf, output_type, is_ptx, user_data, stream, mr);
 }
 
 }  // namespace cudf

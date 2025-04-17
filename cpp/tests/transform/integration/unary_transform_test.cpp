@@ -506,11 +506,7 @@ TEST_F(StringOperationTest, Output)
 
   auto expected =
     cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
-  auto result = cudf::transform({a, b, c, d},
-                                cuda,
-                                cudf::data_type(cudf::type_id::STRING),
-                                false,
-                                cudf::transform_type::STRING_VIEW);
+  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -558,8 +554,7 @@ __device__ void transform(cudf::string_view* out,
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,
-                                cudf::transform_type::STRING_VIEW,
-                                {scratch.data()});
+                                scratch.data());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
