@@ -125,3 +125,37 @@ def test_user_streaming_options():
         )
     )
     assert config.parquet_options.chunked is True
+
+
+def test_validate_streaming_executor_shuffle_method():
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"shuffle_method": "tasks"},
+        )
+    )
+    assert config.executor.shuffle_method == "tasks"
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={
+                "shuffle_method": "rapidsmpf",
+                "scheduler": "distributed",
+            },
+        )
+    )
+    assert config.executor.shuffle_method == "rapidsmpf"
+
+    # rapidsmpf with sync is not allowed
+
+    with pytest.raises(ValueError, match="rapidsmpf shuffle method"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "shuffle_method": "rapidsmpf",
+                    "scheduler": "synchronous",
+                },
+            )
+        )
