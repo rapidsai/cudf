@@ -10,17 +10,22 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.experimental.parallel import evaluate_dask, lower_ir_graph
+from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER
 from cudf_polars.utils.config import ConfigOptions
 
 
-@pytest.fixture(scope="module")
-def engine():
+@pytest.fixture(scope="module", params=["tasks", None])
+def engine(request):
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 4},
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": request.param,
+        },
     )
 
 
@@ -41,7 +46,7 @@ def test_hash_shuffle(df, engine):
 
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
-    options = ConfigOptions({})
+    options = ConfigOptions(engine.config)
     qir1 = Shuffle(qir.schema, keys, options, qir)
 
     # Add second Shuffle node (on the same keys)
@@ -49,7 +54,7 @@ def test_hash_shuffle(df, engine):
 
     # Check that sequential shuffles on the same keys
     # are replaced with a single shuffle node
-    partition_info = lower_ir_graph(qir2)[1]
+    partition_info = lower_ir_graph(qir2, options)[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 1
 
     # Add second Shuffle node (on different keys)
@@ -58,10 +63,10 @@ def test_hash_shuffle(df, engine):
 
     # Check that we have an additional shuffle
     # node after shuffling on different keys
-    partition_info = lower_ir_graph(qir3)[1]
+    partition_info = lower_ir_graph(qir3, options)[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
-    # Check that Dask evaluation works
-    result = evaluate_dask(qir3).to_polars()
+    # Check that streaming evaluation works
+    result = evaluate_streaming(qir3, options).to_polars()
     expect = df.collect(engine="cpu")
     assert_frame_equal(result, expect, check_row_order=False)

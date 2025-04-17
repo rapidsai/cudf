@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -17,5 +17,5 @@ def test_repeat_strings(repeats):
         else repeats,
     )
     result = plc.interop.to_arrow(plc_result)
-    expected = pa.chunked_array(pc.binary_repeat(arr, repeats))
+    expected = pa.array(pc.binary_repeat(arr, repeats))
     assert result.equals(expected)

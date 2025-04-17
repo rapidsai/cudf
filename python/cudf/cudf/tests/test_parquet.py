@@ -4442,3 +4442,20 @@ def test_parquet_bloom_filters(
         len(df_stats),
         expected_len,
     )
+
+
+def test_parquet_reader_unsupported_compression(datadir):
+    fname = datadir / "hadoop_lz4_compressed.parquet"
+
+    with pytest.raises(
+        RuntimeError,
+        match="Unsupported Parquet compression type: LZ4",
+    ):
+        cudf.read_parquet(fname)
+
+
+def test_parquet_reader_empty_compressed_page(datadir):
+    fname = datadir / "empty_datapage_v2.parquet"
+
+    df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
+    assert_eq(cudf.read_parquet(fname), df)

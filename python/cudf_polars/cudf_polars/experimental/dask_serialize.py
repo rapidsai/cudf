@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, ClassVar, overload
 
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
@@ -17,9 +17,35 @@ import rmm
 from cudf_polars.containers import Column, DataFrame
 
 if TYPE_CHECKING:
+    from distributed import Client
+
     from cudf_polars.typing import ColumnHeader, DataFrameHeader
 
-__all__ = ["register"]
+__all__ = ["SerializerManager", "register"]
+
+
+class SerializerManager:  # pragma: no cover; Only used with Distributed scheduler
+    """Manager to ensure ensure serializer is only registered once."""
+
+    _serializer_registered: bool = False
+    _client_run_executed: ClassVar[set[str]] = set()
+
+    @classmethod
+    def register_serialize(cls) -> None:
+        """Register Dask/cudf-polars serializers in calling process."""
+        if not cls._serializer_registered:
+            from cudf_polars.experimental.dask_serialize import register
+
+            register()
+            cls._serializer_registered = True
+
+    @classmethod
+    def run_on_cluster(cls, client: Client) -> None:
+        """Run serializer registration on the workers and scheduler."""
+        if client.id not in cls._client_run_executed:
+            client.run(cls.register_serialize)
+            client.run_on_scheduler(cls.register_serialize)
+            cls._client_run_executed.add(client.id)
 
 
 def register() -> None:
