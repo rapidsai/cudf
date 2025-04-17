@@ -36,8 +36,10 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # TODO: determine if InMemoryExecutor can reach here
-    assert ir.config_options.executor.name == "streaming"
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
     rows_per_partition = ir.config_options.executor.max_rows_per_partition
 
     nrows = max(ir.df.shape()[0], 1)
@@ -99,8 +101,10 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            # TODO: determine if InMemoryExecutor can reach here
-            assert ir.config_options.executor.name == "streaming"
+            assert ir.config_options.executor.name == "streaming", (
+                "'in-memory' executor not supported in 'generate_ir_tasks'"
+            )
+
             blocksize: int = ir.config_options.executor.parquet_blocksize
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.

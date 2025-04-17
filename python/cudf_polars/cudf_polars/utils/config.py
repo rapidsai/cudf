@@ -137,7 +137,6 @@ class ConfigOptions:
             case "streaming":
                 executor = StreamingExecutor(**user_executor_options)
                 # Update with the streaming defaults, but user options take precedence.
-                # TODO: test this!
                 user_parquet_options = {
                     **STREAMING_EXECUTOR_PARQUET_DEFAULTS,
                     **user_parquet_options,

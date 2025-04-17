@@ -212,8 +212,9 @@ def _(
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
 
-    # TODO: determine if InMemoryExecutor can reach here
-    assert ir.config_options.executor.name == "streaming"
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
 
     cardinality_factor = {
         c: min(f, 1.0)
@@ -336,10 +337,11 @@ def _(
     # Simple N-ary tree reduction
     j = 0
 
-    # TODO: determine if InMemoryExecutor can reach here
-    assert ir.config_options.executor.name == "streaming"
-
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
     n_ary = ir.config_options.executor.groupby_n_ary
+
     graph: MutableMapping[Any, Any] = {}
     name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]
