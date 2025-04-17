@@ -418,6 +418,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_md5(JNIEnv* env,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sha1(JNIEnv* env,
+  jobject j_object,
+  jlongArray column_handles)
+{
+JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+
+try {
+auto column_views =
+cudf::jni::native_jpointerArray<cudf::column_view>{env, column_handles}.get_dereferenced();
+return release_as_jlong(cudf::hashing::sha1(cudf::table_view{column_views}));
+}
+CATCH_STD(env, 0);
+}
+
 ////////
 // Native methods specific to cudf::column. These either take or return a cudf::column
 // instead of a cudf::column_view so they need to be used with caution. These should

@@ -532,6 +532,89 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testSha1HashStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings("Hello", "World", "CuDF", "Rapids", "AI", "Spark");
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0", "70c07ec18ef89c5309bbb0937f3a6342411e1fdd",
+          "f07e54a651cddad6e1a7bd5d61bb4327a5ca590c", "62ee80d2358be1ecfe498e4c2a4a2f1f50082973",
+          "560040c54a3bfeaf24c4a4096cee1de719cd87cd", "85f5955f4b27a9a4c2aab6ffe5d7189fc298b92c"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashBinary() {
+    try (ColumnVector v0 = ColumnVector.fromBytes(
+        new byte[] {0x48, 0x65, 0x6c, 0x6c, 0x6f},
+        new byte[] {0x57, 0x6f, 0x72, 0x6c, 0x64},
+        new byte[] {0x43, 0x75, 0x44, 0x46},
+        new byte[] {0x52, 0x61, 0x70, 0x69, 0x64, 0x73},
+        new byte[] {0x41, 0x49},
+        new byte[] {0x53, 0x70, 0x61, 0x72, 0x6b}
+    );
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0", "70c07ec18ef89c5309bbb0937f3a6342411e1fdd",
+          "f07e54a651cddad6e1a7bd5d61bb4327a5ca590c", "62ee80d2358be1ecfe498e4c2a4a2f1f50082973",
+          "560040c54a3bfeaf24c4a4096cee1de719cd87cd", "85f5955f4b27a9a4c2aab6ffe5d7189fc298b92c"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashInts() {
+    try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4, 5, 6);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "479e04f3d12d112b5c04c9ee67e4b1e6e201ea4e", "ff56b9948d201ee37605e101e01f63aab97b5e4a",
+          "a40dc8ca42102b7db12aeeae5f5d91a964a588a0", "f0c957104bb1b80c9d125d9c8cbb3f06fbf2ab1a",
+          "00e14c6ef59816760e2c9b5a57157e8ac9de4012", "bd76c36c93aeee40821e85825cd7ad64e88a069f"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashFloats() {
+    try (ColumnVector v0 = ColumnVector.fromFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "a9f0fff2199478255cd08efb165b2079b89ef31f", "fe85ddaa3b04d4296e92f4319e3efb7fe631343d",
+          "da267140a6aa0437da73ff9fd414f3bae04bf1dd", "022e2140a5a5c75807c8fb48f93391fe0c25572d",
+          "3e7f27c1f1b3b512dcb8abc1a844e8787f60a553", "281970f462015f2efe86bde787cd2b47dfd26f23"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashBooleans() {
+    try (ColumnVector v0 = ColumnVector.fromBooleans(true, false);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "bf8b4530d8d246dd74ac53a13471bba17941dff7", "5ba93c9db0cff93f52b521d7420e43f6eda2784f"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashDecimals() {
+    try (ColumnVector v0 = ColumnVector.decimalFromLongs(2, 123456, 789012, 345678, 901234, 567890, 432109);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "17cb6ae78c5109ff81e1dd78a68f475195ff6ffc", "f05c33f3af347e53770b8cfb703d77800d601723",
+          "751f78b3c907af5f64df350869e9a1b74ceaaaf1", "c8f9e7b4827ec36bcdbac1ce5c682f35acdd5d98",
+          "2f6489e5b7c60f888c0e02e10e1f5530c0749f2a", "5d7154e5bb8957a4748ddb09063a322a465bdc70"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();

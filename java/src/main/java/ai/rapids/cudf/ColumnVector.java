@@ -781,6 +781,28 @@ public final class ColumnVector extends ColumnView {
     return new ColumnVector(md5(columnViews));
   }
 
+  public static ColumnVector sha1Hash(ColumnView column) {
+    assert column != null : "Column vector passed may not be null";
+    assert column.getType() == DType.STRING || 
+           column.getType() == DType.BOOL8 || 
+           column.getType() == DType.INT8 || 
+           column.getType() == DType.INT16 || 
+           column.getType() == DType.INT32 || 
+           column.getType() == DType.INT64 || 
+           column.getType() == DType.UINT8 || 
+           column.getType() == DType.UINT16 || 
+           column.getType() == DType.UINT32 || 
+           column.getType() == DType.UINT64 || 
+           column.getType() == DType.FLOAT32 || 
+           column.getType() == DType.FLOAT64 || 
+           column.getType() == DType.DECIMAL32 || 
+           column.getType() == DType.DECIMAL64 || 
+           column.getType() == DType.DECIMAL128 :
+           "SHA1 hash can only be applied to STRING, numeric, boolean, or decimal columns";
+    long columnView = column.getNativeView();
+    return new ColumnVector(sha1(new long[]{columnView}));
+  }
+
   /**
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
@@ -891,6 +913,14 @@ public final class ColumnVector extends ColumnView {
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
   private static native long md5(long[] viewHandles) throws CudfException;
+
+  /**
+   * Native method to sha1 hash each row of the given table
+   *
+   * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
+   * @return native handle of the resulting cudf column containing the hex-string hashing results.
+   */
+  private static native long sha1(long[] viewHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
