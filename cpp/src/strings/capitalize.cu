@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
@@ -37,6 +38,73 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
+constexpr size_type NUM_SPECIAL_CHARS = 112;
+
+// These characters have unique title-case values that are different from their
+// upper-case counterparts. The lookup uses binary_search so they must be sorted here.
+__constant__ cuda::std::array<uint16_t, NUM_SPECIAL_CHARS> title_case_table = {
+  0x00df, 0x01c4, 0x01c6, 0x01c7, 0x01c9, 0x01ca, 0x01cc, 0x01f1, 0x01f3, 0x0587, 0x10d0, 0x10d1,
+  0x10d2, 0x10d3, 0x10d4, 0x10d5, 0x10d6, 0x10d7, 0x10d8, 0x10d9, 0x10da, 0x10db, 0x10dc, 0x10dd,
+  0x10de, 0x10df, 0x10e0, 0x10e1, 0x10e2, 0x10e3, 0x10e4, 0x10e5, 0x10e6, 0x10e7, 0x10e8, 0x10e9,
+  0x10ea, 0x10eb, 0x10ec, 0x10ed, 0x10ee, 0x10ef, 0x10f0, 0x10f1, 0x10f2, 0x10f3, 0x10f4, 0x10f5,
+  0x10f6, 0x10f7, 0x10f8, 0x10f9, 0x10fa, 0x10fd, 0x10fe, 0x10ff, 0x1f80, 0x1f81, 0x1f82, 0x1f83,
+  0x1f84, 0x1f85, 0x1f86, 0x1f87, 0x1f90, 0x1f91, 0x1f92, 0x1f93, 0x1f94, 0x1f95, 0x1f96, 0x1f97,
+  0x1fa0, 0x1fa1, 0x1fa2, 0x1fa3, 0x1fa4, 0x1fa5, 0x1fa6, 0x1fa7, 0x1fb2, 0x1fb3, 0x1fb4, 0x1fb7,
+  0x1fc2, 0x1fc3, 0x1fc4, 0x1fc7, 0x1ff2, 0x1ff3, 0x1ff4, 0x1ff7, 0x2c5f, 0xa7c1, 0xa7c8, 0xa7ca,
+  0xa7d1, 0xa7d7, 0xa7d9, 0xa7f6, 0xfb00, 0xfb01, 0xfb02, 0xfb03, 0xfb04, 0xfb05, 0xfb06, 0xfb13,
+  0xfb14, 0xfb15, 0xfb16, 0xfb17};
+
+// These are the title-case counterparts to the characters in title_case_table
+__constant__ cuda::std::array<uint64_t, NUM_SPECIAL_CHARS> title_case_chars = {
+  0x005300730000 /* Ss */, 0x01c500000000 /* ǅ */,   0x01c500000000 /* ǅ */,
+  0x01c800000000 /* ǈ */,  0x01c800000000 /* ǈ */,   0x01cb00000000 /* ǋ */,
+  0x01cb00000000 /* ǋ */,  0x01f200000000 /* ǲ */,   0x01f200000000 /* ǲ */,
+  0x053505820000 /* Եւ */, 0x10d000000000 /* ა */,   0x10d100000000 /* ბ */,
+  0x10d200000000 /* გ */,  0x10d300000000 /* დ */,   0x10d400000000 /* ე */,
+  0x10d500000000 /* ვ */,  0x10d600000000 /* ზ */,   0x10d700000000 /* თ */,
+  0x10d800000000 /* ი */,  0x10d900000000 /* კ */,   0x10da00000000 /* ლ */,
+  0x10db00000000 /* მ */,  0x10dc00000000 /* ნ */,   0x10dd00000000 /* ო */,
+  0x10de00000000 /* პ */,  0x10df00000000 /* ჟ */,   0x10e000000000 /* რ */,
+  0x10e100000000 /* ს */,  0x10e200000000 /* ტ */,   0x10e300000000 /* უ */,
+  0x10e400000000 /* ფ */,  0x10e500000000 /* ქ */,   0x10e600000000 /* ღ */,
+  0x10e700000000 /* ყ */,  0x10e800000000 /* შ */,   0x10e900000000 /* ჩ */,
+  0x10ea00000000 /* ც */,  0x10eb00000000 /* ძ */,   0x10ec00000000 /* წ */,
+  0x10ed00000000 /* ჭ */,  0x10ee00000000 /* ხ */,   0x10ef00000000 /* ჯ */,
+  0x10f000000000 /* ჰ */,  0x10f100000000 /* ჱ */,   0x10f200000000 /* ჲ */,
+  0x10f300000000 /* ჳ */,  0x10f400000000 /* ჴ */,   0x10f500000000 /* ჵ */,
+  0x10f600000000 /* ჶ */,  0x10f700000000 /* ჷ */,   0x10f800000000 /* ჸ */,
+  0x10f900000000 /* ჹ */,  0x10fa00000000 /* ჺ */,   0x10fd00000000 /* ჽ */,
+  0x10fe00000000 /* ჾ */,  0x10ff00000000 /* ჿ */,   0x1f8800000000 /* ᾈ */,
+  0x1f8900000000 /* ᾉ */,  0x1f8a00000000 /* ᾊ */,   0x1f8b00000000 /* ᾋ */,
+  0x1f8c00000000 /* ᾌ */,  0x1f8d00000000 /* ᾍ */,   0x1f8e00000000 /* ᾎ */,
+  0x1f8f00000000 /* ᾏ */,  0x1f9800000000 /* ᾘ */,   0x1f9900000000 /* ᾙ */,
+  0x1f9a00000000 /* ᾚ */,  0x1f9b00000000 /* ᾛ */,   0x1f9c00000000 /* ᾜ */,
+  0x1f9d00000000 /* ᾝ */,  0x1f9e00000000 /* ᾞ */,   0x1f9f00000000 /* ᾟ */,
+  0x1fa800000000 /* ᾨ */,  0x1fa900000000 /* ᾩ */,   0x1faa00000000 /* ᾪ */,
+  0x1fab00000000 /* ᾫ */,  0x1fac00000000 /* ᾬ */,   0x1fad00000000 /* ᾭ */,
+  0x1fae00000000 /* ᾮ */,  0x1faf00000000 /* ᾯ */,   0x1fba03450000 /* Ὰͅ */,
+  0x1fbc00000000 /* ᾼ */,  0x038603450000 /* Άͅ */,   0x039103420345 /* ᾼ͂ */,
+  0x1fca03450000 /* Ὴͅ */,  0x1fcc00000000 /* ῌ */,   0x038903450000 /* Ήͅ */,
+  0x039703420345 /* ῌ͂ */,  0x1ffa03450000 /* Ὼͅ */,   0x1ffc00000000 /* ῼ */,
+  0x038f03450000 /* Ώͅ */,  0x03a903420345 /* ῼ͂ */,   0x2c2f00000000 /* Ⱟ */,
+  0xa7c000000000 /* Ꟁ */,  0xa7c700000000 /* Ꟈ */,   0xa7c900000000 /* Ꟊ */,
+  0xa7d000000000 /* Ꟑ */,  0xa7d600000000 /* Ꟗ */,   0xa7d800000000 /* Ꟙ */,
+  0xa7f500000000 /* Ꟶ */,  0x004600660000 /* Ff */,  0x004600690000 /* Fi */,
+  0x0046006c0000 /* Fl */, 0x004600660069 /* Ffi */, 0x00460066006c /* Ffl */,
+  0x005300740000 /* St */, 0x005300740000 /* St */,  0x054405760000 /* Մն */,
+  0x054405650000 /* Մե */, 0x0544056b0000 /* Մի */,  0x054e05760000 /* Վն */,
+  0x0544056d0000 /* Մխ */
+};
+
+// clang-format off
+// These characters are already upper-case but need to be converted to title-case.
+// The lookup uses binary_search so they must be sorted here.
+__constant__ cuda::std::array<uint16_t,13> upper_convert = {
+  0x01c4, 0x01c7, 0x01ca, 0x01f1, 0x2c5f, 0xa7c1, 0xa7c8,
+  0xa7ca, 0xa7d1, 0xa7d7, 0xa7d9, 0xa7f6, 0xfb04
+};
+// clang-format on
 
 using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
 
@@ -81,6 +149,25 @@ struct base_fn {
     auto const code_point = info.first;
     auto const flag       = info.second;
 
+    // first, check for the special title-case characters
+    auto tc_itr = thrust::upper_bound(
+      thrust::seq, title_case_table.begin(), title_case_table.end(), code_point);
+    tc_itr -= (tc_itr != title_case_table.begin());
+    if (*tc_itr == code_point) {
+      // result is encoded with up to 3 Unicode (16-bit) characters
+      auto const result = title_case_chars[cuda::std::distance(title_case_table.begin(), tc_itr)];
+      auto const count  = ((result & 0x0FFFF00000000) > 0) + ((result & 0x0000FFFF0000) > 0) +
+                         ((result & 0x00000000FFFF) > 0);
+      size_type bytes = 0;
+      for (auto i = 0; i < count; ++i) {
+        auto new_cp = result >> (32 - (i * 16)) & 0x0FFFF;
+        bytes += d_buffer
+                   ? detail::from_char_utf8(detail::codepoint_to_utf8(new_cp), d_buffer + bytes)
+                   : detail::bytes_in_char_utf8(detail::codepoint_to_utf8(new_cp));
+      }
+      return bytes;
+    }
+
     if (!IS_SPECIAL(flag)) {
       auto const new_char = codepoint_to_utf8(d_case_table[code_point]);
       return d_buffer ? detail::from_char_utf8(new_char, d_buffer)
@@ -119,9 +206,11 @@ struct base_fn {
     auto d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
     bool capitalize  = true;
     for (auto const chr : d_str) {
-      auto const info        = get_char_info(d_flags, chr);
-      auto const flag        = info.second;
-      auto const change_case = capitalize ? IS_LOWER(flag) : IS_UPPER(flag);
+      auto const info = get_char_info(d_flags, chr);
+      auto const flag = info.second;
+      auto const is_upper_convert =
+        thrust::binary_search(thrust::seq, upper_convert.begin(), upper_convert.end(), info.first);
+      auto const change_case = capitalize ? (IS_LOWER(flag) || is_upper_convert) : IS_UPPER(flag);
 
       if (change_case) {
         auto const char_bytes = convert_char(info, d_buffer);

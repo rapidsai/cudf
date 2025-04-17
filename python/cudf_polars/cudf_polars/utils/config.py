@@ -10,6 +10,8 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping, Sequence
+
     from typing_extensions import Self
 
 __all__ = ["ConfigOptions"]
@@ -29,8 +31,7 @@ class ConfigOptions:
     """The underlying (nested) config-option dictionary."""
 
     def __init__(self, options: dict[str, Any]):
-        self.validate(options)
-        self.config_options = options
+        self.config_options = self.validate(copy.deepcopy(options))
 
     def set(self, name: str, value: Any) -> Self:
         """
@@ -95,7 +96,7 @@ class ConfigOptions:
             return self._hash_value
 
     @staticmethod
-    def validate(config: dict) -> None:
+    def validate(config: dict) -> dict:
         """
         Validate a configuration-option dictionary.
 
@@ -103,6 +104,10 @@ class ConfigOptions:
         ----------
         config
             GPUEngine configuration options to validate.
+
+        Returns
+        -------
+        Valid config-option dictionary.
 
         Raises
         ------
@@ -121,20 +126,88 @@ class ConfigOptions:
         )
 
         # Validate executor_options
-        executor = config.get("executor", "pylibcudf")
-        if executor == "dask-experimental":
-            unsupported = config.get("executor_options", {}).keys() - {
-                "fallback_mode",
-                "max_rows_per_partition",
-                "parquet_blocksize",
-                "cardinality_factor",
-                "groupby_n_ary",
-                "broadcast_join_limit",
-                "shuffle_method",
-            }
+        executor = config.get("executor", "in-memory")
+        if executor == "streaming":
+            executor_options, unsupported = _valid_streaming_options(
+                config["executor_options"]
+            )
+            config["executor_options"] = executor_options
         else:
             unsupported = config.get("executor_options", {}).keys()
         if unsupported:
             raise ValueError(
                 f"Unsupported executor_options for {executor}: {unsupported}"
             )
+
+        return config
+
+
+def _valid_option(
+    options: MutableMapping[str, Any],
+    key: str,
+    *,
+    default: Any,
+    choices: Sequence[Any] | None = None,
+    astype: type | None = None,
+) -> MutableMapping[str, Any]:
+    """Return a valid configuration option."""
+    value = options.get(key, default)
+    if astype is not None:
+        value = astype(value)
+    if choices is not None and value not in choices:
+        raise ValueError(f"Unsupported {key} option: {value}. Choices are: {choices}")
+    options[key] = value
+    return options
+
+
+def _valid_streaming_options(
+    options: MutableMapping[str, Any],
+) -> tuple[MutableMapping[str, Any], set[str]]:
+    """Return valid options for the streaming executor."""
+    default: Any
+    choices: Sequence[Any]
+    for key in (
+        _STREAMING_OPTIONS := (
+            "scheduler",  # Validate scheduler first
+            "fallback_mode",
+            "max_rows_per_partition",
+            "parquet_blocksize",
+            "cardinality_factor",
+            "groupby_n_ary",
+            "broadcast_join_limit",
+            "shuffle_method",
+        )
+    ):
+        match key:
+            case "scheduler":
+                options = _valid_option(
+                    options,
+                    key,
+                    default="synchronous",
+                    choices=("synchronous", "distributed"),
+                )
+            case "fallback_mode":
+                options = _valid_option(
+                    options, key, default="warn", choices=("warn", "raise", "silent")
+                )
+            case "max_rows_per_partition":
+                options = _valid_option(options, key, default=1_000_000, astype=int)
+            case "parquet_blocksize":
+                options = _valid_option(options, key, default=1_000_000_000, astype=int)
+            case "cardinality_factor":
+                options = _valid_option(options, key, default={}, astype=dict)
+            case "groupby_n_ary":
+                options = _valid_option(options, key, default=32, astype=int)
+            case "broadcast_join_limit":
+                default = 4 if options["scheduler"] == "distributed" else 32
+                options = _valid_option(options, key, default=default, astype=int)
+            case "shuffle_method":
+                if options["scheduler"] != "distributed":
+                    default = "tasks"
+                    choices = (None, "tasks")
+                else:  # pragma: no cover; Requires distributed testing.
+                    default = None
+                    choices = (None, "tasks", "rapidsmpf")
+                options = _valid_option(options, key, default=default, choices=choices)
+
+    return options, options.keys() - set(_STREAMING_OPTIONS)
