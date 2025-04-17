@@ -248,7 +248,7 @@ def _callback(
 
 
 def execute_with_cudf(
-    nt: NodeTraverser, duration_since_start: int | None, *, engine: GPUEngine
+    nt: NodeTraverser, duration_since_start: int | None, *, config: GPUEngine
 ) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
@@ -262,7 +262,7 @@ def execute_with_cudf(
         Time since the user started executing the query (or None if no
         profiling should occur).
 
-    engine
+    config
         GPUEngine object. Configuration is available as ``engine.config``.
 
     Raises
@@ -282,12 +282,12 @@ def execute_with_cudf(
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
 
-    config = ConfigOptions.from_polars_engine(engine)
-    device = engine.device
-    memory_resource = engine.memory_resource
+    config_options = ConfigOptions.from_polars_engine(config)
+    device = config.device
+    memory_resource = config.memory_resource
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-        translator = Translator(nt, engine)
+        translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if timer is not None:
@@ -306,7 +306,7 @@ def execute_with_cudf(
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if config.raise_on_fail:
+            if config_options.raise_on_fail:
                 raise exception
         else:
             if POLARS_VERSION_LT_125:  # pragma: no cover
@@ -317,7 +317,7 @@ def execute_with_cudf(
                         should_time=False,
                         device=device,
                         memory_resource=memory_resource,
-                        executor=config.executor,
+                        executor=config_options.executor.name,
                         config_options=translator.config_options,
                         timer=None,
                     )
@@ -329,7 +329,7 @@ def execute_with_cudf(
                         ir,
                         device=device,
                         memory_resource=memory_resource,
-                        executor=config.executor,
+                        executor=config_options.executor.name,
                         config_options=translator.config_options,
                         timer=timer,
                     )

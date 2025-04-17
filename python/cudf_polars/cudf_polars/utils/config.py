@@ -55,7 +55,13 @@ class StreamingExecutor:
     parquet_blocksize: int = 1_000_000_000  # why isn't this a ParquetOption?
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 4
-    shuffle_method: Literal["tasks"] | None = None
+    shuffle_method: Literal["tasks", "rapidsmpf"] | None = None
+
+    def __post_init__(self) -> None:
+        if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
+            raise ValueError(
+                "rapidsmpf shuffle method is not supported for synchronous scheduler"
+            )
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -64,7 +70,7 @@ class InMemoryExecutor:
 
     name: Literal["in-memory"] = "in-memory"
     scheduler: Literal["synchronous"] = "synchronous"
-    shuffle_method: Literal["tasks", "rapidsmpf"] | None = None
+    shuffle_method: Literal["tasks"] | None = None
     broadcast_join_limit: int = 32
 
 
@@ -94,6 +100,7 @@ class ConfigOptions:
             "executor",
             "executor_options",
             "parquet_options",
+            "raise_on_fail",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -103,6 +110,7 @@ class ConfigOptions:
         user_executor = engine.config.get("executor", "in-memory")
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
+        user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
         executor: InMemoryExecutor | StreamingExecutor
         match user_executor:
@@ -120,7 +128,7 @@ class ConfigOptions:
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
         return cls(
-            raise_on_fail=engine.raise_on_fail,
+            raise_on_fail=user_raise_on_fail,
             parquet_options=ParquetOptions(**user_parquet_options),
             executor=executor,
         )
