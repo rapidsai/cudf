@@ -18,7 +18,7 @@
 
 #include "parquet_common.hpp"
 
-#include <cudf/fixed_point/detail/floating_conversion.hpp>
+#include <cudf/fixed_point/detail/count_significant_bits.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
 

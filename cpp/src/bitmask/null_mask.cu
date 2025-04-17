@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/fixed_point/detail/floating_conversion.hpp>
+#include <cudf/fixed_point/detail/count_significant_bits.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -205,8 +205,7 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
       auto const num_words =
         num_bitmask_words(end_bits[i]) - begin_bits[i] / detail::size_in_bits<bitmask_type>();
       // Divide by num_bitmasks and update average here to avoid overflow
-      average_nullmask_words +=
-        cudf::util::div_rounding_up_safe<size_type>(num_words, num_bitmasks);
+      average_nullmask_words += cudf::util::div_rounding_up_safe<size_t>(num_words, num_bitmasks);
       return num_words;
     });
 
