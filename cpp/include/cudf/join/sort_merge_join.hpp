@@ -82,72 +82,70 @@ class sort_merge_join {
   inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+ private:
   /**
-   * @brief Helper struct to pre-process the tables before join operations can be performed
+   * @brief Helper struct to pre-process tables before join operations
    */
   struct preprocessed_table {
-    table_view raw_tbl_view;  ///< raw table view before pre processing
+    table_view raw_tbl_view;  ///< Raw table view before pre-processing
 
-    table_view tbl_view;  ///< processed table view which is the null-free subset of the rows of the
-                          ///< raw table view if null equality is set to false, and is equal to the
-                          ///< raw table view otherwise
+    table_view tbl_view;  ///< Processed table view which is the null-free subset of the rows of the
+                          ///< raw table view if null equality is set to false, otherwise equal to the
+                          ///< raw table view
 
     std::optional<rmm::device_buffer> raw_validity_mask =
-      std::nullopt;  ///< optional filters for null_equality::UNEQUAL
+      std::nullopt;  ///< Optional validity mask for null_equality::UNEQUAL case
     std::optional<size_type> raw_num_nulls =
-      std::nullopt;  ///< optional filters for null_equality::UNEQUAL
+      std::nullopt;  ///< Optional count of nulls for null_equality::UNEQUAL case
     std::optional<std::unique_ptr<table>> tbl =
-      std::nullopt;  ///< optional filters for null_equality::UNEQUAL
+      std::nullopt;  ///< Optional filtered table for null_equality::UNEQUAL case
 
     std::optional<std::unique_ptr<column>> tbl_sorted_order =
-      std::nullopt;  ///< optional reordering if we are given pre-sorted tables
+      std::nullopt;  ///< Optional sort ordering for pre-sorted tables
 
     /**
      * @brief Mark rows in raw table with nulls at root or child levels by populating the
      * raw_validity_mask
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @param mr Device memory resource used to allocate the table and columns' device
-     * memory.
+     * @param mr Device memory resource used for memory allocation
      */
     void populate_nonnull_filter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
     /**
-     * @brief Apply raw_validity_mask on the raw_tbl_view to create a null-free table
+     * @brief Apply raw_validity_mask to the raw_tbl_view to create a null-free table
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @param mr Device memory resource used to allocate the table and columns' device
-     * memory.
+     * @param mr Device memory resource used for memory allocation
      */
     void apply_nonnull_filter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
     /**
-     * @brief Pre-process the raw table in the case where nulls are unequal.
+     * @brief Pre-process the raw table when null equality is set to unequal
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @param mr Device memory resource used to allocate the table and columns' device
-     * memory.
+     * @param mr Device memory resource used for memory allocation
      */
     void preprocess_raw_table(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
     /**
-     * @brief Get sorted ordering of processed table
+     * @brief Compute sorted ordering of the processed table
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @param mr Device memory resource used to allocate the table and columns' device
-     * memory.
+     * @param mr Device memory resource used for memory allocation
      */
     void get_sorted_order(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
     /**
-     * @brief Get mapping from processed table to raw table to return correct join indices
+     * @brief Create mapping from processed table indices to raw table indices
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @param mr Device memory resource used to allocate the table and columns' device
-     * memory.
-     * @return A device vector indicating the mapping between pre-processed table and raw table
+     * @param mr Device memory resource used for memory allocation
+     * @return A device vector containing the mapping from processed table indices to raw table indices
      */
     rmm::device_uvector<size_type> map_tbl_to_raw(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
   };
-
- private:
   preprocessed_table ptleft;
   preprocessed_table ptright;
   null_equality compare_nulls;
