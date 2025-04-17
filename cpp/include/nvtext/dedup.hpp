@@ -100,8 +100,8 @@ std::unique_ptr<cudf::column> resolve_duplicates(
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once between input1 and input2.
  *
- * The result is undefined if the indices were not created on the same input
- * provided here.
+ * The result is undefined if the indices1 were not created on the input1 and
+ * indices2 were not created on input2.
  *
  * @param input1 Strings column for indices1
  * @param indices1 Suffix array from nvtext::build_suffix_array for input1

@@ -5346,6 +5346,8 @@ class StringMethods(ColumnMethods):
 
     def substring_duplicates(self, min_width) -> SeriesOrIndex:
         """
+        Returns duplicate strings found anywhere in the input column
+        with min_width minimum number of bytes.
 
         Parameters
         ----------
@@ -5366,7 +5368,12 @@ class StringMethods(ColumnMethods):
 
     def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
         """
-        Builds a suffix array for the input strings column
+        Builds a suffix array for the input strings column.
+        A suffix array is the indices of the sorted set of substrings
+        of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
+        where bytes is the total number of bytes in input.
+        The returned array represent the sorted strings such that
+        result[i] = input[result[i]:]
 
         For details, see :cpp:func:`build_suffix_array`
 
@@ -5389,7 +5396,10 @@ class StringMethods(ColumnMethods):
 
     def resolve_duplicates(self, sa, min_width: int) -> SeriesOrIndex:
         """
-        Builds a suffix array for the input strings column
+        Returns duplicate strings found in the input column
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously created
+        for input. Otherwise, the results are undefined.
 
         For details, see :cpp:func:`resolve_duplicates`
 
@@ -5417,7 +5427,10 @@ class StringMethods(ColumnMethods):
         self, sa1, input2, sa2, min_width: int
     ) -> SeriesOrIndex:
         """
-        Builds a suffix array for the input strings column
+        Returns duplicate strings in input1 found in input2
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously
+        created for the inputs. Otherwise, the results are undefined.
 
         For details, see :cpp:func:`resolve_duplicates_pair`
 
