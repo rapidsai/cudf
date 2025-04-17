@@ -82,6 +82,7 @@ cache:
             then:
               - libcufile-dev
       - cuda-version =${{ cuda_version }}
+      - cuda-nvml-dev
       - nvcomp ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka ${{ librdkafka_version }}
@@ -104,6 +105,8 @@ outputs:
       string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
       dynamic_linking:
         overlinking_behavior: "error"
+        missing_dso_allowlist:
+          - "libnvidia-ml.so.1"
       prefix_detection:
         ignore:
           # See https://github.com/rapidsai/build-planning/issues/160
@@ -114,6 +117,7 @@ outputs:
         - ${{ compiler("c") }}
       host:
         - cuda-version =${{ cuda_version }}
+        - cuda-nvml-dev
         - libkvikio =${{ minor_version }}
         - nvcomp ${{ nvcomp_version }}
         - rapids-logger =0.1
