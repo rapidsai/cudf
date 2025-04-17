@@ -395,7 +395,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
                                    this->head(),
                                    this->null_mask(),
                                    this->offset() + offset,
-                                   static_cast<column_device_view_core*>(d_children),
+                                   d_children,
                                    this->num_child_columns()};
   }
 
@@ -472,7 +472,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    */
   [[nodiscard]] __device__ column_device_view_core child(size_type child_index) const noexcept
   {
-    return static_cast<column_device_view_core*>(d_children)[child_index];
+    return d_children[child_index];
   }
 
   /**
@@ -659,7 +659,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   [[nodiscard]] __device__ mutable_column_device_view_core
   child(size_type child_index) const noexcept
   {
-    return static_cast<mutable_column_device_view_core*>(d_children)[child_index];
+    return d_children[child_index];
   }
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
