@@ -7,6 +7,7 @@ import string
 import numba.cuda
 import numpy
 import pandas as pd
+import pyarrow as pa
 import pytest
 import pytest_cases
 from config import NUM_COLS, NUM_ROWS, cudf, cupy
@@ -162,6 +163,12 @@ def bench_construction_with_framelike(
         index=index(num_rows),
         dtype=dtype,
     )
+
+
+@pytest.mark.parametrize("N", [100, 1_000_000, 100_000_000])
+def bench_from_arrow(benchmark, N):
+    rng = numpy.random.default_rng(seed=10)
+    benchmark(cudf.DataFrame, {None: pa.array(rng.random(N))})
 
 
 @pytest.mark.parametrize("N", [100, 100_000])

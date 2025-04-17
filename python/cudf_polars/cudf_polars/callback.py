@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
+    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -186,7 +187,8 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
 
@@ -201,7 +203,8 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
 
@@ -215,7 +218,8 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
     assert with_columns is None
@@ -229,16 +233,16 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
+        if executor is None or executor == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
+        elif executor == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_dask(ir).to_polars()
+            return evaluate_streaming(ir, config_options).to_polars()
         else:
             raise ValueError(f"Unknown executor '{executor}'")
 
@@ -313,6 +317,7 @@ def execute_with_cudf(
                         device=device,
                         memory_resource=memory_resource,
                         executor=executor,
+                        config_options=translator.config_options,
                         timer=None,
                     )
                 )
@@ -324,6 +329,7 @@ def execute_with_cudf(
                         device=device,
                         memory_resource=memory_resource,
                         executor=executor,
+                        config_options=translator.config_options,
                         timer=timer,
                     )
                 )
