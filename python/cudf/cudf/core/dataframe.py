@@ -2780,16 +2780,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        ret = super().equals(other)
-        # If all other checks matched, validate names.
-        if ret:
+        # Check that column labels match too
+        return super().equals(other) and all(
+            self_name == other_name
             for self_name, other_name in zip(
-                self._column_names, other._column_names
-            ):
-                if self_name != other_name:
-                    ret = False
-                    break
-        return ret
+                self._column_names, other._column_names, strict=True
+            )
+        )
 
     @property
     def iat(self):

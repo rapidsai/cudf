@@ -698,15 +698,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
+        if not isinstance(other, ColumnBase) or len(self) != len(other):
             return False
-        if check_dtypes and (self.dtype != other.dtype):
+        elif self is other:
+            return True
+        elif check_dtypes and (self.dtype != other.dtype):
+            return False
+        elif self.null_count != other.null_count:
             return False
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
-            raise TypeError(f"Cannot compare equality with {type(other)}")
+            return False
         return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
