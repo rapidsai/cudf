@@ -125,7 +125,7 @@ class ListColumn(ColumnBase):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(value, type=self.dtype.to_arrow())
             )
-        elif value is NA:
+        elif value is NA or value is None:
             return pa_scalar_to_plc_scalar(
                 pa.scalar(None, type=self.dtype.to_arrow())
             )
