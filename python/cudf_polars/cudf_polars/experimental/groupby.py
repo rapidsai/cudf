@@ -257,6 +257,9 @@ def _(
 
     # Reduction
     gb_inter: GroupBy | Repartition | Shuffle
+    reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
+        k.name: k.value.dtype for k in reduction_exprs
+    }
     if post_aggregation_count > 1:
         # Shuffle reduction
         if ir.maintain_order:  # pragma: no cover
@@ -284,8 +287,7 @@ def _(
             partition_info[gb_inter] = PartitionInfo(count=count)
             if count > 1:
                 gb_inter = GroupBy(
-                    {k.name: k.value.dtype for k in ir.keys}
-                    | {k.name: k.value.dtype for k in reduction_exprs},
+                    reduction_schema,
                     ir.keys,
                     reduction_exprs,
                     ir.maintain_order,
@@ -297,8 +299,7 @@ def _(
 
     # Final aggregation
     gb_reduce = GroupBy(
-        {k.name: k.value.dtype for k in ir.keys}
-        | {k.name: k.value.dtype for k in reduction_exprs},
+        reduction_schema,
         ir.keys,
         reduction_exprs,
         ir.maintain_order,
