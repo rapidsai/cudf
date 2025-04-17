@@ -14,7 +14,16 @@ import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
-from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    Cache,
+    Filter,
+    HStack,
+    MapFunction,
+    Projection,
+    Select,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -235,6 +244,20 @@ def _(
     }
 
 
+@lower_ir_node.register(MapFunction)
+def _(
+    ir: MapFunction, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Allow pointwise operations
+    if ir.name in ("rename", "explode"):
+        return _lower_ir_pwise(ir, rec)
+
+    # Fallback for everything else
+    return _lower_ir_fallback(
+        ir, rec, msg=f"{ir.name} is not supported for multiple partitions."
+    )
+
+
 def _lower_ir_pwise(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -285,4 +308,5 @@ generate_ir_tasks.register(Projection, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)
