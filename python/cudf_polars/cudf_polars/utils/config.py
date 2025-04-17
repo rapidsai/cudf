@@ -9,11 +9,10 @@ import dataclasses
 import json
 from typing import TYPE_CHECKING, Literal
 
-import polars as pl
-
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    import polars as pl
 
 __all__ = ["ConfigOptions"]
 
@@ -113,9 +112,7 @@ class ConfigOptions:
 
         extra_options = set(engine.config.keys()) - valid_options
         if extra_options:
-            raise pl.exceptions.ComputeError(
-                f"Unsupported executor_options: {extra_options}"
-            )
+            raise TypeError(f"Unsupported executor_options: {extra_options}")
 
         user_executor = engine.config.get("executor", "in-memory")
         if user_executor is None:
