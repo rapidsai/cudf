@@ -24,5 +24,5 @@ TEST(SystemTest, Nvml)
     GTEST_SKIP() << "Skipping tests that require the NVML library.";
   }
 
-  EXPECT_NO_THROW(cudf::is_c2c_available(););
+  EXPECT_NO_THROW(cudf::is_c2c_available());
 }
