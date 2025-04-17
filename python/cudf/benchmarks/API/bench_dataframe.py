@@ -171,6 +171,11 @@ def bench_from_arrow(benchmark, N):
     benchmark(cudf.DataFrame, {None: pa.array(rng.random(N))})
 
 
+@pytest.mark.parametrize("N", [100, 1_000_000])
+def bench_construction(benchmark, N):
+    benchmark(cudf.DataFrame, {None: cupy.random.rand(N)})
+
+
 @pytest.mark.parametrize("N", [100, 100_000])
 @pytest.mark.pandas_incompatible
 def bench_construction_numba_device_array(benchmark, N):
