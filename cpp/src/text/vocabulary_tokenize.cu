@@ -371,10 +371,15 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto map_ref           = vocabulary._impl->get_map_ref();
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto const sizes_itr =
-      cudf::detail::make_counting_transform_iterator(0, strings_tokenizer{*d_strings, d_delimiter});
+    auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      zero_itr,
+                      zero_itr + input.size(),
+                      d_sizes.begin(),
+                      strings_tokenizer{*d_strings, d_delimiter});
     auto [token_offsets, total_count] =
-      cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+      cudf::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
 
     // build the output column to hold all the token ids
     auto tokens = cudf::make_numeric_column(
@@ -383,7 +388,6 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
     vocabulary_tokenizer_fn<decltype(map_ref)> tokenizer{
       *d_strings, d_delimiter, map_ref, default_id, d_offsets, d_tokens};
-    auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
     thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), tokenizer);
     return cudf::make_lists_column(input.size(),
                                    std::move(token_offsets),
