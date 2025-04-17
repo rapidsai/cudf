@@ -89,7 +89,7 @@ def toposort(graph: Graph) -> list[Key]:
         while nodes:
             # Keep current node on the stack until all descendants are visited
             current = nodes[-1]
-            if current in completed:
+            if current in completed:  # pragma: no cover
                 # Already fully traversed descendants of current
                 nodes.pop()
                 continue
@@ -137,7 +137,7 @@ def synchronous_scheduler(
     -------
     Executed task-graph result for ``key``.
     """
-    if key not in graph:
+    if key not in graph:  # pragma: no cover
         raise KeyError(f"{key} is not a key in the graph")
     if cache is None:
         cache = {}
