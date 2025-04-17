@@ -28,23 +28,22 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io::parquet::experimental {
-
-namespace detail {
-
-/**
- * @brief Internal experimental Parquet reader optimized for highly selective filters (Hybrid Scan
- * operation).
- */
-class impl;
-
-}  // namespace detail
-
+namespace io {
 /**
  * @addtogroup io_readers
  * @{
  * @file
  */
+
+namespace parquet::experimental {
+
+namespace detail {
+/**
+ * @brief Internal experimental Parquet reader optimized for highly selective filters (Hybrid Scan
+ * operation).
+ */
+class impl;
+}  // namespace detail
 
 /**
  * @brief The experimental parquet reader class to optimally read parquet files subject to
@@ -245,6 +244,9 @@ class hybrid_scan_reader {
   std::unique_ptr<detail::impl> _impl;
 };
 
+}  // namespace parquet::experimental
+
 /** @} */  // end of group
-}  // namespace io::parquet::experimental
+
+}  // namespace io
 }  // namespace CUDF_EXPORT cudf
