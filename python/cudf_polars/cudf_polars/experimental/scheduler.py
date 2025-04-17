@@ -102,15 +102,17 @@ def toposort(graph: Graph) -> list[Key]:
             next_nodes = []
             for nxt in dependencies[current]:
                 if nxt not in completed:
-                    if nxt in seen:
+                    if nxt in seen:  # pragma: no cover
                         # Cycle detected!
-                        raise RuntimeError("Cycle detected in the task graph!")
+                        raise RuntimeError(
+                            f"Cycle detected in the task graph! Key: {nxt}"
+                        )
                     next_nodes.append(nxt)
 
             if next_nodes:
                 nodes.extend(next_nodes)
             else:
-                # cur has no more descendants to explore, so we're done with it
+                # Current has no more descendants to explore
                 ordered.append(current)
                 completed.add(current)
                 seen.remove(current)
