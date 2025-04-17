@@ -304,6 +304,7 @@ cdef class Column:
         DataType dtype,
         size_type size,
         list children,
+        bint verify=True,
         Stream stream=None,
     ):
         """
@@ -319,6 +320,9 @@ cdef class Column:
             The type of the data in the buffer.
         children : list
             List of child columns.
+        verify : bool, default True
+            If True, verify that the buff and children are valid
+            for the given dtype.
         stream : Stream, default None
             The stream to use for the operation.
 
@@ -332,6 +336,39 @@ cdef class Column:
             move(buff), stream
         )
         cdef gpumemoryview data = gpumemoryview(rmm_buff)
+
+        if verify:
+            if dtype.id() in {
+                type_id.INT8,
+                type_id.INT16,
+                type_id.INT32,
+                type_id.INT64,
+                type_id.UINT8,
+                type_id.UINT16,
+                type_id.UINT32,
+                type_id.UINT64,
+                type_id.FLOAT32,
+                type_id.FLOAT64,
+                type_id.BOOL8,
+                type_id.TIMESTAMP_SECONDS,
+                type_id.TIMESTAMP_MILLISECONDS,
+                type_id.TIMESTAMP_MICROSECONDS,
+                type_id.TIMESTAMP_NANOSECONDS,
+                type_id.DURATION_SECONDS,
+                type_id.DURATION_MILLISECONDS,
+                type_id.DURATION_MICROSECONDS,
+                type_id.DURATION_NANOSECONDS,
+                type_id.DECIMAL32,
+                type_id.DECIMAL64,
+                type_id.DECIMAL128,
+            } and len(children) != 0:
+                raise ValueError("Fixed-width types must have zero children.")
+            elif dtype.id() == type_id.STRING and len(children) != 1:
+                raise ValueError("String columns have have 1 child column of offsets.")
+            elif dtype.id() in {type_id.LIST, type_id.STRUCT} and len(children) == 0:
+                raise ValueError(
+                    "List and struct columns must have at least one child column."
+                )
 
         return Column(
             dtype,
@@ -375,7 +412,8 @@ cdef class Column:
             dtype,
             size,
             children,
-            stream,
+            verify=False,
+            stream=stream,
         )
         cdef gpumemoryview mask = None
         if null_count > 0:

@@ -55,6 +55,7 @@ cdef class Column:
         DataType dtype,
         size_type size,
         list children,
+        bint verify=*,
         Stream stream=*,
     )
 
