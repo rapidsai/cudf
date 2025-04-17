@@ -9,10 +9,10 @@ import dataclasses
 import json
 from typing import TYPE_CHECKING, Literal
 
+import polars as pl
+
 if TYPE_CHECKING:
     from typing_extensions import Self
-
-    import polars as pl
 
 
 __all__ = ["ConfigOptions"]
@@ -113,12 +113,25 @@ class ConfigOptions:
 
         extra_options = set(engine.config.keys()) - valid_options
         if extra_options:
-            raise ValueError(f"Unsupported options: {extra_options}")
+            raise pl.exceptions.ComputeError(
+                f"Unsupported executor_options: {extra_options}"
+            )
 
         user_executor = engine.config.get("executor", "in-memory")
+        if user_executor is None:
+            user_executor = "in-memory"
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
+
+        # These are user-provided options, so we need to actually validate
+        # them.
+
+        if user_executor not in {"in-memory", "streaming"}:
+            raise ValueError(f"Unknown executor '{user_executor}'")
+
+        if not isinstance(user_raise_on_fail, bool):
+            raise TypeError("GPUEngine option 'raise_on_fail' must be a boolean.")
 
         executor: InMemoryExecutor | StreamingExecutor
         match user_executor:
