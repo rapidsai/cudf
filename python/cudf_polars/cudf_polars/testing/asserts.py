@@ -273,6 +273,7 @@ def assert_sink_result_equal(
     engine: str | GPUEngine = "gpu",
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
+    executor: str | None = None,
 ) -> None:
     """
     Assert that writing a LazyFrame via sink produces the same output.
@@ -290,6 +291,9 @@ def assert_sink_result_equal(
         Optional keyword arguments to pass to the corresponding `pl.read_*` function.
     write_kwargs
         Optional keyword arguments to pass to the corresponding `sink_*` function.
+    executor
+        The executor configuration to pass to `GPUEngine`. If not specified
+        uses the module level `Executor` attribute.
 
     Raises
     ------
@@ -298,6 +302,15 @@ def assert_sink_result_equal(
     ValueError
         If the file extension is not one of the supported formats.
     """
+    if engine is None:
+        executor = executor or DEFAULT_EXECUTOR
+        engine = GPUEngine(
+            raise_on_fail=True,
+            executor=executor,
+            executor_options=(
+                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
+            ),
+        )
     path = Path(path)
     read_kwargs = read_kwargs or {}
     write_kwargs = write_kwargs or {}
@@ -311,11 +324,7 @@ def assert_sink_result_equal(
     read_fn = getattr(pl, f"read_{fmt}")
 
     sink_fn(cpu_path, **write_kwargs)
-    sink_fn(
-        gpu_path,
-        engine=GPUEngine(raise_on_fail=True) if engine == "gpu" else engine,
-        **write_kwargs,
-    )
+    sink_fn(gpu_path, engine=engine, **write_kwargs)
 
     expected = read_fn(cpu_path, **read_kwargs)
     result = read_fn(gpu_path, **read_kwargs)
