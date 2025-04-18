@@ -29,7 +29,6 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_schema_raw,
 )
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
@@ -299,77 +298,64 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_rmm_buffer(
-        unique_ptr[device_buffer] buff,
+    def from_rmm_buffer(
+        DeviceBuffer buff,
         DataType dtype,
         size_type size,
         list children,
-        bint verify=True,
-        Stream stream=None,
     ):
         """
         Create a Column from an RMM DeviceBuffer.
 
         Parameters
         ----------
-        buff : unique_ptr[DeviceBuffer]
-            Pointer to the data rmm.DeviceBuffer.
+        buff : DeviceBuffer
+            The data rmm.DeviceBuffer.
         size : size_type
             The number of rows in the column.
         dtype : DataType
             The type of the data in the buffer.
         children : list
             List of child columns.
-        verify : bool, default True
-            If True, verify that the buff and children are valid
-            for the given dtype.
-        stream : Stream, default None
-            The stream to use for the operation.
 
         Notes
         -----
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
-        stream = _get_stream(stream)
-        cdef DeviceBuffer rmm_buff = DeviceBuffer.c_from_unique_ptr(
-            move(buff), stream
-        )
-        cdef gpumemoryview data = gpumemoryview(rmm_buff)
+        if dtype.id() in {
+            type_id.INT8,
+            type_id.INT16,
+            type_id.INT32,
+            type_id.INT64,
+            type_id.UINT8,
+            type_id.UINT16,
+            type_id.UINT32,
+            type_id.UINT64,
+            type_id.FLOAT32,
+            type_id.FLOAT64,
+            type_id.BOOL8,
+            type_id.TIMESTAMP_SECONDS,
+            type_id.TIMESTAMP_MILLISECONDS,
+            type_id.TIMESTAMP_MICROSECONDS,
+            type_id.TIMESTAMP_NANOSECONDS,
+            type_id.DURATION_SECONDS,
+            type_id.DURATION_MILLISECONDS,
+            type_id.DURATION_MICROSECONDS,
+            type_id.DURATION_NANOSECONDS,
+            type_id.DECIMAL32,
+            type_id.DECIMAL64,
+            type_id.DECIMAL128,
+        } and len(children) != 0:
+            raise ValueError("Fixed-width types must have zero children.")
+        elif dtype.id() == type_id.STRING and len(children) != 1:
+            raise ValueError("String columns have have 1 child column of offsets.")
+        elif dtype.id() in {type_id.LIST, type_id.STRUCT} and len(children) == 0:
+            raise ValueError(
+                "List and struct columns must have at least one child column."
+            )
 
-        if verify:
-            if dtype.id() in {
-                type_id.INT8,
-                type_id.INT16,
-                type_id.INT32,
-                type_id.INT64,
-                type_id.UINT8,
-                type_id.UINT16,
-                type_id.UINT32,
-                type_id.UINT64,
-                type_id.FLOAT32,
-                type_id.FLOAT64,
-                type_id.BOOL8,
-                type_id.TIMESTAMP_SECONDS,
-                type_id.TIMESTAMP_MILLISECONDS,
-                type_id.TIMESTAMP_MICROSECONDS,
-                type_id.TIMESTAMP_NANOSECONDS,
-                type_id.DURATION_SECONDS,
-                type_id.DURATION_MILLISECONDS,
-                type_id.DURATION_MICROSECONDS,
-                type_id.DURATION_NANOSECONDS,
-                type_id.DECIMAL32,
-                type_id.DECIMAL64,
-                type_id.DECIMAL128,
-            } and len(children) != 0:
-                raise ValueError("Fixed-width types must have zero children.")
-            elif dtype.id() == type_id.STRING and len(children) != 1:
-                raise ValueError("String columns have have 1 child column of offsets.")
-            elif dtype.id() in {type_id.LIST, type_id.STRUCT} and len(children) == 0:
-                raise ValueError(
-                    "List and struct columns must have at least one child column."
-                )
-
+        cdef gpumemoryview data = gpumemoryview(buff)
         return Column(
             dtype,
             size,
@@ -397,6 +383,17 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
+        # Note that when converting to cudf Column objects we'll need to pull
+        # out the base object.
+        cdef gpumemoryview data = gpumemoryview(
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
+        )
+
+        cdef gpumemoryview mask = None
+        if null_count > 0:
+            mask = gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+            )
 
         children = []
         if contents.children.size() != 0:
@@ -405,23 +402,16 @@ cdef class Column:
                     Column.from_libcudf(move(contents.children[i]), stream)
                 )
 
-        cdef Column result = Column.from_rmm_buffer(
-            # Note that when converting to cudf Column objects
-            # we'll need to pull  out the base object.
-            move(contents.data),
+        return Column(
             dtype,
             size,
+            data,
+            mask,
+            null_count,
+            # Initial offset when capturing a C++ column is always 0.
+            0,
             children,
-            verify=False,
-            stream=stream,
         )
-        cdef gpumemoryview mask = None
-        if null_count > 0:
-            mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream)
-            )
-            result = result.with_mask(mask, null_count)
-        return result
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.
