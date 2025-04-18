@@ -146,8 +146,7 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
 
   auto table_bytes = [](cudf::table_view tbl) {
     size_t bytes = 0;
-    for (cudf::size_type i = 0; i < tbl.num_columns(); i++) {
-      auto col = tbl.column(i);
+    for (auto& col : tbl) {
       bytes += (sizeof(Key) * col.size()) +
                (col.nullable() ? std::ceil(static_cast<double>(col.size()) / 8) : 0);
     }
