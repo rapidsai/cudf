@@ -999,10 +999,7 @@ def test_series_setitem_iloc(key, value, nulls):
 @pytest.mark.parametrize(
     "key, value",
     [
-        pytest.param(
-            0,
-            0.5,
-        ),
+        (0, 0.5),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
@@ -1016,9 +1013,9 @@ def test_series_setitem_dtype(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
     gsr = cudf.from_pandas(psr)
 
-    with expect_warning_if(isinstance(value, (float, list))):
+    with pytest.warns(FutureWarning):
         psr[key] = value
-    with expect_warning_if(isinstance(value, (float, list))):
+    with pytest.warns(FutureWarning):
         gsr[key] = value
 
     assert_eq(psr, gsr)
