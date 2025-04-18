@@ -22,7 +22,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/fixed_point/detail/count_significant_bits.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -45,7 +44,6 @@
 #include <thrust/tabulate.h>
 
 #include <algorithm>
-#include <cstddef>
 #include <numeric>
 #include <type_traits>
 
@@ -224,7 +222,7 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
   auto block_size =
     std::max<size_t>(min_threads_per_block, (average_nullmask_words / max_words_per_thread));
   // Round block size to nearest (ceil) power of 2
-  block_size = size_t{1} << (numeric::detail::count_significant_bits(block_size) - 1);
+  block_size = size_t{1} << (63 - __builtin_clzll(block_size));
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
