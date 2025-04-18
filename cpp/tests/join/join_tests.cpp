@@ -154,6 +154,28 @@ struct JoinTest : public cudf::test::BaseFixture {
   }
 };
 
+TEST_F(JoinTest, InvalidLoadFactor)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
+               std::invalid_argument);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
+               std::invalid_argument);
+  // Test load factor > 1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 1.5),
+               std::invalid_argument);
+}
+
 TEST_F(JoinTest, EmptySentinelRepro)
 {
   // This test reproduced an implementation specific behavior where the combination of these

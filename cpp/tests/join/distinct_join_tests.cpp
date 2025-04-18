@@ -27,6 +27,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuco/utility/error.hpp>
+
 #include <numeric>
 #include <vector>
 
@@ -496,4 +498,24 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+}
+
+TEST_F(DistinctJoinTest, InvalidLoadFactor)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, -0.1), cuco::logic_error);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 0.0), cuco::logic_error);
+
+  // Test load factor > 1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
 }

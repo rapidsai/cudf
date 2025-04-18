@@ -603,7 +603,8 @@ hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   // If we cannot know beforehand about null existence then let's assume that there are nulls.
-  : hash_join(build, nullable_join::YES, compare_nulls, stream)
+  : hash_join(
+      build, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
 
