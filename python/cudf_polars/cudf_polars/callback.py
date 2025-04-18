@@ -296,7 +296,7 @@ def execute_with_cudf(
             and executor == "streaming"
             and translator.config_options.get("executor_options.scheduler")
             == "distributed"
-        ):
+        ):  # pragma: no cover; Requires distributed cluster
             memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
