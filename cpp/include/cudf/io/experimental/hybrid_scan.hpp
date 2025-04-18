@@ -37,15 +37,16 @@ class impl;
 }  // namespace io::parquet::experimental::detail
 }  // namespace CUDF_EXPORT cudf
 
+using byte_range_info = cudf::io::text::byte_range_info;
+
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::parquet::experimental {
 /**
  * @addtogroup io_readers
  * @{
  * @file
  */
 
-namespace parquet::experimental {
 /**
  * @brief The experimental parquet reader class to optimally read parquet files subject to
  *        highly selective filters (Hybrid Scan operation)
@@ -88,7 +89,7 @@ class hybrid_scan_reader {
    *
    * @return Byte range of the `PageIndex`
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info get_page_index_bytes() const;
 
   /**
    * @brief Setup the `PageIndex` within the Parquet file metadata struct for later use
@@ -131,7 +132,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
-  [[nodiscard]] std::pair<std::vector<text::byte_range_info>, std::vector<text::byte_range_info>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
   get_secondary_filters(cudf::host_span<size_type const> row_group_indices,
                         parquet_reader_options const& options) const;
 
@@ -189,7 +190,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<text::byte_range_info> get_filter_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<byte_range_info> get_filter_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
@@ -220,7 +221,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
    */
-  [[nodiscard]] std::vector<text::byte_range_info> get_payload_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<byte_range_info> get_payload_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
@@ -245,9 +246,7 @@ class hybrid_scan_reader {
   std::unique_ptr<detail::impl> _impl;
 };
 
-}  // namespace parquet::experimental
-
 /** @} */  // end of group
 
-}  // namespace io
+}  // namespace io::parquet::experimental
 }  // namespace CUDF_EXPORT cudf
