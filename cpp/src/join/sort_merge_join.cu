@@ -331,21 +331,20 @@ struct mapping_functor {
 };
 
 struct list_nonnull_filter {
-  bitmask_type * const validity_mask;
-  bitmask_type const * const reduced_validity_mask;
+  bitmask_type* const validity_mask;
+  bitmask_type const* const reduced_validity_mask;
   device_span<size_type const> child_positions;
   size_type const subset_offset;
-  __device__ void operator()(size_type idx) const noexcept {
+  __device__ void operator()(size_type idx) const noexcept
+  {
     if (!bit_is_set(reduced_validity_mask, idx))
-      clear_bit(validity_mask, child_positions[idx]);
+      clear_bit(validity_mask, child_positions[idx + subset_offset]);
   };
 };
 
 struct raw_tbl_mapper {
-  bitmask_type const * const raw_validity_mask;
-  __device__ auto operator()(size_type idx) {
-    return cudf::bit_is_set(raw_validity_mask, idx);
-  }
+  bitmask_type const* const raw_validity_mask;
+  __device__ auto operator()(size_type idx) { return cudf::bit_is_set(raw_validity_mask, idx); }
 };
 
 }  // anonymous namespace
@@ -392,15 +391,10 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
         rmm::exec_policy(stream),
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(0) + subset_size,
-        list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()), static_cast<bitmask_type const*>(reduced_validity_mask.data()), child_positions, static_cast<size_type>(subset_offset)});
-        /*
-        [validity_mask         = static_cast<bitmask_type*>(validity_mask.data()),
-         reduced_validity_mask = static_cast<bitmask_type*>(reduced_validity_mask.data()),
-         child_positions       = child_positions.begin() + subset_offset] __device__(auto idx) {
-          if (!bit_is_set(reduced_validity_mask, idx))
-            clear_bit(validity_mask, child_positions[idx]);
-        });
-        */
+        list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()),
+                            static_cast<bitmask_type const*>(reduced_validity_mask.data()),
+                            child_positions,
+                            static_cast<size_type>(subset_offset)});
     }
   }
   this->raw_num_nulls =
@@ -499,15 +493,12 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_r
                "Mapping is not possible");
   rmm::device_uvector<size_type> tbl_mapping(
     raw_tbl_view.num_rows() - raw_num_nulls.value(), stream, mr);
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::counting_iterator<cudf::size_type>(0),
-                  thrust::counting_iterator<cudf::size_type>(raw_tbl_view.num_rows()),
-                  tbl_mapping.begin(),
-                  raw_tbl_mapper{static_cast<bitmask_type const*>(raw_validity_mask.value().data())});
-                  /*
-                  [mask = static_cast<bitmask_type*>(raw_validity_mask.value().data())] __device__(
-                    size_type idx) { return cudf::bit_is_set(mask, idx); });
-                  */
+  thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(raw_tbl_view.num_rows()),
+    tbl_mapping.begin(),
+    raw_tbl_mapper{static_cast<bitmask_type const*>(raw_validity_mask.value().data())});
   return tbl_mapping;
 }
 

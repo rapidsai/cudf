@@ -90,8 +90,8 @@ class sort_merge_join {
     table_view raw_tbl_view;  ///< Raw table view before pre-processing
 
     table_view tbl_view;  ///< Processed table view which is the null-free subset of the rows of the
-                          ///< raw table view if null equality is set to false, otherwise equal to the
-                          ///< raw table view
+                          ///< raw table view if null equality is set to false, otherwise equal to
+                          ///< the raw table view
 
     std::optional<rmm::device_buffer> raw_validity_mask =
       std::nullopt;  ///< Optional validity mask for null_equality::UNEQUAL case
@@ -141,7 +141,8 @@ class sort_merge_join {
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      * @param mr Device memory resource used for memory allocation
-     * @return A device vector containing the mapping from processed table indices to raw table indices
+     * @return A device vector containing the mapping from processed table indices to raw table
+     * indices
      */
     rmm::device_uvector<size_type> map_tbl_to_raw(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
