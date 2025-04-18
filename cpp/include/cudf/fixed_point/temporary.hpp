@@ -40,10 +40,10 @@ auto to_string(T value) -> std::string
         return "-170141183460469231731687303715884105728";
       value += 1;  // can add back the one, no need to avoid overflow anymore
     }
-    while (value) {
+    do {
       s.push_back("0123456789"[value % 10]);
       value /= 10;
-    }
+    } while (value);
     if (sign) s.push_back('-');
     std::reverse(s.begin(), s.end());
     return s;

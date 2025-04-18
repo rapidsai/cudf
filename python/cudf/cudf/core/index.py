@@ -66,7 +66,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
-    from cudf._typing import Dtype
+    from cudf._typing import ColumnLike, Dtype
     from cudf.core.frame import Frame
 
 
@@ -3149,14 +3149,14 @@ class CategoricalIndex(Index):
                     "`ordered` together with `dtype`."
                 )
         if copy:
-            data = column.as_column(data, dtype=dtype).copy(deep=True)
+            data = as_column(data, dtype=dtype).copy(deep=True)
         name = _getdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
-            data = column.as_column(data)
+            data = as_column(data)
         else:
-            data = column.as_column(
+            data = as_column(
                 data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
             )
             # dtype has already been taken care
@@ -3180,6 +3180,44 @@ class CategoricalIndex(Index):
         if not isinstance(column.dtype, cudf.CategoricalDtype):
             raise ValueError("column must have a categorial type.")
         return super()._from_column(column, name=name)
+
+    @classmethod
+    def from_codes(
+        cls,
+        codes: ColumnLike,
+        categories: ColumnLike,
+        ordered: bool,
+        name: Hashable = None,
+    ) -> Self:
+        """
+        Construct a CategoricalIndex from codes and categories.
+
+        More performant that using the CategoricalIndex constructor.
+
+        Parameters
+        ----------
+        codes : array-like
+            The integer codes of the CategoricalIndex.
+        categories : array-like
+            The category labels of the CategoricalIndex.
+        ordered : bool
+            Whether the categories are ordered.
+        name : Hashable, optional
+            The name of the CategoricalIndex.
+        """
+        codes = as_column(codes, dtype=np.dtype(np.int32))
+        categories = as_column(categories)
+        cat_col = CategoricalColumn(
+            data=None,
+            size=len(codes),
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=ordered
+            ),
+            offset=0,
+            null_count=0,
+            children=(codes,),
+        )
+        return cls._from_column(cat_col, name=name)
 
     @property
     def ordered(self) -> bool:

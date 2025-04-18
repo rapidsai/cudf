@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -24,11 +24,18 @@ def column(request, nullable):
 
 
 def test_copy_bitmask(column, nullable):
-    expected = column.null_mask().obj if nullable else rmm.DeviceBuffer()
-    got = plc.null_mask.copy_bitmask(column)
+    expected = (
+        column.null_mask()
+        if nullable
+        else plc.gpumemoryview(rmm.DeviceBuffer())
+    )
+    got = plc.gpumemoryview(plc.null_mask.copy_bitmask(column))
 
-    assert expected.size == got.size
-    assert expected.tobytes() == got.tobytes()
+    start = 0
+    end = column.size() * 8
+    assert plc.null_mask.null_count(
+        expected, start, end
+    ) == plc.null_mask.null_count(got, start, end)
 
 
 def test_bitmask_allocation_size_bytes():

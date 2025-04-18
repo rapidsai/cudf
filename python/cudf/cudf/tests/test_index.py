@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -3336,3 +3336,16 @@ def test_bool_rangeindex_raises():
         lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
         rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
     )
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize("name", [None, "test"])
+def test_categoricalindex_from_codes(ordered, name):
+    codes = [0, 1, 2, 3, 4]
+    categories = ["a", "b", "c", "d", "e"]
+    result = cudf.CategoricalIndex.from_codes(codes, categories, ordered, name)
+    expected = pd.CategoricalIndex(
+        pd.Categorical.from_codes(codes, categories, ordered=ordered),
+        name=name,
+    )
+    assert_eq(result, expected)
