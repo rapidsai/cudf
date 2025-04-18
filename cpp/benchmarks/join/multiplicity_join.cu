@@ -26,7 +26,7 @@ void nvbench_inner_join(nvbench::state& state)
                  cudf::null_equality compare_nulls) {
     auto stream = cudf::get_default_stream();
     auto mr     = cudf::get_current_device_resource_ref();
-    cudf::sort_merge_join obj(left_input, false, right_input, false, compare_nulls, stream, mr);
+    cudf::sort_merge_join obj(left_input, false, right_input, false, compare_nulls, stream);
     return obj.inner_join(stream, mr);
   };
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
