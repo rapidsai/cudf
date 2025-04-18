@@ -30,6 +30,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -437,20 +438,20 @@ void sort_merge_join::preprocess_tables(table_view const left,
   };
 
   if (compare_nulls == null_equality::EQUAL) {
-    ptleft.tbl_view  = left;
-    ptright.tbl_view = right;
+    preprocessed_left.tbl_view  = left;
+    preprocessed_right.tbl_view = right;
   } else {
     auto is_left_nullable  = is_nullable_table(left);
     auto is_right_nullable = is_nullable_table(right);
     if (is_left_nullable) {
-      ptleft.preprocess_raw_table(stream);
+      preprocessed_left.preprocess_raw_table(stream);
     } else {
-      ptleft.tbl_view = left;
+      preprocessed_left.tbl_view = left;
     }
     if (is_right_nullable) {
-      ptright.preprocess_raw_table(stream);
+      preprocessed_right.preprocess_raw_table(stream);
     } else {
-      ptright.tbl_view = right;
+      preprocessed_right.tbl_view = right;
     }
   }
 }
@@ -467,9 +468,9 @@ void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view
 }
 
 sort_merge_join::sort_merge_join(table_view const& left,
-                                 bool is_left_sorted,
+                                 sorted is_left_sorted,
                                  table_view const& right,
-                                 bool is_right_sorted,
+                                 sorted is_right_sorted,
                                  null_equality compare_nulls,
                                  rmm::cuda_stream_view stream)
 {
@@ -477,13 +478,13 @@ sort_merge_join::sort_merge_join(table_view const& left,
   CUDF_EXPECTS(left.num_columns() == right.num_columns(),
                "Number of columns must match for a join");
 
-  ptleft.raw_tbl_view  = left;
-  ptright.raw_tbl_view = right;
-  this->compare_nulls  = compare_nulls;
+  preprocessed_left.raw_tbl_view  = left;
+  preprocessed_right.raw_tbl_view = right;
+  this->compare_nulls             = compare_nulls;
   preprocess_tables(left, right, stream);
 
-  if (!is_left_sorted) { ptleft.get_sorted_order(stream); }
-  if (!is_right_sorted) { ptright.get_sorted_order(stream); }
+  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
+  if (is_right_sorted == cudf::sorted::NO) { preprocessed_right.get_sorted_order(stream); }
 }
 
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_raw(
@@ -507,7 +508,8 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                                           device_span<size_type> larger_indices,
                                           rmm::cuda_stream_view stream)
 {
-  bool is_left_smaller = ptleft.tbl_view.num_rows() < ptright.tbl_view.num_rows();
+  bool is_left_smaller =
+    preprocessed_left.tbl_view.num_rows() < preprocessed_right.tbl_view.num_rows();
   // if a table has no nullable column, then there's no postprocessing to be done
   auto is_nullable_table = [](table_view const& t) {
     for (auto&& col : t) {
@@ -517,10 +519,10 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
   };
 
   if (compare_nulls == null_equality::UNEQUAL) {
-    auto is_left_nullable  = is_nullable_table(ptleft.tbl_view);
-    auto is_right_nullable = is_nullable_table(ptright.tbl_view);
+    auto is_left_nullable  = is_nullable_table(preprocessed_left.tbl_view);
+    auto is_right_nullable = is_nullable_table(preprocessed_right.tbl_view);
     if (is_left_nullable) {
-      auto left_mapping = ptleft.map_tbl_to_raw(stream);
+      auto left_mapping = preprocessed_left.map_tbl_to_raw(stream);
       if (is_left_smaller) {
         thrust::transform(rmm::exec_policy(stream),
                           smaller_indices.begin(),
@@ -536,7 +538,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
       }
     }
     if (is_right_nullable) {
-      auto right_mapping = ptright.map_tbl_to_raw(stream);
+      auto right_mapping = preprocessed_right.map_tbl_to_raw(stream);
       if (is_left_smaller) {
         thrust::transform(rmm::exec_policy(stream),
                           larger_indices.begin(),
@@ -559,9 +561,10 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   // TODO: what if one is sorted but not the other?
-  bool is_left_smaller = ptleft.tbl_view.num_rows() < ptright.tbl_view.num_rows();
-  auto& smaller        = is_left_smaller ? ptleft : ptright;
-  auto& larger         = is_left_smaller ? ptright : ptleft;
+  bool is_left_smaller =
+    preprocessed_left.tbl_view.num_rows() < preprocessed_right.tbl_view.num_rows();
+  auto& smaller = is_left_smaller ? preprocessed_left : preprocessed_right;
+  auto& larger  = is_left_smaller ? preprocessed_right : preprocessed_left;
   if (smaller.tbl_sorted_order.has_value() && larger.tbl_sorted_order.has_value()) {
     merge obj(smaller.tbl_view,
               smaller.tbl_sorted_order.value()->view().begin<size_type>(),
@@ -595,7 +598,7 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr)
 {
-  cudf::sort_merge_join obj(left_keys, false, right_keys, false, compare_nulls, stream);
+  cudf::sort_merge_join obj(left_keys, sorted::NO, right_keys, sorted::NO, compare_nulls, stream);
   return obj.inner_join(stream, mr);
 }
 
@@ -607,7 +610,7 @@ merge_inner_join(cudf::table_view const& left_keys,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
-  cudf::sort_merge_join obj(left_keys, true, right_keys, true, compare_nulls, stream);
+  cudf::sort_merge_join obj(left_keys, sorted::YES, right_keys, sorted::YES, compare_nulls, stream);
   return obj.inner_join(stream, mr);
 }
 

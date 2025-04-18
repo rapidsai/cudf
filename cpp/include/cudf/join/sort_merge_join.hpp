@@ -50,16 +50,16 @@ class sort_merge_join {
    * else behavior is undefined.
    *
    * @param left The left table
-   * @param is_left_sorted Boolean to indicate if left table is pre-sorted
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param right The right table
-   * @param is_right_sorted Boolean to indicate if right table is pre-sorted
+   * @param is_right_sorted Enum to indicate if right table is pre-sorted
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   sort_merge_join(table_view const& left,
-                  bool is_left_sorted,
+                  sorted is_left_sorted,
                   table_view const& right,
-                  bool is_right_sorted,
+                  sorted is_right_sorted,
                   null_equality compare_nulls  = null_equality::EQUAL,
                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -138,8 +138,8 @@ class sort_merge_join {
      */
     rmm::device_uvector<size_type> map_tbl_to_raw(rmm::cuda_stream_view stream);
   };
-  preprocessed_table ptleft;
-  preprocessed_table ptright;
+  preprocessed_table preprocessed_left;
+  preprocessed_table preprocessed_right;
   null_equality compare_nulls;
 
   /**
