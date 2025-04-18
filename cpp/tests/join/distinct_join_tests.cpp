@@ -164,9 +164,7 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join{build.view()};
-  auto result        = distinct_join.inner_join(probe.view());
-
+  // Create gold table once
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{1, 1}};
@@ -182,7 +180,16 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   cols_gold.push_back(col_gold_5.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
+
+  for (auto load_factor : load_factors) {
+    auto distinct_join =
+      cudf::distinct_hash_join{build.view(), cudf::null_equality::EQUAL, load_factor};
+    auto result = distinct_join.inner_join(probe.view());
+
+    this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  }
 }
 
 TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
