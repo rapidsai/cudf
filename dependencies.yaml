@@ -921,7 +921,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fastavro>=0.22.9
-          - hypothesis
+          - hypothesis<6.131.1
           - *numpy
           - pandas
   test_python_cudf:
@@ -930,7 +930,7 @@ dependencies:
         packages:
           - cramjam
           - fastavro>=0.22.9
-          - hypothesis
+          - hypothesis<6.131.1
           - mmh3
           # Version 5.1 is incompatible with pytest<8.2.
           # https://github.com/ionelmc/pytest-benchmark/commit/8dfeeeca8a5c640a4dc4455904ace4f97f62e655
