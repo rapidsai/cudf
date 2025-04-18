@@ -2078,6 +2078,21 @@ class Sink(IR):
                 f"Unhandled sink kind: {kind}"
             )  # pragma: no cover
 
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The option dictionary is serialised for hashing purposes.
+        """
+        schema_hash = tuple(self.schema.items())
+        return (
+            type(self),
+            schema_hash,
+            self.kind,
+            self.path,
+            json.dumps(self.options),
+        )
+
     @classmethod
     def do_evaluate(
         cls,

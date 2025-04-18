@@ -270,7 +270,7 @@ def assert_sink_result_equal(
     lazydf: pl.LazyFrame,
     path: str | Path,
     *,
-    engine: str | GPUEngine = "gpu",
+    engine: str | GPUEngine = None,
     read_kwargs: dict | None = None,
     write_kwargs: dict | None = None,
     executor: str | None = None,
