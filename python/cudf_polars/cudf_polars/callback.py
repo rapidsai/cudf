@@ -291,6 +291,13 @@ def execute_with_cudf(
         ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+        if (
+            memory_resource is None
+            and executor == "streaming"
+            and translator.config_options.get("executor_options.scheduler")
+            == "distributed"
+        ):
+            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
