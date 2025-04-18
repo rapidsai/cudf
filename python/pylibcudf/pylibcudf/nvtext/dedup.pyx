@@ -65,7 +65,12 @@ cpdef Column substring_duplicates(Column input, size_type min_width):
 
 cpdef Column build_suffix_array(Column input, size_type min_width):
     """
-    Builds a suffix array for the input strings column
+    Builds a suffix array for the input strings column.
+    A suffix array is the indices of the sorted set of substrings
+    of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
+    where bytes is the total number of bytes in input.
+    The returned array represent the sorted strings such that
+    result[i] = input[result[i]:]
 
     For details, see :cpp:func:`build_suffix_array`
 
@@ -91,6 +96,8 @@ cpdef Column resolve_duplicates(Column input, Column indices, size_type min_widt
     """
     Returns duplicate strings found in the input column
     with min_width minimum number of bytes.
+    The indices are expected to be the suffix array previously created
+    for input. Otherwise, the results are undefined.
 
     For details, see :cpp:func:`resolve_duplicates`
 
@@ -122,6 +129,8 @@ cpdef Column resolve_duplicates_pair(
     """
     Returns duplicate strings in input1 found in input2
     with min_width minimum number of bytes.
+    The indices are expected to be the suffix array previously created
+    for the inputs. Otherwise, the results are undefined.
 
     For details, see :cpp:func:`resolve_duplicates_pair`
 
@@ -130,11 +139,11 @@ cpdef Column resolve_duplicates_pair(
     input1 : Column
         Strings column of text
     indices1 : Column
-        Suffix array from :cpp:func:`build_suffix_array`
+        Suffix array from :cpp:func:`build_suffix_array` for input1
     input2 : Column
         Strings column of text
     indices2 : Column
-        Suffix array from :cpp:func:`build_suffix_array`
+        Suffix array from :cpp:func:`build_suffix_array` for input2
     min_width : size_type
         Minimum width of bytes to detect duplicates
 
