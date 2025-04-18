@@ -169,7 +169,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.data is None:
             return 0
         else:
-            return self.data.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = getattr(self.data._owner, "_ptr", None)
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.data.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (
+                getattr(self.data._owner, "_ptr", None) != original_ptr
+            ):
+                # Update base_data to match the new data buffer
+                self.set_base_data(self.data)
+
+            return ptr
 
     def set_base_data(self, value: None | Buffer) -> None:
         if value is not None and not isinstance(value, Buffer):
@@ -211,7 +226,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.mask is None:
             return 0
         else:
-            return self.mask.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = getattr(self.mask._owner, "_ptr", None)
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.mask.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (
+                getattr(self.mask._owner, "_ptr", None) != original_ptr
+            ):
+                # Update base_data to match the new data buffer
+                self.set_base_mask(self.mask)
+
+            return ptr
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
