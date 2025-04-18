@@ -1362,7 +1362,9 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL);
+  double constexpr desired_load_factor = 0.5;
+  cudf::hash_join hash_join(
+    t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL, desired_load_factor);
 
   {
     CVector cols0;
@@ -1457,7 +1459,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
                            ? cudf::nullable_join::YES
                            : cudf::nullable_join::NO;
 
-  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL);
+  double constexpr desired_load_factor = 0.5;
+  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL, desired_load_factor);
 
   {
     auto output_size = hash_join.left_join_size(t0);
@@ -1608,7 +1611,9 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   cudf::column_view col_zeros(
     cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data(), nullptr, 0);
   cudf::table_view tview{{col_zeros}};
-  cudf::hash_join hash_join(tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL);
+  double constexpr desired_load_factor = 0.5;
+  cudf::hash_join hash_join(
+    tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }

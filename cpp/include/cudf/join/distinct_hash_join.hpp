@@ -81,7 +81,9 @@ class distinct_hash_join {
    *
    * @throw std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
-   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   * @param load_factor The desired ratio of filled slots to total slots in the hash table, must be
+   * in range (0,1]. For example, 0.5 indicates a target of 50% occupancy. Note that the actual
+   * occupancy achieved may be slightly lower than the specified value.
    */
   distinct_hash_join(cudf::table_view const& build,
                      null_equality compare_nulls  = null_equality::EQUAL,

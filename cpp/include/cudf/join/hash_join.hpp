@@ -119,7 +119,8 @@ class hash_join {
    *
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *                  any `probe` table that will be used later for join
-   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% desired
+   * occupancy.
    */
   hash_join(cudf::table_view const& build,
             nullable_join has_nulls,
