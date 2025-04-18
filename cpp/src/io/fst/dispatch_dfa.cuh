@@ -392,12 +392,7 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Alias the temporary allocations from the single storage blob (or compute the necessary size
     // of the blob)
-    // TODO (@miscco): remove this once rapids moves to CCCL 2.8
-#if CCCL_MAJOR_VERSION >= 3 || (CCCL_MAJOR_VERSION == 2 && CCCL_MINOR_VERSION >= 8)
     error = cub::detail::AliasTemporaries(
-#else   // ^^^ CCCL 3.x ^^^ / vvv CCCL 2.x vvv
-    error = cub::AliasTemporaries(
-#endif  // CCCL 2.x
       d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
     if (error != cudaSuccess) return error;
 
