@@ -426,8 +426,7 @@ def test_utf8_escaped_json_writer(tmp_path):
     )
     plc.io.json.write_json(options)
 
-    with open(path, "r", encoding="utf-8") as f:
-        output_string = f.read().strip()
+    output_string = path.read_text(encoding="utf-8").strip()
 
     assert output_string == '[{"0":"C𝞵𝓓𝒻"}]'
 
