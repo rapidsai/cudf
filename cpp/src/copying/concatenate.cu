@@ -93,7 +93,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     device_views.cend(),
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
-    thrust::plus{});
+    cuda::std::plus{});
   auto d_offsets =
     make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();

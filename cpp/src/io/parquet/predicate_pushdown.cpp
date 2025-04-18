@@ -179,7 +179,7 @@ aggregate_reader_metadata::filter_row_groups(
       ? std::accumulate(stats_filtered_row_groups.value().cbegin(),
                         stats_filtered_row_groups.value().cend(),
                         size_type{0},
-                        [](auto& sum, auto const& per_file_row_groups) {
+                        [](auto sum, auto const& per_file_row_groups) {
                           return sum + per_file_row_groups.size();
                         })
       : total_row_groups;
@@ -245,7 +245,7 @@ aggregate_reader_metadata::filter_row_groups(
       ? std::accumulate(bloom_filtered_row_groups.value().cbegin(),
                         bloom_filtered_row_groups.value().cend(),
                         size_type{0},
-                        [](auto& sum, auto const& per_file_row_groups) {
+                        [](auto sum, auto const& per_file_row_groups) {
                           return sum + per_file_row_groups.size();
                         })
       : num_stats_filtered_row_groups;
