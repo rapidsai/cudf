@@ -37,7 +37,7 @@ class impl;
 }  // namespace io::parquet::experimental::detail
 }  // namespace CUDF_EXPORT cudf
 
-/// Using `byte_range_info` from cudf::io::text
+//! Using `byte_range_info` from cudf::io::text
 using byte_range_info = cudf::io::text::byte_range_info;
 
 namespace CUDF_EXPORT cudf {
