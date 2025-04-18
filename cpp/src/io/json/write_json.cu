@@ -78,10 +78,10 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
+  bool const escaped_utf8{true};
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
-  bool const escaped_utf8{true};
 
   __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
@@ -603,8 +603,7 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{
-      *d_column, false, nullptr, nullptr, {}, options_.is_enabled_utf8_escaped()}
+    return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
       .get_escaped_strings(column_v, stream_, mr_);
   }
 
