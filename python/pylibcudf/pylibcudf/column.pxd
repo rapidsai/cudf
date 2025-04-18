@@ -3,7 +3,6 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport (
