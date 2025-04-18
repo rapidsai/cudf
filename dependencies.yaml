@@ -1221,6 +1221,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - ipython
+          - hypothesis<6.131.1
   test_python_cudf_pandas:
     common:
       - output_types: [conda, requirements, pyproject]
