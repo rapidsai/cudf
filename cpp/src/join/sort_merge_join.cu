@@ -199,7 +199,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
   auto match_counts_it = match_counts.begin();
   nvtxRangePushA("upper bound");
-  thrust::upper_bound(rmm::exec_policy(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
@@ -209,6 +209,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   nvtxRangePop();
 
 #if SORT_MERGE_JOIN_DEBUG
+  stream.synchronize();
   debug_print<size_type>("h_match_counts", cudf::detail::make_host_vector(match_counts, stream));
 #endif
 
@@ -218,7 +219,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
       match_counts[idx] -= val;
     });
   nvtxRangePushA("lower bound");
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
                       thrust::make_counting_iterator(0),
@@ -228,6 +229,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   nvtxRangePop();
 
 #if SORT_MERGE_JOIN_DEBUG
+  stream.synchronize();
   debug_print<size_type>("h_match_counts", cudf::detail::make_host_vector(match_counts, stream));
 #endif
 
@@ -238,7 +240,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
   thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + larger_numrows,
     nonzero_matches.begin(),
@@ -246,6 +248,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
 #if SORT_MERGE_JOIN_DEBUG
   std::printf("count_matches = %d\n", count_matches);
+  stream.synchronize();
   debug_print<size_type>("h_nonzero_matches",
                          cudf::detail::make_host_vector(nonzero_matches, stream));
 #endif
@@ -258,12 +261,12 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto larger_indices =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
   nvtxRangePushA("larger indices");
-  thrust::scatter(rmm::exec_policy(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
                   thrust::make_permutation_iterator(match_counts.begin(), nonzero_matches.begin()),
                   larger_indices.begin());
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          larger_indices.begin(),
                          larger_indices.end(),
                          larger_indices.begin(),
@@ -286,7 +289,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
   nvtxRangePushA("smaller indices");
-  thrust::fill(rmm::exec_policy(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+  thrust::fill(rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
   auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
      match_counts    = match_counts.begin(),
@@ -295,19 +298,19 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
       auto pos             = match_counts[lhsidx];
       smaller_indices[pos] = lb;
     });
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       smaller_tabulate_it,
                       comp);
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 larger_indices.begin(),
                                 larger_indices.end(),
                                 smaller_indices.begin(),
                                 smaller_indices.begin());
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     smaller_indices.begin(),
                     smaller_indices.end(),
                     smaller_indices.begin(),
@@ -317,12 +320,14 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   nvtxRangePop();
 
 #if SORT_MERGE_JOIN_DEBUG
+  stream.synchronize();
   debug_print<size_type>("h_larger_indices",
                          cudf::detail::make_host_vector(larger_indices, stream));
   debug_print<size_type>("h_smaller_indices",
                          cudf::detail::make_host_vector(smaller_indices, stream));
 #endif
 
+  stream.synchronize();
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
 }
@@ -346,7 +351,10 @@ struct list_nonnull_filter {
 
 struct raw_tbl_mapper {
   bitmask_type const* const raw_validity_mask;
-  __device__ auto operator()(size_type idx) { return cudf::bit_is_set(raw_validity_mask, idx); }
+  __device__ auto operator()(size_type idx) const noexcept
+  {
+    return cudf::bit_is_set(raw_validity_mask, idx);
+  }
 };
 
 }  // anonymous namespace
