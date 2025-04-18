@@ -23,7 +23,6 @@
 #include <cuda/std/iterator>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>

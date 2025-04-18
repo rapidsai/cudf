@@ -25,7 +25,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
-#include <thrust/iterator/iterator_traits.h>
+#include <cuda/std/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {

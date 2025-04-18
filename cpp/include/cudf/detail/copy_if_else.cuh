@@ -24,8 +24,8 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/optional>
-#include <thrust/iterator/iterator_traits.h>
 
 namespace cudf {
 namespace detail {

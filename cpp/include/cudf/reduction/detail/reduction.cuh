@@ -29,8 +29,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
+#include <cuda/std/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/iterator_traits.h>
 
 #include <optional>
 
