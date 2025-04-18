@@ -144,12 +144,14 @@ class StructColumn(ColumnBase):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(new_value, type=self.dtype.to_arrow())
             )
-        elif _is_null_host_scalar(value):
+        elif value is None or value is cudf.NA:
             return pa_scalar_to_plc_scalar(
                 pa.scalar(None, type=self.dtype.to_arrow())
             )
         else:
-            raise ValueError("Can not set dict values into StructColumn")
+            raise ValueError(
+                f"Can not set {type(value).__name__} into StructColumn"
+            )
 
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
