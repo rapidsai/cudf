@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import dataclasses
+import enum
 import json
 from typing import TYPE_CHECKING, Literal
 
@@ -25,8 +26,32 @@ class ParquetOptions:
     chunk_read_limit: int = 0
     pass_read_limit: int = 0
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.chunked, bool):
+            raise TypeError("chunked must be a bool")
+        if not isinstance(self.chunk_read_limit, int):
+            raise TypeError("chunk_read_limit must be an int")
+        if not isinstance(self.pass_read_limit, int):
+            raise TypeError("pass_read_limit must be an int")
 
-FALLBACK_MODE = Literal["warn", "raise"]
+
+# TODO: Use enum.StrEnum when we drop Python 3.10
+
+
+class FallbackMode(str, enum.Enum):
+    WARN = "warn"
+    RAISE = "raise"
+    SILENT = "silent"
+
+
+class Scheduler(str, enum.Enum):
+    SYNCHRONOUS = "synchronous"
+    DISTRIBUTED = "distributed"
+
+
+class ShuffleMethod(str, enum.Enum):
+    TASKS = "tasks"
+    RAPIDSMFP = "rapidsmpf"
 
 
 STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
@@ -47,21 +72,41 @@ class StreamingExecutor:
         "distributed" requires a Dask cluster to be running.
     """
 
-    name: Literal["streaming"] = "streaming"
-    scheduler: Literal["synchronous", "distributed"] = "synchronous"
-    fallback_mode: FALLBACK_MODE = "warn"
+    name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
+    scheduler: Scheduler = Scheduler.SYNCHRONOUS
+    fallback_mode: FallbackMode = FallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
     parquet_blocksize: int = 1_000_000_000  # why isn't this a ParquetOption?
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 4
-    shuffle_method: Literal["tasks", "rapidsmpf"] | None = None
+    shuffle_method: ShuffleMethod | None = None
 
     def __post_init__(self) -> None:
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
             raise ValueError(
                 "rapidsmpf shuffle method is not supported for synchronous scheduler"
             )
+
+        # frozen dataclass, so use object.__setattr__
+        object.__setattr__(self, "fallback_mode", FallbackMode(self.fallback_mode))
+        object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
+        if self.shuffle_method is not None:
+            object.__setattr__(
+                self, "shuffle_method", ShuffleMethod(self.shuffle_method)
+            )
+
+        # Type / value check everything else
+        if not isinstance(self.max_rows_per_partition, int):
+            raise TypeError("max_rows_per_partition must be an int")
+        if not isinstance(self.cardinality_factor, dict):
+            raise TypeError("cardinality_factor must be a dict of column name to float")
+        if not isinstance(self.parquet_blocksize, int):
+            raise TypeError("parquet_blocksize must be an int")
+        if not isinstance(self.groupby_n_ary, int):
+            raise TypeError("groupby_n_ary must be an int")
+        if not isinstance(self.broadcast_join_limit, int):
+            raise TypeError("broadcast_join_limit must be an int")
 
     def __hash__(self) -> int:
         # cardinatlity factory, a dict, isn't natively hashable. We'll dump it
@@ -75,10 +120,23 @@ class StreamingExecutor:
 class InMemoryExecutor:
     """Configuration for the cudf-polars in-memory executor."""
 
-    name: Literal["in-memory"] = "in-memory"
+    name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
     scheduler: Literal["synchronous"] = "synchronous"
     shuffle_method: Literal["tasks"] | None = None
     broadcast_join_limit: int = 32
+
+    def __post_init__(self) -> None:
+        if self.scheduler != "synchronous":
+            raise ValueError(
+                "'synchronous' is the only valid scheduler for the in-memory executor"
+            )
+        if self.shuffle_method is not None and self.shuffle_method != "tasks":
+            raise ValueError(
+                "'tasks' is the only valid shuffle method for the in-memory executor"
+            )
+
+        if not isinstance(self.broadcast_join_limit, int):
+            raise TypeError("broadcast_join_limit must be an int")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
