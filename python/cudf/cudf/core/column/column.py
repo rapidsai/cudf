@@ -178,9 +178,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Check if a new buffer was created or if the underlying data was modified
             # This happens both when the buffer object is replaced and when
             # ExposureTrackedBuffer.make_single_owner_inplace() is called
-            if cudf.get_option("copy_on_write") and (
-                ptr != original_ptr
-            ):
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
                 # Update base_data to match the new data buffer
                 self.set_base_data(self.data)
 
@@ -235,9 +233,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # Check if a new buffer was created or if the underlying data was modified
             # This happens both when the buffer object is replaced and when
             # ExposureTrackedBuffer.make_single_owner_inplace() is called
-            if cudf.get_option("copy_on_write") and (
-                ptr != original_ptr
-            ):
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
                 # Update base_data to match the new data buffer
                 self.set_base_mask(self.mask)
 
