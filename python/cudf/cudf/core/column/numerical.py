@@ -138,12 +138,21 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            scalar = pa.scalar(
-                value
-                if not cudf.utils.utils._is_null_host_scalar(value)
-                else None
-            )
-            if pa.types.is_boolean(scalar.type) and self.dtype.kind != "b":
+            if value is cudf.NA or value is None:
+                scalar = pa.scalar(
+                    None, type=cudf_dtype_to_pa_type(self.dtype)
+                )
+            else:
+                try:
+                    scalar = pa.scalar(value)
+                except ValueError as err:
+                    raise TypeError(
+                        f"Cannot set value of type {type(value)} to column of type {self.dtype}"
+                    ) from err
+            is_scalar_bool = pa.types.is_boolean(scalar.type)
+            if (is_scalar_bool and self.dtype.kind != "b") or (
+                not is_scalar_bool and self.dtype.kind == "b"
+            ):
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
                 )

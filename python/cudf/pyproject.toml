@@ -56,7 +56,7 @@ test = [
     "hypothesis",
     "mmh3",
     "msgpack",
-    "pytest-benchmark",
+    "pytest-benchmark<5.1.0",
     "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-rerunfailures",

@@ -859,6 +859,10 @@ class DatetimeColumn(column.ColumnBase):
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if isinstance(value, (np.str_, np.datetime64)):
             value = pd.Timestamp(value.item())
+        elif isinstance(value, str):
+            value = pd.Timestamp(value)
+        elif value is cudf.NaT:
+            value = None
         return super()._cast_setitem_value(value)
 
     @property
