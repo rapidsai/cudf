@@ -1045,11 +1045,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            if _is_null_host_scalar(value):
+            if value is cudf.NA:
                 value = None
-            return pa_scalar_to_plc_scalar(
-                pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
-            )
+            try:
+                pa_scalar = pa.scalar(
+                    value, type=cudf_dtype_to_pa_type(self.dtype)
+                )
+            except ValueError as err:
+                raise TypeError(
+                    f"Cannot set value of type {type(value)} to column of type {self.dtype}"
+                ) from err
+            return pa_scalar_to_plc_scalar(pa_scalar)
         else:
             return as_column(value, dtype=self.dtype)
 
