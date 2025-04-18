@@ -187,7 +187,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
@@ -203,7 +203,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
@@ -218,7 +218,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
@@ -233,16 +233,16 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
+        if executor is None or executor == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
+        elif executor == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_dask(ir, config_options).to_polars()
+            return evaluate_streaming(ir, config_options).to_polars()
         else:
             raise ValueError(f"Unknown executor '{executor}'")
 
