@@ -584,11 +584,8 @@ class CategoricalColumn(column.ColumnBase):
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
-        lhs = self
-        # We need to convert values to same type as self,
-        # hence passing dtype=self.dtype
-        rhs = cudf.core.column.as_column(values, dtype=self.dtype)
-        return lhs, rhs
+        # Convert values to categorical dtype like self
+        return self, column.as_column(values, dtype=self.dtype)
 
     def set_base_mask(self, value: Buffer | None) -> None:
         super().set_base_mask(value)

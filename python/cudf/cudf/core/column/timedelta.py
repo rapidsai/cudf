@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import math
+import warnings
 from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
@@ -460,8 +461,27 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def isin(self, values: Sequence) -> ColumnBase:
-        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if len(rhs) and rhs.dtype.kind == "O":
+            try:
+                rhs = rhs.astype(lhs.dtype)
+            except ValueError:
+                pass
+            else:
+                warnings.warn(
+                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
+                    "castable values (e.g. strings) is deprecated. In a "
+                    "future version, these will not be considered matching "
+                    "by isin. Explicitly cast to the appropriate dtype before "
+                    "calling isin instead.",
+                    FutureWarning,
+                )
+        elif isinstance(rhs, type(self)):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     def quantile(
         self,
