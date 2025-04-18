@@ -964,8 +964,8 @@ class json_writer_options {
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
   std::optional<table_metadata> _metadata;  // Optional column names
-  // Indicates whether to unescape UTF-8 characters in JSON output
-  bool _enable_utf8_unescaped = false;
+  // Indicates whether to escape UTF-8 characters in JSON output
+  bool _enable_utf8_escaped = true;
 
   /**
    * @brief Constructor from sink and table.
@@ -1048,24 +1048,24 @@ class json_writer_options {
   [[nodiscard]] bool is_enabled_lines() const { return _lines; }
 
   /**
-   * @brief Enable or disable writing unescaped UTF-8 characters in JSON output.
+   * @brief Enable or disable writing escaped UTF-8 characters in JSON output.
    *
    * Example:
-   * With `enable_utf8_unescaped(true)`, the string `"ẅ"` is written as-is instead of:
+   * With `enable_utf8_escaped(false)`, the string `"ẅ"` is written as-is instead of:
    * `"\u1e85"`.
    *
    * @note Enabling this is useful for producing more human-readable JSON.
    *
-   * @param val Boolean value to enable/disable UTF-8 unescaped output
+   * @param val Boolean value to enable/disable UTF-8 escaped output
    */
-  void enable_utf8_unescaped(bool val) { _enable_utf8_unescaped = val; }
+  void enable_utf8_escaped(bool val) { _enable_utf8_escaped = val; }
 
   /**
-   * @brief Check whether UTF-8 unescaped output is enabled.
+   * @brief Check whether UTF-8 escaped output is enabled.
    *
-   * @return true if UTF-8 unescaped output is enabled, false otherwise
+   * @return true if UTF-8 escaped output is enabled, false otherwise
    */
-  [[nodiscard]] bool is_enabled_utf8_unescaped() const { return _enable_utf8_unescaped; }
+  [[nodiscard]] bool is_enabled_utf8_escaped() const { return _enable_utf8_escaped; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
@@ -1240,16 +1240,16 @@ class json_writer_options_builder {
   }
 
   /**
-   * @brief Enables/Disable UTF-8 unescaped output for string fields.
+   * @brief Enables/Disable UTF-8 escaped output for string fields.
    *
    * Default is `false`, which escapes all non-ASCII characters.
    *
-   * @param val Boolean value to enable/disable unescaped UTF-8 output
+   * @param val Boolean value to enable/disable escaped UTF-8 output
    * @return this for chaining
    */
-  json_writer_options_builder& utf8_unescaped(bool val)
+  json_writer_options_builder& utf8_escaped(bool val)
   {
-    options._enable_utf8_unescaped = val;
+    options._enable_utf8_escaped = val;
     return *this;
   }
 

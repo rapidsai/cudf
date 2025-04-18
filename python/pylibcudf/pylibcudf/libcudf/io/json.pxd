@@ -233,7 +233,7 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options_builder& compression(
             cudf_io_types.compression_type comptype
         ) except +libcudf_exception_handler
-        json_writer_options_builder& utf8_unescaped(
+        json_writer_options_builder& utf8_escaped(
             bool val
         ) except +libcudf_exception_handler
 

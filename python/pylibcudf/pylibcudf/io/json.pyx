@@ -938,7 +938,7 @@ cdef class JsonWriterOptionsBuilder:
         self.c_obj.compression(comptype)
         return self
 
-    cpdef JsonWriterOptionsBuilder utf8_unescaped(self, bool val):
+    cpdef JsonWriterOptionsBuilder utf8_escaped(self, bool val):
         """
         Sets whether to write UTF-8 characters in string fields
         without escaping them.
@@ -946,13 +946,13 @@ cdef class JsonWriterOptionsBuilder:
         Parameters
         ----------
         val : bool
-            If True, disables escaping of UTF-8 characters in output
+            If False, disables escaping of UTF-8 characters in output
 
         Returns
         -------
         Self
         """
-        self.c_obj.utf8_unescaped(val)
+        self.c_obj.utf8_escaped(val)
         return self
 
     cpdef JsonWriterOptions build(self):

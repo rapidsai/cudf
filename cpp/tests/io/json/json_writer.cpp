@@ -630,7 +630,7 @@ TEST_P(JsonCompressedWriterTest, UnicodeUnescaped)
                        .metadata(mt)
                        .lines(true)
                        .na_rep("null")
-                       .utf8_unescaped(true)
+                       .utf8_escaped(false)
                        .build();
 
   cudf::io::write_json(out_options, cudf::test::get_default_stream());
