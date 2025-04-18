@@ -122,9 +122,14 @@ cdef class Table:
             tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
             self._columns = tmp.columns()
         elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+            # TODO: When we add support for this case, it should be moved above
+            # the __arrow_c_stream__ case since we should prioritize device
+            # data if possible.
             raise NotImplementedError("Device streams not yet supported")
         elif hasattr(arrow_like, "__arrow_c_array__"):
             raise NotImplementedError("Arrow host arrays not yet supported")
+        else:
+            raise ValueError("Invalid Arrow-like object")
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.
