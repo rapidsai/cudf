@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file parquet_schema.hpp
+ * @brief Parquet footer schema structs
+ */
+
 #pragma once
 
 #include <cudf/types.hpp>
@@ -26,15 +31,13 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::parquet {
 /**
  * @addtogroup io_types
  * @{
  * @file
  */
 
-//! Parquet schema structs
-namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */
@@ -201,7 +204,7 @@ struct DecimalType {
  */
 struct TimeUnit {
   /// Available time units
-  enum Type { UNDEFINED, MILLIS, MICROS, NANOS };
+  enum Type : uint8_t { UNDEFINED, MILLIS, MICROS, NANOS };
   /// Time unit type
   Type type;
 };
@@ -216,7 +219,7 @@ struct TimeType {
   /// Writer option overrides this to default
   bool isAdjustedToUTC = true;
   /// Time unit type
-  TimeUnit unit = {TimeUnit::MILLIS};
+  TimeUnit unit = {TimeUnit::Type::MILLIS};
 };
 
 /**
@@ -229,7 +232,7 @@ struct TimestampType {
   /// Writer option overrides this to default
   bool isAdjustedToUTC = true;
   /// Timestamp's time unit
-  TimeUnit unit = {TimeUnit::MILLIS};
+  TimeUnit unit = {TimeUnit::Type::MILLIS};
 };
 
 /**
@@ -249,7 +252,7 @@ struct IntType {
  */
 struct LogicalType {
   /// Logical type annotations to replace ConvertedType.
-  enum Type {
+  enum Type : uint8_t {
     UNDEFINED,
     STRING,
     MAP,
@@ -282,7 +285,7 @@ struct LogicalType {
    *
    * @param tp Logical type
    */
-  LogicalType(Type tp = UNDEFINED) : type(tp) {}
+  LogicalType(Type tp = Type::UNDEFINED) : type(tp) {}
 
   /**
    * @brief Constructor for Decimal logical type
@@ -415,7 +418,7 @@ struct LogicalType {
  */
 struct ColumnOrder {
   /// Available column order types
-  enum Type { UNDEFINED, TYPE_ORDER };
+  enum Type : uint8_t { UNDEFINED, TYPE_ORDER };
   /// Column order type
   Type type;
 };
@@ -718,7 +721,7 @@ struct BloomFilterAlgorithm {
   /// Available bloom filter algorithms
   enum Algorithm : uint8_t { UNDEFINED, SPLIT_BLOCK };
   /// Bloom filter algorithm
-  Algorithm algorithm{SPLIT_BLOCK};
+  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
 };
 
 /**
@@ -728,7 +731,7 @@ struct BloomFilterHash {
   /// Available bloom filter hashers
   enum Hash : uint8_t { UNDEFINED, XXHASH };
   /// Bloom filter hasher
-  Hash hash{XXHASH};
+  Hash hash{Hash::XXHASH};
 };
 
 /**
@@ -738,7 +741,7 @@ struct BloomFilterCompression {
   /// Available bloom filter compression types
   enum Compression : uint8_t { UNDEFINED, UNCOMPRESSED };
   /// Bloom filter compression type
-  Compression compression{UNCOMPRESSED};
+  Compression compression{Compression::UNCOMPRESSED};
 };
 
 /**
@@ -930,9 +933,6 @@ struct PageHeader {
   DataPageHeaderV2 data_page_header_v2;
 };
 
-}  // namespace parquet
-
 /** @} */  // end of group
-
-}  // namespace io
+}  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf
