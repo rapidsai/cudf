@@ -19,12 +19,14 @@
 
 namespace CUDF_EXPORT cudf {
 
+namespace jit {
+
 /**
  * @brief C++20 std::span with reduced feature set.
  *
  */
 template <typename T>
-struct span {
+struct device_span {
   using element_type = T;  ///< The type of the elements in the span
 
  private:
@@ -32,7 +34,7 @@ struct span {
   size_t _size        = 0;
 
  public:
-  constexpr CUDF_HOST_DEVICE span() {}
+  constexpr CUDF_HOST_DEVICE device_span() {}
 
   /**
    * @brief Constructs a span from a pointer and a size.
@@ -40,7 +42,7 @@ struct span {
    * @param data Pointer to the first element in the span.
    * @param size The number of elements in the span.
    */
-  constexpr CUDF_HOST_DEVICE span(element_type* data, size_t size) : _data{data}, _size{size}
+  constexpr CUDF_HOST_DEVICE device_span(element_type* data, size_t size) : _data{data}, _size{size}
   {
   }
 
@@ -95,4 +97,5 @@ struct span {
   CUDF_HOST_DEVICE element_type* end() const { return _data + _size; }
 };
 
-}  // namespace CUDF_EXPORT cudf
+}  // namespace jit
+}  // namespace cudf

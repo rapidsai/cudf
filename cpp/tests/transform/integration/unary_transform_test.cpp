@@ -517,40 +517,29 @@ TEST_F(StringOperationTest, StringConcat)
     cudf::test::strings_column_wrapper{"John", "Mia", "Abd", "Mendes", "Arya", "John"};
   auto last_name =
     cudf::test::strings_column_wrapper{"Doe", "Folk", "Louis", "Xi", "Serenity", "Scott"};
-  auto offsets = cudf::test::fixed_width_column_wrapper<int64_t>{0, 100, 200, 300, 400, 500};
-  auto sizes   = cudf::test::fixed_width_column_wrapper<int64_t>{100, 100, 100, 100, 100, 100};
   rmm::device_buffer scratch(100 * 6, cudf::get_default_stream());
+  auto scratch_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 100, 200, 300, 400, 500};
+  auto scratch_sizes   = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
   std::string cuda = R"***(
 __device__ void transform(cudf::string_view* out,
                           cudf::string_view first_name,
                           cudf::string_view last_name,
-                          int64_t offset,
-                          int64_t size,
-                          void* scratch)
+                          int32_t offset,
+                          int32_t size,
+                          void* user_data)
 {
-  auto begin                = reinterpret_cast<char*>(scratch) + offset;
-  [[maybe_unused]] auto end = begin + size;
-  auto it                   = begin;
-
-  // assume the scratch buffer is large enough based on statistics
-
-  memcpy(it, first_name.data(), first_name.size_bytes());
-  it += first_name.size_bytes();
-
-  memcpy(it, " ", 1);
-  it += 1;
-
-  memcpy(it, last_name.data(), last_name.size_bytes());
-  it += last_name.size_bytes();
-
-  *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - begin)};
+  cudf::buffer_string result(static_cast<char*>(user_data) + offset, size);
+  result.append(first_name);
+  result.append(" ");
+  result.append(last_name);
+  *out = result;
 }
     )***";
 
   auto expected = cudf::test::strings_column_wrapper{
     "John Doe", "Mia Folk", "Abd Louis", "Mendes Xi", "Arya Serenity", "John Scott"};
-  auto result = cudf::transform({first_name, last_name, offsets, sizes},
+  auto result = cudf::transform({first_name, last_name, scratch_offsets, scratch_sizes},
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,

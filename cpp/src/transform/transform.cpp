@@ -285,7 +285,7 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(std::vector{span<T>{output.data(), output.size()}}, stream, mr);
+  auto outputs = to_device_vector(std::vector{jit::device_span<T>{output.data(), output.size()}}, stream, mr);
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
   auto user_data = to_device_vector(user_data_host, stream, mr);
