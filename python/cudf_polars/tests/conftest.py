@@ -18,15 +18,17 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="pylibcudf",
-        choices=("pylibcudf", "dask-experimental"),
+        default="in-memory",
+        choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )
 
     parser.addoption(
-        "--dask-cluster",
-        action="store_true",
-        help="Executor to use for GPUEngine.",
+        "--scheduler",
+        action="store",
+        default="synchronous",
+        choices=("synchronous", "distributed"),
+        help="Scheduler to use for 'streaming' executor.",
     )
 
 
@@ -34,20 +36,19 @@ def pytest_configure(config):
     import cudf_polars.testing.asserts
 
     if (
-        config.getoption("--dask-cluster")
-        and config.getoption("--executor") != "dask-experimental"
+        config.getoption("--scheduler") == "distributed"
+        and config.getoption("--executor") != "streaming"
     ):
-        raise pytest.UsageError(
-            "--dask-cluster requires --executor='dask-experimental'"
-        )
+        raise pytest.UsageError("Distributed scheduler requires --executor='streaming'")
 
-    cudf_polars.testing.asserts.Executor = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
 
 
 def pytest_sessionstart(session):
     if (
-        session.config.getoption("--dask-cluster")
-        and session.config.getoption("--executor") == "dask-experimental"
+        session.config.getoption("--scheduler") == "distributed"
+        and session.config.getoption("--executor") == "streaming"
     ):
         from dask import config
         from dask.distributed import Client

@@ -879,7 +879,7 @@ thrust::lower_bound(rmm::exec_policy(stream),
                     values->begin<Element>(),
                     values->end<Element>(),
                     result_itr,
-                    thrust::less<Element>());
+                    cuda::std::less<Element>());
 ```
 
 ### Offset-normalizing iterators

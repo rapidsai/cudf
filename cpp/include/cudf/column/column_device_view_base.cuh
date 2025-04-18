@@ -89,7 +89,7 @@ namespace detail {
 class alignas(16) column_device_view_base {
  public:
   // TODO: merge this offsets column index with `strings_column_view::offsets_column_index`
-  static constexpr size_type string_offsets_column_index{0};  ///< Child index of the offsets column
+  static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
 
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
@@ -395,7 +395,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
                                    this->head(),
                                    this->null_mask(),
                                    this->offset() + offset,
-                                   static_cast<column_device_view_core*>(d_children),
+                                   d_children,
                                    this->num_child_columns()};
   }
 
@@ -438,7 +438,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
-    auto const offsets    = child(string_offsets_column_index);
+    auto const offsets    = child(offsets_column_index);
     auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
     auto const offset     = itr[index];
     return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
@@ -472,7 +472,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    */
   [[nodiscard]] __device__ column_device_view_core child(size_type child_index) const noexcept
   {
-    return static_cast<column_device_view_core*>(d_children)[child_index];
+    return d_children[child_index];
   }
 
   /**
@@ -659,7 +659,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   [[nodiscard]] __device__ mutable_column_device_view_core
   child(size_type child_index) const noexcept
   {
-    return static_cast<mutable_column_device_view_core*>(d_children)[child_index];
+    return d_children[child_index];
   }
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
