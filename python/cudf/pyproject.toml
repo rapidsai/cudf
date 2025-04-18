@@ -53,7 +53,7 @@ classifiers = [
 test = [
     "cramjam",
     "fastavro>=0.22.9",
-    "hypothesis",
+    "hypothesis<6.131.1",
     "mmh3",
     "msgpack",
     "pytest-benchmark<5.1.0",
