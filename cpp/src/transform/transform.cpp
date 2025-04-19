@@ -20,6 +20,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -127,6 +128,12 @@ rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
   return device;
 }
 
+template <typename DeviceView, typename ColumnView>
+std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
+           rmm::device_uvector<DeviceView>>
+column_views_to_device(std::vector<ColumnView> const& views,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr)
 template <typename DeviceView, typename ColumnView>
 std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
            rmm::device_uvector<DeviceView>>
