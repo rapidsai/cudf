@@ -2,7 +2,6 @@
 import io
 import os
 
-import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import (
@@ -104,6 +103,7 @@ def test_read_csv_basic(
 # infers correctly
 @pytest.mark.parametrize("chunk_size", [1000, 5999])
 def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
+    pd = pytest.importorskip("pandas")
     _, pa_table = table_data
     if len(pa_table) == 0:
         # pandas writes nothing when we have empty table
@@ -188,6 +188,7 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
 def test_read_csv_parse_options(
     source_or_sink, decimal, quotechar, skip_blanks, lineterminator
 ):
+    pd = pytest.importorskip("pandas")
     lines = [
         "# first comment line",
         "# third comment line",
@@ -230,6 +231,7 @@ def test_read_csv_parse_options(
 def test_read_csv_na_values(
     source_or_sink, na_filter, na_values, keep_default_na
 ):
+    pd = pytest.importorskip("pandas")
     lines = ["a,b,c", "n/a,NaN,NV_NAN", "1.0,2.0,3.0"]
     buffer = "\n".join(lines)
 
