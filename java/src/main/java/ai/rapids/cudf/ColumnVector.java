@@ -784,21 +784,8 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector sha1Hash(ColumnView column) {
     assert column != null : "Column vector passed may not be null";
     assert column.getType() == DType.STRING || 
-           column.getType() == DType.BOOL8 || 
-           column.getType() == DType.INT8 || 
-           column.getType() == DType.INT16 || 
-           column.getType() == DType.INT32 || 
-           column.getType() == DType.INT64 || 
-           column.getType() == DType.UINT8 || 
-           column.getType() == DType.UINT16 || 
-           column.getType() == DType.UINT32 || 
-           column.getType() == DType.UINT64 || 
-           column.getType() == DType.FLOAT32 || 
-           column.getType() == DType.FLOAT64 || 
-           column.getType() == DType.DECIMAL32 || 
-           column.getType() == DType.DECIMAL64 || 
-           column.getType() == DType.DECIMAL128 :
-           "SHA1 hash can only be applied to STRING, numeric, boolean, or decimal columns";
+           column.getType() == DType.BOOL8:
+           "SHA1 hash can only be applied to STRING, boolean";
     long columnView = column.getNativeView();
     return new ColumnVector(sha1(new long[]{columnView}));
   }
