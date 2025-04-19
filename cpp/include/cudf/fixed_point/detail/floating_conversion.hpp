@@ -56,6 +56,7 @@ CUDF_HOST_DEVICE inline constexpr int count_significant_bits(T value)
   // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
   if (value == 0) { return 0; }
 
+  // TODO: Use `std::countl_zero` instead of `__builtin_clzXX` once we migrate to C++20
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - __builtin_clzll(value);
   } else if constexpr (std::is_same_v<T, uint32_t>) {

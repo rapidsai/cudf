@@ -131,6 +131,7 @@ class CompactProtocolReader {
  public:
   static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
+    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
     return max_level > 0 ? 32 - __builtin_clz(max_level) : 0;
   }
   bool InitSchema(FileMetaData* md);

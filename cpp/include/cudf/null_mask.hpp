@@ -100,7 +100,7 @@ rmm::device_buffer create_null_mask(
  * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
  *
- * @param bitmask Pointer to bitmask (e.g. returned by `column_viewnull_mask()`)
+ * @param bitmask Pointer to bitmask (e.g. returned by `column_view::null_mask()`)
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null
@@ -119,7 +119,7 @@ void set_null_mask(bitmask_type* bitmask,
  * Sets `[begin_bit, end_bit)` bits of each given bitmasks to corresponding valid state. This
  * utility is particularly advantageous if setting 16 or more bitmasks sized 2^24 bits or less.
  *
- * @param bitmasks Pointers to bitmasks (e.g. returned by `column_viewnull_mask()`)
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
  * @param begin_bits Indices of the first bits to set (inclusive)
  * @param end_bits Indices of the last bits to set (exclusive)
  * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null

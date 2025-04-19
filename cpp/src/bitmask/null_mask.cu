@@ -44,6 +44,7 @@
 #include <thrust/tabulate.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <type_traits>
 
@@ -146,12 +147,11 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
   }
 }
 
-CUDF_KERNEL void set_null_mask_bulk_kernel(
-  cudf::device_span<bitmask_type* __restrict__> destinations,
-  cudf::device_span<size_type const> begin_bits,
-  cudf::device_span<size_type const> end_bits,
-  cudf::device_span<bool const> valids,
-  cudf::device_span<size_type const> numbers_of_mask_words)
+CUDF_KERNEL void set_null_mask_bulk_kernel(cudf::device_span<bitmask_type*> destinations,
+                                           cudf::device_span<size_type const> begin_bits,
+                                           cudf::device_span<size_type const> end_bits,
+                                           cudf::device_span<bool const> valids,
+                                           cudf::device_span<size_type const> numbers_of_mask_words)
 {
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
@@ -164,7 +164,7 @@ CUDF_KERNEL void set_null_mask_bulk_kernel(
                      cg::this_thread_block());
 }
 
-CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
+CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
                                       size_type begin_bit,
                                       size_type end_bit,
                                       bool valid,
@@ -191,8 +191,9 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
   CUDF_EXPECTS(num_bitmasks == end_bits.size(), "Number of bitmasks and end bits must be equal.");
   CUDF_EXPECTS(num_bitmasks == valids.size(), "Number of bitmasks and valids must be equal.");
 
-  size_t average_nullmask_words = 0;
-  auto h_number_of_mask_words   = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
+  size_t average_nullmask_words     = 0;
+  size_t cumulative_null_mask_words = 0;
+  auto h_number_of_mask_words = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
   thrust::tabulate(
     thrust::host, h_number_of_mask_words.begin(), h_number_of_mask_words.end(), [&](auto i) {
       CUDF_EXPECTS(begin_bits[i] >= 0, "Invalid range.");
@@ -202,10 +203,20 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
       // Number of words in this bitmask
       auto const num_words =
         num_bitmask_words(end_bits[i]) - begin_bits[i] / detail::size_in_bits<bitmask_type>();
-      // Divide by num_bitmasks and update average here to avoid overflow
-      average_nullmask_words += cudf::util::div_rounding_up_safe<size_t>(num_words, num_bitmasks);
+      // Handle overflow if any
+      if (num_words >= std::numeric_limits<size_t>::max() - cumulative_null_mask_words) {
+        average_nullmask_words +=
+          cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
+        cumulative_null_mask_words = 0;
+      }
+      // Add to cumulative null mask words
+      cumulative_null_mask_words += num_words;
       return num_words;
     });
+
+  // Add the last cumulative null mask words to average
+  average_nullmask_words +=
+    cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
   auto const mr     = rmm::mr::get_current_device_resource_ref();
@@ -222,6 +233,7 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
   auto block_size =
     std::max<size_t>(min_threads_per_block, (average_nullmask_words / max_words_per_thread));
   // Round block size to nearest (ceil) power of 2
+  // TODO: Use `std::countl_zero` instead of `__builtin_clzll` once we migrate to C++20
   block_size = size_t{1} << (63 - __builtin_clzll(block_size));
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
