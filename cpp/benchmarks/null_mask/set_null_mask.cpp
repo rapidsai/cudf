@@ -86,7 +86,7 @@ void BM_setnullmask_bulk(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
                timer.start();
-               cudf::set_null_masks_bulk(masks_ptr, begin_bits, end_bits, valids);
+               cudf::set_null_masks(masks_ptr, begin_bits, end_bits, valids);
                timer.stop();
              });
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

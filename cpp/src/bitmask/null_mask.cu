@@ -147,11 +147,11 @@ __device__ void set_null_mask_impl(bitmask_type* __restrict__ destination,
   }
 }
 
-CUDF_KERNEL void set_null_mask_bulk_kernel(cudf::device_span<bitmask_type*> destinations,
-                                           cudf::device_span<size_type const> begin_bits,
-                                           cudf::device_span<size_type const> end_bits,
-                                           cudf::device_span<bool const> valids,
-                                           cudf::device_span<size_type const> numbers_of_mask_words)
+CUDF_KERNEL void set_null_masks_kernel(cudf::device_span<bitmask_type*> destinations,
+                                       cudf::device_span<size_type const> begin_bits,
+                                       cudf::device_span<size_type const> end_bits,
+                                       cudf::device_span<bool const> valids,
+                                       cudf::device_span<size_type const> numbers_of_mask_words)
 {
   auto const bitmask_idx = cg::this_grid().block_rank();
   // Return early if nothing to do
@@ -176,11 +176,11 @@ CUDF_KERNEL void set_null_mask_kernel(bitmask_type* destination,
 
 // Set pre-allocated null masks of given bit ranges [begin_bit, end_bit) to valids, if valid==true,
 // or null, otherwise;
-void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
-                         cudf::host_span<size_type const> begin_bits,
-                         cudf::host_span<size_type const> end_bits,
-                         cudf::host_span<bool const> valids,
-                         rmm::cuda_stream_view stream)
+void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
+                    cudf::host_span<size_type const> begin_bits,
+                    cudf::host_span<size_type const> end_bits,
+                    cudf::host_span<bool const> valids,
+                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -238,7 +238,7 @@ void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
-  set_null_mask_bulk_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
+  set_null_masks_kernel<<<num_bitmasks, block_size, 0, stream.value()>>>(
     destinations, d_begin_bits, d_end_bits, d_valids, number_of_mask_words);
   CUDF_CHECK_CUDA(stream.value());
 }
@@ -288,13 +288,13 @@ void set_null_mask(bitmask_type* bitmask,
 }
 
 // Bulk set pre-allocated null masks to corresponding valid state in the corresponding bit ranges
-void set_null_masks_bulk(cudf::host_span<bitmask_type*> bitmasks,
-                         cudf::host_span<size_type const> begin_bits,
-                         cudf::host_span<size_type const> end_bits,
-                         cudf::host_span<bool const> valids,
-                         rmm::cuda_stream_view stream)
+void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
+                    cudf::host_span<size_type const> begin_bits,
+                    cudf::host_span<size_type const> end_bits,
+                    cudf::host_span<bool const> valids,
+                    rmm::cuda_stream_view stream)
 {
-  return detail::set_null_masks_bulk(bitmasks, begin_bits, end_bits, valids, stream);
+  return detail::set_null_masks(bitmasks, begin_bits, end_bits, valids, stream);
 }
 
 namespace detail {
