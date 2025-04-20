@@ -524,7 +524,7 @@ class alignas(16) column_device_view : public column_device_view_core {
 
   /**
    * @brief Return the size in bytes of the amount of memory needed to hold a
-   * device view of the specified column and it's children.
+   * device view of the specified column and its children.
    *
    * @param source_view The `column_view` to use for this calculation.
    * @return number of bytes to store device view in GPU memory
@@ -748,11 +748,11 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
 
   /**
    * @brief Return the size in bytes of the amount of memory needed to hold a
-   * device view of the specified column and it's children.
+   * device view of the specified column and its children.
    *
    * @param source_view The `column_view` to use for this calculation.
    * @return The size in bytes of the amount of memory needed to hold a
-   * device view of the specified column and it's children
+   * device view of the specified column and its children
    */
   static std::size_t extent(mutable_column_view source_view);
 
