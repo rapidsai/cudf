@@ -157,7 +157,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      rmm::device_async_resource_ref mr)
 {
   // This is the type of the cuda::std::optional element in the passed iterators
-  using Element = cuda::std::iter_value_t<LeftIter>::value_type;
+  using Element = typename cuda::std::iter_value_t<LeftIter>::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, cudf::detail::warp_size);
