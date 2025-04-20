@@ -19,11 +19,11 @@
 #include "jit/util.hpp"
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/jit/runtime_support.hpp>
-#include <cudf/jit/types.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -88,18 +88,6 @@ std::map<uint32_t, std::string> build_ptx_params(mutable_column_view output,
   return params;
 }
 
-cudf::jit::column_device_view to_jit_view(column_view const& view)
-{
-  return cudf::jit::column_device_view{
-    view.type(), view.size(), view.head(), view.null_mask(), view.offset(), nullptr, 0};
-}
-
-cudf::jit::mutable_column_device_view to_mut_jit_view(mutable_column_view const& view)
-{
-  return cudf::jit::mutable_column_device_view{
-    view.type(), view.size(), view.head(), view.null_mask(), view.offset(), nullptr, 0};
-}
-
 template <typename T>
 rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
                                         rmm::cuda_stream_view stream,
@@ -110,21 +98,29 @@ rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
   return device;
 }
 
-std::tuple<rmm::device_uvector<cudf::jit::mutable_column_device_view>,
-           rmm::device_uvector<cudf::jit::column_device_view>>
-build_views(mutable_column_view output,
-            std::vector<column_view> const& inputs,
-            rmm::cuda_stream_view stream,
-            rmm::device_async_resource_ref mr)
+template <typename DeviceView, typename ColumnView>
+std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
+           rmm::device_uvector<DeviceView>>
+column_views_to_device(std::vector<ColumnView> const& views,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr)
 {
-  std::vector<cudf::jit::mutable_column_device_view> output_device_views;
-  std::vector<cudf::jit::column_device_view> input_device_views;
+  std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>> handles;
 
-  output_device_views.emplace_back(to_mut_jit_view(output));
-  std::transform(inputs.begin(), inputs.end(), std::back_inserter(input_device_views), to_jit_view);
+  std::transform(views.begin(), views.end(), std::back_inserter(handles), [&](auto const& view) {
+    return DeviceView::create(view, stream);
+  });
 
-  return std::make_tuple(to_device_vector(output_device_views, stream, mr),
-                         to_device_vector(input_device_views, stream, mr));
+  std::vector<DeviceView> host_array;
+
+  std::transform(
+    handles.begin(), handles.end(), std::back_inserter(host_array), [](auto const& handle) {
+      return *handle;
+    });
+
+  auto device_array = to_device_vector(host_array, stream, mr);
+
+  return std::make_tuple(std::move(handles), std::move(device_array));
 }
 
 void launch(jitify2::ConfiguredKernel& kernel,
@@ -133,10 +129,14 @@ void launch(jitify2::ConfiguredKernel& kernel,
             rmm::cuda_stream_view stream,
             rmm::device_async_resource_ref mr)
 {
-  auto const [outputs, inputs] = build_views(output_col, input_cols, stream, mr);
+  auto [output_handles, outputs] =
+    column_views_to_device<mutable_column_device_view, mutable_column_view>(
+      {output_col}, stream, mr);
+  auto [input_handles, inputs] =
+    column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
 
-  cudf::jit::mutable_column_device_view const* output_ptr = outputs.data();
-  cudf::jit::column_device_view const* inputs_ptr         = inputs.data();
+  cudf::mutable_column_device_view const* output_ptr = outputs.data();
+  cudf::column_device_view const* inputs_ptr         = inputs.data();
 
   std::array<void*, 2> args{&output_ptr, &inputs_ptr};
 
@@ -178,8 +178,6 @@ void transform_operation(mutable_column_view output,
                udf, "GENERIC_TRANSFORM_OP", build_ptx_params(output, inputs))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto views = build_views(output, inputs, stream, mr);
-
   auto kernel = get_kernel(output, inputs, cuda_source)
                   ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 
@@ -200,10 +198,13 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type), "Transforms only support fixed-width types");
-  CUDF_EXPECTS(
-    std::all_of(
-      inputs.begin(), inputs.end(), [](auto& input) { return is_fixed_width(input.type()); }),
-    "Transforms only support fixed-width types");
+  CUDF_EXPECTS(std::all_of(inputs.begin(),
+                           inputs.end(),
+                           [](auto& input) {
+                             return is_fixed_width(input.type()) ||
+                                    (input.type().id() == type_id::STRING);
+                           }),
+               "Transforms only support fixed-width and string types");
 
   auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
