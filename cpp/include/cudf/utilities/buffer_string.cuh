@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include <cudf/strings/detail/utf8.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
 namespace CUDF_EXPORT cudf {
@@ -37,15 +39,15 @@ struct buffer_string {
    * @param buffer Pointer to the pre-allocated character buffer.
    * @param capacity Maximum capacity of the buffer in bytes.
    */
-  CUDF_HOST_DEVICE buffer_string(char* buffer, cudf::size_type capacity)
-    : m_data(buffer), m_capacity(capacity), m_size(0)
+  CUDF_HOST_DEVICE constexpr buffer_string(char* buffer, cudf::size_type capacity)
+    : m_data(buffer), m_capacity(capacity)
   {
   }
 
   /**
    * @brief Default constructor for buffer_string.
    */
-  CUDF_HOST_DEVICE buffer_string() = default;
+  CUDF_HOST_DEVICE constexpr buffer_string() = default;
 
   buffer_string(buffer_string const&) = delete;
 
@@ -58,7 +60,7 @@ struct buffer_string {
    *
    * @param other The buffer_string instance to move from.
    */
-  __device__ buffer_string(buffer_string&& other)
+  CUDF_HOST_DEVICE constexpr buffer_string(buffer_string&& other)
     : m_data(other.m_data), m_capacity(other.m_capacity), m_size(other.m_size)
   {
     other.m_data     = nullptr;
@@ -74,7 +76,7 @@ struct buffer_string {
    * @param other The buffer_string instance to move from.
    * @return Reference to the current instance.
    */
-  __device__ buffer_string& operator=(buffer_string&& other)
+  CUDF_HOST_DEVICE constexpr buffer_string& operator=(buffer_string&& other)
   {
     if (this == &other) { return *this; }
 
@@ -86,8 +88,6 @@ struct buffer_string {
     other.m_size     = 0;
     return *this;
   }
-
-  __device__ ~buffer_string() = default;
 
   /**
    * @brief Returns the number of characters in the string.
@@ -104,14 +104,14 @@ struct buffer_string {
    *
    * @return The size of the string in bytes.
    */
-  CUDF_HOST_DEVICE cudf::size_type size_bytes() const { return m_size; }
+  CUDF_HOST_DEVICE constexpr cudf::size_type size_bytes() const { return m_size; }
 
   /**
    * @brief Returns the capacity of the buffer in bytes.
    *
    * @return The capacity of the buffer in bytes.
    */
-  CUDF_HOST_DEVICE cudf::size_type capacity_bytes() const { return m_capacity; }
+  CUDF_HOST_DEVICE constexpr cudf::size_type capacity_bytes() const { return m_capacity; }
 
   /**
    * @brief Returns a `cudf::string_view` representing the current string.
@@ -130,26 +130,26 @@ struct buffer_string {
   /**
    * @brief Clears the string, setting its size to zero.
    */
-  CUDF_HOST_DEVICE void clear() { m_size = 0; }
+  CUDF_HOST_DEVICE constexpr void clear() { m_size = 0; }
 
   /**
    * @brief Resets the string, setting its size to zero.
    */
-  CUDF_HOST_DEVICE void reset() { m_size = 0; }
+  CUDF_HOST_DEVICE constexpr void reset() { m_size = 0; }
 
   /**
    * @brief Returns a pointer to the character buffer.
    *
    * @return Pointer to the character buffer.
    */
-  CUDF_HOST_DEVICE char* data() { return m_data; }
+  CUDF_HOST_DEVICE constexpr char* data() { return m_data; }
 
   /**
    * @brief Checks if the string is empty.
    *
    * @return True if the string is empty, false otherwise.
    */
-  CUDF_HOST_DEVICE bool is_empty() const { return m_size == 0; }
+  CUDF_HOST_DEVICE constexpr bool is_empty() const { return m_size == 0; }
 
   /**
    * @brief Returns an iterator to the beginning of the string.
@@ -260,7 +260,7 @@ struct buffer_string {
    * @param size The new size of the string in bytes.
    * @return True if the resize was successful, false otherwise.
    */
-  __device__  bool resize_bytes_uninitialized(cudf::size_type size)
+  __device__ bool resize_bytes_uninitialized(cudf::size_type size)
   {
     if (size > m_capacity) { return false; }
     m_size = size;
@@ -273,7 +273,7 @@ struct buffer_string {
    * @param size The new size of the string in bytes.
    * @return True if the resize was successful, false otherwise.
    */
-  __device__  bool resize_bytes(cudf::size_type size)
+  __device__ bool resize_bytes(cudf::size_type size)
   {
     auto const old_size = m_size;
     if (!resize_bytes_uninitialized(size)) { return false; }
@@ -316,7 +316,7 @@ struct buffer_string {
    * @param size The new size of the string in bytes.
    * @return True if the resize was successful, false otherwise.
    */
-  __device__  bool resize(cudf::size_type size) { return resize_bytes(size); }
+  __device__ bool resize(cudf::size_type size) { return resize_bytes(size); }
 
   /**
    * @brief Appends a `cudf::string_view` to the string.
@@ -324,7 +324,7 @@ struct buffer_string {
    * @param str The `cudf::string_view` to append.
    * @return True if the append was successful, false otherwise.
    */
-  __device__  bool append(cudf::string_view str)
+  __device__ bool append(cudf::string_view str)
   {
     auto old_size = m_size;
     if (!resize_bytes_uninitialized(m_size + str.size_bytes())) { return false; }
@@ -332,7 +332,19 @@ struct buffer_string {
     return true;
   }
 
-  __device__  bool append(cudf::char_utf8 chr, cudf::size_type count)
+  /**
+   * @brief Appends a `cudf::string_view` to the string.
+   *
+   * @param str The `cudf::string_view` to append.
+   * @return True if the append was successful, false otherwise.
+   */
+  __device__ bool append(char const* str)
+  {
+    return append(
+      cudf::string_view{str, cudf::strings::detail::bytes_in_null_terminated_string(str)});
+  }
+
+  __device__ bool append(cudf::char_utf8 chr, cudf::size_type count)
   {
     auto bytes          = cudf::strings::detail::bytes_in_char_utf8(chr) * count;
     auto const old_size = m_size;
@@ -347,9 +359,7 @@ struct buffer_string {
     return true;
   }
 
-  __device__  bool replace(cudf::size_type pos,
-                                        cudf::size_type count,
-                                        cudf::string_view in)
+  __device__ bool replace(cudf::size_type pos, cudf::size_type count, cudf::string_view in)
   {
     if (pos < 0 || in.size_bytes() < 0) {
       assert(false);  // this is not a valid state and should never happen
@@ -375,9 +385,20 @@ struct buffer_string {
     return true;
   }
 
-  __device__  bool insert(cudf::size_type pos, cudf::string_view in)
+  __device__ bool replace(cudf::size_type pos, cudf::size_type count, char const* str)
   {
-    return replace(pos, 0, in);
+    return replace(
+      pos,
+      count,
+      cudf::string_view{str, cudf::strings::detail::bytes_in_null_terminated_string(str)});
+  }
+
+  __device__ bool insert(cudf::size_type pos, cudf::string_view in) { return replace(pos, 0, in); }
+
+  __device__ bool insert(cudf::size_type pos, char const* str)
+  {
+    return insert(
+      pos, cudf::string_view{str, cudf::strings::detail::bytes_in_null_terminated_string(str)});
   }
 
   __device__ void erase(cudf::size_type pos, cudf::size_type count)
@@ -386,4 +407,4 @@ struct buffer_string {
   }
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -518,8 +518,9 @@ TEST_F(StringOperationTest, StringConcat)
   auto last_name =
     cudf::test::strings_column_wrapper{"Doe", "Folk", "Louis", "Xi", "Serenity", "Scott"};
   rmm::device_buffer scratch(100 * 6, cudf::get_default_stream());
-  auto scratch_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 100, 200, 300, 400, 500};
-  auto scratch_sizes   = cudf::test::fixed_width_column_wrapper<int32_t>{100};
+  auto scratch_offsets =
+    cudf::test::fixed_width_column_wrapper<int32_t>{0, 100, 200, 300, 400, 500};
+  auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
   std::string cuda = R"***(
 __device__ void transform(cudf::string_view* out,

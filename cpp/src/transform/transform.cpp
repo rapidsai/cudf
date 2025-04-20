@@ -20,7 +20,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -128,12 +127,6 @@ rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
   return device;
 }
 
-template <typename DeviceView, typename ColumnView>
-std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
-           rmm::device_uvector<DeviceView>>
-column_views_to_device(std::vector<ColumnView> const& views,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr)
 template <typename DeviceView, typename ColumnView>
 std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
            rmm::device_uvector<DeviceView>>
@@ -292,14 +285,15 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(std::vector{jit::device_span<T>{output.data(), output.size()}}, stream, mr);
+  auto outputs = to_device_vector(
+    std::vector{cudf::jit::device_span<T>{output.data(), output.size()}}, stream, mr);
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
   auto user_data = to_device_vector(user_data_host, stream, mr);
 
-  span<T> const* outputs_ptr           = outputs.data();
-  column_device_view const* inputs_ptr = inputs.data();
-  void* const* user_data_ptr           = user_data.data();
+  cudf::jit::device_span<T> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr         = inputs.data();
+  void* const* user_data_ptr                   = user_data.data();
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &user_data_ptr};
 

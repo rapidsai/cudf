@@ -34,7 +34,7 @@ struct device_span {
   size_t _size        = 0;
 
  public:
-  constexpr CUDF_HOST_DEVICE device_span() {}
+  CUDF_HOST_DEVICE constexpr device_span() {}
 
   /**
    * @brief Constructs a span from a pointer and a size.
@@ -42,7 +42,7 @@ struct device_span {
    * @param data Pointer to the first element in the span.
    * @param size The number of elements in the span.
    */
-  constexpr CUDF_HOST_DEVICE device_span(element_type* data, size_t size) : _data{data}, _size{size}
+  CUDF_HOST_DEVICE constexpr device_span(element_type* data, size_t size) : _data{data}, _size{size}
   {
   }
 
@@ -51,21 +51,21 @@ struct device_span {
    *
    * @return A pointer to the first element of the span
    */
-  CUDF_HOST_DEVICE element_type* data() const { return _data; }
+  CUDF_HOST_DEVICE constexpr element_type* data() const { return _data; }
 
   /**
    * @brief Returns the number of elements in the span.
    *
    * @return The number of elements in the span
    */
-  CUDF_HOST_DEVICE size_t size() const { return _size; }
+  CUDF_HOST_DEVICE constexpr size_t size() const { return _size; }
 
   /**
    * @brief Checks if the span is empty.
    *
    * @return True if the span is empty, false otherwise
    */
-  CUDF_HOST_DEVICE bool empty() const { return _size == 0; }
+  CUDF_HOST_DEVICE constexpr bool empty() const { return _size == 0; }
 
   /**
    * @brief Returns a reference to the idx-th element of the sequence.
@@ -76,7 +76,7 @@ struct device_span {
    * @param idx the index of the element to access
    * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
    */
-  CUDF_HOST_DEVICE element_type& operator[](size_t idx) const { return _data[idx]; }
+  CUDF_HOST_DEVICE constexpr element_type& operator[](size_t idx) const { return _data[idx]; }
 
   /**
    * @brief Returns an iterator to the first element of the span.
@@ -85,7 +85,7 @@ struct device_span {
    *
    * @return An iterator to the first element of the span
    */
-  CUDF_HOST_DEVICE element_type* begin() const { return _data; }
+  CUDF_HOST_DEVICE constexpr element_type* begin() const { return _data; }
 
   /**
    * @brief Returns an iterator to the element following the last element of the span.
@@ -94,8 +94,8 @@ struct device_span {
    *
    * @return An iterator to the element following the last element of the span
    */
-  CUDF_HOST_DEVICE element_type* end() const { return _data + _size; }
+  CUDF_HOST_DEVICE constexpr element_type* end() const { return _data + _size; }
 };
 
 }  // namespace jit
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

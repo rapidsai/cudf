@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,6 +206,21 @@ CUDF_HOST_DEVICE constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
     utf8 |= 0xF080'8080u;
   }
   return utf8;
+}
+
+/**
+ * @brief Count the bytes in a null-terminated character array
+ *
+ * @param str Null-terminated string
+ * @return Number of bytes in `str` up to but not including the null-terminator
+ */
+CUDF_HOST_DEVICE constexpr cudf::size_type bytes_in_null_terminated_string(char const* str)
+{
+  if (!str) return 0;
+  cudf::size_type bytes = 0;
+  while (*str++)
+    ++bytes;
+  return bytes;
 }
 
 }  // namespace strings::detail
