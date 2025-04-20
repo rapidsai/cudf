@@ -25,7 +25,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
-#include <cudf/join/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -147,10 +146,9 @@ void BM_join(state_type& state, Join JoinFunc, int multiplicity = 1, double sele
 
   auto table_bytes = [](cudf::table_view tbl) {
     size_t bytes = 0;
-    for (cudf::size_type i = 0; i < tbl.num_columns(); i++) {
-      auto col = tbl.column(i);
+    for (auto& col : tbl) {
       bytes += (sizeof(Key) * col.size()) +
-               (col.nullable() ? std::ceil(static_cast<double>(col.null_count()) / 8) : 0);
+               (col.nullable() ? std::ceil(static_cast<double>(col.size()) / 8) : 0);
     }
     return bytes;
   };

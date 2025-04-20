@@ -16,8 +16,7 @@
 
 #include <benchmarks/join/join_common.hpp>
 
-#include <cudf/join/sort_merge_join.hpp>
-#include <cudf/types.hpp>
+#include <cudf/join/join.hpp>
 
 void nvbench_inner_join(nvbench::state& state)
 {
@@ -25,11 +24,7 @@ void nvbench_inner_join(nvbench::state& state)
   auto join               = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls) {
-    auto stream = cudf::get_default_stream();
-    auto mr     = cudf::get_current_device_resource_ref();
-    cudf::sort_merge_join obj(
-      left_input, cudf::sorted::NO, right_input, cudf::sorted::NO, compare_nulls, stream);
-    return obj.inner_join(stream, mr);
+    return cudf::inner_join(left_input, right_input, compare_nulls);
   };
   BM_join<nvbench::int64_t, false>(state, join, multiplicity);
 }

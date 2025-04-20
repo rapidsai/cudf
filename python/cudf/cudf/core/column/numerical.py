@@ -15,7 +15,7 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf.api.types import infer_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
@@ -23,7 +23,6 @@ from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -123,9 +122,9 @@ class NumericalColumn(NumericalBaseColumn):
                 f"Cannot use a {type(value).__name__} to find an index of "
                 f"a {self.dtype} Index."
             )
-        if (
-            value is not None
-            and self.dtype.kind in {"c", "f"}
+        elif (
+            self.dtype.kind in {"c", "f"}
+            and isinstance(value, (float, np.floating))
             and np.isnan(value)
         ):
             return self.isnan().indices_of(True)
@@ -417,37 +416,20 @@ class NumericalColumn(NumericalBaseColumn):
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
-        lhs = cast("cudf.core.column.ColumnBase", self)
         try:
-            rhs = as_column(values, nan_as_null=False)
-        except (MixedTypeError, TypeError) as e:
-            # There is a corner where `values` can be of `object` dtype
-            # but have values of homogeneous type.
-            inferred_dtype = infer_dtype(values)
-            if (
-                self.dtype.kind in {"i", "u"} and inferred_dtype == "integer"
-            ) or (
-                self.dtype.kind == "f"
-                and inferred_dtype in {"floating", "integer"}
-            ):
-                rhs = as_column(values, nan_as_null=False, dtype=self.dtype)
-            elif self.dtype.kind == "f" and inferred_dtype == "integer":
-                rhs = as_column(values, nan_as_null=False, dtype="int")
-            elif (
-                self.dtype.kind in {"i", "u"} and inferred_dtype == "floating"
-            ):
-                rhs = as_column(values, nan_as_null=False, dtype="float")
+            lhs, rhs = super()._process_values_for_isin(values)
+        except TypeError:
+            # Can remove once dask 25.04 is the minimum version
+            # https://github.com/dask/dask/pull/11869
+            if isinstance(values, np.ndarray) and values.dtype.kind == "O":
+                return super()._process_values_for_isin(values.tolist())
             else:
-                raise e
-        else:
-            if isinstance(rhs, NumericalColumn):
-                rhs = rhs.astype(dtype=self.dtype)
-
-        if lhs.null_count == len(lhs):
-            lhs = lhs.astype(rhs.dtype)
-        elif rhs.null_count == len(rhs):
-            rhs = rhs.astype(lhs.dtype)
-
+                raise
+        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+            if rhs.can_cast_safely(lhs.dtype):
+                rhs = rhs.astype(lhs.dtype)
+            elif lhs.can_cast_safely(rhs.dtype):
+                lhs = lhs.astype(rhs.dtype)
         return lhs, rhs
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
