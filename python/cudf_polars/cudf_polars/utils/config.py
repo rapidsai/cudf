@@ -10,12 +10,12 @@ import enum
 import json
 from typing import TYPE_CHECKING, Literal
 
+import rmm.mr
+
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars as pl
-
-    import rmm.mr
 
 
 __all__ = ["ConfigOptions"]
@@ -192,6 +192,7 @@ class ConfigOptions:
             raise TypeError("GPUEngine option 'raise_on_fail' must be a boolean.")
 
         executor: InMemoryExecutor | StreamingExecutor
+        memory_resource = engine.memory_resource
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
@@ -202,6 +203,10 @@ class ConfigOptions:
                     **STREAMING_EXECUTOR_PARQUET_DEFAULTS,
                     **user_parquet_options,
                 }
+
+                if engine.memory_resource is None:
+                    memory_resource = rmm.mr.get_current_device_resource()
+
             case _:
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
@@ -210,5 +215,5 @@ class ConfigOptions:
             parquet_options=ParquetOptions(**user_parquet_options),
             executor=executor,
             device=engine.device,
-            memory_resource=engine.memory_resource,
+            memory_resource=memory_resource,
         )

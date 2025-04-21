@@ -21,7 +21,6 @@ import rmm
 from rmm._cuda import gpu
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.timer import Timer
 from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
+    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -274,7 +274,7 @@ def execute_with_cudf(
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
 
-    config_options = ConfigOptions.from_polars_engine(config)
+    # config_options = ConfigOptions.from_polars_engine(config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
@@ -296,7 +296,7 @@ def execute_with_cudf(
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if config_options.raise_on_fail:
+            if translator.config_options.raise_on_fail:
                 raise exception
         else:
             if POLARS_VERSION_LT_125:  # pragma: no cover
