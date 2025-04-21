@@ -237,7 +237,7 @@ def _callback(
             from cudf_polars.experimental.parallel import evaluate_streaming
 
             return evaluate_streaming(ir, config_options).to_polars()
-        else:
+        else:  # pragma: no cover; Unreachable
             # TODO(Python 3.11+): use typing.assert_never
             raise ValueError(f"Unknown executor '{config_options.executor}'")
 

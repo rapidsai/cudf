@@ -278,3 +278,15 @@ def test_validate_parquet_options(option: str) -> None:
                 parquet_options={option: object()},
             )
         )
+
+
+def test_validate_raise_on_fail() -> None:
+    with pytest.raises(TypeError, match="'raise_on_fail' must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(executor="streaming", raise_on_fail=object())
+        )
+
+
+def test_validate_executor() -> None:
+    with pytest.raises(ValueError, match="Unknown executor 'foo'"):
+        ConfigOptions.from_polars_engine(pl.GPUEngine(executor="foo"))
