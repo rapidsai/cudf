@@ -13,6 +13,7 @@ from functools import cache, partial
 from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
+from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -237,9 +238,7 @@ def _callback(
             from cudf_polars.experimental.parallel import evaluate_streaming
 
             return evaluate_streaming(ir, config_options).to_polars()
-        else:  # pragma: no cover; Unreachable
-            # TODO(Python 3.11+): use typing.assert_never
-            raise ValueError(f"Unknown executor '{config_options.executor}'")
+        assert_never(f"Unknown executor '{config_options.executor}'")
 
 
 def execute_with_cudf(
