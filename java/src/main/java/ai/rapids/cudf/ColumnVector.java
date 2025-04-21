@@ -783,7 +783,7 @@ public final class ColumnVector extends ColumnView {
 
   public static ColumnVector sha1Hash(ColumnView column) {
     assert column != null : "Column vector passed may not be null";
-    assert column.getType() == DType.STRING || 
+    assert column.getType() == DType.STRING ||
            column.getType() == DType.BOOL8:
            "SHA1 hash can only be applied to STRING, boolean";
     long columnView = column.getNativeView();
