@@ -108,7 +108,7 @@ class StreamingExecutor:
         The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
         by default.
 
-        Note taht the "distributed" requires a Dask cluster to be running.
+        Note that the "distributed" requires a Dask cluster to be running.
 
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
@@ -299,7 +299,7 @@ class ConfigOptions:
                     **user_parquet_options,
                 }
 
-            case _:
+            case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
         return cls(
