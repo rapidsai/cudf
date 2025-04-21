@@ -109,14 +109,14 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
     auto valids = cudf::detail::make_host_vector<bool>(begins.size(), cudf::get_default_stream());
     valids[0]   = valid;
     valids[1]   = !valid;
-    cudf::set_null_masks_bulk(masks, begins, ends, valids);
+    cudf::set_null_masks(masks, begins, ends, valids);
 
     // Set second halves of bitmasks
     begins    = {middle, middle};
     ends      = {size, size};
     valids[0] = !valid;
     valids[1] = valid;
-    cudf::set_null_masks_bulk(
+    cudf::set_null_masks(
       masks, begins, ends, cudf::host_span<bool const>{valids.data(), valids.size()});
 
     // Verify bitmasks
