@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/jit/types.cuh>
+#include <cudf/column/column_device_view_base.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -40,19 +41,19 @@ struct accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ decltype(auto) element(cudf::jit::mutable_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* views,
                                            cudf::size_type row)
   {
     return views[index].element<T>(row);
   }
 
-  static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::column_device_view_core const* views,
                                            cudf::size_type row)
   {
     return views[index].element<T>(row);
   }
 
-  static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
+  static __device__ void assign(cudf::mutable_column_device_view_core const* views,
                                 cudf::size_type row,
                                 T value)
   {
@@ -65,19 +66,19 @@ struct scalar {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
-  static __device__ decltype(auto) element(cudf::jit::mutable_column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* views,
                                            cudf::size_type row)
   {
     return Accessor::element(views, 0);
   }
 
-  static __device__ decltype(auto) element(cudf::jit::column_device_view const* views,
+  static __device__ decltype(auto) element(cudf::column_device_view_core const* views,
                                            cudf::size_type row)
   {
     return Accessor::element(views, 0);
   }
 
-  static __device__ void assign(cudf::jit::mutable_column_device_view const* views,
+  static __device__ void assign(cudf::mutable_column_device_view_core const* views,
                                 cudf::size_type row,
                                 type value)
   {
@@ -86,8 +87,8 @@ struct scalar {
 };
 
 template <typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::jit::mutable_column_device_view const* output,
-                        cudf::jit::column_device_view const* inputs)
+CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* output,
+                        cudf::column_device_view_core const* inputs)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -102,8 +103,8 @@ CUDF_KERNEL void kernel(cudf::jit::mutable_column_device_view const* output,
 }
 
 template <typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::jit::mutable_column_device_view const* output,
-                                    cudf::jit::column_device_view const* inputs)
+CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* output,
+                                    cudf::column_device_view_core const* inputs)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
