@@ -154,7 +154,8 @@ struct JoinTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(JoinTest, InvalidLoadFactor)
+// Disabled for now, waiting on upstream cuco updates
+TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
