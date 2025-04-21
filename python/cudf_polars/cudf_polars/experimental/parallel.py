@@ -45,15 +45,10 @@ if TYPE_CHECKING:
 
 
 @lower_ir_node.register(IR)
-def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def _(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
     # Default logic - Requires single partition
-
-    if len(ir.children) == 0:
-        # Default leaf node has single partition
-        return ir, {
-            ir: PartitionInfo(count=1)
-        }  # pragma: no cover; Missed by pylibcudf executor
-
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
     )
@@ -194,12 +189,12 @@ def _(
         )  # pragma: no cover
 
     child_names = []
-    for child in ir.children:
+    for child in ir.children:  # pragma: no cover
         child_names.append(get_key_name(child))
         if partition_info[child].count > 1:
             raise NotImplementedError(
                 f"Failed to generate tasks for {ir} with child {child}."
-            )  # pragma: no cover
+            )
 
     key_name = get_key_name(ir)
     return {
