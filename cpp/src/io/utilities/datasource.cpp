@@ -59,7 +59,8 @@ class kvikio_source : public datasource {
     // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     std::vector<uint8_t> v(read_size);
-    return {std::move(v), _kvikio_handle.pread(v.data(), read_size, offset)};
+    auto v_data = v.data();
+    return {std::move(v), _kvikio_handle.pread(v_data, read_size, offset)};
   }
 
  public:
@@ -110,7 +111,18 @@ class kvikio_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, this->size() - offset);
-    return _kvikio_handle.pread(dst, read_size, offset);
+
+    if constexpr (std::is_same_v<HandleT, kvikio::FileHandle>) {
+      return _kvikio_handle.pread(dst,
+                                  read_size,
+                                  offset,
+                                  kvikio::defaults::task_size(),
+                                  kvikio::defaults::gds_threshold(),
+                                  false /* not to sync_default_stream */);
+    } else {
+      // HandleT is kvikio::RemoteHandle
+      return _kvikio_handle.pread(dst, read_size, offset);
+    }
   }
 
   size_t device_read(size_t offset,
@@ -203,6 +215,13 @@ class memory_mapped_source : public file_source {
       static_cast<uint8_t*>(_map_addr) + offset - _map_offset, read_size);
   }
 
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
+  {
+    // Use the default implementation instead of the file_source's implementation
+    return datasource::host_read_async(offset, size);
+  }
+
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
@@ -216,6 +235,19 @@ class memory_mapped_source : public file_source {
     auto const src = static_cast<uint8_t*>(_map_addr) + (offset - _map_offset);
     std::memcpy(dst, src, read_size);
     return read_size;
+  }
+
+  std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst) override
+  {
+    // Use the default implementation instead of the file_source's implementation
+    return datasource::host_read_async(offset, size, dst);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return false; }
+
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return supports_device_read();
   }
 
  private:
@@ -466,7 +498,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t max_size_estimate)
 {
   auto const use_memory_mapping = [] {
-    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"OFF"});
 
     if (policy == "ON") { return true; }
     if (policy == "OFF") { return false; }

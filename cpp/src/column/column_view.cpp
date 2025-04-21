@@ -37,7 +37,10 @@ template <typename ColumnView>
 void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
 {
   if (cudf::experimental::prefetch::detail::prefetch_config::instance().get(key)) {
-    if (cudf::is_fixed_width(col.type())) {
+    if (col.type().id() == cudf::type_id::EMPTY) {
+      // Skip prefetching for empty columns
+      return;
+    } else if (cudf::is_fixed_width(col.type())) {
       cudf::experimental::prefetch::detail::prefetch_noexcept(
         key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {

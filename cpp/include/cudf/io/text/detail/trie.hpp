@@ -239,8 +239,7 @@ struct trie {
 
     auto max_duplicate_tokens = most_common_token->second;
 
-    return trie{max_duplicate_tokens,
-                cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
+    return trie{max_duplicate_tokens, cudf::detail::make_device_uvector(trie_nodes, stream, mr)};
   }
 
   [[nodiscard]] trie_device_view view() const { return trie_device_view{_nodes}; }

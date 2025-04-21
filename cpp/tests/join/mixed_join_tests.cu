@@ -20,7 +20,8 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -31,7 +32,6 @@
 #include <thrust/sort.h>
 
 #include <algorithm>
-#include <iostream>
 #include <numeric>
 #include <random>
 #include <stdexcept>
@@ -905,7 +905,7 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
     // Copy data back to host for comparisons
     auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
       cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
-    auto result_indices = cudf::detail::make_std_vector_sync<int32_t>(
+    auto result_indices = cudf::detail::make_std_vector<int32_t>(
       cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
 
     // Sort the indices for 1-1 comparison
@@ -944,7 +944,7 @@ TYPED_TEST(MixedLeftSemiJoinTest, MixedLeftSemiJoinGatherMapLarge)
     // Copy data back to host for comparisons
     auto expected_indices = cudf::detail::make_std_vector_async<int32_t>(
       cudf::device_span<int32_t>(*expected_mixed_semi_join), cudf::get_default_stream());
-    auto result_indices = cudf::detail::make_std_vector_sync<int32_t>(
+    auto result_indices = cudf::detail::make_std_vector<int32_t>(
       cudf::device_span<int32_t>(*mixed_semi_join), cudf::get_default_stream());
 
     // Sort the indices for 1-1 comparison

@@ -1,7 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
-from io import StringIO
 
 import pandas as pd
 import pyarrow as pa
@@ -14,6 +13,7 @@ from utils import (
     write_source_str,
 )
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -214,7 +214,7 @@ def test_read_csv_parse_options(
     options.set_comment("#")
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         comment="#",
         decimal=decimal,
         skip_blank_lines=skip_blanks,
@@ -247,7 +247,7 @@ def test_read_csv_na_values(
         options.set_na_values(na_values)
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         na_filter=na_filter,
         na_values=na_values if na_filter else None,
         keep_default_na=keep_default_na,
@@ -291,6 +291,27 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
     assert_table_and_meta_eq(
         pa_table,
         plc_table_w_meta,
+        check_types_if_empty=False,
+    )
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_csv_from_device_buffers(csv_table_data, stream):
+    _, pa_table = csv_table_data
+
+    csv_string = pa_table.to_pandas().to_csv(index=False)
+    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([buf])
+    ).build()
+    result = plc.io.csv.read_csv(options, stream)
+
+    expected = pa.concat_tables([pa_table])
+
+    assert_table_and_meta_eq(
+        expected,
+        result,
         check_types_if_empty=False,
     )
 

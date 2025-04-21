@@ -1,23 +1,147 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+
+from cpython.pycapsule cimport (
+    PyCapsule_GetPointer,
+    PyCapsule_New,
+)
+
+from libc.stdint cimport uintptr_t
+
+from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.interop cimport ArrowArray, ArrowSchema, arrow_column
+from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
+from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
+from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
+from pylibcudf.libcudf.copying cimport get_element
 
+from pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowSchema,
+    column_metadata,
+    to_arrow_host_raw,
+    to_arrow_schema_raw,
+)
+
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
+from .filling cimport sequence
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
-from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+from ._interop_helpers cimport (
+    _release_schema,
+    _release_array,
+    _metadata_to_libcudf,
+)
+from .null_mask cimport bitmask_allocation_size_bytes
+from .utils cimport _get_stream
+
+from ._interop_helpers import ColumnMetadata
 
 import functools
 
+
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
+
+
+class _ArrowLikeMeta(type):
+    def __subclasscheck__(cls, other):
+        return hasattr(other, "__arrow_c_array__")
+
+
+class _ArrowLike(metaclass=_ArrowLikeMeta):
+    pass
+
+
+cdef class _ArrowColumnHolder:
+    """A holder for an Arrow column for gpumemoryview lifetime management."""
+    cdef unique_ptr[arrow_column] col
+
+
+cdef class OwnerWithCAI:
+    """An interface for column view's data with gpumemoryview via CAI."""
+    @staticmethod
+    cdef create(column_view cv, object owner):
+        obj = OwnerWithCAI()
+        obj.owner = owner
+        cdef int size
+        cdef column_view offsets_column
+        cdef unique_ptr[scalar] last_offset
+        if cv.type().id() == type_id.EMPTY:
+            size = cv.size()
+        elif is_fixed_width(cv.type()):
+            size = cv.size() * cpp_size_of(cv.type())
+        elif cv.type().id() == type_id.STRING:
+            # The size of the character array in the parent is the offsets size
+            num_children = cv.num_children()
+            size = 0
+            # A strings column with no children is created for empty/all null
+            if num_children:
+                offsets_column = cv.child(0)
+                last_offset = get_element(offsets_column, offsets_column.size() - 1)
+                size = (<numeric_scalar[size_type] *> last_offset.get()).value()
+        else:
+            # All other types store data in the children, so the parent size is 0
+            size = 0
+
+        obj.cai = {
+            "shape": (size,),
+            "strides": None,
+            # For the purposes in this function, just treat all of the types as byte
+            # streams of the appropriate size. This matches what we currently get from
+            # rmm.DeviceBuffer
+            "typestr": "|u1",
+            "data": (<uintptr_t> cv.head[char](), False),
+            "version": 3,
+        }
+        return obj
+
+    @property
+    def __cuda_array_interface__(self):
+        return self.cai
+
+
+cdef class OwnerMaskWithCAI:
+    """An interface for column view's null mask with gpumemoryview via CAI."""
+    @staticmethod
+    cdef create(column_view cv, object owner):
+        obj = OwnerMaskWithCAI()
+        obj.owner = owner
+
+        obj.cai = {
+            "shape": (bitmask_allocation_size_bytes(cv.size()),),
+            "strides": None,
+            # For the purposes in this function, just treat all of the types as byte
+            # streams of the appropriate size. This matches what we currently get from
+            # rmm.DeviceBuffer
+            "typestr": "|u1",
+            "data": (<uintptr_t> cv.null_mask(), False),
+            "version": 3,
+        }
+        return obj
+
+    @property
+    def __cuda_array_interface__(self):
+        return self.cai
+
+
+class _Ravelled:
+    def __init__(self, obj):
+        self.obj = obj
+        cai = obj.__cuda_array_interface__.copy()
+        shape = cai["shape"]
+        cai["shape"] = (shape[0]*shape[1],)
+        self.__cuda_array_interface__ = cai
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -46,7 +170,26 @@ cdef class Column:
     children : list
         The children of this column if it is a compound column type.
     """
-    def __init__(
+    def __init__(self, obj=None, *args, **kwargs):
+        self._init(obj, *args, **kwargs)
+
+    __hash__ = None
+
+    @functools.singledispatchmethod
+    def _init(self, obj, *args, **kwargs):
+        if obj is None:
+            if (data_type := kwargs.get("data_type")) is not None:
+                kwargs.pop("data_type")
+                self._init(data_type, *args, **kwargs)
+                return
+            elif (arrow_like := kwargs.get("arrow_like")) is not None:
+                kwargs.pop("arrow_like")
+                self._init(arrow_like, *args, **kwargs)
+                return
+        raise ValueError(f"Invalid input type {type(obj)}")
+
+    @_init.register(DataType)
+    def _(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, size_type offset,
         list children
@@ -62,7 +205,34 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
-    __hash__ = None
+    @_init.register(_ArrowLike)
+    def _(self, arrow_like):
+        schema, array = arrow_like.__arrow_c_array__()
+        cdef ArrowSchema* c_schema = (
+            <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+        )
+        cdef ArrowArray* c_array = (
+            <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+        )
+
+        cdef _ArrowColumnHolder result = _ArrowColumnHolder()
+        cdef unique_ptr[arrow_column] c_result
+        with nogil:
+            c_result = make_unique[arrow_column](
+                move(dereference(c_schema)), move(dereference(c_array))
+            )
+            result.col.swap(c_result)
+
+        tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+        self._init(
+            tmp.type(),
+            tmp.size(),
+            tmp.data(),
+            tmp.null_mask(),
+            tmp.null_count(),
+            tmp.offset(),
+            tmp.children(),
+        )
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
@@ -75,9 +245,9 @@ cdef class Column:
         cdef const bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
@@ -112,9 +282,9 @@ cdef class Column:
         cdef bitmask_type * null_mask = NULL
 
         if self._data is not None:
-            data = int_to_void_ptr(self._data.ptr)
+            data = <void*>self._data.ptr
         if self._mask is not None:
-            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+            null_mask = <bitmask_type*>self._mask.ptr
 
         cdef vector[mutable_column_view] c_children
         with gil:
@@ -129,7 +299,53 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_libcudf(unique_ptr[column] libcudf_col):
+    cdef Column from_rmm_buffer(
+        unique_ptr[device_buffer] buff,
+        DataType dtype,
+        size_type size,
+        list children,
+        Stream stream=None,
+    ):
+        """
+        Create a Column from an RMM DeviceBuffer.
+
+        Parameters
+        ----------
+        buff : unique_ptr[DeviceBuffer]
+            Pointer to the data rmm.DeviceBuffer.
+        size : size_type
+            The number of rows in the column.
+        dtype : DataType
+            The type of the data in the buffer.
+        children : list
+            List of child columns.
+        stream : Stream, default None
+            The stream to use for the operation.
+
+        Notes
+        -----
+        To provide a mask and null count, use `Column.with_mask` after
+        this method.
+        """
+        stream = _get_stream(stream)
+        cdef DeviceBuffer rmm_buff = DeviceBuffer.c_from_unique_ptr(
+            move(buff), stream
+        )
+        cdef gpumemoryview data = gpumemoryview(rmm_buff)
+
+        return Column(
+            dtype,
+            size,
+            data,
+            None,
+            0,
+            # Initial offset when capturing a C++ column is always 0.
+            0,
+            children,
+        )
+
+    @staticmethod
+    cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=None):
         """Create a Column from a libcudf column.
 
         This method is for pylibcudf's functions to use to ingest outputs of
@@ -143,35 +359,31 @@ cdef class Column:
 
         cdef column_contents contents = libcudf_col.get().release()
 
-        # Note that when converting to cudf Column objects we'll need to pull
-        # out the base object.
-        cdef gpumemoryview data = gpumemoryview(
-            DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        )
-
-        cdef gpumemoryview mask = None
-        if null_count > 0:
-            mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            )
+        stream = _get_stream(stream)
 
         children = []
         if contents.children.size() != 0:
             for i in range(contents.children.size()):
                 children.append(
-                    Column.from_libcudf(move(contents.children[i]))
+                    Column.from_libcudf(move(contents.children[i]), stream)
                 )
 
-        return Column(
+        cdef Column result = Column.from_rmm_buffer(
+            # Note that when converting to cudf Column objects
+            # we'll need to pull  out the base object.
+            move(contents.data),
             dtype,
             size,
-            data,
-            mask,
-            null_count,
-            # Initial offset when capturing a C++ column is always 0.
-            0,
             children,
+            stream,
         )
+        cdef gpumemoryview mask = None
+        if null_count > 0:
+            mask = gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream)
+            )
+            result = result.with_mask(mask, null_count)
+        return result
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.
@@ -253,12 +465,10 @@ cdef class Column:
                     Column.from_column_view_of_arbitrary(cv.child(i), owner)
                 )
 
-        cdef gpumemoryview owning_data = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.head[char](), owner
-        )
-        cdef gpumemoryview owning_mask = gpumemoryview.from_pointer(
-            <Py_ssize_t> cv.null_mask(), owner
-        )
+        cdef gpumemoryview owning_data = gpumemoryview(OwnerWithCAI.create(cv, owner))
+        cdef gpumemoryview owning_mask = None
+        if cv.null_count() > 0:
+            owning_mask = gpumemoryview(OwnerMaskWithCAI.create(cv, owner))
 
         return Column(
             DataType.from_libcudf(cv.type()),
@@ -314,50 +524,145 @@ cdef class Column:
             c_result = make_column_from_scalar(dereference(slr.get()), size)
         return Column.from_libcudf(move(c_result))
 
-    @staticmethod
-    def from_cuda_array_interface_obj(object obj):
-        """Create a Column from an object with a CUDA array interface.
+    @classmethod
+    def from_array_interface(cls, obj):
+        """
+        Create a Column from an object implementing the NumPy Array Interface.
 
         Parameters
         ----------
         obj : object
-            The object with the CUDA array interface to create a column from.
+            Must implement the `__array_interface__` protocol.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
+        raise NotImplementedError(
+            "Converting to a pylibcudf Column is not yet implemented."
+        )
+
+    @classmethod
+    def from_cuda_array_interface(cls, obj):
+        """
+        Create a Column from an object implementing the CUDA Array Interface.
+
+        Parameters
+        ----------
+        obj : object
+            Must implement the ``__cuda_array_interface__`` protocol.
 
         Returns
         -------
         Column
             A Column containing the data from the CUDA array interface.
 
-        Notes
-        -----
-        Data is not copied when creating the column. The caller is
-        responsible for ensuring the data is not mutated unexpectedly while the
-        column is in use.
+        Raises
+        ------
+        TypeError
+            If the object does not support __cuda_array_interface__.
+        ValueError
+            If the object is not 1D or 2D, or is not C-contiguous.
+            If the number of rows exceeds size_type limit.
+        NotImplementedError
+            If the object has a mask.
         """
-        data = gpumemoryview(obj)
-        iface = data.__cuda_array_interface__
-        if iface.get('mask') is not None:
-            raise ValueError("mask not yet supported.")
+        try:
+            iface = obj.__cuda_array_interface__
+        except AttributeError:
+            raise TypeError("Object does not implement __cuda_array_interface__")
 
-        typestr = iface['typestr'][1:]
+        if iface.get("mask") is not None:
+            raise NotImplementedError("mask not yet supported")
+
+        typestr = iface["typestr"][1:]
         data_type = _datatype_from_dtype_desc(typestr)
 
-        if not is_c_contiguous(
-            iface['shape'],
-            iface['strides'],
-            size_of(data_type)
-        ):
+        shape = iface["shape"]
+        if not is_c_contiguous(shape, iface["strides"], size_of(data_type)):
             raise ValueError("Data must be C-contiguous")
 
-        size = iface['shape'][0]
-        return Column(
-            data_type,
-            size,
-            data,
-            None,
-            0,
-            0,
-            []
+        if len(shape) == 1:
+            data = gpumemoryview(obj)
+            size = shape[0]
+            return cls(data_type, size, data, None, 0, 0, [])
+        elif len(shape) == 2:
+            num_rows, num_cols = shape
+            if num_rows < numeric_limits[size_type].max():
+                offsets_col = sequence(
+                    num_rows + 1,
+                    Scalar.from_py(0, DataType(type_id.INT32)),
+                    Scalar.from_py(num_cols, DataType(type_id.INT32)),
+                )
+            else:
+                raise ValueError(
+                    "Number of rows exceeds size_type limit for offsets column."
+                )
+            rav_obj = _Ravelled(obj)
+            data_col = cls(
+                data_type=data_type,
+                size=rav_obj.__cuda_array_interface__["shape"][0],
+                data=gpumemoryview(rav_obj),
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+            return cls(
+                data_type=DataType(type_id.LIST),
+                size=num_rows,
+                data=None,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[offsets_col, data_col],
+            )
+        else:
+            raise ValueError("Only 1D or 2D arrays are supported")
+
+    @classmethod
+    def from_array(cls, obj):
+        """
+        Create a Column from any object which supports the NumPy
+        or CUDA array interface.
+
+        Parameters
+        ----------
+        obj : object
+            The input array to be converted into a `pylibcudf.Column`.
+
+        Returns
+        -------
+        Column
+
+        Raises
+        ------
+        TypeError
+            If the input does not implement a supported array interface.
+        ImportError
+            If NumPy is not installed.
+
+        Notes
+        -----
+        - 1D and 2D C-contiguous device arrays are supported.
+          The data are not copied.
+        - For `numpy.ndarray`, this is not yet implemented.
+
+        Examples
+        --------
+        >>> import pylibcudf as plc
+        >>> import cupy as cp
+        >>> cp_arr = cp.array([[1,2],[3,4]])
+        >>> col = plc.Column.from_array(cp_arr)
+        """
+        if hasattr(obj, "__cuda_array_interface__"):
+            return cls.from_cuda_array_interface(obj)
+        if hasattr(obj, "__array_interface__"):
+            return cls.from_array_interface(obj)
+
+        raise TypeError(
+            f"Cannot convert object of type {type(obj)} to a pylibcudf Column"
         )
 
     cpdef DataType type(self):
@@ -417,6 +722,41 @@ cdef class Column:
         with nogil:
             c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
+
+    def _create_nested_column_metadata(self):
+        return ColumnMetadata(
+            children_meta=[
+                child._create_nested_column_metadata() for child in self.children()
+            ]
+        )
+
+    def _to_schema(self, metadata=None):
+        """Create an Arrow schema from this Column."""
+        if metadata is None:
+            metadata = self._create_nested_column_metadata()
+        elif isinstance(metadata, str):
+            metadata = ColumnMetadata(metadata)
+
+        cdef column_metadata c_metadata = _metadata_to_libcudf(metadata)
+
+        cdef ArrowSchema* raw_schema_ptr
+        with nogil:
+            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+
+        return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
+
+    def _to_host_array(self):
+        cdef ArrowArray* raw_host_array_ptr
+        with nogil:
+            raw_host_array_ptr = to_arrow_host_raw(self.view())
+
+        return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
+
+    def __arrow_c_array__(self, requested_schema=None):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Column does not support alternative schema")
+
+        return self._to_schema(), self._to_host_array()
 
 
 cdef class ListColumnView:
