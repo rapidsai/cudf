@@ -167,7 +167,7 @@ TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
   Table t0(std::move(cols0));
 
   // Test load factor of -0.1
-  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, -0.1),
                std::invalid_argument);
   // Test load factor of 0
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
