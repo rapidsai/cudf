@@ -470,8 +470,11 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(
-    rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
+  return thrust::reduce(rmm::exec_policy(stream),
+                        mask_iter,
+                        mask_iter + pages.size(),
+                        0U,
+                        cuda::std::bit_or<uint32_t>{});
 }
 
 /**
