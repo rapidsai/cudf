@@ -394,11 +394,10 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
                              T const* data,
                              int64_t size)
 {
-  if (threadIdx.x == 0) {printf("BlockSum running \n");}
   __shared__ AccumT block_sum;
   if (block.thread_rank() == 0) { block_sum = 0; }
   block.sync();
-  
+
   AccumT local_sum = 0;
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_sum += static_cast<AccumT>(data[idx]);
@@ -730,76 +729,66 @@ things: the pointer to start of the data (an offset within a larger
 column) and the size of the group itslef
 */
 
-__device__ int64_t* block_alloc(size_t size) {
-    //__shared__ int64_t* ptr;
-
-//    if (threadIdx.x == 0) {
-//        ptr = (int64_t*)malloc(size * sizeof(int64_t));
-//        printf("[block_alloc] malloc bytes at %p\n", ptr);
-//        if (ptr == nullptr) {
-//          printf("[block_alloc] malloc failed!\n");
-//        }
-//    }
-
-//    __syncthreads();  // all threads wait for ptr to be written
-//    int64_t* out = ptr;
-    auto out = (int64_t*)malloc(size*sizeof(int64_t));
-    return out;  // all threads return the same pointer
-}
-
-__device__ void block_free(int64_t* ptr) {
-    if (threadIdx.x == 0) {
-      printf("[block_free] freeing pointer %p\n", ptr);
-        free(ptr);
-    }
-}
-
-
-__device__ int64_t* binary_add(int64_t* lhs, int64_t* rhs, int64_t size) {
-
-    auto ptr = block_alloc(size * sizeof(int64_t));
-    printf("[binary_add] allocated bytes at %p\n", ptr);
-    __syncthreads(); // may help clarify if block_alloc uses shared memory
-
-    for (int i = threadIdx.x; i < size; i += blockDim.x) {
-        ptr[i] = lhs[i] + rhs[i];
-    }
-
-    __syncthreads();
-    return ptr;
-}
-
-
-
-
-extern "C" 
-__device__ int group_sum_binaryop(                                                 
-    int64_t** numba_return_value, int64_t* lhs, int64_t* rhs, int64_t size) 
+__device__ int64_t* block_alloc(size_t size)
 {
+  __shared__ int64_t* ptr;
+  if (threadIdx.x == 0) { ptr = (int64_t*)malloc(size * sizeof(int64_t)); }
+  __syncthreads();  // all threads wait for ptr to be written
+  return ptr;
+}
 
-  if (threadIdx.x == 0 and blockIdx.x == 0 ) {
-    //printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
+__device__ void block_free(int64_t* ptr)
+{
+  if (threadIdx.x == 0) {
+    // printf("[block_free] freeing pointer %p\n", ptr);
+    free(ptr);
+  }
+  __syncthreads();  // all threads wait for ptr to be freed
+}
+
+__device__ int64_t* binary_add(int64_t* lhs, int64_t* rhs, int64_t size)
+{
+  auto ptr = block_alloc(size * sizeof(int64_t));
+  // printf("[binary_add] allocated bytes at %p\n", ptr);
+  __syncthreads();  // may help clarify if block_alloc uses shared memory
+
+  for (int i = threadIdx.x; i < size; i += blockDim.x) {
+    ptr[i] = lhs[i] + rhs[i];
+  }
+
+  __syncthreads();
+  return ptr;
+}
+
+extern "C" __device__ int group_sum_binaryop(int64_t** numba_return_value,
+                                             int64_t* lhs,
+                                             int64_t* rhs,
+                                             int64_t size)
+{
+  if (threadIdx.x == 0 and blockIdx.x == 0) {
+    // printf("[group_sum_binaryop]: the lhs pointer is %p\n", lhs);
     for (int64_t i = 0; i < size; ++i) {
-      //printf("[group_sum_binaryop] lhs[%lld] = %lld\n", i, lhs[i]);
+      // printf("[group_sum_binaryop] lhs[%lld] = %lld\n", i, lhs[i]);
     }
   }
   int64_t* result = binary_add(lhs, rhs, size);
-  printf("[group_sum_binaryop] result pointer is %p\n", result);
+  // printf("[group_sum_binaryop] result pointer is %p\n", result);
   *numba_return_value = result;
   return 0;
 }
 
-extern "C"
-__device__ int print_group_data(int64_t* numba_return_value, int64_t* group_data, int64_t size) {
+extern "C" __device__ int print_group_data(int64_t* numba_return_value,
+                                           int64_t* group_data,
+                                           int64_t size)
+{
   if (threadIdx.x == 0) {
-    printf("[print_group_data]: the data pointer is %p\n", group_data);
+    // printf("[print_group_data]: the data pointer is %p\n", group_data);
     for (int64_t i = 0; i < size; ++i) {
-      printf("group_data[%lld] = %lld, block idx = %d\n", i, group_data[i], blockIdx.x);
+      // printf("group_data[%lld] = %lld, block idx = %d\n", i, group_data[i], blockIdx.x);
     }
   }
   return 0;
 }
-
 
 __device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info)
 {
@@ -807,17 +796,16 @@ __device__ void udf_group_dtor(void* udf_group_ptr, size_t size, void* dtor_info
   block_free(ptr);
 }
 
-extern "C"
-__device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data) {
+extern "C" __device__ int meminfo_from_new_udf_group(void** nb_retval, void* group_data)
+{
   if (threadIdx.x == 0) {
-    printf("[meminfo_from_new_udf_group] creating a meminfo around pointer %p\n", group_data);
+    // printf("[meminfo_from_new_udf_group] creating a meminfo around pointer %p\n", group_data);
     *nb_retval = NRT_MemInfo_new(group_data, NULL, udf_group_dtor, NULL);
   } else {
     *nb_retval = nullptr;
   }
   return 0;
 }
-
 
 /*/*
 NRT CUDA functions
