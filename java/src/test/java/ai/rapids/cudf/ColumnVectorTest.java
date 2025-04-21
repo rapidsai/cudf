@@ -561,11 +561,11 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4, 5, 6);
          ColumnVector result0 = ColumnVector.sha1Hash(v0);
          ColumnVector expected = ColumnVector.fromStrings(
-          "3c585604e87f855973731fea83e21fab9392d2fc", 
+          "3c585604e87f855973731fea83e21fab9392d2fc",
           "0aaf76f425c6e0f43a36197de768e67d9e035abb",
-          "8e146c3c4e33449f95a49679795f74f7ae19ecc1", 
+          "8e146c3c4e33449f95a49679795f74f7ae19ecc1",
           "d6459ab29c7b9a9fbf0c7c15fa35faa30fbf8cc6",
-          "ddaf0ed54dfc227ce677b5c2b44e3edee7c7db77", 
+          "ddaf0ed54dfc227ce677b5c2b44e3edee7c7db77",
           "8098e7dfb09adba3bf783794ba0db81985a814d7"
         )) {
       assertColumnsAreEqual(result0, expected);
@@ -585,6 +585,64 @@ public class ColumnVectorTest extends CudfTestBase {
           "0740afaca195a4c635c3f647ba9102fbc5000138"
         )) {
       assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  void testSha1HashDoubles() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(
+          0.0, null, 100.0, -100.0, Double.MIN_NORMAL, Double.MAX_VALUE,
+          POSITIVE_DOUBLE_NAN_UPPER_RANGE, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
+          NEGATIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
+          Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.sha1Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "b6589fc6ab0dc82cf12099d1c2d40ab994e8410c", "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+          "0b046dc924cbefa8d1b7dbabc6f7e5214a7ce67e", "76ff8caa1c500a043d02815cf3aa7c7a6eda9bbb",
+          "c384cb0e1d7d9f4cde903bc9a9bbe1bf1fbc3bd5", "00f853bf55548fc8d01fca524f3e8945101dae2a",
+          "1bffc99e35d4c8d75a174aec2884130f511fe3f1", "1bffc99e35d4c8d75a174aec2884130f511fe3f1",
+          "1bffc99e35d4c8d75a174aec2884130f511fe3f1", "1bffc99e35d4c8d75a174aec2884130f511fe3f1",
+          "5ba93c9db0cff93f52b521d7420e43f6eda2784f", "d39b6791d25a264ebabf4a2f5c903bdb97e7de74")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSha1HashMixed() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+          "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
+          "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+          "in the SHA1 hash function. This string needed to be longer.",
+          null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+          0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnVector result = ColumnVector.sha1Hash(strings, integers, doubles, floats, bools);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "b028bcdda7219ad4a193e55c1cf06aa6c5802a4e", "dc5af6390669dc832c71117a5c47f760d8c76bad",
+          "ffdf7277a7ca1731ea93be97898b63925a69f1bf", "91cdde47ebfe223e6e165e16c46e5e2e086d78e2",
+          "3d3c451dc536322c473c88b3e8cec06a82cfda50", "da39a3ee5e6b4b0d3255bfef95601890afd80709")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSha1HashLists() {
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
+    List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+    "in the SHA1 hash function. This string needed to be longer.", "", null, "A 60 character string to test SHA1's message padding algorithm");
+    List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
+    List<String> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
+         ColumnVector result = ColumnVector.sha1Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "cf1fb1fd33828a5736a73b4cef2c615e3d30e7d1", "91cdde47ebfe223e6e165e16c46e5e2e086d78e2",
+          "a27b96d8a25643a25a65a8ce2d85a65c45dcc8f6", "da39a3ee5e6b4b0d3255bfef95601890afd80709")) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 
