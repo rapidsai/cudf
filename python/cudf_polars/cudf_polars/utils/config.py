@@ -25,11 +25,14 @@ __all__ = ["ConfigOptions"]
 
 class FallbackMode(str, enum.Enum):
     """
-    How to handle errors when the GPU engine fails to execute a query.
+    How the streaming executor handles operations that don't support multiple partitions.
+
+    Upon encountering an unsupported operation, the streaming executor will fall
+    back to using a single-partition, which might use a large amount of memory.
 
     * ``FallbackMode.WARN`` : Emit a warning and fall back to the CPU engine.
-    * ``FallbackMode.RAISE`` : Raise an exception.
     * ``FallbackMode.SILENT``: Silently fall back to the CPU engine.
+    * ``FallbackMode.RAISE`` : Raise an exception.
     """
 
     WARN = "warn"
@@ -51,14 +54,18 @@ class Scheduler(str, enum.Enum):
 
 class ShuffleMethod(str, enum.Enum):
     """
-    The method to use for shuffling data between workers.
+    The method to use for shuffling data between workers with the streaming executor.
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
-    * ``ShuffleMethod.RAPIDSMFP`` : Use the rapidsmpf scheduler.
+    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf scheduler.
+
+    In :class:`StreamingExecutor`, the default of ``None`` will attempt to use
+    ``ShuffleMethod.RAPIDSMPF``, but will fall back to ``ShuffleMethod.TASKS``
+    if rapidsmpf is not installed.
     """
 
     TASKS = "tasks"
-    RAPIDSMFP = "rapidsmpf"
+    RAPIDSMPF = "rapidsmpf"
 
 
 STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
@@ -138,8 +145,9 @@ class StreamingExecutor:
         The maximum number of partitions to allow for the smaller table in
         a broadcast join.
     shuffle_method
-        The method to use for shuffling data between workers. ``ShuffleMethod.TASKS``
-        by default.
+        The method to use for shuffling data between workers. ``None``
+        by default, which will use 'rapidsmpf' if installed and fall back to
+        'tasks' if not.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
