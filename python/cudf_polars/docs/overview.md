@@ -479,11 +479,7 @@ If we get any exceptions, we can then debug as normal in Python.
 
 polars users can configure various options about how the plan is executed
 through the `pl.GPUEngine()`. This includes some configuration options
-defined in polars itself, currently:
-
-- `device`
-- `memory_resource`
-- `raise_on_fail`
+defined in polars itself: https://docs.pola.rs/api/python/dev/reference/lazyframe/api/polars.lazyframe.engine_config.GPUEngine.html
 
 All additional keyword arguments are made available to cudf-polars through
 `engine.config`.

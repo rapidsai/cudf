@@ -114,14 +114,14 @@ class StreamingExecutor:
         How to handle errors when the GPU engine fails to execute a query.
         ``FallbackMode.WARN`` by default.
     max_rows_per_partition
-        The maximum number of rows to process per partition. 1,000,000 by default.
+        The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
     cardinality_factor
-        A dictionary mapping column names to a float strictly greater than 0 and
-        less than or equal to 1. Each factor estimates the fractional number of
-        unique values in the column. By default, a value of ``1.0`` is used
-        for any column not found in ``cardinality_factor``.
+        A dictionary mapping column names floats strictly greater than 0 and less
+        than or equal to 1. Each factor estimates the fractional number of unique values
+        in the column. By default, a value of ``1.0`` is used for any column not
+        included in ``cardinality_factor``.
     parquet_blocksize
         Controls how large parquet files are split into multiple partitions.
         Files larger than ``parquet_blocksize`` bytes are split into multiple
@@ -230,7 +230,7 @@ class ConfigOptions:
     Parameters
     ----------
     raise_on_fail
-        Whether to raise an exception when the GPU engine fails to execute a
+        Whether to raise an exception when the GPU engine cannot execute a
         query. ``False`` by default.
     parquet_options
         Options controlling parquet file reading and writing. See
@@ -239,7 +239,8 @@ class ConfigOptions:
         The executor to use for the GPU engine. See :class:`StreamingExecutor`
         and :class:`InMemoryExecutor` for more.
     device
-        The device to use for the GPU engine.
+        The GPU used to run the query. If not provided, the
+        query uses the current CUDA device.
     """
 
     raise_on_fail: bool = False
