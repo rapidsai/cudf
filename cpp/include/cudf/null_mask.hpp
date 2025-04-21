@@ -116,8 +116,10 @@ void set_null_mask(bitmask_type* bitmask,
  * @brief Sets a vector of pre-allocated bitmask buffers to given states in the corresponding ranges
  * in bulk
  *
- * Sets `[begin_bit, end_bit)` bits of each given bitmasks to corresponding valid state. This
- * utility is particularly advantageous if setting 16 or more bitmasks sized 2^24 bits or less.
+ * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
+ * bit ranges must be non-aliasing. i.e., attempting to concurrently set bits within the same
+ * physical word across bitmasks will result in undefined behavior. This utility is optimized for
+ * bulk operation on 16 or more bitmasks sized 2^24 bits or less.
  *
  * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
  * @param begin_bits Indices of the first bits to set (inclusive)
