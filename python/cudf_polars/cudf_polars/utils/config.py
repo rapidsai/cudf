@@ -195,31 +195,9 @@ class InMemoryExecutor:
     scheduler:
         The scheduler to use for the in-memory executor. Currently
         only ``Scheduler.SYNCHRONOUS`` is supported for the in-memory executor.
-    shuffle_method
-        The method to use for shuffling data between workers. Currently only
-        ``ShuffleMethod.TASKS`` is supported for the in-memory executor.
-    broadcast_join_limit
-        The maximum number of partitions to allow for the smaller table in
-        a broadcast join.
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
-    scheduler: Literal["synchronous"] = "synchronous"
-    shuffle_method: Literal["tasks"] | None = None
-    broadcast_join_limit: int = 32
-
-    def __post_init__(self) -> None:
-        if self.scheduler != "synchronous":
-            raise ValueError(
-                "'synchronous' is the only valid scheduler for the in-memory executor"
-            )
-        if self.shuffle_method is not None and self.shuffle_method != "tasks":
-            raise ValueError(
-                "'tasks' is the only valid shuffle method for the in-memory executor"
-            )
-
-        if not isinstance(self.broadcast_join_limit, int):
-            raise TypeError("broadcast_join_limit must be an int")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)

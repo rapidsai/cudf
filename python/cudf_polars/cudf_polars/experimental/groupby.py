@@ -283,6 +283,10 @@ def _(
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
+        assert ir.config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'generate_ir_tasks'"
+        )
+
         n_ary = ir.config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise

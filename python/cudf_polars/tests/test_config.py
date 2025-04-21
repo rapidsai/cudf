@@ -243,32 +243,6 @@ def test_validate_max_rows_per_partition(option: str) -> None:
         )
 
 
-def test_validate_in_memory_executor() -> None:
-    with pytest.raises(ValueError, match="'synchronous' is the only valid scheduler"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="in-memory",
-                executor_options={"scheduler": "foo"},
-            )
-        )
-
-    with pytest.raises(ValueError, match="'tasks' is the only valid shuffle method"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="in-memory",
-                executor_options={"shuffle_method": "foo"},
-            )
-        )
-
-    with pytest.raises(TypeError, match="broadcast_join_limit must be an int"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="in-memory",
-                executor_options={"broadcast_join_limit": object()},
-            )
-        )
-
-
 @pytest.mark.parametrize("option", ["chunked", "chunk_read_limit", "pass_read_limit"])
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):

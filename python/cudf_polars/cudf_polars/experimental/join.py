@@ -122,6 +122,10 @@ def _should_bcast_join(
     #    TODO: Make this value/heuristic configurable).
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
     return (
         not large_shuffled
         and small_count <= ir.config_options.executor.broadcast_join_limit
