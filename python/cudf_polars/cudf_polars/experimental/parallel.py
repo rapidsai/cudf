@@ -9,11 +9,6 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import cudf_polars.experimental.groupby
-import cudf_polars.experimental.io
-import cudf_polars.experimental.join
-import cudf_polars.experimental.select
-import cudf_polars.experimental.shuffle  # noqa: F401
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -23,6 +18,7 @@ from cudf_polars.dsl.ir import (
     MapFunction,
     Projection,
     Select,
+    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -312,3 +308,4 @@ generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(Sort, _generate_ir_tasks_pwise)
