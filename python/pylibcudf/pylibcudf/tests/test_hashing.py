@@ -3,18 +3,17 @@
 import hashlib
 import struct
 
+import mmh3
+import numpy as np
 import pyarrow as pa
 import pytest
+import xxhash
 from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
 
 SEED = 0
 METHODS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
-
-mmh3 = pytest.importorskip("mmh3")
-np = pytest.importorskip("numpy")
-xxhash = pytest.importorskip("xxhash")
 
 
 def scalar_to_binary(x):

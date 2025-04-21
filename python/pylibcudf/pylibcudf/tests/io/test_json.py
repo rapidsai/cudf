@@ -1,6 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 
+import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import (
@@ -273,7 +274,6 @@ def test_read_json_dtypes(table_data, source_or_sink):
 
 @pytest.mark.parametrize("chunk_size", [10, 15, 20])
 def test_read_json_lines_byte_range(source_or_sink, chunk_size):
-    pd = pytest.importorskip("pandas")
     source = source_or_sink
     if isinstance(source_or_sink, io.StringIO):
         pytest.skip("byte_range doesn't work on StringIO")

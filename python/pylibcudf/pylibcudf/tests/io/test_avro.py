@@ -3,6 +3,7 @@
 import io
 import itertools
 
+import fastavro
 import pyarrow as pa
 import pytest
 from utils import assert_table_and_meta_eq
@@ -21,8 +22,6 @@ avro_dtype_pairs = [
     ("bytes", pa.string()),
     ("string", pa.string()),
 ]
-
-fastavro = pytest.importorskip("fastavro")
 
 
 @pytest.fixture(
