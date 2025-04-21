@@ -69,10 +69,10 @@ std::unique_ptr<column> transform(
  *
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
- * @param input         An immutable view of the input column of floating-point type
- * @param stream        CUDA stream used for device memory operations and kernel launches
- * @param mr            Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  An immutable view of the input column of floating-point type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained by replacing `NaN` in `input` with null.
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
@@ -109,10 +109,10 @@ std::unique_ptr<column> compute_column(
  *
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
- * @param input        Boolean elements to convert to a bitmask
- * @param stream       CUDA stream used for device memory operations and kernel launches
- * @param mr           Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  Boolean elements to convert to a bitmask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
  */

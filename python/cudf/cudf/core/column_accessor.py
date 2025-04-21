@@ -372,9 +372,8 @@ class ColumnAccessor(abc.MutableMapping):
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
-        if old_ncols == 0:
-            # The type(name) may no longer match the prior label_dtype
-            self.label_dtype = None
+        # The type(name) may no longer match the prior label_dtype
+        self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
@@ -601,6 +600,12 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_slice(self, key: slice) -> Self:
         start, stop = key.start, key.stop
+
+        if len(self.names) == 0:
+            # https://github.com/rapidsai/cudf/issues/18376
+            # Any slice is valid when we have no columns
+            return self._from_columns_like_self([], verify=False)
+
         if key.step is not None:
             raise TypeError("Label slicing with step is not supported")
 
@@ -722,12 +727,18 @@ class ColumnAccessor(abc.MutableMapping):
             if len(new_col_names) != len(set(new_col_names)):
                 raise ValueError("Duplicate column names are not allowed")
 
+        label_dtype = self.label_dtype
+        if len(self) > 0 and label_dtype is not None:
+            old_type = type(next(iter(self.keys())))
+            if not all(isinstance(label, old_type) for label in new_col_names):
+                label_dtype = None
+
         data = dict(zip(new_col_names, self.values()))
         return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
-            label_dtype=self.label_dtype,
+            label_dtype=label_dtype,
             verify=False,
         )
 

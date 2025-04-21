@@ -222,6 +222,8 @@ jobs:
       build_type: pull-request
       node_type: "cpu16"
       script: "ci/build_wheel_libcudf.sh"
+      package-type: cpp
+      wheel-name: libcudf
   wheel-build-pylibcudf:
     needs: [checks, wheel-build-libcudf]
     secrets: inherit
@@ -229,6 +231,8 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/build_wheel_pylibcudf.sh"
+      package-type: python
+      wheel-name: pylibcudf
   wheel-build-cudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -236,6 +240,8 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
+      package-type: python
+      wheel-name: cudf
   wheel-tests-cudf:
     needs: [wheel-build-cudf, changed-files]
     secrets: inherit
@@ -253,6 +259,9 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_cudf_polars.sh"
+      package-type: python
+      wheel-name: cudf_polars
+      pure-wheel: true
   wheel-tests-cudf-polars:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -281,6 +290,9 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_dask_cudf.sh"
+      package-type: python
+      wheel-name: dask_cudf
+      pure-wheel: true
   wheel-tests-dask-cudf:
     needs: [wheel-build-dask-cudf, changed-files]
     secrets: inherit
@@ -359,7 +371,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      continue-on-error: true
       container_image: "rapidsai/ci-conda:latest"
       run_script: ci/test_narwhals.sh
   spark-rapids-jni:

@@ -196,9 +196,11 @@ so links should make use of the appropriately namespaced anchors for links rathe
 The following are required to build the documentation:
 - A RAPIDS-compatible GPU. This is necessary because the documentation execute code.
 - A working copy of cudf in the same build environment.
-  We recommend following the [build instructions](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
+  If you are only making changes to documentation we recommend following the
+  [Documentation contributions guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#documentation-contributions) otherwise follow the
+  [build instructions](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
 - Sphinx, numpydoc, and MyST-NB.
-  Assuming you follow the build instructions, these should automatically be installed into your environment.
+  Assuming you follow the instructions in the previous step, these should automatically be installed into your environment.
 
 ### Building and viewing docs
 

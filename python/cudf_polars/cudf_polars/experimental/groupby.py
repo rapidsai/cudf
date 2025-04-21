@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -22,14 +23,15 @@ from cudf_polars.dsl.expr import (
 )
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import MutableMapping
 
-    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
@@ -148,7 +150,7 @@ def decompose(
             return selection, aggregations, reductions
         else:
             raise NotImplementedError(
-                "GroupBy does not support multiple partitions "
+                "group_by does not support multiple partitions "
                 f"for this aggregation type:\n{type(expr)}\n"
                 f"Only {_GB_AGG_SUPPORTED} are supported."
             )
@@ -198,19 +200,21 @@ def _(
         return single_part_node, partition_info
 
     # Check group-by keys
-    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
-        raise NotImplementedError(
-            f"GroupBy does not support multiple partitions for keys:\n{ir.keys}"
-        )  # pragma: no cover
+    if not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.keys])
+    ):  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="group_by does not support multiple partitions for non-pointwise keys.",
+        )
 
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.get(
-            "executor_options.cardinality_factor", default={}
-        ).items()
+        for c, f in ir.config_options.get("executor_options.cardinality_factor").items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -226,9 +230,14 @@ def _(
         )
 
     # Decompose the aggregation requests into three distinct phases
-    selection_exprs, piecewise_exprs, reduction_exprs = combine(
-        *(decompose(agg.name, agg.value) for agg in ir.agg_requests)
-    )
+    try:
+        selection_exprs, piecewise_exprs, reduction_exprs = combine(
+            *(decompose(agg.name, agg.value) for agg in ir.agg_requests)
+        )
+    except NotImplementedError:
+        return _lower_ir_fallback(
+            ir, rec, msg="Failed to decompose groupby aggs for multiple partitions."
+        )
 
     # Partition-wise groupby operation
     pwise_schema = {k.name: k.value.dtype for k in ir.keys} | {
@@ -246,27 +255,51 @@ def _(
     child_count = partition_info[child].count
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
 
-    # Add Shuffle node if necessary
-    gb_inter: GroupBy | Shuffle = gb_pwise
+    # Reduction
+    gb_inter: GroupBy | Repartition | Shuffle
+    reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
+        k.name: k.value.dtype for k in reduction_exprs
+    }
     if post_aggregation_count > 1:
+        # Shuffle reduction
         if ir.maintain_order:  # pragma: no cover
-            raise NotImplementedError(
-                "maintain_order not supported for multiple output partitions."
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="maintain_order not supported for multiple output partitions.",
             )
 
         gb_inter = Shuffle(
-            pwise_schema,
+            gb_pwise.schema,
             ir.keys,
             ir.config_options,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
+    else:
+        # N-ary tree reduction
+        n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
+        count = child_count
+        gb_inter = gb_pwise
+        while count > 1:
+            gb_inter = Repartition(gb_inter.schema, gb_inter)
+            count = max(math.ceil(count / n_ary), 1)
+            partition_info[gb_inter] = PartitionInfo(count=count)
+            if count > 1:
+                gb_inter = GroupBy(
+                    reduction_schema,
+                    ir.keys,
+                    reduction_exprs,
+                    ir.maintain_order,
+                    ir.options,
+                    ir.config_options,
+                    gb_inter,
+                )
+                partition_info[gb_inter] = PartitionInfo(count=count)
 
-    # Tree reduction if post_aggregation_count==1
-    # (Otherwise, this is another partition-wise op)
+    # Final aggregation
     gb_reduce = GroupBy(
-        {k.name: k.value.dtype for k in ir.keys}
-        | {k.name: k.value.dtype for k in reduction_exprs},
+        reduction_schema,
         ir.keys,
         reduction_exprs,
         ir.maintain_order,
@@ -290,60 +323,3 @@ def _(
     )
     partition_info[new_node] = PartitionInfo(count=post_aggregation_count)
     return new_node, partition_info
-
-
-def _tree_node(
-    do_evaluate: Callable[..., DataFrame], nbatch: int, *args: DataFrame
-) -> DataFrame:
-    return do_evaluate(*args[nbatch:], _concat(*args[:nbatch]))
-
-
-@generate_ir_tasks.register(GroupBy)
-def _(
-    ir: GroupBy, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    (child,) = ir.children
-    child_count = partition_info[child].count
-    child_name = get_key_name(child)
-    output_count = partition_info[ir].count
-
-    if output_count == child_count:
-        return {
-            key: (
-                ir.do_evaluate,
-                *ir._non_child_args,
-                (child_name, i),
-            )
-            for i, key in enumerate(partition_info[ir].keys(ir))
-        }
-    elif output_count != 1:  # pragma: no cover
-        raise ValueError(f"Expected single partition, got {output_count}")
-
-    # Simple N-ary tree reduction
-    j = 0
-    n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
-    graph: MutableMapping[Any, Any] = {}
-    name = get_key_name(ir)
-    keys: list[Any] = [(child_name, i) for i in range(child_count)]
-    while len(keys) > n_ary:
-        new_keys: list[Any] = []
-        for i, k in enumerate(range(0, len(keys), n_ary)):
-            batch = keys[k : k + n_ary]
-            graph[(name, j, i)] = (
-                _tree_node,
-                ir.do_evaluate,
-                len(batch),
-                *batch,
-                *ir._non_child_args,
-            )
-            new_keys.append((name, j, i))
-        j += 1
-        keys = new_keys
-    graph[(name, 0)] = (
-        _tree_node,
-        ir.do_evaluate,
-        len(keys),
-        *keys,
-        *ir._non_child_args,
-    )
-    return graph
