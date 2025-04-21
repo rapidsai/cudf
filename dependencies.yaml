@@ -921,8 +921,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fastavro>=0.22.9
-          # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.6
           - *numpy
           - pandas
   test_python_cudf:
@@ -931,8 +930,7 @@ dependencies:
         packages:
           - cramjam
           - fastavro>=0.22.9
-          # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.6
           - mmh3
           # Version 5.1 is incompatible with pytest<8.2.
           # https://github.com/ionelmc/pytest-benchmark/commit/8dfeeeca8a5c640a4dc4455904ace4f97f62e655
@@ -1221,7 +1219,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - ipython
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.6
   test_python_cudf_pandas:
     common:
       - output_types: [conda, requirements, pyproject]
