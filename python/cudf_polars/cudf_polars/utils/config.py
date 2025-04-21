@@ -108,7 +108,7 @@ class StreamingExecutor:
         The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
         by default.
 
-        Note that the "distributed" requires a Dask cluster to be running.
+        Note ``scheduler="distributed"`` requires a Dask cluster to be running.
 
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
