@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -16,7 +16,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
   list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
 endif()
 
-list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
+list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr -lineinfo)
 
 # set warnings as errors
 if(CUDA_WARNINGS_AS_ERRORS)

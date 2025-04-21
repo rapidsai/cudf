@@ -47,6 +47,9 @@
 namespace cudf {
 namespace detail {
 namespace {
+using multimap_type = cudf::hash_join::impl_type::hash_table_t;
+
+// Multimap type used for mixed joins. TODO: This is a temporary alias used
 // TODO: `pair_equal` and `pair_fn` to be moved to common utils during
 // mixed-join migration
 struct pair_fn {

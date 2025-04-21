@@ -211,7 +211,7 @@ struct map_find_fn {
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(device_span<bucket_type> const map_storage,
+  populate_chunk_hash_maps_kernel(device_span<slot_type> const map_storage,
                                   cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -240,7 +240,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  collect_map_entries_kernel(device_span<bucket_type> const map_storage,
+  collect_map_entries_kernel(device_span<slot_type> const map_storage,
                              device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
@@ -252,28 +252,25 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (t == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
   __syncthreads();
 
-  // Iterate over all buckets in the map.
+  // Iterate over all slots in the map.
   for (; t < chunk.dict_map_size; t += block_size) {
-    auto bucket = map_storage.data() + chunk.dict_map_offset + t;
-    // Collect all slots from each bucket.
-    for (auto& slot : *bucket) {
-      auto const key = slot.first;
-      if (key != KEY_SENTINEL) {
-        auto const loc = counter.fetch_add(1, memory_order_relaxed);
-        cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-        chunk.dict_data[loc] = key;
-        // If sorting dict page ever becomes a hard requirement, enable the following statement
-        // and add a dict sorting step before storing into the slot's second field.
-        // chunk.dict_data_idx[loc] = idx;
-        slot.second = loc;
-      }
+    auto* slot     = map_storage.data() + chunk.dict_map_offset + t;
+    auto const key = slot->first;
+    if (key != KEY_SENTINEL) {
+      auto const loc = counter.fetch_add(1, memory_order_relaxed);
+      cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
+      chunk.dict_data[loc] = key;
+      // If sorting dict page ever becomes a hard requirement, enable the following statement
+      // and add a dict sorting step before storing into the slot's second field.
+      // chunk.dict_data_idx[loc] = idx;
+      slot->second = loc;
     }
   }
 }
 
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(device_span<bucket_type> const map_storage,
+  get_dictionary_indices_kernel(device_span<slot_type> const map_storage,
                                 cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto const col_idx = blockIdx.y;
@@ -303,7 +300,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                   s_ck_start_val_idx);
 }
 
-void populate_chunk_hash_maps(device_span<bucket_type> const map_storage,
+void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
@@ -312,7 +309,7 @@ void populate_chunk_hash_maps(device_span<bucket_type> const map_storage,
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
 }
 
-void collect_map_entries(device_span<bucket_type> const map_storage,
+void collect_map_entries(device_span<slot_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream)
 {
@@ -321,7 +318,7 @@ void collect_map_entries(device_span<bucket_type> const map_storage,
     <<<chunks.size(), block_size, 0, stream.value()>>>(map_storage, chunks);
 }
 
-void get_dictionary_indices(device_span<bucket_type> const map_storage,
+void get_dictionary_indices(device_span<slot_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {

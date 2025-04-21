@@ -31,9 +31,6 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-using multimap_type = cudf::hash_join::impl_type::hash_table_t;
-
-// Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
 // using a cooperative group of size 1.
 using mixed_multimap_type =
