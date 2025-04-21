@@ -27,6 +27,7 @@ def _(
     # (May be a top- or bottom-k operation)
 
     if ir.zlice is not None and ir.zlice[0] < 1:
+        # TODO: Handle large slices (e.g. 1m+ rows)
         from cudf_polars.experimental.parallel import _lower_ir_pwise
 
         # Sort input partitions
@@ -41,8 +42,4 @@ def _(
         return new_node, partition_info
 
     # Fallback
-    return _lower_ir_fallback(
-        ir,
-        rec,
-        msg="Sort does not support multiple partitions.",
-    )
+    return _lower_ir_fallback(ir, rec, msg="Sort does not support multiple partitions.")
