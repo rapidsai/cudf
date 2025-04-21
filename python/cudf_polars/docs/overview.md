@@ -477,7 +477,7 @@ If we get any exceptions, we can then debug as normal in Python.
 
 # Configuration
 
-polars users can configure various options about how the plan is executed
+Polars users can configure various options about how the plan is executed
 through the `pl.GPUEngine()`. This includes some configuration options
 defined in polars itself: https://docs.pola.rs/api/python/dev/reference/lazyframe/api/polars.lazyframe.engine_config.GPUEngine.html
 

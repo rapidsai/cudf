@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import json
+import warnings
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -122,9 +123,9 @@ class StreamingExecutor:
         than or equal to 1. Each factor estimates the fractional number of unique values
         in the column. By default, a value of ``1.0`` is used for any column not
         included in ``cardinality_factor``.
-    parquet_blocksize
+    parquet_partition_blocksize
         Controls how large parquet files are split into multiple partitions.
-        Files larger than ``parquet_blocksize`` bytes are split into multiple
+        Files larger than ``parquet_partition_blocksize`` bytes are split into multiple
         partitions.
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
@@ -146,7 +147,7 @@ class StreamingExecutor:
     fallback_mode: FallbackMode = FallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
-    parquet_blocksize: int = 1_000_000_000  # why isn't this a ParquetOption?
+    parquet_partition_blocksize: int = 1_000_000_000
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 4
     shuffle_method: ShuffleMethod | None = None
@@ -170,8 +171,8 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.cardinality_factor, dict):
             raise TypeError("cardinality_factor must be a dict of column name to float")
-        if not isinstance(self.parquet_blocksize, int):
-            raise TypeError("parquet_blocksize must be an int")
+        if not isinstance(self.parquet_partition_blocksize, int):
+            raise TypeError("parquet_partition_blocksize must be an int")
         if not isinstance(self.groupby_n_ary, int):
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):
@@ -252,7 +253,8 @@ class ConfigOptions:
         user_executor = engine.config.get("executor", "in-memory")
         if user_executor is None:
             user_executor = "in-memory"
-        user_executor_options = engine.config.get("executor_options", {})
+        # we mutate this below
+        user_executor_options = dict(engine.config.get("executor_options", {}))
         user_parquet_options = engine.config.get("parquet_options", {})
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
 
@@ -271,6 +273,24 @@ class ConfigOptions:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
+                # backwards compatibility for the old parquet_blocksize option
+                if (
+                    "parquet_blocksize" in user_executor_options
+                    and "parquet_partition_blocksize" in user_executor_options
+                ):
+                    raise ValueError(
+                        "Specify just one of 'parquet_blocksize' or 'parquet_partition_blocksize'."
+                    )
+                elif "parquet_blocksize" in user_executor_options:
+                    warnings.warn(
+                        "The 'parquet_blocksize' option is deprecated. Use 'parquet_partition_blocksize' instead.",
+                        FutureWarning,
+                        stacklevel=3,
+                    )
+                    user_executor_options["parquet_partition_blocksize"] = (
+                        user_executor_options.pop("parquet_blocksize")
+                    )
+
                 executor = StreamingExecutor(**user_executor_options)
                 # Update with the streaming defaults, but user options take precedence.
                 user_parquet_options = {

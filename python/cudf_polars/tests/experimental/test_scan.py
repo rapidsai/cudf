@@ -69,7 +69,7 @@ def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "parquet_blocksize": blocksize,
+            "parquet_partition_blocksize": blocksize,
             "scheduler": DEFAULT_SCHEDULER,
         },
     )
