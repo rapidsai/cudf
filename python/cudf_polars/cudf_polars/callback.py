@@ -185,9 +185,6 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[False],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
@@ -201,9 +198,6 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[True],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
@@ -216,9 +210,6 @@ def _callback(
     n_rows: int | None,
     should_time: bool,  # noqa: FBT001
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
@@ -230,21 +221,22 @@ def _callback(
     with (
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
-        set_device(device),
-        set_memory_resource(memory_resource),
+        set_device(config_options.device),
+        set_memory_resource(config_options.memory_resource),
     ):
-        if executor is None or executor == "in-memory":
+        if config_options.executor.name == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "streaming":
+        elif config_options.executor.name == "streaming":
             from cudf_polars.experimental.parallel import evaluate_streaming
 
             return evaluate_streaming(ir, config_options).to_polars()
         else:
-            raise ValueError(f"Unknown executor '{executor}'")
+            # TODO(Python 3.11+): use typing.assert_never
+            raise ValueError(f"Unknown executor '{config_options.executor}'")
 
 
 def execute_with_cudf(
@@ -283,8 +275,6 @@ def execute_with_cudf(
         timer = Timer(start - duration_since_start)
 
     config_options = ConfigOptions.from_polars_engine(config)
-    device = config.device
-    memory_resource = config.memory_resource
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
@@ -315,9 +305,6 @@ def execute_with_cudf(
                         _callback,
                         ir,
                         should_time=False,
-                        device=device,
-                        memory_resource=memory_resource,
-                        executor=config_options.executor.name,
                         config_options=translator.config_options,
                         timer=None,
                     )
@@ -327,9 +314,6 @@ def execute_with_cudf(
                     partial(
                         _callback,
                         ir,
-                        device=device,
-                        memory_resource=memory_resource,
-                        executor=config_options.executor.name,
                         config_options=translator.config_options,
                         timer=timer,
                     )

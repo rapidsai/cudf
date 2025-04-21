@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    import rmm.mr
+
+
 __all__ = ["ConfigOptions"]
 
 
@@ -144,12 +147,12 @@ class ConfigOptions:
     """Configuration for the polars GPUEngine."""
 
     raise_on_fail: bool = False
-    # device?
-    # memory resource?
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
     executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
         default_factory=InMemoryExecutor
     )
+    device: int | None = None
+    memory_resource: rmm.mr.DeviceMemoryResource | None = None
 
     @classmethod
     def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
@@ -206,4 +209,6 @@ class ConfigOptions:
             raise_on_fail=user_raise_on_fail,
             parquet_options=ParquetOptions(**user_parquet_options),
             executor=executor,
+            device=engine.device,
+            memory_resource=engine.memory_resource,
         )
