@@ -10,8 +10,6 @@ import enum
 import json
 from typing import TYPE_CHECKING, Literal
 
-import rmm.mr
-
 if TYPE_CHECKING:
     from typing_extensions import Self
 
@@ -242,10 +240,6 @@ class ConfigOptions:
         and :class:`InMemoryExecutor` for more.
     device
         The device to use for the GPU engine.
-    memory_resource
-        The :class:`rmm.mr.DeviceMemoryResource` to use for the GPU engine. By
-        default, a new memory resource is created for the current device for the
-        duration of the execution.
     """
 
     raise_on_fail: bool = False
@@ -254,7 +248,6 @@ class ConfigOptions:
         default_factory=InMemoryExecutor
     )
     device: int | None = None
-    memory_resource: rmm.mr.DeviceMemoryResource | None = None
 
     @classmethod
     def from_polars_engine(cls, engine: pl.GPUEngine) -> Self:
@@ -294,7 +287,7 @@ class ConfigOptions:
             raise TypeError("GPUEngine option 'raise_on_fail' must be a boolean.")
 
         executor: InMemoryExecutor | StreamingExecutor
-        memory_resource = engine.memory_resource
+
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
@@ -306,9 +299,6 @@ class ConfigOptions:
                     **user_parquet_options,
                 }
 
-                if engine.memory_resource is None:
-                    memory_resource = rmm.mr.get_current_device_resource()
-
             case _:
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
@@ -317,5 +307,4 @@ class ConfigOptions:
             parquet_options=ParquetOptions(**user_parquet_options),
             executor=executor,
             device=engine.device,
-            memory_resource=memory_resource,
         )

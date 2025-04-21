@@ -185,6 +185,7 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[False],
     *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
@@ -198,6 +199,7 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[True],
     *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
@@ -210,6 +212,7 @@ def _callback(
     n_rows: int | None,
     should_time: bool,  # noqa: FBT001
     *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
@@ -222,7 +225,7 @@ def _callback(
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(config_options.memory_resource),
+        set_memory_resource(memory_resource),
     ):
         if config_options.executor.name == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
@@ -274,12 +277,21 @@ def execute_with_cudf(
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
 
+    memory_resource = config.memory_resource
+
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+
+        if (
+            memory_resource is None
+            and translator.config_options.executor.name == "streaming"
+            and translator.config_options.executor.scheduler == "distributed"
+        ):  # pragma: no cover; Requires distributed cluster
+            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
@@ -303,6 +315,7 @@ def execute_with_cudf(
                         _callback,
                         ir,
                         should_time=False,
+                        memory_resource=memory_resource,
                         config_options=translator.config_options,
                         timer=None,
                     )
@@ -312,6 +325,7 @@ def execute_with_cudf(
                     partial(
                         _callback,
                         ir,
+                        memory_resource=memory_resource,
                         config_options=translator.config_options,
                         timer=timer,
                     )
