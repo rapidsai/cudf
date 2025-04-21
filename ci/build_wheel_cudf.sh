@@ -20,14 +20,15 @@ export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 ./ci/build_wheel.sh cudf ${package_dir}
 
+# repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
-    -w ${package_dir}/final_dist \
+    -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
     ${package_dir}/dist/*
 
-./ci/validate_wheel.sh ${package_dir} final_dist
+./ci/validate_wheel.sh "${package_dir}" "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
 
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"

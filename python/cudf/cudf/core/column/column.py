@@ -169,7 +169,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.data is None:
             return 0
         else:
-            return self.data.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = self.data.get_ptr(mode="read")
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.data.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # Update base_data to match the new data buffer
+                self.set_base_data(self.data)
+
+            return ptr
 
     def set_base_data(self, value: None | Buffer) -> None:
         if value is not None and not isinstance(value, Buffer):
@@ -211,7 +224,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.mask is None:
             return 0
         else:
-            return self.mask.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = self.mask.get_ptr(mode="read")
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.mask.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # Update base_data to match the new data buffer
+                self.set_base_mask(self.mask)
+
+            return ptr
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
@@ -329,7 +355,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             else:
                 with acquire_spill_lock():
                     self._null_count = plc.null_mask.null_count(
-                        self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+                        plc.gpumemoryview(self.base_mask),  # type: ignore[union-attr]
                         self.offset,
                         self.offset + self.size,
                     )
@@ -750,7 +776,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return plc.interop.to_arrow(self.to_pylibcudf(mode="read")).chunk(0)
+        return plc.interop.to_arrow(self.to_pylibcudf(mode="read"))
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -1045,11 +1071,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            if _is_null_host_scalar(value):
+            if value is cudf.NA:
                 value = None
-            return pa_scalar_to_plc_scalar(
-                pa.scalar(value, type=cudf_dtype_to_pa_type(self.dtype))
-            )
+            try:
+                pa_scalar = pa.scalar(
+                    value, type=cudf_dtype_to_pa_type(self.dtype)
+                )
+            except ValueError as err:
+                raise TypeError(
+                    f"Cannot set value of type {type(value)} to column of type {self.dtype}"
+                ) from err
+            return pa_scalar_to_plc_scalar(pa_scalar)
         else:
             return as_column(value, dtype=self.dtype)
 
@@ -1402,7 +1434,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return last
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return concat_columns([self, as_column(other)])
+        return concat_columns([self, other])
 
     def quantile(
         self,
@@ -1450,17 +1482,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result: Column
             Column of booleans indicating if each element is in values.
         """
-        try:
-            lhs, rhs = self._process_values_for_isin(values)
-            res = lhs._isin_earlystop(rhs)
-            if res is not None:
-                return res
-        except ValueError:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
+        lhs, rhs = self._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype:
+            if lhs.null_count and rhs.null_count:
+                return lhs.isnull()
+            else:
+                return as_column(
+                    False, length=len(self), dtype=np.dtype(np.bool_)
+                )
+        elif lhs.null_count == 0 and (rhs.null_count == len(rhs)):
             return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
 
-        return lhs._obtain_isin_result(rhs)
+        result = rhs.contains(lhs)
+        if lhs.null_count > 0:
+            # If one of the needles is null, then the result contains
+            # nulls, these nulls should be replaced by whether or not the
+            # haystack contains a null.
+            # TODO: this is unnecessary if we resolve
+            # https://github.com/rapidsai/cudf/issues/14515 by
+            # providing a mode in which cudf::contains does not mask
+            # the result.
+            result = result.fillna(rhs.null_count > 0)
+        return result
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -1475,44 +1518,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif rhs.null_count == len(rhs):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
-
-    def _isin_earlystop(self, rhs: ColumnBase) -> ColumnBase | None:
-        """
-        Helper function for `isin` which determines possibility of
-        early-stopping or not.
-        """
-        if self.dtype != rhs.dtype:
-            if self.null_count and rhs.null_count:
-                return self.isnull()
-            else:
-                return as_column(
-                    False, length=len(self), dtype=np.dtype(np.bool_)
-                )
-        elif self.null_count == 0 and (rhs.null_count == len(rhs)):
-            return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
-        else:
-            return None
-
-    def _obtain_isin_result(self, rhs: ColumnBase) -> ColumnBase:
-        """
-        Helper function for `isin` which merges `self` & `rhs`
-        to determine what values of `rhs` exist in `self`.
-        """
-        # We've already matched dtypes by now
-        # self.isin(other) asks "which values of self are in other"
-        # contains(haystack, needles) asks "which needles are in haystack"
-        # hence this argument ordering.
-        result = rhs.contains(self)
-        if self.null_count > 0:
-            # If one of the needles is null, then the result contains
-            # nulls, these nulls should be replaced by whether or not the
-            # haystack contains a null.
-            # TODO: this is unnecessary if we resolve
-            # https://github.com/rapidsai/cudf/issues/14515 by
-            # providing a mode in which cudf::contains does not mask
-            # the result.
-            result = result.fillna(rhs.null_count > 0)
-        return result
 
     def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
