@@ -28,10 +28,10 @@ class FallbackMode(str, enum.Enum):
     How the streaming executor handles operations that don't support multiple partitions.
 
     Upon encountering an unsupported operation, the streaming executor will fall
-    back to using a single-partition, which might use a large amount of memory.
+    back to using a single partition, which might use a large amount of memory.
 
-    * ``FallbackMode.WARN`` : Emit a warning and fall back to the CPU engine.
-    * ``FallbackMode.SILENT``: Silently fall back to the CPU engine.
+    * ``FallbackMode.WARN`` : Emit a warning and fall back to a single partition.
+    * ``FallbackMode.SILENT``: Silently fall back to a single partition.
     * ``FallbackMode.RAISE`` : Raise an exception.
     """
 
@@ -187,7 +187,7 @@ class StreamingExecutor:
             raise TypeError("broadcast_join_limit must be an int")
 
     def __hash__(self) -> int:
-        # cardinatlity factory, a dict, isn't natively hashable. We'll dump it
+        # cardinality factory, a dict, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["cardinality_factor"] = json.dumps(d["cardinality_factor"])
