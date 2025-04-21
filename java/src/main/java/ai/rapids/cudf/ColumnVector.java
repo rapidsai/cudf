@@ -782,7 +782,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the MD5 hash of each row in the table.
+   * Create a new vector containing the Sha1 hash of each row in the table.
    *
    * @param columns columns to hash
    * @return the new ColumnVector of 40 character hex strings representing each row's hash value.
@@ -797,9 +797,10 @@ public final class ColumnVector extends ColumnView {
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert column.getType() == DType.STRING ||
-            column.getType() == DType.BOOL8:
-            "SHA1 hash can only be applied to STRING, boolean";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() || columns[i].getType().equals(DType.LIST) :
+        "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(sha1(columnViews));
