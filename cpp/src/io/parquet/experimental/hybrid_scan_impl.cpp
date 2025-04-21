@@ -55,15 +55,14 @@ namespace {
 }
 
 [[nodiscard]] std::vector<cudf::data_type> get_output_types(
-  cudf::host_span<inline_column_buffer const> output_buffer_template, bool has_converted_expr)
+  cudf::host_span<inline_column_buffer const> output_buffer_template)
 {
   std::vector<cudf::data_type> output_dtypes;
-  if (has_converted_expr) {
-    std::transform(output_buffer_template.begin(),
-                   output_buffer_template.end(),
-                   std::back_inserter(output_dtypes),
-                   [](auto const& col) { return col.type; });
-  }
+  output_dtypes.reserve(output_buffer_template.size());
+  std::transform(output_buffer_template.begin(),
+                 output_buffer_template.end(),
+                 std::back_inserter(output_dtypes),
+                 [](auto const& col) { return col.type; });
   return output_dtypes;
 }
 
@@ -609,8 +608,9 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _metadata->filter_row_groups_with_stats(row_group_indices,
                                                  output_dtypes,
@@ -630,8 +630,9 @@ std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto const bloom_filter_bytes = _metadata->get_bloom_filter_bytes(
     row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
@@ -654,8 +655,9 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_page
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _metadata->filter_row_groups_with_dictionary_pages(dictionary_page_data,
                                                             row_group_indices,
@@ -678,8 +680,9 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   return _metadata->filter_row_groups_with_bloom_filters(bloom_filter_data,
                                                          row_group_indices,
@@ -702,8 +705,9 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, expr_conv.get_converted_expr().has_value());
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto row_mask = _metadata->filter_data_pages_with_stats(row_group_indices,
                                                           output_dtypes,
@@ -824,8 +828,7 @@ table_with_metadata impl::materialize_payload_columns(
 
   initialize_options(row_group_indices, options, stream);
 
-  auto output_dtypes =
-    get_output_types(_output_buffers_template, _expr_conv.get_converted_expr().has_value());
+  auto output_dtypes = get_output_types(_output_buffers_template);
 
   auto data_page_mask = _metadata->compute_data_page_mask(
     row_mask, row_group_indices, output_dtypes, _output_column_schemas, stream);
