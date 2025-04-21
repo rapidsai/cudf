@@ -19,12 +19,9 @@ from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
-    GroupBy,
     HStack,
     MapFunction,
     Projection,
-    Select,
-    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -181,28 +178,15 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 def _(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    # Single-partition default behavior.
-    # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
-    if partition_info[ir].count > 1:
-        raise NotImplementedError(
-            f"Failed to generate multiple output tasks for {ir}."
-        )  # pragma: no cover
-
-    child_names = []
-    for child in ir.children:  # pragma: no cover
-        child_names.append(get_key_name(child))
-        if partition_info[child].count > 1:
-            raise NotImplementedError(
-                f"Failed to generate tasks for {ir} with child {child}."
-            )
-
-    key_name = get_key_name(ir)
+    # Generate pointwise (embarrassingly-parallel) tasks by default
+    child_names = [get_key_name(c) for c in ir.children]
     return {
-        (key_name, 0): (
+        key: (
             ir.do_evaluate,
             *ir._non_child_args,
-            *((child_name, 0) for child_name in child_names),
+            *[(child_name, i) for child_name in child_names],
         )
+        for i, key in enumerate(partition_info[ir].keys(ir))
     }
 
 
@@ -285,28 +269,3 @@ lower_ir_node.register(Projection, _lower_ir_pwise)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(Filter, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
-
-
-def _generate_ir_tasks_pwise(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    # Generate partition-wise (i.e. embarrassingly-parallel) tasks
-    child_names = [get_key_name(c) for c in ir.children]
-    return {
-        key: (
-            ir.do_evaluate,
-            *ir._non_child_args,
-            *[(child_name, i) for child_name in child_names],
-        )
-        for i, key in enumerate(partition_info[ir].keys(ir))
-    }
-
-
-generate_ir_tasks.register(Projection, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Sort, _generate_ir_tasks_pwise)
