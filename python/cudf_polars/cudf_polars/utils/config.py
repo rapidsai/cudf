@@ -21,9 +21,70 @@ if TYPE_CHECKING:
 __all__ = ["ConfigOptions"]
 
 
+# TODO: Use enum.StrEnum when we drop Python 3.10
+
+
+class FallbackMode(str, enum.Enum):
+    """
+    How to handle errors when the GPU engine fails to execute a query.
+
+    * ``FallbackMode.WARN`` : Emit a warning and fall back to the CPU engine.
+    * ``FallbackMode.RAISE`` : Raise an exception.
+    * ``FallbackMode.SILENT``: Silently fall back to the CPU engine.
+    """
+
+    WARN = "warn"
+    RAISE = "raise"
+    SILENT = "silent"
+
+
+class Scheduler(str, enum.Enum):
+    """
+    The scheduler to use for the streaming executor.
+
+    * ``Scheduler.SYNCHRONOUS`` : Use the synchronous scheduler.
+    * ``Scheduler.DISTRIBUTED`` : Use the distributed scheduler.
+    """
+
+    SYNCHRONOUS = "synchronous"
+    DISTRIBUTED = "distributed"
+
+
+class ShuffleMethod(str, enum.Enum):
+    """
+    The method to use for shuffling data between workers.
+
+    * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
+    * ``ShuffleMethod.RAPIDSMFP`` : Use the rapidsmpf scheduler.
+    """
+
+    TASKS = "tasks"
+    RAPIDSMFP = "rapidsmpf"
+
+
+STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
+    "chunked": False,
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class ParquetOptions:
-    """Configuration for the cudf-polars Parquet engine."""
+    """
+    Configuration for the cudf-polars Parquet engine.
+
+    Parameters
+    ----------
+    chunked
+        Whether to use cudf's ``ChunkedParquetReader`` to read the parquet
+        dataset in chunks. This is useful when reading very large parquet
+        files.
+    chunk_read_limit
+        Limit on total number of bytes to be returned per read, or 0 if
+        there is no limit.
+    pass_read_limit
+        Limit on the amount of memory used for reading and decompressing data
+        or 0 if there is no limit.
+    """
 
     chunked: bool = True
     chunk_read_limit: int = 0
@@ -38,30 +99,6 @@ class ParquetOptions:
             raise TypeError("pass_read_limit must be an int")
 
 
-# TODO: Use enum.StrEnum when we drop Python 3.10
-
-
-class FallbackMode(str, enum.Enum):
-    WARN = "warn"
-    RAISE = "raise"
-    SILENT = "silent"
-
-
-class Scheduler(str, enum.Enum):
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
-
-
-class ShuffleMethod(str, enum.Enum):
-    TASKS = "tasks"
-    RAPIDSMFP = "rapidsmpf"
-
-
-STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
-    "chunked": False,
-}
-
-
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -70,9 +107,40 @@ class StreamingExecutor:
     Parameters
     ----------
     scheduler
-        The scheduler to use for the streaming executor.
+        The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
+        by default.
 
-        "distributed" requires a Dask cluster to be running.
+        Note taht the "distributed" requires a Dask cluster to be running.
+
+    fallback_mode
+        How to handle errors when the GPU engine fails to execute a query.
+        ``FallbackMode.WARN`` by default.
+    max_rows_per_partition
+        The maximum number of rows to process per partition. 1,000,000 by default.
+        When the number of rows exceeds this value, the query will be split into
+        multiple partitions and executed in parallel.
+    cardinality_factor
+        A dictionary mapping column names to a float strictly greater than 0 and
+        less than or equal to 1. Each factor estimates the fractional number of
+        unique values in the column. By default, a value of ``1.0`` is used
+        for any column not found in ``cardinality_factor``.
+    parquet_blocksize
+        Controls how large parquet files are split into multiple partitions.
+        Files larger than ``parquet_blocksize`` bytes are split into multiple
+        partitions.
+    groupby_n_ary
+        The factor by which the number of partitions is decreased when performing
+        a groupby on a partitioned column. For example, if a column has 64 partitions,
+        it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
+
+        This is useful when the absolute number of partitions is large.
+
+    broadcast_join_limit
+        The maximum number of partitions to allow for the smaller table in
+        a broadcast join.
+    shuffle_method
+        The method to use for shuffling data between workers. ``ShuffleMethod.TASKS``
+        by default.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
@@ -121,7 +189,21 @@ class StreamingExecutor:
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class InMemoryExecutor:
-    """Configuration for the cudf-polars in-memory executor."""
+    """
+    Configuration for the cudf-polars in-memory executor.
+
+    Parameters
+    ----------
+    scheduler:
+        The scheduler to use for the in-memory executor. Currently
+        only ``Scheduler.SYNCHRONOUS`` is supported for the in-memory executor.
+    shuffle_method
+        The method to use for shuffling data between workers. Currently only
+        ``ShuffleMethod.TASKS`` is supported for the in-memory executor.
+    broadcast_join_limit
+        The maximum number of partitions to allow for the smaller table in
+        a broadcast join.
+    """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
     scheduler: Literal["synchronous"] = "synchronous"
@@ -144,7 +226,27 @@ class InMemoryExecutor:
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions:
-    """Configuration for the polars GPUEngine."""
+    """
+    Configuration for the polars GPUEngine.
+
+    Parameters
+    ----------
+    raise_on_fail
+        Whether to raise an exception when the GPU engine fails to execute a
+        query. ``False`` by default.
+    parquet_options
+        Options controlling parquet file reading and writing. See
+        :class:`ParquetOptions` for more.
+    executor
+        The executor to use for the GPU engine. See :class:`StreamingExecutor`
+        and :class:`InMemoryExecutor` for more.
+    device
+        The device to use for the GPU engine.
+    memory_resource
+        The :class:`rmm.mr.DeviceMemoryResource` to use for the GPU engine. By
+        default, a new memory resource is created for the current device for the
+        duration of the execution.
+    """
 
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)

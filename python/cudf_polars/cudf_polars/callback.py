@@ -274,8 +274,6 @@ def execute_with_cudf(
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
 
-    # config_options = ConfigOptions.from_polars_engine(config)
-
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
