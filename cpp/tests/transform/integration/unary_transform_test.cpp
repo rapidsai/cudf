@@ -22,12 +22,22 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/transform.hpp>
 
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
 template <class dtype, class Op, class Data>
 void test_udf(char const* udf, Op op, Data data_init, cudf::size_type size, bool is_ptx)
@@ -220,9 +230,17 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
 }
 
-struct TenaryOperationTest : public cudf::test::BaseFixture {};
+struct TernaryOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
 
-TEST_F(TenaryOperationTest, TransformWithScalar)
+TEST_F(TernaryOperationTest, TransformWithScalar)
 {
   std::string const cuda =
     R"***(
@@ -333,6 +351,144 @@ __device__ inline void transform(
     cudf::transform({a, b, c}, ptx, cudf::data_type(cudf::type_to_id<T>()), true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ptx_result, expected);
+}
+
+template <typename T>
+struct TernaryDecimalOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
+
+TYPED_TEST_SUITE(TernaryDecimalOperationTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
+{
+  using T = TypeParam;
+
+  auto type_name = cudf::type_to_name(cudf::data_type(cudf::type_to_id<T>()));
+
+  // clang-format off
+  std::string const cuda =
+    "__device__ void transform("
+    + type_name + "* out, "
+    + type_name + " a,"
+    + type_name + " b,"
+    + type_name + " c) {\n"
+    + "*out = ((a + b) * c);"
+    + " }";
+  // clang-format on
+
+  T const A(10, numeric::scale_type{0});
+  T const B(20, numeric::scale_type{-1});
+  T const C(5, numeric::scale_type{-2});
+  T const RES = ((A + B) * C);
+
+  std::vector<typename T::rep> a_host(200, A.value());
+  std::vector<typename T::rep> b_host(200, B.value());
+  std::vector<typename T::rep> c_host(1, C.value());
+  std::vector<typename T::rep> expected_host(200, RES.value());
+
+  cudf::test::fixed_point_column_wrapper<typename T::rep> a(
+    a_host.begin(), a_host.end(), A.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> b(
+    b_host.begin(), b_host.end(), B.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> c(
+    c_host.begin(), c_host.end(), C.scale());
+  cudf::test::fixed_point_column_wrapper<typename T::rep> expected(
+    expected_host.begin(), expected_host.end(), RES.scale());
+
+  std::unique_ptr<cudf::column> cuda_result =
+    cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_to_id<T>(), RES.scale()), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, expected);
+}
+
+struct StringOperationTest : public cudf::test::BaseFixture {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
+
+TEST_F(StringOperationTest, StringComparison)
+{
+  auto a = cudf::test::strings_column_wrapper{"a", "b", "ccc", "dddd", "eee"};
+  auto b = cudf::test::strings_column_wrapper{"a", "b", "d", "dddddd", "e"};
+  auto c = cudf::test::strings_column_wrapper{"a", "b", "e", "ddd", "e"};
+
+  std::string cuda = R"***(
+  __device__ void compare(bool * out, cudf::string_view a, cudf::string_view b, cudf::string_view c){
+    *out = (a == b) || (b == c);
+  }
+  )***";
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, true};
+  auto result   = cudf::transform({a, b, c}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, StringContains)
+{
+  auto a = cudf::test::strings_column_wrapper{"a", "ab", "ccc", "dddd", "eee", "123"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "b", "d", "dddddd", "e", "321"};
+
+  std::string cuda = R"***(
+  __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
+    *out =  a.find(b) != cudf::string_view::npos;
+  }
+  )***";
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<bool>{false, true, false, false, true, false};
+  auto result = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, StringFind)
+{
+  auto a = cudf::test::strings_column_wrapper{"a", "b", " h", "123"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "about", "oh hi", "012345"};
+
+  std::string cuda = R"***(
+  __device__ void transform(int32_t * out, cudf::string_view a, cudf::string_view b){
+    *out =  b.find(a);
+  }
+  )***";
+
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 1};
+  auto result   = cudf::transform({a, b}, cuda, cudf::data_type(cudf::type_id::INT32), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, MixedTypes)
+{
+  auto a = cudf::test::strings_column_wrapper{"a", "b", "ccc", "dddd", "eee", "123"};
+  auto b = cudf::test::strings_column_wrapper{"a", "b", "d", "dddddd", "e", "321"};
+  auto c = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6};
+  auto d = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 5, 6, 7, 8};
+
+  std::string cuda = R"***(
+  __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b, int32_t c, int32_t d){
+    *out =  (a == b) && (c == d);
+  }
+  )***";
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, false, false};
+  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 }  // namespace transformation

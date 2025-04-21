@@ -1,9 +1,9 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.api import types as pd_types
+from pandas.api import types as pd_types  # noqa: TID251
 
 import cudf
 from cudf.api import types

@@ -17,12 +17,13 @@
 #include "reader_impl_helpers.hpp"
 
 #include "compact_protocol_reader.hpp"
-#include "io/parquet/parquet.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -43,27 +44,30 @@ std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
-      case ENUM:  // treat ENUM as UTF8 string
-      case UTF8: return LogicalType{LogicalType::STRING};
-      case MAP: return LogicalType{LogicalType::MAP};
-      case LIST: return LogicalType{LogicalType::LIST};
-      case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
-      case DATE: return LogicalType{LogicalType::DATE};
-      case TIME_MILLIS: return LogicalType{TimeType{true, {TimeUnit::MILLIS}}};
-      case TIME_MICROS: return LogicalType{TimeType{true, {TimeUnit::MICROS}}};
-      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, {TimeUnit::MILLIS}}};
-      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, {TimeUnit::MICROS}}};
-      case UINT_8: return LogicalType{IntType{8, false}};
-      case UINT_16: return LogicalType{IntType{16, false}};
-      case UINT_32: return LogicalType{IntType{32, false}};
-      case UINT_64: return LogicalType{IntType{64, false}};
-      case INT_8: return LogicalType{IntType{8, true}};
-      case INT_16: return LogicalType{IntType{16, true}};
-      case INT_32: return LogicalType{IntType{32, true}};
-      case INT_64: return LogicalType{IntType{64, true}};
-      case JSON: return LogicalType{LogicalType::JSON};
-      case BSON: return LogicalType{LogicalType::BSON};
-      case INTERVAL:  // there is no logical type for INTERVAL yet
+      case ConvertedType::ENUM:  // treat ENUM as UTF8 string
+      case ConvertedType::UTF8: return LogicalType{LogicalType::STRING};
+      case ConvertedType::MAP: return LogicalType{LogicalType::MAP};
+      case ConvertedType::LIST: return LogicalType{LogicalType::LIST};
+      case ConvertedType::DECIMAL:
+        return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
+      case ConvertedType::DATE: return LogicalType{LogicalType::DATE};
+      case ConvertedType::TIME_MILLIS: return LogicalType{TimeType{true, {TimeUnit::MILLIS}}};
+      case ConvertedType::TIME_MICROS: return LogicalType{TimeType{true, {TimeUnit::MICROS}}};
+      case ConvertedType::TIMESTAMP_MILLIS:
+        return LogicalType{TimestampType{true, {TimeUnit::MILLIS}}};
+      case ConvertedType::TIMESTAMP_MICROS:
+        return LogicalType{TimestampType{true, {TimeUnit::MICROS}}};
+      case ConvertedType::UINT_8: return LogicalType{IntType{8, false}};
+      case ConvertedType::UINT_16: return LogicalType{IntType{16, false}};
+      case ConvertedType::UINT_32: return LogicalType{IntType{32, false}};
+      case ConvertedType::UINT_64: return LogicalType{IntType{64, false}};
+      case ConvertedType::INT_8: return LogicalType{IntType{8, true}};
+      case ConvertedType::INT_16: return LogicalType{IntType{16, true}};
+      case ConvertedType::INT_32: return LogicalType{IntType{32, true}};
+      case ConvertedType::INT_64: return LogicalType{IntType{64, true}};
+      case ConvertedType::JSON: return LogicalType{LogicalType::JSON};
+      case ConvertedType::BSON: return LogicalType{LogicalType::BSON};
+      case ConvertedType::INTERVAL:  // there is no logical type for INTERVAL yet
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
@@ -137,11 +141,11 @@ type_id to_type_id(SchemaElement const& schema,
 
       case LogicalType::DECIMAL: {
         int32_t const decimal_precision = logical_type->precision();
-        if (physical_type == INT32) {
+        if (physical_type == Type::INT32) {
           return type_id::DECIMAL32;
-        } else if (physical_type == INT64) {
+        } else if (physical_type == Type::INT64) {
           return type_id::DECIMAL64;
-        } else if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+        } else if (physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
           if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
             return type_id::DECIMAL32;
           } else if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
@@ -149,7 +153,7 @@ type_id to_type_id(SchemaElement const& schema,
           } else if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
             return type_id::DECIMAL128;
           }
-        } else if (physical_type == BYTE_ARRAY) {
+        } else if (physical_type == Type::BYTE_ARRAY) {
           CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
           if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
             return type_id::DECIMAL32;
@@ -183,17 +187,17 @@ type_id to_type_id(SchemaElement const& schema,
   // Physical storage type supported by Parquet; controls the on-disk storage
   // format in combination with the encoding type.
   switch (physical_type) {
-    case BOOLEAN: return type_id::BOOL8;
-    case INT32: return type_id::INT32;
-    case INT64: return type_id::INT64;
-    case FLOAT: return type_id::FLOAT32;
-    case DOUBLE: return type_id::FLOAT64;
-    case BYTE_ARRAY:
+    case Type::BOOLEAN: return type_id::BOOL8;
+    case Type::INT32: return type_id::INT32;
+    case Type::INT64: return type_id::INT64;
+    case Type::FLOAT: return type_id::FLOAT32;
+    case Type::DOUBLE: return type_id::FLOAT64;
+    case Type::BYTE_ARRAY:
       // strings can be mapped to a 32-bit hash
       if (strings_to_categorical) { return type_id::INT32; }
       [[fallthrough]];
-    case FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
-    case INT96:
+    case Type::FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
+    case Type::INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;
     default: break;
@@ -231,22 +235,23 @@ void metadata::sanitize_schema()
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
-    if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
+    if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
-      if (schema_elem.repetition_type == REPEATED && schema_elem.num_children > 1 &&
-          parent_type != LIST && parent_type != MAP) {
+      if (schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+          schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
+          parent_type != ConvertedType::MAP) {
         // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
-        schema_elem.converted_type  = LIST;
+        schema_elem.converted_type  = ConvertedType::LIST;
         schema_elem.logical_type    = LogicalType::LIST;
-        schema_elem.repetition_type = OPTIONAL;
+        schema_elem.repetition_type = FieldRepetitionType::OPTIONAL;
         auto const struct_node_idx  = static_cast<size_type>(schema.size());
 
         SchemaElement struct_elem;
         struct_elem.name            = "struct_node";
-        struct_elem.repetition_type = REQUIRED;
+        struct_elem.repetition_type = FieldRepetitionType::REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
-        struct_elem.type            = UNDEFINED_TYPE;
+        struct_elem.type            = Type::UNDEFINED;
         struct_elem.converted_type  = std::nullopt;
 
         // swap children
@@ -310,7 +315,7 @@ metadata::metadata(datasource* source)
   // Note: This will have to be modified if there are other uses in the future (e.g. calculating
   // chunk/pass boundaries).
   auto const has_strings = std::any_of(
-    schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
+    schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
   if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
     // column index and offset index are encoded back to back.
@@ -352,11 +357,21 @@ metadata::metadata(datasource* source)
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   host_span<std::unique_ptr<datasource> const> sources)
 {
+  // Avoid using the thread pool for a single source
+  if (sources.size() == 1) { return {metadata{sources[0].get()}}; }
+
+  std::vector<std::future<metadata>> metadata_ctor_tasks;
+  metadata_ctor_tasks.reserve(sources.size());
+  for (auto const& source : sources) {
+    metadata_ctor_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+      [source = source.get()] { return metadata{source}; }));
+  }
   std::vector<metadata> metadatas;
-  std::transform(
-    sources.begin(), sources.end(), std::back_inserter(metadatas), [](auto const& source) {
-      return metadata(source.get());
-    });
+  metadatas.reserve(sources.size());
+  std::transform(metadata_ctor_tasks.begin(),
+                 metadata_ctor_tasks.end(),
+                 std::back_inserter(metadatas),
+                 [](std::future<metadata>& task) { return std::move(task).get(); });
   return metadatas;
 }
 
@@ -395,9 +410,9 @@ std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::ini
 int64_t aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), 0l, [](auto& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), int64_t{0}, [](auto sum, auto& pfm) {
       auto const rowgroup_rows = std::accumulate(
-        pfm.row_groups.cbegin(), pfm.row_groups.cend(), 0l, [](auto& rg_sum, auto& rg) {
+        pfm.row_groups.cbegin(), pfm.row_groups.cend(), int64_t{0}, [](auto rg_sum, auto& rg) {
           return rg_sum + rg.num_rows;
         });
       CUDF_EXPECTS(pfm.num_rows == 0 || pfm.num_rows == rowgroup_rows,
@@ -409,7 +424,7 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   auto const total_row_groups = std::accumulate(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t& sum, auto& pfm) {
+    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
 
@@ -552,7 +567,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
       // check the behavior of other implementations (once there are some). Some may not set the
       // var bytes for all null pages, so check the `null_pages` field on the column index.
-      if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
+      if (schema.type == Type::BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
@@ -597,12 +612,12 @@ aggregate_reader_metadata::aggregate_reader_metadata(
       thrust::make_counting_iterator(static_cast<size_t>(1)),
       thrust::make_counting_iterator(schema.size()),
       [&](auto const schema_idx) {
-        if (schema[schema_idx].repetition_type == REQUIRED and
+        if (schema[schema_idx].repetition_type == FieldRepetitionType::REQUIRED and
             std::any_of(
               per_file_metadata.begin() + 1, per_file_metadata.end(), [&](auto const& pfm) {
-                return pfm.schema[schema_idx].repetition_type != REQUIRED;
+                return pfm.schema[schema_idx].repetition_type != FieldRepetitionType::REQUIRED;
               })) {
-          schema[schema_idx].repetition_type = OPTIONAL;
+          schema[schema_idx].repetition_type = FieldRepetitionType::OPTIONAL;
         }
       });
   }
@@ -1058,7 +1073,7 @@ aggregate_reader_metadata::select_row_groups(
         std::accumulate(row_group_indices.begin(),
                         row_group_indices.end(),
                         size_t{0},
-                        [](size_t& sum, auto const& pfm) { return sum + pfm.size(); });
+                        [](size_t sum, auto const& pfm) { return sum + pfm.size(); });
 
       // Check if we have less than 2B total row groups.
       CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -1254,8 +1269,8 @@ aggregate_reader_metadata::select_columns(
                               : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
       auto const dtype    = to_data_type(col_type, schema_elem);
 
-      cudf::io::detail::inline_column_buffer output_col(dtype,
-                                                        schema_elem.repetition_type == OPTIONAL);
+      cudf::io::detail::inline_column_buffer output_col(
+        dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
       if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
       // store the index of this element if inserted in out_col_array
       nesting.push_back(static_cast<int>(out_col_array.size()));
@@ -1295,7 +1310,7 @@ aggregate_reader_metadata::select_columns(
           auto const element_dtype = to_data_type(element_type, schema_elem);
 
           cudf::io::detail::inline_column_buffer element_col(
-            element_dtype, schema_elem.repetition_type == OPTIONAL);
+            element_dtype, schema_elem.repetition_type == FieldRepetitionType::OPTIONAL);
           if (has_list_parent || col_type == type_id::LIST) {
             element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
           }

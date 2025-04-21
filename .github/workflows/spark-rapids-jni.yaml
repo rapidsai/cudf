@@ -7,7 +7,7 @@ jobs:
   spark-rapids-jni-build:
     runs-on: linux-amd64-cpu8
     container:
-      image: rapidsai/ci-spark-rapids-jni:rockylinux8-cuda12.2.0
+      image: rapidsai/ci-spark-rapids-jni:rockylinux8-cuda12.8.0
     steps:
       - uses: actions/checkout@v4
         with:

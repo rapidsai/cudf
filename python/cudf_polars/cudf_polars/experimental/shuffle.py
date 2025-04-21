@@ -4,26 +4,78 @@
 
 from __future__ import annotations
 
-import json
 import operator
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 
 import pylibcudf as plc
+import rmm.mr
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
-from cudf_polars.experimental.base import _concat, get_key_name
+from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import ConfigOptions
+
+
+# Supported shuffle methods
+_SHUFFLE_METHODS = ("rapidsmpf", "tasks")
+
+
+# Experimental rapidsmpf shuffler integration
+class RMPFIntegration:  # pragma: no cover
+    """cuDF-Polars protocol for rapidsmpf shuffler."""
+
+    @staticmethod
+    def insert_partition(
+        df: DataFrame,
+        on: Sequence[str],
+        partition_count: int,
+        shuffler: Any,
+    ) -> None:
+        """Add cudf-polars DataFrame chunks to an RMP shuffler."""
+        from rapidsmpf.shuffler import partition_and_pack
+
+        columns_to_hash = tuple(df.column_names.index(val) for val in on)
+        packed_inputs = partition_and_pack(
+            df.table,
+            columns_to_hash=columns_to_hash,
+            num_partitions=partition_count,
+            stream=DEFAULT_STREAM,
+            device_mr=rmm.mr.get_current_device_resource(),
+        )
+        shuffler.insert_chunks(packed_inputs)
+
+    @staticmethod
+    def extract_partition(
+        partition_id: int,
+        column_names: list[str],
+        shuffler: Any,
+    ) -> DataFrame:
+        """Extract a finished partition from the RMP shuffler."""
+        from rapidsmpf.shuffler import unpack_and_concat
+
+        shuffler.wait_on(partition_id)
+        return DataFrame.from_table(
+            unpack_and_concat(
+                shuffler.extract(partition_id),
+                stream=DEFAULT_STREAM,
+                device_mr=rmm.mr.get_current_device_resource(),
+            ),
+            column_names,
+        )
 
 
 class Shuffle(IR):
@@ -35,44 +87,34 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("keys", "options")
-    _non_child = ("schema", "keys", "options")
+    __slots__ = ("config_options", "keys")
+    _non_child = ("schema", "keys", "config_options")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    options: dict[str, Any]
-    """Shuffling options."""
+    config_options: ConfigOptions
+    """Configuration options."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.options = options
-        self._non_child_args = (schema, keys, options)
+        self.config_options = config_options
+        self._non_child_args = (schema, keys, config_options)
         self.children = (df,)
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            tuple(self.schema.items()),
-            self.keys,
-            json.dumps(self.options),
-            self.children,
-        )
 
     @classmethod
     def do_evaluate(
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        options: dict[str, Any],
+        config_options: ConfigOptions,
         df: DataFrame,
-    ):  # pragma: no cover
+    ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         # Single-partition Shuffle evaluation is a no-op
         return df
@@ -133,8 +175,8 @@ def _partition_dataframe(
 
 
 def _simple_shuffle_graph(
-    name_out: str,
     name_in: str,
+    name_out: str,
     keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
@@ -159,7 +201,7 @@ def _simple_shuffle_graph(
                 (split_name, part_in),
                 part_out,
             )
-        graph[(name_out, part_out)] = (_concat, _concat_list)
+        graph[(name_out, part_out)] = (_concat, *_concat_list)
     return graph
 
 
@@ -192,12 +234,43 @@ def _(
 def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    # Use a simple all-to-all shuffle graph.
+    # Extract "shuffle_method" configuration
+    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
 
-    # TODO: Optionally use rapidsmp.
+    # Try using rapidsmpf shuffler if we have "simple" shuffle
+    # keys, and the "shuffle_method" config is set to "rapidsmpf"
+    _keys: list[Col]
+    if shuffle_method in (None, "rapidsmpf") and len(
+        _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
+    ) == len(ir.keys):  # pragma: no cover
+        shuffle_on = [k.name for k in _keys]
+        try:
+            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
+
+            return rapidsmpf_shuffle_graph(
+                get_key_name(ir.children[0]),
+                get_key_name(ir),
+                list(ir.schema.keys()),
+                shuffle_on,
+                partition_info[ir.children[0]].count,
+                partition_info[ir].count,
+                RMPFIntegration,
+            )
+        except (ImportError, ValueError) as err:
+            # ImportError: rapidsmpf is not installed
+            # ValueError: rapidsmpf couldn't find a distributed client
+            if shuffle_method == "rapidsmpf":
+                # Only raise an error if the user specifically
+                # set the shuffle method to "rapidsmpf"
+                raise ValueError(
+                    "Rapidsmp is not installed correctly or the current "
+                    "Dask cluster does not support rapidsmpf shuffling."
+                ) from err
+
+    # Simple task-based fall-back
     return _simple_shuffle_graph(
-        get_key_name(ir),
         get_key_name(ir.children[0]),
+        get_key_name(ir),
         ir.keys,
         partition_info[ir.children[0]].count,
         partition_info[ir].count,

@@ -16,23 +16,16 @@
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/join.hpp>
-#include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/join.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/detail/join/join.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <cuco/static_multimap.cuh>
 #include <cuda/atomic>
 
-#include <limits>
-
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
-constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
-constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
 using pair_type = cuco::pair<hash_value_type, size_type>;
 
@@ -51,5 +44,4 @@ using mixed_multimap_type =
                         cuco::legacy::double_hashing<1, hash_type, hash_type>>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

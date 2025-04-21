@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -44,7 +44,7 @@ def data_1d(request):
     nulls = request.param[2]
     rng = np.random.default_rng(seed=0)
     a = rng.integers(10, size=nelems).astype(dtype)
-    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.dtype(dtype).kind == "f":
         idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a[idx] = np.nan
     return a
@@ -58,7 +58,7 @@ def data_2d(request):
     nulls = request.param[3]
     rng = np.random.default_rng(seed=0)
     a = rng.integers(10, size=(nrows, ncols)).astype(dtype)
-    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.dtype(dtype).kind == "f":
         idx = rng.choice(a.size, size=int(a.size * 0.2), replace=False)
         a.ravel()[idx] = np.nan
     return np.ascontiguousarray(a)
@@ -140,7 +140,7 @@ def test_to_dlpack_cupy_2d(data_2d):
 def test_from_dlpack_cupy_1d(data_1d):
     cupy_array = cupy.array(data_1d)
     cupy_host_array = cupy_array.get()
-    dlt = cupy_array.toDlpack()
+    dlt = cupy_array.__dlpack__()
 
     gs = cudf.from_dlpack(dlt)
     cudf_host_array = gs.to_numpy(na_value=np.nan)
@@ -151,7 +151,7 @@ def test_from_dlpack_cupy_1d(data_1d):
 def test_from_dlpack_cupy_2d(data_2d):
     cupy_array = cupy.array(data_2d, order="F")
     cupy_host_array = cupy_array.get().flatten()
-    dlt = cupy_array.toDlpack()
+    dlt = cupy_array.__dlpack__()
 
     gdf = cudf.from_dlpack(dlt)
     cudf_host_array = np.array(gdf.to_pandas()).flatten()
@@ -210,4 +210,4 @@ def test_to_dlpack_mixed_dtypes():
 def test_from_dlpack_zero_sizes(shape):
     arr = cupy.empty(shape, dtype=float)
     df = cudf.io.dlpack.from_dlpack(arr.__dlpack__())
-    assert_eq(df, cudf.DataFrame(arr))
+    assert_eq(df, cudf.DataFrame(columns=range(shape[1]), dtype=float))

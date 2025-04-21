@@ -23,7 +23,7 @@ import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
-from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
+from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
 try:
     import fsspec.parquet as fsspec_parquet
@@ -717,11 +717,10 @@ chunksize : integer, default None
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
+    bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
+    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
 byte_range : list or tuple, default None
 
@@ -864,6 +863,8 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+compression : {'gzip', 'snappy', 'zstd'}, default None
+    For on-the-fly compression of the output data. Set to None for no compression.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the `pandas` engine
     will be selected.
@@ -1537,7 +1538,9 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
     types = []
     index_levels = []
     index_descriptors = []
-    columns_to_convert = list(table._columns)
+    df_meta = table.head(0)
+    columns_to_convert = list(df_meta._columns)
+
     # Columns
     for name, col in table._column_labels_and_values:
         if cudf.get_option("mode.pandas_compatible"):
@@ -1546,34 +1549,22 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
         else:
             col_names.append(name)
 
-        if isinstance(col.dtype, cudf.CategoricalDtype):
-            raise ValueError(
-                "'category' column dtypes are currently not "
-                + "supported by the gpu accelerated parquet writer"
-            )
-        elif isinstance(
-            col.dtype,
-            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
-        ):
-            types.append(col.dtype.to_arrow())
-        else:
+        if col.dtype.kind == "b":
             # A boolean element takes 8 bits in cudf and 1 bit in
             # pyarrow. To make sure the cudf format is interoperable
             # with arrow, we use `int8` type when converting from a
             # cudf boolean array.
-            if col.dtype.type == np.bool_:
-                types.append(pa.int8())
-            else:
-                types.append(np_to_pa_dtype(col.dtype))
+            types.append(pa.int8())
+        else:
+            types.append(cudf_dtype_to_pa_type(col.dtype))
 
     # Indexes
-    materialize_index = False
     if index is not False:
         for level, name in enumerate(table.index.names):
-            if isinstance(table.index, cudf.MultiIndex):
-                idx = table.index.get_level_values(level)
+            if isinstance(df_meta.index, cudf.MultiIndex):
+                idx = df_meta.index.get_level_values(level)
             else:
-                idx = table.index
+                idx = df_meta.index
 
             if isinstance(idx, cudf.RangeIndex):
                 if index is None:
@@ -1585,50 +1576,39 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                         "step": table.index.step,
                     }
                 else:
-                    materialize_index = True
                     # When `index=True`, RangeIndex needs to be materialized.
-                    materialized_idx = idx._as_int_index()
+                    materialized_idx = df_meta.index._as_int_index()
+                    df_meta.index = materialized_idx
                     descr = _index_level_name(
                         index_name=materialized_idx.name,
                         level=level,
                         column_names=col_names,
                     )
                     index_levels.append(materialized_idx)
-                    columns_to_convert.append(materialized_idx._values)
+                    columns_to_convert.append(materialized_idx)
                     col_names.append(descr)
-                    types.append(np_to_pa_dtype(materialized_idx.dtype))
+                    types.append(pa.from_numpy_dtype(materialized_idx.dtype))
             else:
                 descr = _index_level_name(
                     index_name=idx.name, level=level, column_names=col_names
                 )
-                columns_to_convert.append(idx._values)
+                columns_to_convert.append(idx)
                 col_names.append(descr)
-                if isinstance(idx.dtype, cudf.CategoricalDtype):
-                    raise ValueError(
-                        "'category' column dtypes are currently not "
-                        + "supported by the gpu accelerated parquet writer"
-                    )
-                elif isinstance(idx.dtype, cudf.ListDtype):
-                    types.append(col.dtype.to_arrow())
-                else:
+                if idx.dtype.kind == "b":
                     # A boolean element takes 8 bits in cudf and 1 bit in
                     # pyarrow. To make sure the cudf format is interperable
                     # in arrow, we use `int8` type when converting from a
                     # cudf boolean array.
-                    if idx.dtype.type == np.bool_:
-                        types.append(pa.int8())
-                    else:
-                        types.append(np_to_pa_dtype(idx.dtype))
+                    types.append(pa.int8())
+                else:
+                    types.append(cudf_dtype_to_pa_type(idx.dtype))
 
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    df_meta = table.head(0)
-    if materialize_index:
-        df_meta.index = df_meta.index._as_int_index()
     metadata = pa.pandas_compat.construct_metadata(
         columns_to_convert=columns_to_convert,
-        # It is OKAY to do `.head(0).to_pandas()` because
+        # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only
         df=df_meta.to_pandas(),
         column_names=col_names,

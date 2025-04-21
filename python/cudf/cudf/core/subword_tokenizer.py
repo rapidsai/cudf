@@ -20,7 +20,7 @@ def _cast_to_appropriate_type(ar, cast_type):
     elif cast_type == "tf":
         from tensorflow.experimental.dlpack import from_dlpack
 
-    return from_dlpack(ar.astype(np.dtype(np.int32)).toDlpack())
+    return from_dlpack(ar.astype(np.dtype(np.int32)).__dlpack__())
 
 
 class SubwordTokenizer:
@@ -50,6 +50,11 @@ class SubwordTokenizer:
         self.do_lower_case = do_lower_case
         self.vocab_file = plc.nvtext.subword_tokenize.HashedVocabulary(
             hash_file
+        )
+        warnings.warn(
+            "SubwordTokenizer is deprecated and will be removed in a future "
+            "version. Use WordPieceVocabulary instead.",
+            FutureWarning,
         )
 
     def __call__(

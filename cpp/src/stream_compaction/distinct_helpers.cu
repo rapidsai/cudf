@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/atomic>
+#include <cuda/std/iterator>
 
 namespace cudf::detail {
 
@@ -35,7 +36,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
     auto const iter = thrust::counting_iterator<cudf::size_type>{0};
     set.insert_async(iter, iter + num_rows, stream.value());
     auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
-    output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
+    output_indices.resize(cuda::std::distance(output_indices.begin(), output_end), stream);
     return output_indices;
   }
 
@@ -95,7 +96,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                                          auto const idx) { return idx != init_value; }));
   }();
 
-  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+  output_indices.resize(cuda::std::distance(output_indices.begin(), map_end), stream);
   return output_indices;
 }
 

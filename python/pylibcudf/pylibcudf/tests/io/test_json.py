@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 
 import pandas as pd
@@ -11,6 +11,9 @@ from utils import (
     write_source_str,
 )
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.stream import Stream
+
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
@@ -18,9 +21,12 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
-def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
+def test_write_json_basic(
+    table_data, source_or_sink, lines, rows_per_chunk, stream
+):
     plc_table_w_meta, pa_table = table_data
     sink = source_or_sink
 
@@ -35,7 +41,7 @@ def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
 
     options.set_rows_per_chunk(rows_per_chunk)
 
-    plc.io.json.write_json(options)
+    plc.io.json.write_json(options, stream)
 
     exp = pa_table.to_pandas()
 
@@ -143,9 +149,10 @@ def test_write_json_bool_opts(true_value, false_value):
     assert str_result == pd_result
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("lines", [True, False])
 def test_read_json_basic(
-    table_data, source_or_sink, lines, text_compression_type
+    table_data, source_or_sink, lines, text_compression_type, stream
 ):
     compression_type = text_compression_type
 
@@ -172,7 +179,8 @@ def test_read_json_basic(
             .compression(compression_type)
             .lines(lines)
             .build()
-        )
+        ),
+        stream,
     )
 
     # Adjustments to correct for the fact orient=records is lossy
@@ -365,6 +373,42 @@ def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
             [[1, 2, None, 3], [10, 11, None, 12]], names=["a", "b"]
         )
         assert_table_and_meta_eq(exp, tbl_w_meta)
+
+
+@pytest.mark.parametrize("num_buffers", [1, 2])
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_json_from_device_buffers(table_data, num_buffers, stream):
+    _, pa_table = table_data
+
+    json_str = pa_table.to_pandas().to_json(orient="records", lines=True)
+    buf = DeviceBuffer.to_device(json_str.encode("utf-8"))
+
+    options = (
+        plc.io.json.JsonReaderOptions.builder(
+            plc.io.SourceInfo([buf] * num_buffers)
+        )
+        .lines(True)
+        .build()
+    )
+    result = plc.io.json.read_json(options, stream)
+
+    expected = (
+        pa_table
+        if num_buffers == 1
+        else pa.concat_tables([pa_table] * num_buffers)
+    )
+
+    if len(expected) == 0:
+        expected = pa.table([])
+    else:
+        new_fields = []
+        for field in expected.schema:
+            if field.type == pa.uint64():
+                field = field.with_type(pa.int64())
+            new_fields.append(field)
+        expected = expected.cast(pa.schema(new_fields))
+
+    assert_table_and_meta_eq(expected, result, check_field_nullability=False)
 
 
 # TODO: Add tests for these!

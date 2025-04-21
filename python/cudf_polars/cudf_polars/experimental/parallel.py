@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Multi-partition Dask execution."""
+"""Multi-partition evaluation."""
 
 from __future__ import annotations
 
@@ -9,23 +9,37 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle  # noqa: F401
-from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
+from cudf_polars.dsl.ir import (
+    IR,
+    Cache,
+    Filter,
+    GroupBy,
+    HStack,
+    MapFunction,
+    Projection,
+    Select,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import Any
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 @lower_ir_node.register(IR)
@@ -38,24 +52,14 @@ def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, Partition
             ir: PartitionInfo(count=1)
         }  # pragma: no cover; Missed by pylibcudf executor
 
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check that child partitioning is supported
-    if any(partition_info[c].count > 1 for c in children):
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-
-    # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=1)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
+    return _lower_ir_fallback(
+        ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
+    )
 
 
-def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def lower_ir_graph(
+    ir: IR, config_options: ConfigOptions
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -63,6 +67,8 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     ----------
     ir
         Root of the graph to rewrite.
+    config_options
+        GPUEngine configuration options.
 
     Returns
     -------
@@ -79,7 +85,7 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node)
+    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
     return mapper(ir)
 
 
@@ -121,20 +127,57 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, list(partition_info[ir].keys(ir)))
+        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
         return graph, key_name
     else:
         return graph, (key_name, 0)
 
 
-def evaluate_dask(ir: IR) -> DataFrame:
-    """Evaluate an IR graph with Dask."""
-    from dask import get
+# The true type signature for get_scheduler() needs an overload. Not worth it.
 
-    ir, partition_info = lower_ir_graph(ir)
+
+def get_scheduler(config_options: ConfigOptions) -> Any:
+    """Get appropriate task scheduler."""
+    scheduler = config_options.get("executor_options.scheduler")
+    if (
+        scheduler == "distributed"
+    ):  # pragma: no cover; block depends on executor type and Distributed cluster
+        from distributed import get_client
+
+        from cudf_polars.experimental.dask_serialize import SerializerManager
+
+        client = get_client()
+        SerializerManager.register_serialize()
+        SerializerManager.run_on_cluster(client)
+        return client.get
+    elif scheduler == "synchronous":
+        from dask import get
+
+        return get
+    else:  # pragma: no cover
+        raise ValueError(f"{scheduler} not a supported scheduler option.")
+
+
+def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
+    """
+    Evaluate an IR graph with partitioning.
+
+    Parameters
+    ----------
+    ir
+        Logical plan to evaluate.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    A cudf-polars DataFrame object.
+    """
+    ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info)
-    return get(graph, key)
+
+    return get_scheduler(config_options)(graph, key)
 
 
 @generate_ir_tasks.register(IR)
@@ -170,17 +213,15 @@ def _(
 def _(
     ir: Union, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Check zlice
+    if ir.zlice is not None:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir, rec, msg="zlice is not supported for multiple partitions."
+        )
+
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
-
-    # Check zlice
-    if ir.zlice is not None:  # pragma: no cover
-        if any(p[c].count > 1 for p, c in zip(children, _partition_info, strict=False)):
-            raise NotImplementedError("zlice is not supported for multiple partitions.")
-        new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
 
     # Partition count is the sum of all child partitions
     count = sum(partition_info[c].count for c in children)
@@ -204,6 +245,20 @@ def _(
     }
 
 
+@lower_ir_node.register(MapFunction)
+def _(
+    ir: MapFunction, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Allow pointwise operations
+    if ir.name in ("rename", "explode"):
+        return _lower_ir_pwise(ir, rec)
+
+    # Fallback for everything else
+    return _lower_ir_fallback(
+        ir, rec, msg=f"{ir.name} is not supported for multiple partitions."
+    )
+
+
 def _lower_ir_pwise(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -215,10 +270,12 @@ def _lower_ir_pwise(
     counts = {partition_info[c].count for c in children}
 
     # Check that child partitioning is supported
-    if len(counts) > 1:
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support unbalanced partitions."
-        )  # pragma: no cover
+    if len(counts) > 1:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
+        )
 
     # Return reconstructed node and partition-info dict
     partition = PartitionInfo(count=max(counts))
@@ -251,5 +308,7 @@ def _generate_ir_tasks_pwise(
 generate_ir_tasks.register(Projection, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)

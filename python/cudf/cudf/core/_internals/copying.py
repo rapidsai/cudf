@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.buffer import acquire_spill_lock
 
 if TYPE_CHECKING:
@@ -20,7 +19,7 @@ def gather(
     columns: Iterable[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
-) -> list[ColumnBase]:
+) -> list[plc.Column]:
     plc_tbl = plc.copying.gather(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
         gather_map.to_pylibcudf(mode="read"),
@@ -28,10 +27,7 @@ def gather(
         if nullify
         else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     )
-    return [
-        cudf._lib.column.Column.from_pylibcudf(col)
-        for col in plc_tbl.columns()
-    ]
+    return plc_tbl.columns()
 
 
 @acquire_spill_lock()
@@ -64,29 +60,25 @@ def scatter(
                 f"index out of bounds for column of size {n_rows}"
             )
 
+    from cudf.core.column import ColumnBase
+
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
-        if isinstance(sources[0], cudf._lib.column.Column)
+        if isinstance(sources[0], ColumnBase)
         else sources,  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )
 
-    return [
-        cudf._lib.column.Column.from_pylibcudf(col)
-        for col in plc_tbl.columns()
-    ]
+    return plc_tbl.columns()
 
 
 @acquire_spill_lock()
 def columns_split(
     input_columns: Iterable[ColumnBase], splits: list[int]
-) -> list[list[ColumnBase]]:
+) -> list[list[plc.Column]]:
     return [
-        [
-            cudf._lib.column.Column.from_pylibcudf(col)
-            for col in plc_tbl.columns()
-        ]
+        plc_tbl.columns()
         for plc_tbl in plc.copying.split(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in input_columns]

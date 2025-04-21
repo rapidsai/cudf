@@ -11,15 +11,25 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.extensions import no_default
-from cudf.api.types import is_scalar
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+    concat_columns,
+)
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    min_unsigned_type,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     from cudf._typing import DtypeObj
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -535,14 +545,14 @@ def concat(
 
 
 def melt(
-    frame,
+    frame: cudf.DataFrame,
     id_vars=None,
     value_vars=None,
     var_name=None,
-    value_name="value",
+    value_name: Hashable = "value",
     col_level=None,
     ignore_index: bool = True,
-):
+) -> cudf.DataFrame:
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -606,14 +616,12 @@ def melt(
     """
     if col_level is not None:
         raise NotImplementedError("col_level != None is not supported yet.")
-    if ignore_index is not True:
-        raise NotImplementedError("ignore_index is currently not supported.")
 
     # Arg cleaning
 
     # id_vars
     if id_vars is not None:
-        if cudf.api.types.is_scalar(id_vars):
+        if is_scalar(id_vars):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -627,7 +635,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if cudf.api.types.is_scalar(value_vars):
+        if is_scalar(value_vars):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)
@@ -644,7 +652,7 @@ def melt(
     # Error for unimplemented support for datatype
     if any(
         isinstance(frame[col].dtype, cudf.CategoricalDtype)
-        for col in id_vars + value_vars
+        for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
@@ -669,15 +677,14 @@ def melt(
     N = len(frame)
     K = len(value_vars)
 
-    def _tile(A, reps):
-        series_list = [A] * reps
+    def _tile(base_col: ColumnBase, reps: int) -> ColumnBase:
         if reps > 0:
-            return cudf.Series._concat(objs=series_list, index=False)
+            return concat_columns([base_col] * reps)
         else:
-            return cudf.Series([], dtype=A.dtype)
+            return column_empty(0, dtype=base_col.dtype)
 
     # Step 1: tile id_vars
-    mdata = {col: _tile(frame[col], K) for col in id_vars}
+    mdata = {col: _tile(frame[col]._column, K) for col in id_vars}
 
     # Step 2: add variable
     nval = len(value_vars)
@@ -688,23 +695,27 @@ def melt(
 
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
-        var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index.dtype
+        var_data = column_empty(
+            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
         )
     else:
-        var_data = (
-            cudf.Series(value_vars)
-            .take(np.repeat(np.arange(nval, dtype=dtype), N))
-            .reset_index(drop=True)
+        var_data = as_column(value_vars).take(
+            as_column(np.repeat(np.arange(nval, dtype=dtype), N)),
+            check_bounds=False,
         )
     mdata[var_name] = var_data
 
     # Step 3: add values
-    mdata[value_name] = cudf.Series._concat(
-        objs=[frame[val] for val in value_vars], index=False
+    mdata[value_name] = concat_columns(
+        [frame[val]._column for val in value_vars]
     )
 
-    return cudf.DataFrame(mdata)
+    result = cudf.DataFrame._from_data(mdata)
+    if not ignore_index:
+        taker = np.tile(np.arange(len(frame)), frame.shape[1] - len(id_vars))
+        result.index = frame.index.take(taker)
+
+    return result
 
 
 def get_dummies(
@@ -813,7 +824,7 @@ def get_dummies(
     dtype = cudf.dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
-        encode_fallback_dtypes = ["object", "category"]
+        encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
 
         if columns is None or len(columns) == 0:
             columns = data.select_dtypes(
@@ -916,7 +927,7 @@ def _merge_sorted(
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-    if not pd.api.types.is_list_like(objs):
+    if is_scalar(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
@@ -980,7 +991,7 @@ def _merge_sorted(
     )
 
     result_columns = [
-        Column.from_pylibcudf(col) for col in plc_table.columns()
+        ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(
@@ -1261,7 +1272,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         raise NotImplementedError("fill_value is not supported.")
     elif sort is False:
         raise NotImplementedError(f"{sort=} is not supported.")
-    if pd.api.types.is_list_like(level):
+    if not is_scalar(level):
         if not level:
             return df
     if not isinstance(df.index, cudf.MultiIndex):
@@ -1355,7 +1366,7 @@ def _one_hot_encode_column(
 
 
 def _length_check_params(obj, columns, name):
-    if cudf.api.types.is_list_like(obj):
+    if is_list_like(obj):
         if len(obj) != len(columns):
             raise ValueError(
                 f"Length of '{name}' ({len(obj)}) did not match the "
@@ -1519,9 +1530,9 @@ def pivot_table(
     ----------
     data : DataFrame
     values : column name or list of column names to aggregate, optional
-    index : list of column names
+    index : scalar or list of column names
             Values to group by in the rows.
-    columns : list of column names
+    columns : scalar or list of column names
             Values to group by in the columns.
     aggfunc : str or dict, default "mean"
             If dict is passed, the key is column to aggregate
@@ -1555,11 +1566,16 @@ def pivot_table(
     if sort is not True:
         raise NotImplementedError("sort is not supported yet")
 
+    if is_scalar(index):
+        index = [index]
+    if is_scalar(columns):
+        columns = [columns]
+
     keys = index + columns
 
     values_passed = values is not None
     if values_passed:
-        if pd.api.types.is_list_like(values):
+        if not is_scalar(values):
             values_multi = True
             values = list(values)
         else:
@@ -1613,15 +1629,8 @@ def pivot_table(
         table = table.fillna(fill_value)
 
     # discard the top level
-    if values_passed and not values_multi and table._data.multiindex:
-        column_names = table._data.level_names[1:]
-        table_columns = tuple(
-            map(lambda column: column[1:], table._column_names)
-        )
-        table.columns = pd.MultiIndex.from_tuples(
-            tuples=table_columns, names=column_names
-        )
-
+    if values_passed and not values_multi and table._data.nlevels > 1:
+        table.columns = table._data.to_pandas_index.droplevel(0)
     if len(index) == 0 and len(columns) > 0:
         table = table.T
 

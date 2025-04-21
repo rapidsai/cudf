@@ -26,9 +26,9 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 
 # Install requirements for running polars tests
 rapids-logger "Install polars test requirements"
+# TODO: Remove sed command when polars-cloud supports 1.23
+sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
 rapids-pip-retry install -r polars/py-polars/requirements-dev.txt -r polars/py-polars/requirements-ci.txt
-# TODO: Workaround until https://github.com/pola-rs/polars/issues/21274 is fixed.
-rapids-pip-retry install connectorx==0.4.1
 
 # shellcheck disable=SC2317
 function set_exitcode()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
                       result.begin(),
                       valid_bit_functor{bitmask});
 
-    auto host_result = cudf::detail::make_host_vector_sync(result, stream);
+    auto host_result = cudf::detail::make_host_vector(result, stream);
     EXPECT_THAT(host_result, testing::ElementsAreArray(expect));
   }
 

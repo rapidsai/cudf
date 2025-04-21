@@ -17,11 +17,12 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join.hpp>
+#include <cudf/detail/join/hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -32,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -41,8 +43,6 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
-#include <iostream>
-#include <numeric>
 
 namespace cudf {
 namespace detail {
@@ -260,7 +260,7 @@ probe_join_hash_table(
                                               .first;
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
-        auto const actual_size = thrust::distance(out_probe_begin, out_probe_end);
+        auto const actual_size = cuda::std::distance(out_probe_begin, out_probe_end);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
       }

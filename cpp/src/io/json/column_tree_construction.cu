@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include "nested_json.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -50,7 +51,7 @@ template <typename T>
 void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
 {
   stream.synchronize();
-  auto h_vec = cudf::detail::make_std_vector_sync(d_vec, stream);
+  auto h_vec = cudf::detail::make_std_vector(d_vec, stream);
   std::cout << name << " = ";
   for (auto e : h_vec) {
     std::cout << e << " ";
@@ -208,7 +209,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                           thrust::make_constant_iterator(1),
                           non_leaf_nodes.begin(),
                           non_leaf_nodes_children.begin(),
-                          thrust::equal_to<TreeDepthT>());
+                          cuda::std::equal_to<TreeDepthT>());
 
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     non_leaf_nodes_children.begin(),
@@ -227,7 +228,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
           auto idx = thrust::get<1>(a);
           return n == 1 ? idx : idx + 1;
         }),
-        thrust::plus<NodeIndexT>{});
+        cuda::std::plus<NodeIndexT>{});
     } else {
       auto single_node = 1;
       row_idx.set_element_async(1, single_node, stream);

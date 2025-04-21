@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from . import (
     byte_pair_encode,
@@ -12,6 +12,7 @@ from . import (
     stemmer,
     subword_tokenize,
     tokenize,
+    wordpiece_tokenize,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "stemmer",
     "subword_tokenize",
     "tokenize",
+    "wordpiece_tokenize",
 ]

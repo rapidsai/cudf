@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import re
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -15,16 +15,12 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -370,9 +366,9 @@ def _process_col(
     elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
-                col = col.astype(dtype="int64")
+                col = col.astype(np.dtype(np.int64))
             except ValueError:
-                col = col.astype(dtype="float64")
+                col = col.astype(np.dtype(np.float64))
             return _process_col(
                 col=col,
                 unit=unit,
@@ -728,56 +724,6 @@ class DateOffset:
         return pd.DateOffset(**self.kwds, n=1)
 
 
-def _isin_datetimelike(
-    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
-) -> column.ColumnBase:
-    """
-    Check whether values are contained in the
-    DateTimeColumn or TimeDeltaColumn.
-
-    Parameters
-    ----------
-    lhs : TimeDeltaColumn or DatetimeColumn
-        Column to check whether the `values` exist in.
-    values : set or list-like
-        The sequence of values to test. Passing in a single string will
-        raise a TypeError. Instead, turn a single string into a list
-        of one element.
-
-    Returns
-    -------
-    result: Column
-        Column of booleans indicating if each element is in values.
-    """
-    rhs = None
-    try:
-        rhs = cudf.core.column.as_column(values)
-        was_string = len(rhs) and rhs.dtype.kind == "O"
-
-        if rhs.dtype.kind in {"f", "i", "u"}:
-            return column.as_column(False, length=len(lhs), dtype="bool")
-        rhs = rhs.astype(lhs.dtype)
-        if was_string:
-            warnings.warn(
-                f"The behavior of 'isin' with dtype={lhs.dtype} and "
-                "castable values (e.g. strings) is deprecated. In a "
-                "future version, these will not be considered matching "
-                "by isin. Explicitly cast to the appropriate dtype before "
-                "calling isin instead.",
-                FutureWarning,
-            )
-        res = lhs._isin_earlystop(rhs)
-        if res is not None:
-            return res
-    except ValueError:
-        # pandas functionally returns all False when cleansing via
-        # typecasting fails
-        return column.as_column(False, length=len(lhs), dtype="bool")
-
-    res = lhs._obtain_isin_result(rhs)
-    return res
-
-
 def date_range(
     start=None,
     end=None,
@@ -883,7 +829,7 @@ def date_range(
             "three must be specified"
         )
 
-    if periods is not None and not cudf.api.types.is_integer(periods):
+    if periods is not None and not is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
@@ -987,7 +933,7 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = libcudf.column.Column.from_pylibcudf(
+            res = column.ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
                     pa_scalar_to_plc_scalar(pa.scalar(start)),

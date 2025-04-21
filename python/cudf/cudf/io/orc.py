@@ -10,11 +10,8 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type, dtype_to_pylibcudf_type
 
@@ -265,15 +262,12 @@ def read_orc(
             options.set_columns(columns)
 
         tbl_w_meta = plc.io.orc.read_orc(options)
+        df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
 
         if isinstance(columns, list) and len(columns) == 0:
-            # When `columns=[]`, index needs to be
-            # established, but not the columns.
-            nrows = tbl_w_meta.tbl.num_rows()
-            ca = ColumnAccessor({})
-            index = cudf.RangeIndex(nrows)
+            # Index to deselect all columns
+            df = df.loc[:, columns]
         else:
-            names = tbl_w_meta.column_names(include_children=False)
             index_col = None
             is_range_index = False
             reset_index_name = False
@@ -308,8 +302,6 @@ def read_orc(
                                         if c["name"] is None:
                                             reset_index_name = True
 
-            actual_index_names = None
-            col_names = names
             if index_col is not None and len(index_col) > 0:
                 if is_range_index:
                     range_index_meta = index_col[0]
@@ -323,56 +315,13 @@ def read_orc(
                         range_idx = range_idx[skiprows:]
                     if num_rows != -1:
                         range_idx = range_idx[:num_rows]
+                    df.index = range_idx
                 else:
-                    actual_index_names = list(index_col_names.values())
-                    col_names = names[len(actual_index_names) :]
+                    df = df.set_index(list(index_col_names.values()))
 
-            result_col_names = col_names if columns is None else names
-            if actual_index_names is None:
-                index = None
-                data = {
-                    name: Column.from_pylibcudf(col)
-                    for name, col in zip(
-                        result_col_names, tbl_w_meta.columns, strict=True
-                    )
-                }
-            else:
-                result_columns = [
-                    Column.from_pylibcudf(col) for col in tbl_w_meta.columns
-                ]
-                index = _index_from_data(
-                    dict(
-                        zip(
-                            actual_index_names,
-                            result_columns[: len(actual_index_names)],
-                            strict=True,
-                        )
-                    )
-                )
-                data = dict(
-                    zip(
-                        result_col_names,
-                        result_columns[len(actual_index_names) :],
-                        strict=True,
-                    )
-                )
-
-            if is_range_index:
-                index = range_idx
-            elif reset_index_name:
-                index.names = [None] * len(index.names)
-
-            child_name_values = tbl_w_meta.child_names.values()
-
-            data = {
-                name: ioutils._update_col_struct_field_names(col, child_names)
-                for (name, col), child_names in zip(
-                    data.items(), child_name_values
-                )
-            }
-            ca = ColumnAccessor(data, rangeindex=len(data) == 0)
-
-        return cudf.DataFrame._from_data(ca, index=index)
+            if reset_index_name:
+                df.index.names = [None] * len(df.index.names)
+        return df
     else:
         from pyarrow import orc
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -34,6 +35,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -46,6 +48,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <functional>
 
 namespace cudf::io::json::detail {
 
@@ -202,7 +205,7 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  auto const value           = cudf::detail::make_host_vector_sync(
+  auto const value           = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
   return value[0];
@@ -344,8 +347,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
     auto values_column_indices =
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
-    auto h_values_column_indices =
-      cudf::detail::make_host_vector_sync(values_column_indices, stream);
+    auto h_values_column_indices = cudf::detail::make_host_vector(values_column_indices, stream);
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
                    column_names.cbegin(),
@@ -360,7 +362,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
     if (is_enabled_mixed_types_as_string) {
-      return cudf::detail::make_std_vector_sync(
+      return cudf::detail::make_std_vector(
         is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
     }
     return std::vector<uint8_t>();
@@ -947,7 +949,7 @@ void scatter_offsets(tree_meta_t const& tree,
     });
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
   // parent's null mask to null. Setting mixed type list rows to null.
-  auto const num_list_children = thrust::distance(
+  auto const num_list_children = cuda::std::distance(
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()), list_children_end);
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
@@ -1006,13 +1008,13 @@ void scatter_offsets(tree_meta_t const& tree,
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
-                             thrust::maximum<json_column::row_offset_t>{});
+                             cudf::detail::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
       thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
-                             thrust::maximum<json_column::row_offset_t>{});
+                             cudf::detail::maximum<json_column::row_offset_t>{});
     }
   }
   stream.synchronize();

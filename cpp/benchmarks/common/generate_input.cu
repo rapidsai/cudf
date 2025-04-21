@@ -580,7 +580,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     null_mask.begin(),
     lengths.begin(),
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
-    thrust::logical_not<bool>{});
+    cuda::std::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
@@ -866,7 +866,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  unsigned seed)
 {
   auto const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](size_t sum, auto tid) {
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), double{0}, [&](auto sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);

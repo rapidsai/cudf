@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from cudf.api.types import is_numeric_dtype
 from cudf.core.window.rolling import _RollingBase
+from cudf.utils.dtypes import is_dtype_obj_numeric
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
@@ -184,7 +184,7 @@ class ExponentialMovingWindow(_RollingBase):
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str
     ) -> ColumnBase:
-        if not is_numeric_dtype(source_column.dtype):
+        if not is_dtype_obj_numeric(source_column.dtype):
             raise TypeError("No numeric types to aggregate")
 
         # libcudf ewm has special casing for nulls only

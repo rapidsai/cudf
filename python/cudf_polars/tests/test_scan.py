@@ -1,8 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -82,15 +80,21 @@ def make_source(df, path, format):
         df.write_parquet(path)
 
 
-@pytest.mark.parametrize(
-    "format, scan_fn",
-    [
-        ("csv", pl.scan_csv),
-        ("ndjson", pl.scan_ndjson),
-        ("parquet", pl.scan_parquet),
-        ("chunked_parquet", pl.scan_parquet),
-    ],
-)
+@pytest.fixture(params=["csv", "ndjson", "parquet", "chunked_parquet"])
+def format(request):
+    return request.param
+
+
+@pytest.fixture
+def scan_fn(format):
+    if format == "csv":
+        return pl.scan_csv
+    elif format == "ndjson":
+        return pl.scan_ndjson
+    else:
+        return pl.scan_parquet
+
+
 def test_scan(
     tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
 ):
@@ -203,8 +207,11 @@ def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test*.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
-    os.chdir(tmp_path)
-    q = pl.scan_csv(filename, glob=glob, n_rows=n_rows, skip_rows=skiprows)
+    if isinstance(filename, list):
+        source = [tmp_path / fn for fn in filename]
+    else:
+        source = tmp_path / filename
+    q = pl.scan_csv(source, glob=glob, n_rows=n_rows, skip_rows=skiprows)
 
     assert_gpu_result_equal(q)
 
@@ -325,6 +332,19 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
+    make_source(df, tmp_path / "file", format)
+
+    q = scan_fn(tmp_path / "file", include_file_paths="files")
+
+    if format == "ndjson":
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif format == "parquet":
+        assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
+    else:
+        assert_gpu_result_equal(q)
+
+
 @pytest.fixture(
     scope="module", params=["no_slice", "skip_to_end", "skip_partial", "partial"]
 )
@@ -359,11 +379,21 @@ def large_df(df, tmpdir_factory, chunked_slice):
 @pytest.mark.parametrize(
     "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
 )
+@pytest.mark.parametrize(
+    "filter", [None, pl.col("a") > 3], ids=["no_filters", "with_filters"]
+)
 def test_scan_parquet_chunked(
-    request, chunked_slice, large_df, chunk_read_limit, pass_read_limit
+    large_df,
+    chunk_read_limit,
+    pass_read_limit,
+    filter,
 ):
+    if filter is None:
+        q = large_df
+    else:
+        q = large_df.filter(filter)
     assert_gpu_result_equal(
-        large_df,
+        q,
         engine=pl.GPUEngine(
             raise_on_fail=True,
             parquet_options={
