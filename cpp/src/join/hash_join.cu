@@ -103,10 +103,10 @@ struct output_fn {
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
- * for build_table
- * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table
- * for probe_table
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ *                           build_table
+ * @param preprocessed_probe shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ *                           probe_table
  * @param hash_table A hash table built on the build table that maps the index
  *                   of every row to the hash value of that row
  * @param join The type of join to be performed
