@@ -14,10 +14,12 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-FILE_KEY=$1
+PYLIBCUDF_KEY=$1
+CUDF_KEY=$2
 rapids-dependency-file-generator \
   --output conda \
-  --file-key "${FILE_KEY}" \
+  --file-key "${PYLIBCUDF_KEY}" \
+  --file-key "${CUDF_KEY}" \
   --prepend-channel "${CPP_CHANNEL}" \
   --prepend-channel "${PYTHON_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
