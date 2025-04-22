@@ -165,7 +165,13 @@ def _parse_array_interface(iface: dict) -> tuple:
     return typestr, data, shape, strides
 
 
-def _validate_array_metadata(typestr, data, shape, strides, itemsize):
+def _validate_array_metadata(
+    typestr: str,
+    itemsize: int,
+    shape: tuple[int, ...],
+    data: None | tuple[int, bool],
+    strides: None | tuple[int, ...],
+) -> None:
     """
     Validate the CUDA or NumPy array interface metadata.
     """
@@ -682,7 +688,7 @@ cdef class Column:
         typestr, data, shape, strides = _parse_array_interface(iface)
         dtype = _datatype_from_dtype_desc(typestr[1:])
         itemsize = size_of(dtype)
-        _validate_array_metadata(typestr, data, shape, strides, itemsize)
+        _validate_array_metadata(typestr, itemsize, shape, data, strides)
 
         data_ptr = <uintptr_t>data[0]
         nbytes = functools.reduce(operator.mul, shape, 1) * itemsize
@@ -730,7 +736,7 @@ cdef class Column:
         typestr, data, shape, strides = _parse_array_interface(iface)
         dtype = _datatype_from_dtype_desc(typestr[1:])
         itemsize = size_of(dtype)
-        _validate_array_metadata(typestr, data, shape, strides, itemsize)
+        _validate_array_metadata(typestr, itemsize, shape, data, strides)
 
         if len(shape) == 2:
             obj = _Ravelled(obj)
