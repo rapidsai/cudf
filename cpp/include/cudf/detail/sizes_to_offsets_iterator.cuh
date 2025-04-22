@@ -50,7 +50,7 @@ struct sizes_to_offsets_iterator {
   using reference         = sizes_to_offsets_iterator const&;
   using iterator_category = std::random_access_iterator_tag;
 
-  using ScanType = typename thrust::iterator_traits<ScanIterator>::value_type;
+  using ScanType = cuda::std::iter_value_t<ScanIterator>;
 
   CUDF_HOST_DEVICE inline sizes_to_offsets_iterator& operator++()
   {
@@ -265,7 +265,7 @@ auto sizes_to_offsets(SizesIterator begin,
                       int64_t initial_offset,
                       rmm::cuda_stream_view stream)
 {
-  using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
+  using SizeType = cuda::std::iter_value_t<SizesIterator>;
   static_assert(std::is_integral_v<SizeType>,
                 "Only numeric types are supported by sizes_to_offsets");
 
