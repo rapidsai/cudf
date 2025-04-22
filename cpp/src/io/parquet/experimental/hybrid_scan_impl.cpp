@@ -1054,11 +1054,6 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
   auto begin_bits = std::vector<cudf::size_type>{};
   auto end_bits   = std::vector<cudf::size_type>{};
 
-  // Update the nullmask in bulk if there are more than 16 pages
-  // TODO: Currently setting this to max to avoid bulk update until aliasing is handled
-  constexpr auto min_nullmasks_for_bulk_update = std::numeric_limits<size_t>::max();
-  auto const use_bulk_nullmask_update          = pages.size() >= min_nullmasks_for_bulk_update;
-
   thrust::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
       // Return if the page is valid
@@ -1080,29 +1075,38 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
             cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
           continue;
         }
+        // Add the nullmask and bit bounds to corresponding lists
+        null_masks.emplace_back(out_buf.null_mask());
+        begin_bits.emplace_back(start_row);
+        end_bits.emplace_back(end_row);
+
         // Increment the null count
         out_buf.null_count() += (end_row - start_row);
-
-        // Add nullmask and the current page's row bounds to corresponding lists if bulk updating
-        if (use_bulk_nullmask_update) {
-          null_masks.push_back(out_buf.null_mask());
-          begin_bits.push_back(start_row);
-          end_bits.push_back(end_row);
-        }
-        // Else, update the nullmask right away
-        else {
-          cudf::set_null_mask(out_buf.null_mask(), start_row, end_row, false, _stream);
-        }
       }
     });
 
-  // Bulk update the nullmasks
-  if (null_masks.size()) {
-    CUDF_EXPECTS(use_bulk_nullmask_update, "Bulk nullmask update should be used");
+  // Update the nullmask in bulk if there are more than 16 pages
+  // TODO: Currently setting this to max to avoid bulk update until aliasing is handled
+  constexpr auto min_nullmasks_for_bulk_update = std::numeric_limits<size_t>::max();
+
+  // Bulk update the nullmasks if more than 16 pages
+  if (null_masks.size() >= min_nullmasks_for_bulk_update) {
     auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
     std::fill(valids.begin(), valids.end(), false);
-    // TODO: Make sure there is no aliasing in nullmasks to avoid race conditions
     cudf::set_null_masks(null_masks, begin_bits, end_bits, valids, _stream);
+  }
+  // Otherwise, update the nullmasks in a loop
+  else {
+    auto nullmask_iter = thrust::make_zip_iterator(
+      thrust::make_tuple(null_masks.begin(), begin_bits.begin(), end_bits.begin()));
+    thrust::for_each(
+      nullmask_iter, nullmask_iter + null_masks.size(), [&](auto const& nullmask_tuple) {
+        cudf::set_null_mask(thrust::get<0>(nullmask_tuple),
+                            thrust::get<1>(nullmask_tuple),
+                            thrust::get<2>(nullmask_tuple),
+                            false,
+                            _stream);
+      });
   }
 }
 
