@@ -460,16 +460,69 @@ _group_sum_binaryop = cuda.declare_device(
         group_size_type,
     )
 )
+
+_group_sub_scalar = cuda.declare_device(
+    "group_sub_scalar",
+    types.CPointer(types.int64)(
+        types.CPointer(types.int64), types.int64, group_size_type
+    ),
+)
+
+_group_sub_group = cuda.declare_device(
+    "group_sub_group",
+    types.CPointer(types.int64)(
+        types.CPointer(types.int64),
+        types.CPointer(types.int64),
+        group_size_type,
+    ),
+)
+
 def call_group_sum(lhs, rhs, size):
     return _group_sum_binaryop(lhs, rhs, size)
 
+def call_group_sub_scalar(lhs, scalar, size):
+    return _group_sub_scalar(lhs, scalar, size)
 
+def call_group_sub_group(lhs, rhs, size):
+    return _group_sub_group(lhs, rhs, size)
+
+
+
+class GroupViewSubScalar(AbstractTemplate):
+    def generic(self, args, kws):
+        # for now only support int group minus int scalar
+        if isinstance(args[0], GroupViewType) and isinstance(
+            args[1], types.Integer
+        ):
+            return nb_signature(
+                ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1]
+            )
+        else:
+            return None
 
 class GroupViewAdd(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], GroupViewType) and isinstance(
             args[1], GroupViewType
         ):
-            return nb_signature(ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1])
+            return nb_signature(
+                ManagedGroupViewType(GroupViewType(types.int64)), args[0], args[1]
+            )
+
+class ManagedGroupViewSub(AbstractTemplate):
+    """ Typing for managed_group_view - managed_group_view """
+    def generic(self, args, kws):
+        if isinstance(args[0], ManagedGroupViewType) and isinstance(
+            args[1], ManagedGroupViewType
+        ):
+            return nb_signature(
+                ManagedGroupViewType(GroupViewType(types.int64)),
+                args[0],
+                args[1],
+            )
+        else:
+            return None
 
 cuda_registry.register_global(operator.add)(GroupViewAdd)
+cuda_registry.register_global(operator.sub)(GroupViewSubScalar)
+cuda_registry.register_global(operator.sub)(ManagedGroupViewSub)
