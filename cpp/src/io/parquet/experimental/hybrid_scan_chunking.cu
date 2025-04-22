@@ -212,12 +212,15 @@ struct codec_stats {
 
   void add_pages(host_span<ColumnChunkDesc const> chunks,
                  host_span<PageInfo> pages,
-                 page_selection selection)
+                 page_selection selection,
+                 host_span<bool const> page_mask)
   {
-    for (auto& page : pages) {
+    for (size_t page_idx = 0; page_idx < pages.size(); ++page_idx) {
+      auto& page = pages[page_idx];
       if (chunks[page.chunk_idx].codec == compression_type &&
           (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
-            (selection == page_selection::DICT_PAGES)) {
+            (selection == page_selection::DICT_PAGES) &&
+          page_mask[page_idx]) {
         ++num_pages;
         total_decomp_size += page.uncompressed_page_size;
         max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
@@ -245,6 +248,7 @@ struct codec_stats {
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
   host_span<PageInfo> subpass_pages,
+  host_span<bool const> page_mask,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -269,7 +273,7 @@ struct codec_stats {
 
   size_t total_pass_decomp_size = 0;
   for (auto& codec : codecs) {
-    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES);
+    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES, page_mask);
     total_pass_decomp_size += codec.total_decomp_size;
   }
 
@@ -277,7 +281,7 @@ struct codec_stats {
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
   for (auto& codec : codecs) {
-    codec.add_pages(chunks, subpass_pages, codec_stats::page_selection::NON_DICT_PAGES);
+    codec.add_pages(chunks, subpass_pages, codec_stats::page_selection::NON_DICT_PAGES, page_mask);
     // at this point, the codec contains info for both dictionary pass pages and data subpass pages
     total_decomp_size += codec.total_decomp_size;
     num_comp_pages += codec.num_pages;
@@ -315,10 +319,12 @@ struct codec_stats {
                             void* decomp_data,
                             bool select_dict_pages,
                             size_t& decomp_offset) {
-    for (auto& page : pages) {
+    for (size_t page_idx = 0; page_idx < pages.size(); ++page_idx) {
+      auto& page = pages[page_idx];
       if (chunks[page.chunk_idx].codec == codec.compression_type &&
           (page.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) ==
-            select_dict_pages) {
+            select_dict_pages &&
+          page_mask[page_idx]) {
         auto const dst_base = static_cast<uint8_t*>(decomp_data) + decomp_offset;
         // offset will only be non-zero for V2 pages
         auto const offset =
@@ -745,6 +751,7 @@ void impl::compute_output_chunks_for_subpass()
 }
 
 void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
+                           cudf::host_span<std::vector<bool> const> data_page_mask,
                            parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
@@ -781,6 +788,9 @@ void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
       setup_next_pass(std::move(column_chunk_buffers), options);
     }
   }
+
+  // Must be called before `setup_next_subpass()` to select pages to decompress
+  set_page_mask(data_page_mask);
 
   // setup the next sub pass
   setup_next_subpass(options);
@@ -917,8 +927,12 @@ void impl::setup_next_subpass(parquet_reader_options const& options)
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
-    auto [pass_data, subpass_data] = decompress_page_data(
-      pass.chunks, is_first_subpass ? pass.pages : host_span<PageInfo>{}, subpass.pages, _stream);
+    auto [pass_data, subpass_data] =
+      decompress_page_data(pass.chunks,
+                           is_first_subpass ? pass.pages : host_span<PageInfo>{},
+                           subpass.pages,
+                           _page_mask,
+                           _stream);
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);

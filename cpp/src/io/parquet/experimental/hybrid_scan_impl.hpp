@@ -235,6 +235,7 @@ class impl {
    */
   void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
                     std::vector<rmm::device_buffer> column_chunk_buffers,
+                    cudf::host_span<std::vector<bool> const> data_page_mask,
                     parquet_reader_options const& options);
 
   /**
@@ -254,6 +255,7 @@ class impl {
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
+                       cudf::host_span<std::vector<bool> const> data_page_mask,
                        parquet_reader_options const& options);
 
   /**
@@ -501,7 +503,7 @@ class impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  std::vector<bool> _page_mask;
+  cudf::detail::host_vector<bool> _page_mask;
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
