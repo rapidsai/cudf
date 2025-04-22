@@ -27,7 +27,7 @@ T_ = TypeVar("T_")
 
 def istask(x: Any) -> bool:
     """Check if x is a callable task."""
-    return bool(type(x) is tuple and x and callable(x[0]))
+    return isinstance(x, tuple) and bool(x) and callable(x[0])
 
 
 def _execute_task(arg: Any, cache: MutableMapping) -> Any:
