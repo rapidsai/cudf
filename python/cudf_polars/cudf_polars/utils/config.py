@@ -68,11 +68,6 @@ class ShuffleMethod(str, enum.Enum):
     RAPIDSMPF = "rapidsmpf"
 
 
-STREAMING_EXECUTOR_PARQUET_DEFAULTS = {
-    "chunked": False,
-}
-
-
 @dataclasses.dataclass(frozen=True)
 class ParquetOptions:
     """
@@ -301,10 +296,6 @@ class ConfigOptions:
 
                 executor = StreamingExecutor(**user_executor_options)
                 # Update with the streaming defaults, but user options take precedence.
-                user_parquet_options = {
-                    **STREAMING_EXECUTOR_PARQUET_DEFAULTS,
-                    **user_parquet_options,
-                }
 
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")

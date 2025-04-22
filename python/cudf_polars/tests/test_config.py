@@ -103,28 +103,22 @@ def test_explicit_memory_resource():
     assert n_allocations > 0
 
 
-def test_parquet_options() -> None:
+@pytest.mark.parametrize("executor", ["streaming", "in-memory"])
+def test_parquet_options(executor: str) -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
-            executor="streaming",
+            executor=executor,
+        )
+    )
+    assert config.parquet_options.chunked is True
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor=executor,
+            parquet_options={"chunked": False},
         )
     )
     assert config.parquet_options.chunked is False
-
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="streaming",
-            parquet_options={"chunked": True},
-        )
-    )
-    assert config.parquet_options.chunked is True
-
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor="in-memory",
-        )
-    )
-    assert config.parquet_options.chunked is True
 
 
 def test_validate_streaming_executor_shuffle_method() -> None:
