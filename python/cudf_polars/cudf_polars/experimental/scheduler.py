@@ -30,7 +30,7 @@ def istask(x: Any) -> bool:
     return isinstance(x, tuple) and bool(x) and callable(x[0])
 
 
-def _execute_task(arg: Any, cache: MutableMapping) -> Any:
+def _execute_task(arg: Any, cache: Mapping) -> Any:
     """Execute a compute task."""
     if istask(arg):
         return arg[0](*(_execute_task(a, cache) for a in arg[1:]))
