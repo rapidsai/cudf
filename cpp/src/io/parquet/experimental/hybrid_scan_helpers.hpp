@@ -162,6 +162,125 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     host_span<int const> output_column_schemas,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Get the bloom filter byte ranges, one per input column chunk
+   *
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter Optional AST expression to filter row groups based on bloom filters
+   *
+   * @return Byte ranges of bloom filters, one per input column chunk
+   */
+  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_bloom_filter_bytes(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  /**
+   * @brief Get the dictionary page byte ranges, one per input column chunk
+   *
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter Optional AST expression to filter row groups based on dictionary pages
+   *
+   * @return Byte ranges of dictionary pages, one per input column chunk
+   */
+  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  /**
+   * @brief Filter the row groups using dictionaries based on predicate filter
+   *
+   * @param dictionary_page_data Device buffers of dictionary pages, one per input column chunk
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter Optional AST expression to filter row groups based on dictionary pages
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any are filtered
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
+    std::vector<rmm::device_buffer>& dictionary_page_data,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filter the row groups using bloom filters based on predicate filter
+   *
+   * @param bloom_filter_data Device buffers of bloom filters, one per input column chunk
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter Optional AST expression to filter row groups based on bloom filters
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any are filtered
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
+    std::vector<rmm::device_buffer>& bloom_filter_data,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    rmm::cuda_stream_view stream) const;
+};
+
+/**
+ * @brief Collects lists of equal and not-equal predicate literals in the AST expression, one list
+ * per input table column. This is used in row group filtering based on dictionary pages.
+ */
+class dictionary_literals_and_operators_collector : public equality_literals_collector {
+ public:
+  dictionary_literals_and_operators_collector();
+
+  dictionary_literals_and_operators_collector(ast::expression const& expr,
+                                              cudf::size_type num_input_columns);
+
+  using equality_literals_collector::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns the vectors of dictionary page filter literals in the AST expression, one per
+   * input table column
+   */
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() = delete;
+
+  /**
+   * @brief Returns a pair of two vectors containing dictionary filter literals and operators
+   * in the AST expression respectively, one per input table column
+   */
+  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
+                          std::vector<std::vector<ast::ast_operator>>>
+  get_literals_and_operators() &&;
+
+ private:
+  std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail
