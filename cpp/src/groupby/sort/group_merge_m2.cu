@@ -51,7 +51,7 @@ struct merge_fn {
   result_type const* d_means;
   result_type const* d_M2s;
 
-  auto __device__ operator()(size_type const group_idx) noexcept
+  auto __device__ operator()(size_type const group_idx) const
   {
     count_type n{0};
     result_type avg{0};
