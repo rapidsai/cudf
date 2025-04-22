@@ -23,8 +23,8 @@ main() {
 
     if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
-        CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-        PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
+        CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+        PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
     fi
 
     ANY_FAILURES=0
