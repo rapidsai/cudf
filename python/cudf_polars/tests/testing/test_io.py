@@ -27,15 +27,10 @@ def test_make_source_multiple_files(tmp_path, fmt, n_files):
     df = pl.DataFrame({"a": list(range(100)), "b": ["x"] * 100})
     make_partitioned_source(df, tmp_path, fmt, n_files=n_files)
 
-    # Check all the parts exist
-    for i in range(n_files):
-        expected = tmp_path / f"part.{i}.{fmt}"
-        assert expected.exists()
-        assert expected.is_file()
-
-    # No extra files
-    files = list(tmp_path.glob(f"part.*.{fmt}"))
-    assert len(files) == n_files
+    for i, file in enumerate(sorted(tmp_path.iterdir())):
+        assert file.exists()
+        assert file.is_file()
+        assert file.name == f"part.{i}.{fmt}"
 
 
 def test_make_source_invalid_format(tmp_path):

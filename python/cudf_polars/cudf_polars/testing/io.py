@@ -9,13 +9,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     import polars as pl
+
+__all__: list[str] = ["make_partitioned_source"]
 
 
 def make_partitioned_source(
     df: pl.DataFrame,
     path: str | Path,
-    fmt: str,
+    fmt: Literal["csv", "ndjson", "parquet", "chunked_parquet"],
     *,
     n_files: int = 1,
     row_group_size: int | None = None,
@@ -29,7 +33,7 @@ def make_partitioned_source(
         The input DataFrame to write.
     path : str | pathlib.Path
         The base path to write the file(s) to.
-    fmt : str
+    fmt : Literal["csv", "ndjson", "parquet", "chunked_parquet"]
         The format to write in.
     n_files : int, default 1
         If greater than 1, splits the data into multiple files.
@@ -37,30 +41,25 @@ def make_partitioned_source(
         Only used for Parquet. Specifies the row group size per file.
     """
     path = Path(path)
-    if n_files == 1:
-        if fmt == "csv":
-            df.write_csv(path)
-        elif fmt == "ndjson":
-            df.write_ndjson(path)
-        elif fmt in {"parquet", "chunked_parquet"}:
-            df.write_parquet(path)
-        else:
-            raise ValueError(f"Unsupported format: {fmt}")
-    else:
-        n_rows = len(df)
-        stride = int(n_rows / n_files)
-        for i in range(n_files):
-            offset = stride * i
-            part = df.slice(offset, stride)
-            file_path = path / f"part.{i}.{fmt}"
-            if fmt == "csv":
+
+    def write(part: pl.DataFrame, file_path: Path) -> None:
+        match fmt:
+            case "csv":
                 part.write_csv(file_path)
-            elif fmt == "ndjson":
+            case "ndjson":
                 part.write_ndjson(file_path)
-            elif fmt == "parquet":
+            case "parquet" | "chunked_parquet":
                 part.write_parquet(
                     file_path,
-                    row_group_size=row_group_size or int(stride / 2),
+                    row_group_size=row_group_size or (len(part) // 2),
                 )
-            else:
+            case _:
                 raise ValueError(f"Unsupported format: {fmt}")
+
+    if n_files == 1:
+        write(df, path)
+    else:
+        stride = len(df) // n_files
+        for i, part in enumerate(df.iter_slices(stride)):
+            file_path = path / f"part.{i}.{fmt}"
+            write(part, file_path)
