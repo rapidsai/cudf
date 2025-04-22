@@ -782,7 +782,7 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the Sha1 hash of each row in the table.
+   * Create a new column containing the Sha1 hash of each row in the table.
    *
    * @param columns columns to hash
    * @return the new ColumnVector of 40 character hex strings representing each row's hash value.
@@ -920,7 +920,7 @@ public final class ColumnVector extends ColumnView {
   /**
    * Native method to sha1 hash each row of the given table
    *
-   * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
+   * @param viewHandles array of native handles to the columns being operated on.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
   private static native long sha1(long[] viewHandles) throws CudfException;
