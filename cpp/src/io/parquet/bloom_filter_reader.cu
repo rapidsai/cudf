@@ -335,9 +335,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
         (header.num_bytes % words_per_block) == 0 and
-        header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
-        header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
-        header.hash.hash == BloomFilterHash::Hash::XXHASH;
+        header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
+        header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
+        header.hash.hash == BloomFilterHash::XXHASH;
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
