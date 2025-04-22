@@ -152,7 +152,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
 
   return count_type_id == type_id::INT64
            ? merge_m2<int64_t>(values, group_offsets, num_groups, stream, mr)
-           : merge_m2<double>(values, group_offsets, num_groups, stream, mr);
+           : merge_m2<result_type>(values, group_offsets, num_groups, stream, mr);
 }
 
 }  // namespace detail
