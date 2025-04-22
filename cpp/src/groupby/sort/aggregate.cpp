@@ -795,6 +795,24 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::BITWISE_AGG>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const bit_op = dynamic_cast<cudf::detail::bitwise_aggregation const&>(agg).bit_op;
+  auto result       = detail::group_bitwise(bit_op,
+                                      get_grouped_values(),
+                                      helper.group_labels(stream),
+                                      helper.num_groups(stream),
+                                      stream,
+                                      mr);
+  cache.add_result(values, agg, std::move(result));
+}
+
+// Note: the definition for HOST_UDF specialization needs to be at last.
+// This is because it calls to `aggregation_dispatcher` which requires to see all other function
+// specializations defined before this.
+template <>
 void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) { return; }

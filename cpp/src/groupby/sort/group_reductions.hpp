@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -538,6 +538,23 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           column_view const& stddev_1,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Internal API to calculate bitwise operation on grouped values.
+ *
+ * @param bit_op Bitwise operation to perform on the input
+ * @param grouped_values Grouped values to perform bitwise operation on
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
+                                      column_view const& grouped_values,
+                                      device_span<size_type const> group_labels,
+                                      size_type num_groups,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace groupby
