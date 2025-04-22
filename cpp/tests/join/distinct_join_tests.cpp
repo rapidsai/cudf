@@ -508,7 +508,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 }
 
 // Disabled for now, waiting on upstream cuco updates
-TEST_F(DistinctJoinTest, DISABLE_InvalidLoadFactor)
+TEST_F(DistinctJoinTest, DISABLED_InvalidLoadFactor)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
