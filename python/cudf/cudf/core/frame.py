@@ -388,14 +388,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> df.equals(different_column_type)
         True
         """
-        if self is other:
+        if not isinstance(other, type(self)):
+            return False
+        elif self is other:
             return True
-        if not isinstance(other, type(self)) or len(self) != len(other):
+        elif (
+            self._num_columns != other._num_columns
+            or self._num_rows != other._num_rows
+        ):
             return False
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(self._columns, other._columns)
+            for self_col, other_col in zip(
+                self._columns, other._columns, strict=True
+            )
         )
 
     @_performance_tracking
