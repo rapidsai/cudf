@@ -35,6 +35,7 @@ namespace cudf::io::parquet::experimental::detail {
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
 using CompactProtocolReader          = parquet::detail::CompactProtocolReader;
 using equality_literals_collector    = parquet::detail::equality_literals_collector;
+using inline_column_buffer           = detail::inline_column_buffer;
 using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
 using row_group_info                 = parquet::detail::row_group_info;
@@ -135,6 +136,134 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
       }
     }
   }
+}
+
+std::tuple<std::vector<input_column_info>,
+           std::vector<inline_column_buffer>,
+           std::vector<cudf::size_type>>
+aggregate_reader_metadata::select_payload_columns(
+  std::optional<std::vector<std::string>> const& payload_column_names,
+  std::optional<std::vector<std::string>> const& filter_column_names,
+  bool include_index,
+  bool strings_to_categorical,
+  type_id timestamp_type_id)
+{
+  // Select all columns if no payload or filter columns are specified
+  if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
+    return select_columns({}, {}, include_index, strings_to_categorical, timestamp_type_id);
+  }
+
+  // If payload columns are specified, only select payload columns that do not appear in the filter
+  // expression
+  std::vector<std::string> valid_payload_columns;
+  if (payload_column_names.has_value()) {
+    valid_payload_columns = *payload_column_names;
+    // Remove filter columns from the provided payload column names
+    if (filter_column_names.has_value()) {
+      valid_payload_columns.erase(std::remove_if(valid_payload_columns.begin(),
+                                                 valid_payload_columns.end(),
+                                                 [&](std::string const& col) {
+                                                   return std::find(filter_column_names->begin(),
+                                                                    filter_column_names->end(),
+                                                                    col) !=
+                                                          filter_column_names->end();
+                                                 }),
+                                  valid_payload_columns.end());
+    }
+    // Select valid payload columns using the base `select_columns` method
+    return select_columns(
+      valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+  }
+
+  // Otherwise, select all columns that do not appear in the filter expression
+  std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
+                                                              int schema_idx) {
+    auto const& schema_elem     = get_schema(schema_idx);
+    std::string const curr_path = path_till_now + schema_elem.name;
+    // If the current path is not a filter column, then add it and its children to the list of valid
+    // payload columns
+    if (std::find(filter_column_names.value().cbegin(),
+                  filter_column_names.value().cend(),
+                  curr_path) == filter_column_names.value().cend()) {
+      valid_payload_columns.push_back(curr_path);
+      // Add all children as well
+      for (auto const& child_idx : schema_elem.children_idx) {
+        add_column_path(curr_path + ".", child_idx);
+      }
+    }
+  };
+  // Add all base level columns to valid payload columns
+  for (auto const& child_idx : get_schema(0).children_idx) {
+    add_column_path("", child_idx);
+  }
+
+  // Select valid payload columns using the base `select_columns` method
+  return select_columns(
+    valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
+}
+
+std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::optional<std::reference_wrapper<ast::expression const>> filter,
+  rmm::cuda_stream_view stream) const
+{
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
+  std::transform(per_file_metadata.cbegin(),
+                 per_file_metadata.cend(),
+                 std::back_inserter(all_row_group_indices),
+                 [](auto const& file_meta) {
+                   std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
+                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
+                   return rg_idx;
+                 });
+
+  if (not filter.has_value()) { return all_row_group_indices; }
+
+  // Compute total number of input row groups
+  cudf::size_type total_row_groups = [&]() {
+    if (not row_group_indices.empty()) {
+      size_t const total_row_groups =
+        std::accumulate(row_group_indices.begin(),
+                        row_group_indices.end(),
+                        size_t{0},
+                        [](auto sum, auto const& pfm) { return sum + pfm.size(); });
+
+      // Check if we have less than 2B total row groups.
+      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+                   "Total number of row groups exceed the cudf::size_type's limit");
+      return static_cast<cudf::size_type>(total_row_groups);
+    } else {
+      return num_row_groups;
+    }
+  }();
+
+  // Span of input row group indices for predicate pushdown
+  host_span<std::vector<cudf::size_type> const> input_row_group_indices;
+  if (row_group_indices.empty()) {
+    std::transform(per_file_metadata.cbegin(),
+                   per_file_metadata.cend(),
+                   std::back_inserter(all_row_group_indices),
+                   [](auto const& file_meta) {
+                     std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
+                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
+                     return rg_idx;
+                   });
+    input_row_group_indices = host_span<std::vector<cudf::size_type> const>(all_row_group_indices);
+  } else {
+    input_row_group_indices = row_group_indices;
+  }
+
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  auto const stats_filtered_row_group_indices = apply_stats_filters(input_row_group_indices,
+                                                                    total_row_groups,
+                                                                    output_dtypes,
+                                                                    output_column_schemas,
+                                                                    filter.value(),
+                                                                    stream);
+
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices);
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

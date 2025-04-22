@@ -35,6 +35,7 @@ namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
 using equality_literals_collector    = parquet::detail::equality_literals_collector;
+using inline_column_buffer           = io::detail::inline_column_buffer;
 using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
 using row_group_info                 = parquet::detail::row_group_info;
@@ -123,6 +124,44 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
    */
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
+
+  /**
+   * @brief Filters and reduces down to the selection of payload columns
+   *
+   * @param payload_column_names List of paths of select payload column names, if any
+   * @param filter_columns_names List of paths of column names present only in filter, if any
+   * @param include_index Whether to always include the PANDAS index column(s)
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
+   *
+   * @return input column information, output column information, list of output column schema
+   * indices
+   */
+  [[nodiscard]] std::
+    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+    select_payload_columns(std::optional<std::vector<std::string>> const& payload_column_names,
+                           std::optional<std::vector<std::string>> const& filter_column_names,
+                           bool include_index,
+                           bool strings_to_categorical,
+                           type_id timestamp_type_id);
+
+  /**
+   * @brief Filter the row groups with statistics based on predicate filter
+   *
+   * @param row_group_indices Input row groups indices
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter Optional AST expression to filter row groups based on Column chunk statistics
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any are filtered
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    rmm::cuda_stream_view stream) const;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

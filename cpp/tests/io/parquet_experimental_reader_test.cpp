@@ -149,7 +149,7 @@ auto create_parquet_with_stats()
 
 TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
-  // Create a table with several row groups each with a single page.
+  // Create a table with 4 row groups each with a single page.
   auto constexpr num_concat    = 1;
   auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
 
@@ -210,4 +210,50 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   input_row_group_indices = reader->get_all_row_groups(options);
   // Expect only 2 row groups now
   ASSERT_EQ(reader->get_all_row_groups(options).size(), 2);
+}
+
+TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
+{
+  // Create a table with 4 row groups each with a single page.
+  auto constexpr num_concat    = 1;
+  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+
+  // Filtering AST - table[0] < 50
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(50);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
+      .filter(filter_expression);
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(
+    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+
+  // Create hybrid scan reader with footer bytes
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  // Get all row groups from the reader - API # 4
+  auto input_row_group_indices = reader->get_all_row_groups(options);
+  // Expect 4 = 20000 rows / 5000 rows per row group
+  ASSERT_EQ(input_row_group_indices.size(), 4);
+  // Expect 3 row groups to be filtered out with stats
+  ASSERT_EQ(
+    reader
+      ->filter_row_groups_with_stats(input_row_group_indices, options, cudf::get_default_stream())
+      .size(),
+    1);
+
+  // Use custom input row group indices
+  input_row_group_indices = {1, 2};
+  // Expect all row groups to be filtered out with stats
+  ASSERT_EQ(
+    reader
+      ->filter_row_groups_with_stats(input_row_group_indices, options, cudf::get_default_stream())
+      .size(),
+    0);
 }
