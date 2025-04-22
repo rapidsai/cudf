@@ -54,3 +54,26 @@ reaches its saturation bottleneck, whether that bottleneck is bandwidth or compu
 sets larger than this point is generally not helpful, except in specific cases where doing so
 exercises different code and can therefore uncover regressions that smaller benchmarks will not
 (this should be rare).
+
+## Running and Comparing NVBench Benchmarks in libcudf
+
+### Running Benchmarks
+
+NVBench executables are built under the `cpp/build/latest/benchmarks` directory. Each benchmark is compiled
+into its own binary with a `_NVBENCH` suffix.
+
+To list available benchmarks:
+
+```bash
+ls cpp/build/latest/benchmarks/*_NVBENCH
+```
+
+To view benchmark options:
+
+```bash
+./cpp/build/latest/benchmarks/RESHAPE_NVBENCH --help
+```
+
+### Comparing Benchmarks
+
+To compare two benchmark runs, use the [nvbench_compare.py](https://github.com/NVIDIA/nvbench/blob/main/scripts/nvbench_compare.py) script provided by NVBench.
