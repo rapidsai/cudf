@@ -64,8 +64,9 @@ struct accumulate_fn {
 
     auto const n_ab  = merge_vals.count + partial_vals.count;
     auto const delta = partial_vals.mean - merge_vals.mean;
-    merge_vals.M2 +=
-      partial_vals.M2 + (delta * delta) * merge_vals.count * partial_vals.count / n_ab;
+    merge_vals.M2 += partial_vals.M2 + (delta * delta) *
+                                         static_cast<result_type>(merge_vals.count) *
+                                         static_cast<result_type>(partial_vals.count) / n_ab;
     merge_vals.mean =
       (merge_vals.mean * merge_vals.count + partial_vals.mean * partial_vals.count) / n_ab;
     merge_vals.count = n_ab;
