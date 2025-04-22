@@ -57,13 +57,6 @@ class Column:
     @staticmethod
     def all_null_like(like: Column, size: int) -> Column: ...
     @classmethod
-    def from_gpumemoryview(
-        data: gpumemoryview,
-        shape: tuple[int, ...],
-        strides: None | tuple[int, ...],
-        dtype: DataType,
-    ) -> Column: ...
-    @classmethod
     def from_cuda_array_interface(
         cls, obj: SupportsCudaArrayInterface
     ) -> Column: ...

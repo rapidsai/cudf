@@ -68,7 +68,7 @@ cdef class Column:
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
     @staticmethod
-    cdef Column from_gpumemoryview(
+    cdef Column _from_gpumemoryview(
         gpumemoryview data,
         tuple shape,
         tuple strides,
