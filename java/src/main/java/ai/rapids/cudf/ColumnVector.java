@@ -796,11 +796,6 @@ public final class ColumnVector extends ColumnView {
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() || columns[i].getType().equals(DType.LIST) :
-        "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(sha1(columnViews));
