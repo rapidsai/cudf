@@ -530,7 +530,7 @@ __device__ void transform(cudf::string_view* out,
                           int32_t size,
                           void* user_data)
 {
-  char* it                = static_cast<char*>(user_data);
+  char* it                = static_cast<char*>(user_data) + offset;
   char const* const begin = it;
 
   memcpy(it, first_name.data(), first_name.size_bytes());
