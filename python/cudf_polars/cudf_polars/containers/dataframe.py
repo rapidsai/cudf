@@ -8,14 +8,12 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-import pyarrow as pa
-
 import polars as pl
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.utils import conversion, dtypes
+from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
@@ -108,18 +106,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        table = df.to_arrow(compat_level=dtypes.TO_ARROW_COMPAT_LEVEL)
-        schema = table.schema
-        for i, field in enumerate(schema):
-            schema = schema.set(
-                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
-            )
-        # No-op if the schema is unchanged.
-        d_table = plc.interop.from_arrow(table.cast(schema))
-        return cls(
-            Column(column).copy_metadata(h_col)
-            for column, h_col in zip(d_table.columns(), df.iter_columns(), strict=True)
-        )
+        return cls.from_table(plc.Table(df), df.columns)
 
     @classmethod
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
