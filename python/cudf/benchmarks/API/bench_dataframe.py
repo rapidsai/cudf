@@ -6,11 +6,163 @@ import string
 
 import numba.cuda
 import numpy
+import pandas as pd
 import pyarrow as pa
 import pytest
 import pytest_cases
-from config import cudf, cupy
+from config import NUM_COLS, NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
+
+
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
+@pytest.mark.parametrize("num_cols", NUM_COLS)
+@pytest.mark.parametrize(
+    "values_constructor",
+    [
+        range,
+        cupy.random.default_rng(2).standard_normal,
+        numpy.random.default_rng(2).standard_normal,
+        lambda num_cols: pd.Series(range(num_cols)),
+        lambda num_cols: cudf.Series(range(num_cols)),
+    ],
+    ids=["range", "cupy", "numpy", "pandas", "cudf"],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        lambda num_rows: None,
+        lambda num_rows: range(num_rows),
+        lambda num_rows: pd.RangeIndex(num_rows),
+        lambda num_rows: cudf.RangeIndex(num_rows),
+    ],
+    ids=["None", "range", "pandas-index", "cudf-index"],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        lambda num_cols: None,
+        lambda num_cols: range(num_cols),
+        lambda num_cols: pd.Index(numpy.arange(num_cols)),
+        lambda num_cols: cudf.Index(numpy.arange(num_cols)),
+    ],
+    ids=["None", "range", "pandas-index", "cudf-index"],
+)
+@pytest.mark.parametrize("dtype", [None, "float32"])
+@pytest.mark.pandas_incompatible
+def bench_construction_with_mapping(
+    benchmark, num_rows, num_cols, values_constructor, index, columns, dtype
+):
+    benchmark(
+        cudf.DataFrame,
+        data={i: values_constructor(num_rows) for i in range(num_cols)},
+        columns=columns(num_cols),
+        index=index(num_rows),
+        dtype=dtype,
+    )
+
+
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
+@pytest.mark.parametrize("num_cols", NUM_COLS)
+@pytest.mark.parametrize("order", ["C", "F"])
+@pytest.mark.parametrize(
+    "array_constructor",
+    [
+        lambda num_rows, num_cols, order: numpy.zeros(
+            (num_rows, num_cols), order=order
+        ),
+        lambda num_rows, num_cols, order: cupy.zeros(
+            (num_rows, num_cols), order=order
+        ),
+    ],
+    ids=["numpy", "cupy"],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        lambda num_rows: None,
+        lambda num_rows: range(num_rows),
+        lambda num_rows: pd.RangeIndex(num_rows),
+        lambda num_rows: cudf.Index(numpy.arange(num_rows)),
+    ],
+    ids=["None", "range", "pandas-index", "cudf-index"],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        lambda num_cols: None,
+        lambda num_cols: range(num_cols),
+        lambda num_cols: pd.Index(numpy.arange(num_cols)),
+        lambda num_cols: cudf.Index(numpy.arange(num_cols)),
+    ],
+    ids=["None", "range", "pandas-index", "cudf-index"],
+)
+@pytest.mark.parametrize("dtype", [None, "float32"])
+@pytest.mark.pandas_incompatible
+def bench_construction_with_array(
+    benchmark,
+    num_rows,
+    num_cols,
+    order,
+    array_constructor,
+    columns,
+    index,
+    dtype,
+):
+    benchmark(
+        cudf.DataFrame,
+        data=array_constructor(num_rows, num_cols, order),
+        columns=columns(num_cols),
+        index=index(num_rows),
+        dtype=dtype,
+    )
+
+
+@pytest.mark.parametrize("num_rows", NUM_ROWS)
+@pytest.mark.parametrize(
+    "frame_index",
+    [
+        lambda num_rows: None,
+        lambda num_rows: range(num_rows - 1, -1, -1),
+    ],
+    ids=["None", "reverse-range"],
+)
+@pytest.mark.parametrize(
+    "framelike",
+    [
+        lambda num_rows, frame_index: pd.Series(range(num_rows), frame_index),
+        lambda num_rows, frame_index: cudf.Series(
+            range(num_rows), frame_index
+        ),
+        lambda num_rows, frame_index: pd.DataFrame(
+            numpy.zeros((num_rows, 50)), frame_index
+        ),
+        lambda num_rows, frame_index: cudf.DataFrame(
+            numpy.zeros((num_rows, 50)), frame_index
+        ),
+    ],
+    ids=["pandas-series", "cudf-series", "pandas-frame", "cudf-frame"],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        lambda num_rows: None,
+        lambda num_rows: range(num_rows),
+        lambda num_rows: pd.Index(numpy.arange(num_rows)),
+        lambda num_rows: cudf.Index(numpy.arange(num_rows)),
+    ],
+    ids=["None", "range", "pandas-index", "cudf-index"],
+)
+@pytest.mark.parametrize("dtype", [None, "float32"])
+@pytest.mark.pandas_incompatible
+def bench_construction_with_framelike(
+    benchmark, framelike, num_rows, frame_index, index, dtype
+):
+    benchmark(
+        cudf.DataFrame,
+        data=framelike(num_rows, frame_index(num_rows)),
+        index=index(num_rows),
+        dtype=dtype,
+    )
 
 
 @pytest.mark.parametrize("N", [100, 1_000_000, 100_000_000])

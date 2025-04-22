@@ -21,6 +21,7 @@ from cudf_polars.dsl.ir import (
     GroupBy,
     HConcatBcast,
     HStack,
+    MapFunction,
     Projection,
     Select,
     Union,
@@ -245,6 +246,20 @@ def _(
     }
 
 
+@lower_ir_node.register(MapFunction)
+def _(
+    ir: MapFunction, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Allow pointwise operations
+    if ir.name in ("rename", "explode"):
+        return _lower_ir_pwise(ir, rec)
+
+    # Fallback for everything else
+    return _lower_ir_fallback(
+        ir, rec, msg=f"{ir.name} is not supported for multiple partitions."
+    )
+
+
 def _lower_ir_pwise(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -302,4 +317,5 @@ generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HConcatBcast, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)

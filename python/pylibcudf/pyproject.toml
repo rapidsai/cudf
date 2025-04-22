@@ -41,7 +41,7 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "fastavro>=0.22.9",
-    "hypothesis<6.131.1",
+    "nanoarrow",
     "numpy>=1.23,<3.0a0",
     "pandas",
     "pytest-cov",

@@ -411,6 +411,26 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
     assert_table_and_meta_eq(expected, result, check_field_nullability=False)
 
 
+def test_utf8_escaped_json_writer(tmp_path):
+    arrow_table = pa.table({"a": ["C𝞵𝓓𝒻"]})
+    plc_table = plc.interop.from_arrow(arrow_table)
+
+    path = tmp_path / "out.json"
+
+    options = (
+        plc.io.json.JsonWriterOptions.builder(
+            plc.io.SinkInfo([path]), plc_table
+        )
+        .utf8_escaped(False)
+        .build()
+    )
+    plc.io.json.write_json(options)
+
+    output_string = path.read_text(encoding="utf-8").strip()
+
+    assert output_string == '[{"0":"C𝞵𝓓𝒻"}]'
+
+
 # TODO: Add tests for these!
 # Tests were not added in the initial PR porting the JSON reader to pylibcudf
 # to save time (and since there are no existing tests for these in Python cuDF)
