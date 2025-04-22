@@ -36,11 +36,11 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
-using ColumnChunkDesc       = parquet::detail::ColumnChunkDesc;
-using decode_kernel_mask    = parquet::detail::decode_kernel_mask;
-using PageInfo              = parquet::detail::PageInfo;
-using PageNestingDecodeInfo = parquet::detail::PageNestingDecodeInfo;
-using byte_range_info       = text::byte_range_info;
+using parquet::detail::ColumnChunkDesc;
+using parquet::detail::decode_kernel_mask;
+using parquet::detail::PageInfo;
+using parquet::detail::PageNestingDecodeInfo;
+using text::byte_range_info;
 
 impl::impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options const& options)
 {

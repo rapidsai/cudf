@@ -182,7 +182,7 @@ class impl {
                               rmm::cuda_stream_view stream);
 
  private:
-  using table_metadata = cudf::io::table_metadata;
+  using cudf::io::table_metadata;
 
   /**
    * @brief The enum indicating whether we are reading the filter columns or the payload columns
