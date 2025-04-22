@@ -55,7 +55,7 @@ test = [
     "fastavro>=0.22.9",
     "hypothesis<6.131.1",
     "msgpack",
-    "pytest-benchmark<5.1.0",
+    "pytest-benchmark",
     "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-rerunfailures",
