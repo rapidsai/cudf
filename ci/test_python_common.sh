@@ -14,16 +14,20 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-PYLIBCUDF_KEY=$1
-CUDF_KEY=$2
-rapids-dependency-file-generator \
-  --output conda \
-  --file-key "${PYLIBCUDF_KEY}" \
-  --file-key "${CUDF_KEY}" \
-  --prepend-channel "${CPP_CHANNEL}" \
-  --prepend-channel "${PYTHON_CHANNEL}" \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-    | tee "${ENV_YAML_DIR}/env.yaml"
+
+CMD="rapids-dependency-file-generator --output conda"
+
+# Add file-key options for each argument
+for KEY in "$@"; do
+  CMD="${CMD} --file-key \"${KEY}\""
+done
+
+CMD="${CMD} \
+  --prepend-channel \"${CPP_CHANNEL}\" \
+  --prepend-channel \"${PYTHON_CHANNEL}\" \
+  --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}\""
+
+eval ${CMD} | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
