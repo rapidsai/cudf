@@ -40,9 +40,9 @@
 namespace cudf::io::parquet::experimental::detail {
 
 /**
- * @brief Implementation for Parquet reader
+ * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
  */
-class impl {
+class hybrid_scan_reader_impl {
  public:
   /**
    * @brief Constructor for the experimental parquet reader implementation to optimally read
@@ -51,7 +51,8 @@ class impl {
    * @param footer_bytes Host span of parquet file footer bytes
    * @param options Parquet reader options
    */
-  explicit impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options const& options);
+  explicit hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
+                                   parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::get_parquet_metadata
@@ -182,8 +183,6 @@ class impl {
                               rmm::cuda_stream_view stream);
 
  private:
-  using cudf::io::table_metadata;
-
   /**
    * @brief The enum indicating whether we are reading the filter columns or the payload columns
    */
@@ -470,7 +469,7 @@ class impl {
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 
   // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, cudf::io::table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;

@@ -23,7 +23,7 @@ namespace cudf::io::parquet::experimental {
 
 hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_bytes,
                                        parquet_reader_options const& options)
-  : _impl{std::make_unique<detail::impl>(footer_bytes, options)}
+  : _impl{std::make_unique<detail::hybrid_scan_reader_impl>(footer_bytes, options)}
 {
 }
 

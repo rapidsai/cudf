@@ -30,10 +30,10 @@
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental::detail {
 /**
- * @brief Internal experimental Parquet reader optimized for highly selective filters (Hybrid Scan
- * operation).
+ * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
+ *        Hybrid Scan operation.
  */
-class impl;
+class hybrid_scan_reader_impl;
 }  // namespace io::parquet::experimental::detail
 }  // namespace CUDF_EXPORT cudf
 
@@ -50,13 +50,13 @@ namespace io::parquet::experimental {
 
 /**
  * @brief The experimental parquet reader class to optimally read parquet files subject to
- *        highly selective filters (Hybrid Scan operation)
+ *        highly selective filters, called a Hybrid Scan operation
  *
  * This class is designed to best exploit reductive optimization techniques to speed up reading
- * Parquet files subject to highly selective filters (Hybrid scan operation). This class reads file
- * contents in two passes, where the first pass optimally reads the `filter` columns (i.e. columns
- * that appear in the filter expression) and the second pass optimally reads the `payload` columns
- * (i.e. columns that do not appear in the filter expression)
+ * Parquet files subject to highly selective filters. This class reads file contents in two passes,
+ * where the first pass optimally reads the `filter` columns (i.e. columns that appear in the filter
+ * expression) and the second pass optimally reads the `payload` columns (i.e. columns that do not
+ * appear in the filter expression).
  */
 class hybrid_scan_reader {
  public:
@@ -76,30 +76,30 @@ class hybrid_scan_reader {
   ~hybrid_scan_reader();
 
   /**
-   * @brief Get the Parquet file footer metadata.
+   * @brief Get the Parquet file footer metadata
    *
    * Returns the materialized Parquet file footer metadata struct. The footer will contain the
-   * materialized `PageIndex` if called after `setup_page_index()`.
+   * materialized page index if called after `setup_page_index()`.
    *
    * @return Parquet file footer metadata
    */
   [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
 
   /**
-   * @brief Get the byte range of the `PageIndex` in the Parquet file
+   * @brief Get the byte range of the page index in the Parquet file
    *
-   * @return Byte range of the `PageIndex`
+   * @return Byte range of the page index
    */
   [[nodiscard]] byte_range_info get_page_index_bytes() const;
 
   /**
-   * @brief Setup the `PageIndex` within the Parquet file metadata struct for later use
+   * @brief Setup the page index within the Parquet file metadata (`FileMetaData`) for later use
    *
-   * Materialize the `ColumnIndex` and `OffsetIndex` structs (collectively called `PageIndex`)
-   * within the Parquet file metadata struct. The statistics contained in `PageIndex` can be used to
+   * Materialize the `ColumnIndex` and `OffsetIndex` structs (collectively called the page index)
+   * within the Parquet file metadata struct. The statistics contained in page index can be used to
    * prune data pages before decoding
    *
-   * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
+   * @param page_index_bytes Host span of Parquet page index buffer bytes
    */
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const;
 
@@ -113,7 +113,7 @@ class hybrid_scan_reader {
     parquet_reader_options const& options) const;
 
   /**
-   * @brief Filter the input row groups with statistics
+   * @brief Filter the input row groups using column chunk statistics
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -138,7 +138,7 @@ class hybrid_scan_reader {
                         parquet_reader_options const& options) const;
 
   /**
-   * @brief Filter the row groups with dictionary pages
+   * @brief Filter the row groups using column chunk dictionary pages
    *
    * @param dictionary_page_data Device buffers containing per-column-chunk dictionary page data
    * @param row_group_indices Input row groups indices
@@ -153,7 +153,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Filter the row groups with bloom filters
+   * @brief Filter the row groups using column chunk bloom filters
    *
    * @param bloom_filter_data Device buffers containing per-column-chunk bloom filter data
    * @param row_group_indices Input row groups indices
@@ -244,7 +244,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
  private:
-  std::unique_ptr<detail::impl> _impl;
+  std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };
 
 /** @} */  // end of group

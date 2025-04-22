@@ -33,11 +33,12 @@
 namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
-using CompactProtocolReader          = parquet::detail::CompactProtocolReader;
-using equality_literals_collector    = parquet::detail::equality_literals_collector;
-using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
-using row_group_info                 = parquet::detail::row_group_info;
+
+using parquet::detail::CompactProtocolReader;
+using parquet::detail::equality_literals_collector;
+using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -100,7 +101,7 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
 {
   // Return early if empty page index buffer span
   if (not page_index_bytes.size()) {
-    CUDF_LOG_WARN("Hybrid scan reader encountered empty `PageIndex` buffer");
+    CUDF_LOG_WARN("Hybrid scan reader encountered empty page index buffer");
     return;
   }
 
@@ -108,7 +109,7 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   auto& row_groups = schema.row_groups;
 
   CUDF_EXPECTS(row_groups.size() and row_groups.front().columns.size(),
-               "No column chunks in Parquet schema to read PageIndex for");
+               "No column chunks in Parquet schema to read page index for");
 
   CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
 
