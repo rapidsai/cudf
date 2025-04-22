@@ -409,25 +409,38 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
-  : _has_nulls{has_nulls},
+  : hash_join{build, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+{
+}
+
+template <typename Hasher>
+hash_join<Hasher>::hash_join(cudf::table_view const& build,
+                             bool has_nulls,
+                             cudf::null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
+  : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{cuco::extent{static_cast<size_t>(build.num_rows())},
-                CUCO_DESIRED_LOAD_FACTOR,
-                cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           cudf::detail::JoinNoneValue}},
-                {},
-                {},
-                {},
-                {},
-                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-                stream.value()},
+    _hash_table{
+      cuco::extent{static_cast<size_t>(build.num_rows())},
+      load_factor,
+      cuco::empty_key{
+        cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::detail::JoinNoneValue}},
+      {},
+      {},
+      {},
+      {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream.value()}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
+               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
+               std::invalid_argument);
 
   if (_is_empty) { return; }
 
@@ -642,7 +655,8 @@ hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   // If we cannot know beforehand about null existence then let's assume that there are nulls.
-  : hash_join(build, nullable_join::YES, compare_nulls, stream)
+  : hash_join(
+      build, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
 
@@ -652,6 +666,16 @@ hash_join::hash_join(cudf::table_view const& build,
                      rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type const>(
       build, has_nulls == nullable_join::YES, compare_nulls, stream)}
+{
+}
+
+hash_join::hash_join(cudf::table_view const& build,
+                     nullable_join has_nulls,
+                     null_equality compare_nulls,
+                     double load_factor,
+                     rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type const>(
+      build, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream)}
 {
 }
 
