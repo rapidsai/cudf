@@ -82,9 +82,8 @@ CUDF_KERNEL void valid_if_kernel(
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A pair containing a `device_buffer` with the new bitmask and it's
- * null count
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
