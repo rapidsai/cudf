@@ -196,7 +196,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     # Launch kernel
     with _CUDFNumbaConfig():
-        specialized[1, 1](*launch_args)
+        specialized[ngroups, tpb](*launch_args)
 
     return output
 
@@ -227,5 +227,5 @@ def _can_be_jitted(frame, func, args):
     try:
         _get_udf_return_type(dataframe_group_type, func, args)
         return True
-    except (UDFError, TypingError):
+    except (UDFError, TypingError, KeyError):
         return False
