@@ -546,19 +546,18 @@ void impl::select_columns(read_mode read_mode, parquet_reader_options const& opt
     // list, struct, dictionary are not supported by AST filter yet.
     _filter_columns_names =
       cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
-    std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_filter_columns(
-        _filter_columns_names, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
+    // Select only filter columns using the base `select_columns` method
+    std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
+      _filter_columns_names, {}, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
   } else {
     if (_is_payload_columns_selected) { return; }
 
-    auto const empty_names = std::vector<std::string>{};
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_payload_columns(options.get_columns().value_or(empty_names),
-                                        _filter_columns_names.value_or(empty_names),
+      _metadata->select_payload_columns(options.get_columns(),
+                                        _filter_columns_names,
                                         use_pandas_metadata,
                                         strings_to_categorical,
                                         timestamp_type_id);
@@ -1055,6 +1054,14 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
   auto page_and_mask_begin =
     thrust::make_zip_iterator(thrust::make_tuple(pages.host_begin(), page_mask.begin()));
 
+  auto null_masks = std::vector<bitmask_type*>{};
+  auto begin_bits = std::vector<cudf::size_type>{};
+  auto end_bits   = std::vector<cudf::size_type>{};
+
+  // Update the nullmask in bulk if there are more than 16 pages
+  constexpr auto min_nullmasks_for_bulk_update = 16;
+  auto const use_bulk_nullmask_update          = pages.size() >= min_nullmasks_for_bulk_update;
+
   thrust::for_each(
     page_and_mask_begin, page_and_mask_begin + pages.size(), [&](auto const& page_and_mask_pair) {
       // Return if the page is valid
@@ -1076,12 +1083,28 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
             cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
           continue;
         }
-        // Update the nullmask corresponding to the current page's row bounds
-        cudf::set_null_mask(out_buf.null_mask(), start_row, end_row, false, _stream);
         // Increment the null count
         out_buf.null_count() += (end_row - start_row);
+
+        // Add nullmask and the current page's row bounds to corresponding lists if bulk updating
+        if (use_bulk_nullmask_update) {
+          null_masks.push_back(out_buf.null_mask());
+          begin_bits.push_back(start_row);
+          end_bits.push_back(end_row);
+        }
+        // Else, update the nullmask right away
+        else {
+          cudf::set_null_mask(out_buf.null_mask(), start_row, end_row, false, _stream);
+        }
       }
     });
+
+  // Bulk update the nullmasks
+  if (use_bulk_nullmask_update) {
+    auto valids = cudf::detail::make_host_vector<bool>(null_masks.size(), _stream);
+    std::fill(valids.begin(), valids.end(), false);
+    cudf::set_null_masks(null_masks, begin_bits, end_bits, valids, _stream);
+  }
 }
 
 void impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask)

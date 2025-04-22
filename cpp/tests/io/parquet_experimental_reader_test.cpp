@@ -185,9 +185,9 @@ auto create_parquet_with_stats()
  * @brief Read parquet file with the hybrid scan reader
  *
  * @param buffer Buffer containing the parquet file
- * @param num_filter_columns Number of filter columns
- * @param num_payload_columns Number of payload columns
  * @param filter_expression Filter expression
+ * @param num_filter_columns Number of filter columns
+ * @param payload_column_names List of paths of select payload column names, if any
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  *
@@ -195,16 +195,19 @@ auto create_parquet_with_stats()
  *         row validity column
  */
 auto hybrid_scan(std::vector<char>& buffer,
-                 cudf::size_type const num_filter_columns,
-                 cudf::size_type const num_payload_columns,
                  cudf::ast::operation const& filter_expression,
+                 cudf::size_type num_filter_columns,
+                 std::optional<std::vector<std::string>> const& payload_column_names,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options const options =
+  cudf::io::parquet_reader_options options =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
       .filter(filter_expression);
+
+  // Set payload column names if provided
+  if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
 
   // Input file buffer span
   auto const file_buffer_span =
@@ -413,12 +416,7 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(buffer,
-                num_filter_columns,
-                written_table.num_columns() - num_filter_columns,
-                filter_expression,
-                stream,
-                mr);
+    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
@@ -432,6 +430,59 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
     auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({1, 2}), read_payload_table->view());
+  }
+}
+
+TEST_F(ParquetExperimentalReaderTest, TestPayloadColumns)
+{
+  srand(31337);
+
+  // A table not concated with itself with result in a parquet file with several row groups each
+  // with a single page. Since there is only one page per row group, the page and row group stats
+  // are identical and we can only prune row groups.
+  auto constexpr num_concat    = 1;
+  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+
+  // Filtering AST - table[0] < 100
+  auto constexpr num_filter_columns = 1;
+  auto literal_value                = cudf::numeric_scalar<uint32_t>(100);
+  auto literal                      = cudf::ast::literal(literal_value);
+  auto col_ref_0                    = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  {
+    auto const payload_column_names = std::vector<std::string>{"col_uint32", "col_str"};
+    // Read parquet using the hybrid scan reader
+    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+      hybrid_scan(buffer, filter_expression, num_filter_columns, payload_column_names, stream, mr);
+
+    CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+                 "Filter and payload tables should have the same number of rows");
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+        .filter(filter_expression);
+    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2}), read_payload_table->view());
+  }
+
+  {
+    auto const payload_column_names = std::vector<std::string>{"col_str", "col_int64"};
+    // Read parquet using the hybrid scan reader
+    auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
+      hybrid_scan(buffer, filter_expression, num_filter_columns, payload_column_names, stream, mr);
+
+    CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
+                 "Filter and payload tables should have the same number of rows");
+    cudf::io::parquet_reader_options const options =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()))
+        .filter(filter_expression);
+    auto [expected_tbl, expected_meta] = cudf::io::read_parquet(options, stream);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({0}), read_filter_table->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl->select({2, 1}), read_payload_table->view());
   }
 }
 
@@ -457,12 +508,7 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(buffer,
-                num_filter_columns,
-                written_table.num_columns() - num_filter_columns,
-                filter_expression,
-                stream,
-                mr);
+    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
