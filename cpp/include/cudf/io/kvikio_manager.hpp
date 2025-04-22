@@ -27,7 +27,7 @@ namespace detail {
  * @brief Utility class for data source and sink.
  *
  * Use this class as a data member to create a CUDA context if it has not existed, and create a
- * instance of kvikio_manager.
+ * instance of `kvikio_manager`.
  */
 class kvikio_initializer {
  public:
@@ -74,7 +74,7 @@ class kvikio_manager {
    *
    * @param num_io_threads The number of IO threads to be used.
    *
-   * @note This function instantiates the kvikio_manager if it does not exist.
+   * @note This function instantiates the `kvikio_manager` if it does not exist.
    */
   static void set_num_io_threads(unsigned int num_io_threads);
 
@@ -83,7 +83,7 @@ class kvikio_manager {
    *
    * @return The number of IO threads used by the KvikIO manager.
    *
-   * @note This function instantiates the kvikio_manager if it does not exist.
+   * @note This function instantiates the `kvikio_manager` if it does not exist.
    */
   [[nodiscard]] static unsigned int num_io_threads();
 
@@ -92,13 +92,13 @@ class kvikio_manager {
    *
    * @return The default number of IO threads derived by cuDF.
    *
-   * @note This function does not instantiate the kvikio_manager if it does not exist.
+   * @note This function does not instantiate the `kvikio_manager` if it does not exist.
    */
   [[nodiscard]] static unsigned int default_num_io_threads();
 
  private:
   /**
-   * @brief Constructor of kvikio_manager.
+   * @brief Constructor of `kvikio_manager`
    */
   kvikio_manager();
 
