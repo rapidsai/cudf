@@ -44,7 +44,7 @@ namespace {
  */
 template <class result_type>
 struct partial_result {
-  result_type count;
+  int64_t count;
   result_type mean;
   result_type M2;
 };
@@ -80,7 +80,7 @@ struct accumulate_fn {
 template <class result_type>
 struct merge_fn {
   size_type const* const d_offsets;
-  result_type const* const d_counts;
+  int64_t const* const d_counts;
   result_type const* const d_means;
   result_type const* const d_M2s;
 
@@ -91,7 +91,7 @@ struct merge_fn {
     // This case should never happen, because all groups are non-empty as the results of
     // aggregation. Here we just to make sure we cover this case.
     if (start_idx == end_idx) {
-      return thrust::make_tuple(result_type{0}, result_type{0}, result_type{0}, int8_t{0});
+      return thrust::make_tuple(int64_t{0}, result_type{0}, result_type{0}, int8_t{0});
     }
 
     // If `(n = d_counts[idx]) > 0` then `d_means[idx] != null` and `d_M2s[idx] != null`.
@@ -103,7 +103,7 @@ struct merge_fn {
       {
         auto const n = d_counts[idx];
         return n > 0 ? partial_result<result_type>{n, d_means[idx], d_M2s[idx]}
-                     : partial_result<result_type>{result_type{0}, result_type{0}, result_type{0}};
+                     : partial_result<result_type>{int64_t{0}, result_type{0}, result_type{0}};
       };
     };
 
@@ -142,14 +142,14 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
     std::is_same_v<cudf::detail::target_type_t<result_type, aggregation::Kind::M2>, result_type>);
-  CUDF_EXPECTS(values.child(0).type().id() == type_to_id<result_type>() &&
+  CUDF_EXPECTS(values.child(0).type().id() == type_id::INT64 &&
                  values.child(1).type().id() == type_to_id<result_type>() &&
                  values.child(2).type().id() == type_to_id<result_type>(),
                "Input to `group_merge_m2` must be a structs column having children columns "
                "containing tuples of (M2_value, mean, valid_count).");
 
   auto result_counts = make_numeric_column(
-    data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<int64_t>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto result_means = make_numeric_column(
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto result_M2s = make_numeric_column(
@@ -158,10 +158,10 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
 
   // Perform merging for all the aggregations. Their output (and their validity data) are written
   // out concurrently through an output zip iterator.
-  using iterator_tuple  = thrust::tuple<result_type*, result_type*, result_type*, int8_t*>;
+  using iterator_tuple  = thrust::tuple<int64_t*, result_type*, result_type*, int8_t*>;
   using output_iterator = thrust::zip_iterator<iterator_tuple>;
   auto const out_iter =
-    output_iterator{thrust::make_tuple(result_counts->mutable_view().template data<result_type>(),
+    output_iterator{thrust::make_tuple(result_counts->mutable_view().template data<int64_t>(),
                                        result_means->mutable_view().template data<result_type>(),
                                        result_M2s->mutable_view().template data<result_type>(),
                                        validities.begin())};
@@ -172,7 +172,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   auto const iter        = thrust::make_counting_iterator<size_type>(0);
 
   auto const fn = merge_fn<result_type>{group_offsets.begin(),
-                                        count_valid.template begin<result_type>(),
+                                        count_valid.template begin<int64_t>(),
                                         mean_values.template begin<result_type>(),
                                         M2_values.template begin<result_type>()};
   thrust::transform(rmm::exec_policy(stream), iter, iter + num_groups, out_iter, fn);
