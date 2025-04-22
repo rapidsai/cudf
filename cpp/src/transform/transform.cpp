@@ -42,7 +42,7 @@ struct input_column_reflection {
   std::string type_name;
   bool is_scalar = false;
 
-  std::string accessor(int32_t index) const
+  [[nodiscard]] std::string accessor(int32_t index) const
   {
     auto column_accessor =
       jitify2::reflection::Template("cudf::transformation::jit::column_accessor")

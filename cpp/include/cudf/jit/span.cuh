@@ -51,21 +51,21 @@ struct device_span {
    *
    * @return A pointer to the first element of the span
    */
-  CUDF_HOST_DEVICE constexpr element_type* data() const { return _data; }
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* data() const { return _data; }
 
   /**
    * @brief Returns the number of elements in the span.
    *
    * @return The number of elements in the span
    */
-  CUDF_HOST_DEVICE constexpr size_t size() const { return _size; }
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr size_t size() const { return _size; }
 
   /**
    * @brief Checks if the span is empty.
    *
    * @return True if the span is empty, false otherwise
    */
-  CUDF_HOST_DEVICE constexpr bool empty() const { return _size == 0; }
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr bool empty() const { return _size == 0; }
 
   /**
    * @brief Returns a reference to the idx-th element of the sequence.
@@ -85,7 +85,7 @@ struct device_span {
    *
    * @return An iterator to the first element of the span
    */
-  CUDF_HOST_DEVICE constexpr element_type* begin() const { return _data; }
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* begin() const { return _data; }
 
   /**
    * @brief Returns an iterator to the element following the last element of the span.
@@ -94,7 +94,7 @@ struct device_span {
    *
    * @return An iterator to the element following the last element of the span
    */
-  CUDF_HOST_DEVICE constexpr element_type* end() const { return _data + _size; }
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* end() const { return _data + _size; }
 };
 
 }  // namespace jit
