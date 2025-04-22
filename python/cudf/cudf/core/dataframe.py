@@ -1995,7 +1995,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         for name, col in out._column_labels_and_values:
             out._data[name] = col._with_type_metadata(
                 tables[0]._data[name].dtype,
-                dtype_enum=tables[0]._data[name].dtype_enum,
             )
 
         # Reassign index and column names

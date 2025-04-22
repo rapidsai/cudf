@@ -532,7 +532,6 @@ class CategoricalColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[NumericalColumn] = (),  # type: ignore[assignment]
-        dtype_enum: int | None = None,
     ):
         if data is not None:
             raise ValueError(f"{data=} must be None")
@@ -555,7 +554,6 @@ class CategoricalColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
         self._codes = self.children[0].set_mask(self.mask)
 
@@ -782,7 +780,8 @@ class CategoricalColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or self.dtype_enum in {2}:
+        # Check if dtype is a pandas extension dtype directly
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
@@ -815,20 +814,6 @@ class CategoricalColumn(column.ColumnBase):
             codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Index(data)
-
-    def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array."""
-        # pyarrow.Table doesn't support unsigned codes
-        signed_type = (
-            min_signed_type(self.codes.max())
-            if self.codes.size > 0
-            else np.dtype(np.int8)
-        )
-        return pa.DictionaryArray.from_arrays(
-            self.codes.astype(signed_type).to_arrow(),
-            self.categories.to_arrow(),
-            ordered=self.ordered,
-        )
 
     @property
     def values_host(self) -> np.ndarray:
@@ -1174,9 +1159,7 @@ class CategoricalColumn(column.ColumnBase):
             )
             result_col = cast(
                 Self,
-                result_col._with_type_metadata(
-                    dtype_copy, dtype_enum=self.dtype_enum
-                ),
+                result_col._with_type_metadata(dtype_copy),
             )
         return result_col
 
@@ -1239,11 +1222,16 @@ class CategoricalColumn(column.ColumnBase):
             children=(codes_col,),  # type: ignore[arg-type]
         )
 
-    def _with_type_metadata(
-        self: Self, dtype: Dtype, dtype_enum: int | None = None
-    ) -> Self:
-        if isinstance(dtype, CategoricalDtype):
-            return type(self)(
+    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
+        if isinstance(
+            dtype,
+            (
+                CategoricalDtype,
+                pd.ArrowDtype,
+                pd.core.dtypes.dtypes.ExtensionDtype,
+            ),
+        ):
+            result = type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.codes.size,
                 dtype=dtype,
@@ -1251,9 +1239,11 @@ class CategoricalColumn(column.ColumnBase):
                 offset=self.codes.offset,
                 null_count=self.codes.null_count,
                 children=(self.codes,),
-                dtype_enum=dtype_enum,
             )
-        return self
+        else:
+            result = self
+
+        return result
 
     def set_categories(
         self,

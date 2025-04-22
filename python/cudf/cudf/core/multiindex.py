@@ -190,10 +190,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
-            source_data[i] = result_col._with_type_metadata(
-                level.dtype, dtype_enum=level._column.dtype_enum
-            )
-
+            source_data[i] = result_col._with_type_metadata(level.dtype)
         super().__init__(ColumnAccessor(source_data))
         self._levels: None | list[cudf.Index] = new_levels
         self._codes: None | list[column.ColumnBase] = new_codes

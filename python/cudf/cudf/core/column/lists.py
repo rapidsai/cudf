@@ -44,7 +44,6 @@ class ListColumn(ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[NumericalColumn, ColumnBase] = (),  # type: ignore[assignment]
-        dtype_enum: int | None = None,
     ):
         if data is not None:
             raise ValueError("data must be None")
@@ -68,7 +67,6 @@ class ListColumn(ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -216,11 +214,10 @@ class ListColumn(ColumnBase):
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn",
         dtype: Dtype,
-        dtype_enum: int | None = None,
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
             elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type, dtype_enum=dtype_enum
+                dtype.element_type
             )
             return ListColumn(
                 data=None,
@@ -230,7 +227,6 @@ class ListColumn(ColumnBase):
                 offset=self.offset,
                 null_count=self.null_count,
                 children=(self.base_children[0], elements),  # type: ignore[arg-type]
-                dtype_enum=dtype_enum,
             )
 
         return self
@@ -337,7 +333,7 @@ class ListColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or self.dtype_enum in {2, 3}:
+        if arrow_type:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
@@ -560,10 +556,7 @@ class ListMethods(ColumnMethods):
             # manually from the input column if we lost some information
             # somewhere. Not doing this unilaterally since the cost is
             # non-zero..
-            out = out._with_type_metadata(
-                self._column.dtype.element_type,
-                dtype_enum=self._column.dtype_enum,
-            )
+            out = out._with_type_metadata(self._column.dtype.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:

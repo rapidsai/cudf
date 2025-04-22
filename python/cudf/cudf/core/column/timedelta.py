@@ -116,7 +116,6 @@ class TimeDeltaColumn(ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
-        dtype_enum: int | None = None,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")
@@ -138,7 +137,6 @@ class TimeDeltaColumn(ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
@@ -194,7 +192,11 @@ class TimeDeltaColumn(ColumnBase):
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
-        if self.dtype_enum == 2 or arrow_type:
+        if (
+            arrow_type
+            or isinstance(self.dtype, pd.ArrowDtype)
+            or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+        ):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
             # Workaround for timedelta types until the following issue is fixed:

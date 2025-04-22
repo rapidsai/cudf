@@ -51,7 +51,6 @@ class StructColumn(ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple[ColumnBase, ...] = (),
-        dtype_enum: int | None = None,
     ):
         if data is not None:
             raise ValueError("data must be None.")
@@ -64,7 +63,6 @@ class StructColumn(ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
 
     def _prep_pandas_compat_repr(self) -> StringColumn | Self:
@@ -120,7 +118,12 @@ class StructColumn(ColumnBase):
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type or nullable or self.dtype_enum in {2, 3}:
+        if (
+            arrow_type
+            or nullable
+            or isinstance(self.dtype, pd.ArrowDtype)
+            or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
@@ -187,9 +190,7 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _with_type_metadata(
-        self: StructColumn, dtype: Dtype, dtype_enum: int | None = None
-    ) -> StructColumn:
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 
@@ -201,17 +202,21 @@ class StructColumn(ColumnBase):
                 data=None,
                 dtype=dtype,
                 children=tuple(
-                    self.base_children[i]._with_type_metadata(
-                        dtype.fields[f], dtype_enum=dtype_enum
-                    )
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
                     for i, f in enumerate(dtype.fields.keys())
                 ),
                 mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                dtype_enum=dtype_enum,
             )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(
+            dtype, (pd.ArrowDtype, pd.core.dtypes.dtypes.ExtensionDtype)
+        ):
+            result = self.copy(deep=False)
+            result._dtype = dtype
+            return result
 
         return self
 

@@ -39,26 +39,6 @@ if TYPE_CHECKING:
     from cudf.core.buffer import Buffer
 
 
-DTYPE_ENUM_MAP = {
-    PANDAS_NUMPY_DTYPE: 1,
-    pd.ArrowDtype: 2,
-    pd.core.dtypes.dtypes.ExtensionDtype: 3,
-}
-
-
-def get_dtype_enum(dtype: Dtype) -> int:
-    if issubclass(type(dtype), pd.core.dtypes.dtypes.NumpyEADtype):
-        return DTYPE_ENUM_MAP[pd.core.dtypes.dtypes.NumpyEADtype]
-    elif issubclass(type(dtype), pd.core.dtypes.dtypes.ArrowDtype):
-        return DTYPE_ENUM_MAP[pd.core.dtypes.dtypes.ArrowDtype]
-    elif issubclass(type(dtype), pd.core.dtypes.dtypes.ExtensionDtype):
-        return DTYPE_ENUM_MAP[pd.core.dtypes.dtypes.ExtensionDtype]
-    elif isinstance(dtype, np.dtype):
-        return 0
-    else:
-        raise TypeError(f"Unsupported dtype: {dtype}")
-
-
 def dtype(arbitrary: Any) -> DtypeObj:
     """
     Return the cuDF-supported dtype corresponding to `arbitrary`.

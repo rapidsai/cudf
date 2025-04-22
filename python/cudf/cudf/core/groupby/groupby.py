@@ -981,8 +981,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
         )
+        # Store info about input columns:
+        # - original dtypes so we can cast back if needed
+        # - original columns for broadcasting
         orig_dtypes = tuple(c.dtype for c in columns)
-        orig_dtype_enums = tuple(c.dtype_enum for c in columns)
 
         # Note: When there are no key columns, the below produces
         # an Index with float64 dtype, while Pandas returns
@@ -1000,12 +1002,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         multilevel = _is_multi_agg(func)
         data = {}
-        for col_name, aggs, cols, orig_dtype, orig_dtype_enum in zip(
+        for col_name, aggs, cols, orig_dtype in zip(
             column_names,
             included_aggregations,
             result_columns,
             orig_dtypes,
-            orig_dtype_enums,
         ):
             for agg_tuple, col in zip(aggs, cols):
                 agg, agg_kind = agg_tuple
@@ -1019,9 +1020,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     and orig_dtype != col.dtype.element_type
                 ):
                     # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(
-                        cudf.ListDtype(orig_dtype), dtype_enum=orig_dtype_enum
-                    )
+                    col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(np.dtype(np.int64))
@@ -1936,7 +1935,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 >>> import pandas as pd
                 >>> df = pd.DataFrame({
                 ...     'a': [1, 1, 2, 2],
-                ...     'b': [1, 2, 1, 2],
+                ...     'b': [1, 2, 3, 4],
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)

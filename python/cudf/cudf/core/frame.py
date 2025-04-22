@@ -1087,7 +1087,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data.set_by_label(
                 name,
                 self_col._with_type_metadata(
-                    other_col.dtype, dtype_enum=other_col.dtype_enum
+                    other_col.dtype,
                 ),
             )
 

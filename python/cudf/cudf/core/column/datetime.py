@@ -228,7 +228,6 @@ class DatetimeColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
-        dtype_enum: int | None = None,
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer.")
@@ -248,7 +247,6 @@ class DatetimeColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
 
     @staticmethod
@@ -924,7 +922,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _with_type_metadata(self, dtype, dtype_enum: int | None = None):
+    def _with_type_metadata(self, dtype):
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
@@ -933,7 +931,6 @@ class DatetimeColumn(column.ColumnBase):
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                dtype_enum=dtype_enum,
             )
         return self
 
@@ -1056,7 +1053,7 @@ class DatetimeColumn(column.ColumnBase):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
-        if self.dtype_enum in {2} or arrow_type:
+        if isinstance(self.dtype, pd.ArrowDtype) or arrow_type:
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
         elif nullable:
@@ -1082,7 +1079,6 @@ class DatetimeTZColumn(DatetimeColumn):
         offset: int = 0,
         null_count: int | None = None,
         children: tuple = (),
-        dtype_enum: int | None = None,
     ):
         super().__init__(
             data=data,
@@ -1092,7 +1088,6 @@ class DatetimeTZColumn(DatetimeColumn):
             offset=offset,
             null_count=null_count,
             children=children,
-            dtype_enum=dtype_enum,
         )
 
     @staticmethod
@@ -1109,7 +1104,7 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable or self.dtype_enum in {2}:
+        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(
@@ -1164,9 +1159,7 @@ class DatetimeTZColumn(DatetimeColumn):
         if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
             if dtype.unit != self.time_unit:
                 # TODO: Doesn't check that new unit is valid.
-                casted = self._with_type_metadata(
-                    dtype, dtype_enum=self.dtype_enum
-                )
+                casted = self._with_type_metadata(dtype)
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))

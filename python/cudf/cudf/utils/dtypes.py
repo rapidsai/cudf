@@ -395,7 +395,10 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
     else:
-        dtype = np.dtype(dtype)
+        try:
+            dtype = np.dtype(dtype)
+        except TypeError:
+            dtype = cudf.dtype(dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
