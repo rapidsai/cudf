@@ -23,22 +23,12 @@
 
 TEST(KvikIOManagerTest, ChangeSettings)
 {
-  auto initial_setting = cudf::io::kvikio_manager::num_io_threads();
-
-  // Use a new setting
-  {
-    unsigned int new_setting{8u};
-    cudf::io::kvikio_manager::set_num_io_threads(new_setting);
+  std::vector<unsigned int> settings{1u, 4u, 16u, 4u, 1u};
+  for (auto const& current_setting : settings) {
+    cudf::io::kvikio_manager::set_num_io_threads(current_setting);
     auto actual_setting   = kvikio::defaults::thread_pool_nthreads();
     auto expected_setting = cudf::io::kvikio_manager::num_io_threads();
     EXPECT_EQ(actual_setting, expected_setting);
-  }
-
-  // Revert to the initial setting
-  {
-    cudf::io::kvikio_manager::set_num_io_threads(initial_setting);
-    auto actual_setting = kvikio::defaults::thread_pool_nthreads();
-    EXPECT_EQ(actual_setting, initial_setting);
   }
 }
 
