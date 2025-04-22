@@ -37,6 +37,10 @@ from rmm.pylibrmm.stream cimport Stream
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .scalar cimport Scalar
+from .traits cimport (
+    is_fixed_width as plc_is_fixed_width,
+    is_nested,
+)
 from .types cimport DataType, size_of, type_id
 from ._interop_helpers cimport (
     _release_schema,
@@ -358,34 +362,11 @@ cdef class Column:
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
-        if dtype.id() in {
-            type_id.INT8,
-            type_id.INT16,
-            type_id.INT32,
-            type_id.INT64,
-            type_id.UINT8,
-            type_id.UINT16,
-            type_id.UINT32,
-            type_id.UINT64,
-            type_id.FLOAT32,
-            type_id.FLOAT64,
-            type_id.BOOL8,
-            type_id.TIMESTAMP_SECONDS,
-            type_id.TIMESTAMP_MILLISECONDS,
-            type_id.TIMESTAMP_MICROSECONDS,
-            type_id.TIMESTAMP_NANOSECONDS,
-            type_id.DURATION_SECONDS,
-            type_id.DURATION_MILLISECONDS,
-            type_id.DURATION_MICROSECONDS,
-            type_id.DURATION_NANOSECONDS,
-            type_id.DECIMAL32,
-            type_id.DECIMAL64,
-            type_id.DECIMAL128,
-        } and len(children) != 0:
+        if plc_is_fixed_width(dtype) and len(children) != 0:
             raise ValueError("Fixed-width types must have zero children.")
         elif dtype.id() == type_id.STRING and len(children) != 1:
             raise ValueError("String columns have have 1 child column of offsets.")
-        elif dtype.id() in {type_id.LIST, type_id.STRUCT} and len(children) == 0:
+        elif is_nested(dtype) and len(children) == 0:
             raise ValueError(
                 "List and struct columns must have at least one child column."
             )
