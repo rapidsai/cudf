@@ -342,6 +342,8 @@ def managed_group_sub_managed_group_impl(context, builder, sig, args):
     out_grp.size = lhs_grp.size
     output.group_view = out_grp._getvalue()
     output.meminfo = mi
+
+
     return output._getvalue()
 
 
@@ -368,6 +370,16 @@ def managed_group_reduction_impl_basic(context, builder, sig, args):
     grp_type = sig.args[0]
 
     func = call_cuda_functions['sum'][(types.int64, types.int64)]
+
+    _ = context.compile_internal(
+        builder,
+        call_print_group_data,
+        types.void(
+            types.CPointer(types.int64),
+            group_size_type
+        ),
+        (grp_view.group_data, grp_view.size)
+    )
 
     # insert the forward declaration and return its result
     # pass it the data pointer and the group's size
