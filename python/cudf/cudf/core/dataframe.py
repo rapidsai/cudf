@@ -624,8 +624,8 @@ def _listlike_to_column_accessor(
     -------
     tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]
         - Mapping of column label: Column
-        - Resulting index from the data
-        - Resulting columns from the data
+        - Resulting index (cudf.Index) from the data
+        - Resulting columns (pd.Index - store as host data) from the data
     """
     if len(data) == 0:
         if index is None:
@@ -637,11 +637,8 @@ def _listlike_to_column_accessor(
             }
         else:
             col_data = {}
-        return (
-            col_data,
-            index,
-            pd.RangeIndex(0) if columns is None else columns,
-        )
+            columns = pd.RangeIndex(0)
+        return (col_data, index, columns)
     # We assume that all elements in data are the same type as the first element
     first_element = data[0]
     if is_scalar(first_element):
@@ -664,10 +661,10 @@ def _listlike_to_column_accessor(
             columns,
         )
     elif isinstance(first_element, Series):
+        data_length = len(data)
         if index is None:
             index = _index_from_listlike_of_series(data)
         else:
-            data_length = len(data)
             index_length = len(index)
             if data_length != index_length:
                 # If the passed `index` length doesn't match
@@ -700,23 +697,24 @@ def _listlike_to_column_accessor(
                             itertools.repeat(data, index_length // data_length)
                         )
                     )
+                    data_length = len(data)
                 else:
                     raise ValueError(
                         f"Length of values ({data_length}) does "
                         f"not match length of index ({index_length})"
                     )
-        if len(data) > 1:
+        if data_length > 1:
             common_dtype = find_common_type([ser.dtype for ser in data])
             data = [ser.astype(common_dtype) for ser in data]
         if all(len(first_element) == len(ser) for ser in data):
-            if len(data) == 1:
+            if data_length == 1:
                 temp_index = first_element.index
             else:
                 temp_index = cudf.Index._concat(
                     [ser.index for ser in data]
                 ).drop_duplicates()
 
-            temp_data: dict[int, ColumnBase] = {}  # type: ignore[arg-type]
+            temp_data: dict[Hashable, ColumnBase] = {}
             for i, ser in enumerate(data):
                 if not ser.index.is_unique:
                     raise ValueError(
@@ -729,7 +727,7 @@ def _listlike_to_column_accessor(
 
             temp_frame = DataFrame._from_data(
                 ColumnAccessor(
-                    temp_data,  # type: ignore[arg-type]
+                    temp_data,
                     verify=False,
                     rangeindex=True,
                 ),
