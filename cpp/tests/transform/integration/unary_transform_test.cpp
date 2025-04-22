@@ -530,11 +530,19 @@ __device__ void transform(cudf::string_view* out,
                           int32_t size,
                           void* user_data)
 {
-  cudf::buffer_string result(static_cast<char*>(user_data) + offset, size);
-  result.append(first_name);
-  result.append(" ");
-  result.append(last_name);
-  *out = result;
+  char* it                = static_cast<char*>(user_data);
+  char const* const begin = it;
+
+  memcpy(it, first_name.data(), first_name.size_bytes());
+  it += first_name.size_bytes();
+
+  memcpy(it, " ", 1);
+  it += 1;
+
+  memcpy(it, last_name.data(), last_name.size_bytes());
+  it += last_name.size_bytes();
+
+  *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - begin)};
 }
     )***";
 

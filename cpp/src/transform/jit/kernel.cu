@@ -18,7 +18,6 @@
 #include <cudf/jit/span.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/buffer_string.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
