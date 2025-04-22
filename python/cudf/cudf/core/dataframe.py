@@ -611,6 +611,190 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
 
 
 @_performance_tracking
+def _listlike_to_column_accessor(
+    data: Sequence,
+    columns: None | pd.Index,
+    index: None | cudf.Index,
+    nan_as_null: bool,
+) -> tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]:
+    """
+    Convert a list-like to a dict for ColumnAccessor for DataFrame.__init__
+
+    Returns
+    -------
+    tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]
+        - Mapping of column label: Column
+        - Resulting index (cudf.Index) from the data
+        - Resulting columns (pd.Index - store as host data) from the data
+    """
+    if len(data) == 0:
+        if index is None:
+            index = cudf.RangeIndex(0)
+        if columns is not None:
+            col_data = {
+                col_label: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                for col_label in columns
+            }
+        else:
+            col_data = {}
+            columns = pd.RangeIndex(0)
+        return (col_data, index, columns)
+    # We assume that all elements in data are the same type as the first element
+    first_element = data[0]
+    if is_scalar(first_element):
+        if columns is not None:
+            if len(columns) != 1:
+                raise ValueError("Passed column must be of length 1")
+        else:
+            columns = pd.RangeIndex(1)
+        if index is not None:
+            if len(index) != len(data):
+                raise ValueError(
+                    "Passed index must be the same length as data."
+                )
+        else:
+            index = cudf.RangeIndex(len(data))
+
+        return (
+            {columns[0]: as_column(data, nan_as_null=nan_as_null)},
+            index,
+            columns,
+        )
+    elif isinstance(first_element, Series):
+        data_length = len(data)
+        if index is None:
+            index = _index_from_listlike_of_series(data)
+        else:
+            index_length = len(index)
+            if data_length != index_length:
+                # If the passed `index` length doesn't match
+                # length of Series objects in `data`, we must
+                # check if `data` can be duplicated/expanded
+                # to match the length of index. For that we
+                # check if the length of index is a factor
+                # of length of data.
+                #
+                # 1. If yes, we extend data
+                # until length of data is equal to length of index.
+                # 2. If no, we throw an error stating the
+                # shape of resulting `data` and `index`
+
+                # Simple example
+                # >>> import pandas as pd
+                # >>> s = pd.Series([1, 2, 3])
+                # >>> pd.DataFrame([s], index=['a', 'b'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # c  1  2  3
+                if index_length % data_length == 0:
+                    data = list(
+                        itertools.chain.from_iterable(
+                            itertools.repeat(data, index_length // data_length)
+                        )
+                    )
+                    data_length = len(data)
+                else:
+                    raise ValueError(
+                        f"Length of values ({data_length}) does "
+                        f"not match length of index ({index_length})"
+                    )
+        if data_length > 1:
+            common_dtype = find_common_type([ser.dtype for ser in data])
+            data = [ser.astype(common_dtype) for ser in data]
+        if all(len(first_element) == len(ser) for ser in data):
+            if data_length == 1:
+                temp_index = first_element.index
+            else:
+                temp_index = cudf.Index._concat(
+                    [ser.index for ser in data]
+                ).drop_duplicates()
+
+            temp_data: dict[Hashable, ColumnBase] = {}
+            for i, ser in enumerate(data):
+                if not ser.index.is_unique:
+                    raise ValueError(
+                        "Reindexing only valid with uniquely valued Index "
+                        "objects"
+                    )
+                elif not ser.index.equals(temp_index):
+                    ser = ser.reindex(temp_index)
+                temp_data[i] = ser._column
+
+            temp_frame = DataFrame._from_data(
+                ColumnAccessor(
+                    temp_data,
+                    verify=False,
+                    rangeindex=True,
+                ),
+                index=temp_index,
+            )
+            transpose = temp_frame.T
+        else:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="The behavior of array concatenation",
+                    category=FutureWarning,
+                )
+                transpose = cudf.concat(data, axis=1).T
+
+        if columns is None:
+            columns = pd.RangeIndex(transpose._num_columns)
+            col_data = transpose._data
+        else:
+            col_data = {}
+            for col_label in columns:
+                try:
+                    col_data[col_label] = transpose._data[col_label]
+                except KeyError:
+                    col_data[col_label] = column_empty(
+                        len(index), dtype=np.dtype(np.float64)
+                    )
+        return (col_data, index, columns)
+    elif isinstance(first_element, dict):
+        from_pandas = DataFrame(
+            pd.DataFrame(data),
+            index=index,
+            columns=columns,
+            nan_as_null=nan_as_null,
+        )
+        return (
+            from_pandas._data,
+            from_pandas.index,
+            from_pandas._data.to_pandas_index,
+        )
+    elif not can_convert_to_column(first_element):
+        raise TypeError(f"Cannot convert {type(first_element)} to a column")
+    else:
+        if index is None:
+            index = cudf.RangeIndex(len(data))
+        data = list(itertools.zip_longest(*data))
+        if columns is None:
+            if isinstance(first_element, tuple) and hasattr(
+                first_element, "_fields"
+            ):
+                # pandas behavior is to use the fields from the first
+                # namedtuple as the column names
+                columns = pd.Index(first_element._fields)
+            else:
+                columns = pd.RangeIndex(len(data))
+        col_data = {
+            col_label: as_column(col_values, nan_as_null=nan_as_null)
+            for col_label, col_values in zip(columns, data, strict=True)
+        }
+        return (
+            col_data,
+            index,
+            columns,
+        )
+
+
+@_performance_tracking
 def _array_to_column_accessor(
     data: np.ndarray | cupy.ndarray,
     columns: None | pd.Index,
@@ -653,7 +837,7 @@ def _mapping_to_column_accessor(
     nan_as_null: bool,
 ) -> tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]:
     """
-    Convert a mapping (dict-like) to a ColumnAccessor for DataFrame.__init__
+    Convert a mapping (dict-like) to a dict for ColumnAccessor for DataFrame.__init__
 
     Returns
     -------
@@ -1046,41 +1230,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=columns.dtype,
             )
         elif is_list_like(data):
-            # TODO: Create a new ColumnAccessor instead of reassigning private attributes
-            super().__init__({}, index=cudf.Index([]))
-            if len(data) > 0 and is_scalar(data[0]):
-                if columns is not None:
-                    data = dict(zip(columns, [data]))
-                    rangeindex = isinstance(
-                        columns, (range, pd.RangeIndex, cudf.RangeIndex)
-                    )
-                    label_dtype = columns.dtype
-                else:
-                    data = dict(enumerate([data]))
-                    rangeindex = True
-                    label_dtype = None
-                new_df = DataFrame(data=data, index=index)
-
-                self._data = new_df._data
-                self._index = new_df._index
-                self._data._level_names = (
-                    tuple(columns.names)
-                    if isinstance(columns, pd.Index)
-                    else self._data._level_names
-                )
-                self._data.rangeindex = rangeindex
-                self._data.label_dtype = label_dtype
-            elif len(data) > 0 and isinstance(data[0], Series):
-                self._init_from_series_list(
-                    data=data, columns=columns, index=index
-                )
-            else:
-                self._init_from_list_like(data, index=index, columns=columns)
-            self._check_data_index_length_match()
-
-            if dtype:
-                self._data = self.astype(dtype)._data
-            return
+            col_dict, index, columns = _listlike_to_column_accessor(
+                data, columns, index, nan_as_null
+            )
+            col_accessor = ColumnAccessor(
+                col_dict,
+                verify=False,
+                rangeindex=isinstance(columns, pd.RangeIndex),
+                multiindex=isinstance(columns, pd.MultiIndex),
+                level_names=tuple(columns.names),
+                label_dtype=columns.dtype,
+            )
         else:
             raise TypeError(
                 f"data must be list or dict-like, not {type(data).__name__}"
@@ -1103,7 +1263,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         super().__init__(col_accessor, index=index)
-        self._check_data_index_length_match()
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -1111,179 +1270,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
-
-    @_performance_tracking
-    def _init_from_series_list(self, data, columns, index):
-        if index is None:
-            # When `index` is `None`, the final index of
-            # resulting dataframe will be union of
-            # all Series's names.
-            final_index = cudf.Index(_get_union_of_series_names(data))
-        else:
-            # When an `index` is passed, the final index of
-            # resulting dataframe will be whatever
-            # index passed, but will need
-            # shape validations - explained below
-            data_length = len(data)
-            index_length = len(index)
-            if data_length != index_length:
-                # If the passed `index` length doesn't match
-                # length of Series objects in `data`, we must
-                # check if `data` can be duplicated/expanded
-                # to match the length of index. For that we
-                # check if the length of index is a factor
-                # of length of data.
-                #
-                # 1. If yes, we extend data
-                # until length of data is equal to length of index.
-                # 2. If no, we throw an error stating the
-                # shape of resulting `data` and `index`
-
-                # Simple example
-                # >>> import pandas as pd
-                # >>> s = pd.Series([1, 2, 3])
-                # >>> pd.DataFrame([s], index=['a', 'b'])
-                #    0  1  2
-                # a  1  2  3
-                # b  1  2  3
-                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
-                #    0  1  2
-                # a  1  2  3
-                # b  1  2  3
-                # c  1  2  3
-                if index_length % data_length == 0:
-                    initial_data = data
-                    data = []
-                    for _ in range(int(index_length / data_length)):
-                        data.extend([o for o in initial_data])
-                else:
-                    raise ValueError(
-                        f"Length of values ({data_length}) does "
-                        f"not match length of index ({index_length})"
-                    )
-
-            final_index = ensure_index(index)
-
-        series_lengths = list(map(len, data))
-        common_dtype = find_common_type([obj.dtype for obj in data])
-        data = [obj.astype(common_dtype) for obj in data]
-        if series_lengths.count(series_lengths[0]) == len(series_lengths):
-            # Calculating the final dataframe columns by
-            # getting union of all `index` of the Series objects.
-            final_columns = _get_union_of_indices([d.index for d in data])
-            if isinstance(final_columns, cudf.RangeIndex):
-                self._data.rangeindex = True
-
-            for idx, series in enumerate(data):
-                if not series.index.is_unique:
-                    raise ValueError(
-                        "Reindexing only valid with uniquely valued Index "
-                        "objects"
-                    )
-                if not series.index.equals(final_columns):
-                    series = series.reindex(final_columns)
-                self._data[idx] = series._column
-
-            # Setting `final_columns` to self._index so
-            # that the resulting `transpose` will be have
-            # columns set to `final_columns`
-            self._index = cudf.Index(final_columns)
-
-            transpose = self.T
-        else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                concat_df = cudf.concat(data, axis=1)
-
-            cols = concat_df._data.to_pandas_index
-            if cols.dtype == "object":
-                concat_df.columns = cols.astype("str")
-
-            transpose = concat_df.T
-
-        transpose._index = final_index
-        self._data = transpose._data
-        self._index = transpose._index
-
-        # If `columns` is passed, the result dataframe
-        # contain a dataframe with only the
-        # specified `columns` in the same order.
-        if columns is not None:
-            for col_name in columns:
-                if col_name not in self._data:
-                    self._data[col_name] = column_empty(
-                        row_count=len(self), dtype=np.dtype(np.float64)
-                    )
-            self._data._level_names = (
-                tuple(columns.names)
-                if isinstance(columns, pd.Index)
-                else self._data._level_names
-            )
-            self._data = self._data.select_by_label(columns)
-            self._data.rangeindex = isinstance(
-                columns, (range, cudf.RangeIndex, pd.RangeIndex)
-            )
-            self._data.label_dtype = pd.Index(columns).dtype
-        else:
-            self._data.rangeindex = True
-
-    @_performance_tracking
-    def _init_from_list_like(self, data, index=None, columns=None):
-        if index is None:
-            index = RangeIndex(start=0, stop=len(data))
-        else:
-            index = ensure_index(index)
-
-        self._index = index
-        # list-of-dicts case
-        if len(data) > 0 and isinstance(data[0], dict):
-            data = DataFrame.from_pandas(pd.DataFrame(data))
-            self._data = data._data
-        # interval in a list
-        elif len(data) > 0 and isinstance(data[0], pd.Interval):
-            data = DataFrame.from_pandas(pd.DataFrame(data))
-            self._data = data._data
-        elif any(
-            not isinstance(col, (abc.Iterable, abc.Sequence)) for col in data
-        ):
-            raise TypeError("Inputs should be an iterable or sequence.")
-        elif len(data) > 0 and not can_convert_to_column(data[0]):
-            raise ValueError("Must pass 2-d input.")
-        else:
-            if (
-                len(data) > 0
-                and columns is None
-                and isinstance(data[0], tuple)
-                and hasattr(data[0], "_fields")
-            ):
-                # pandas behavior is to use the fields from the first
-                # namedtuple as the column names
-                columns = data[0]._fields
-
-            data = list(itertools.zip_longest(*data))
-
-            if columns is not None and len(data) == 0:
-                data = [
-                    column_empty(row_count=0, dtype=np.dtype(np.float64))
-                    for _ in columns
-                ]
-            for col_name, col in enumerate(data):
-                self._data[col_name] = column.as_column(col)
-            self._data.rangeindex = True
-
-        if columns is not None:
-            if len(columns) != len(data):
-                raise ValueError(
-                    f"Shape of passed values is ({len(index)}, {len(data)}), "
-                    f"indices imply ({len(index)}, {len(columns)})."
-                )
-
-            self.columns = columns
-            self._data.rangeindex = isinstance(
-                columns, (range, pd.RangeIndex, cudf.RangeIndex)
-            )
-            self._data.multiindex = isinstance(columns, pd.MultiIndex)
-            self._data.label_dtype = getattr(columns, "dtype", None)
 
     @classmethod
     def _from_data(
@@ -4208,7 +4194,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def transpose(self):
+    def transpose(self) -> Self:
         """Transpose index and columns.
 
         Returns
@@ -4222,12 +4208,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             copy=True
         """
         index = self._data.to_pandas_index
-        columns = self.index.copy(deep=False)
+        if not isinstance(index, pd.MultiIndex) and index.dtype == np.dtype(
+            np.object_
+        ):
+            # Potentially convert mixed objects to strings
+            index = index.astype(str)
         if self._num_columns == 0 or self._num_rows == 0:
-            return DataFrame(index=index, columns=columns)
+            return type(self)(index=index, columns=self.index)
 
         # No column from index is transposed with libcudf.
-        source_columns = [*self._columns]
+        source_columns = self._columns
         source_dtype = source_columns[0].dtype
         if isinstance(source_dtype, cudf.CategoricalDtype):
             if any(
@@ -4235,14 +4225,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 for c in source_columns
             ):
                 raise ValueError("Columns must all have the same dtype")
-            cats = list(c.categories for c in source_columns)
-            cats = cudf.core.column.concat_columns(cats).unique()
-            source_columns = [
-                col._set_categories(cats, is_unique=True).codes
+            cats = concat_columns(
+                [c.categories for c in source_columns]  # type: ignore[attr-defined]
+            ).unique()
+            source_columns = [  # type: ignore[assignment]
+                col._set_categories(cats, is_unique=True).codes  # type: ignore[attr-defined]
                 for col in source_columns
             ]
-
-        if any(c.dtype != source_columns[0].dtype for c in source_columns):
+            # TODO: Do we need to pass ordered=source_dtype.ordered as well?
+            source_dtype = cudf.CategoricalDtype(categories=cats)
+        elif any(col.dtype != source_dtype for col in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
         result_table = plc.transpose.transpose(
@@ -4250,31 +4242,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 [col.to_pylibcudf(mode="read") for col in source_columns]
             )
         )
-        result_columns = [
-            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True)
+        result_columns = (
+            ColumnBase.from_pylibcudf(
+                col, data_ptr_exposed=True
+            )._with_type_metadata(source_dtype)
             for col in result_table.columns()
-        ]
-
-        if isinstance(source_dtype, cudf.CategoricalDtype):
-            result_columns = [
-                codes._with_type_metadata(
-                    cudf.core.dtypes.CategoricalDtype(categories=cats)
-                )
-                for codes in result_columns
-            ]
-        else:
-            result_columns = [
-                result_column._with_type_metadata(source_dtype)
-                for result_column in result_columns
-            ]
+        )
 
         # Set the old column names as the new index
-        result = self.__class__._from_data(
+        result = type(self)._from_data(
             ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=cudf.Index(index),
         )
         # Set the old index as the new column names
-        result.columns = columns
+        result.columns = self.index
         return result
 
     T = property(transpose, doc=transpose.__doc__)
@@ -8726,27 +8707,21 @@ def extract_col(df, col):
         return df.index._data[col]
 
 
-def _get_union_of_indices(indexes):
-    if len(indexes) == 1:
-        return indexes[0]
-    else:
-        merged_index = cudf.core.index.Index._concat(indexes)
-        return merged_index.drop_duplicates()
-
-
-def _get_union_of_series_names(series_list):
-    names_list = []
+def _index_from_listlike_of_series(
+    series_list: Sequence[Series],
+) -> cudf.Index:
+    names_list: Sequence[abc.Hashable] = []
     unnamed_count = 0
     for series in series_list:
         if series.name is None:
-            names_list.append(f"Unnamed {unnamed_count}")
+            names_list.append(f"Unnamed {unnamed_count}")  # type: ignore[attr-defined]
             unnamed_count += 1
         else:
-            names_list.append(series.name)
+            names_list.append(series.name)  # type: ignore[attr-defined]
     if unnamed_count == len(series_list):
         names_list = range(len(series_list))
 
-    return names_list
+    return cudf.Index(names_list)
 
 
 # Create a dictionary of the common, non-null columns
