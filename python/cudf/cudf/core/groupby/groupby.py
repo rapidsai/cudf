@@ -259,7 +259,7 @@ Examples
 >>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
 >>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
 >>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
->>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+>>> df.groupby("key", sort=True).agg(result_a=agg_a, result_1=agg_1)
         result_a  result_1
 key
 1          -1      10.5

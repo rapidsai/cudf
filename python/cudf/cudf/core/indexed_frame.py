@@ -282,6 +282,11 @@ class IndexedFrame(Frame):
             raise ValueError(
                 f"index must be a cudf index not {type(index).__name__}"
             )
+        elif self._data.nrows > 0 and self._data.nrows != len(index):
+            raise ValueError(
+                f"Length of values ({self._data.nrows}) does not "
+                f"match length of index ({len(index)})"
+            )
         self._index = index
 
     @property
@@ -300,12 +305,14 @@ class IndexedFrame(Frame):
         index: BaseIndex | None = None,
     ):
         out = super()._from_data(data)
-        if not (index is None or isinstance(index, BaseIndex)):
+        if index is None:
+            # out._num_rows requires .index to be defined
+            index = RangeIndex(out._data.nrows)
+        elif not isinstance(index, BaseIndex):
             raise ValueError(
-                f"index must be None or a cudf.Index not {type(index).__name__}"
+                f"index must be a cudf.Index not {type(index).__name__}"
             )
-        # out._num_rows requires .index to be defined
-        out._index = RangeIndex(out._data.nrows) if index is None else index
+        out._index = index
         return out
 
     @_performance_tracking
@@ -434,16 +441,6 @@ class IndexedFrame(Frame):
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )
-
-    def _check_data_index_length_match(self) -> None:
-        # Validate that the number of rows in the data matches the index if the
-        # data is not empty. This is a helper for the constructor.
-        # TODO: Use self._num_rows once DataFrame.__init__ is cleaned up
-        if self._data.nrows > 0 and self._data.nrows != len(self.index):
-            raise ValueError(
-                f"Length of values ({self._data.nrows}) does not "
-                f"match length of index ({len(self.index)})"
-            )
 
     @property
     @_performance_tracking
