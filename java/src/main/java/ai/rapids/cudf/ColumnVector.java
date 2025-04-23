@@ -792,7 +792,6 @@ public final class ColumnVector extends ColumnView {
       throw new IllegalArgumentException("Sha1 hashing requires at least 1 column of input");
     }
     long[] columnViews = new long[columns.length];
-    long size = columns[0].getRowCount();
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
