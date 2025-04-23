@@ -78,6 +78,7 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
+  bool const escaped_utf8{true};
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
@@ -140,6 +141,11 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
       if (utf8_char > 0x0000'00FF) {
+        if (!escaped_utf8) {
+          // write original utf8 character if unescaping is enabled
+          write_char(utf8_char, d_buffer, bytes);
+          continue;
+        }
         // multi-byte char
         uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (codepoint <= 0x0000'FFFF) {
@@ -597,7 +603,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{*d_column}.get_escaped_strings(column_v, stream_, mr_);
+    return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
+      .get_escaped_strings(column_v, stream_, mr_);
   }
 
   // ints:

@@ -50,15 +50,6 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) nogil
 
     @staticmethod
-    cdef Column from_rmm_buffer(
-        unique_ptr[device_buffer] buff,
-        DataType dtype,
-        size_type size,
-        list children,
-        Stream stream=*,
-    )
-
-    @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col, Stream stream=*)
 
     @staticmethod

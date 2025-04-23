@@ -75,6 +75,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
@@ -86,6 +87,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
@@ -920,7 +922,8 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - fastavro>=0.22.9
+          - &fastavro fastavro>=0.22.9
+          - nanoarrow
           - hypothesis>=6.131.7
           - *numpy
           - pandas
@@ -929,17 +932,10 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cramjam
-          - fastavro>=0.22.9
+          - *fastavro
           - hypothesis>=6.131.7
           - mmh3
-          # Version 5.1 is incompatible with pytest<8.2.
-          # https://github.com/ionelmc/pytest-benchmark/commit/8dfeeeca8a5c640a4dc4455904ace4f97f62e655
-          # Remove upper bound when we unbound pytest
-          # https://github.com/rapidsai/build-planning/issues/105
-          # or when a fixed version of pytest-benchmark 5.1 with the necessary bounds is released
-          # https://github.com/conda-forge/pytest-benchmark-feedstock/pull/27
-          # https://github.com/conda-forge/conda-forge-repodata-patches-feedstock/pull/990
-          - pytest-benchmark<5.1.0
+          - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
           - zstandard
