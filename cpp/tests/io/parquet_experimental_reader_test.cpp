@@ -134,15 +134,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  auto columns = std::vector<std::unique_ptr<column>>{};
-  if constexpr (NumTableConcats == 1) {
-    columns.push_back(col0.release());
-    columns.push_back(col1.release());
-    columns.push_back(col2.release());
-  } else {
-    columns = table->release();
-  }
-  return std::pair{cudf::table{std::move(columns)}, buffer};
+  return std::pair{std::move(table), buffer};
 }
 
 }  // namespace
@@ -150,8 +142,8 @@ auto create_parquet_with_stats()
 TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
   // Create a table with several row groups each with a single page.
-  auto constexpr num_concat    = 1;
-  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+  auto constexpr num_concat = 1;
+  auto [_, buffer]          = create_parquet_with_stats<num_concat>();
 
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<uint32_t>(100);

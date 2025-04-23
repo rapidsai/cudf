@@ -95,7 +95,7 @@ hybrid_scan_reader_impl::get_secondary_filters(
 
 std::vector<std::vector<size_type>>
 hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
-  std::vector<rmm::device_buffer>& dictionary_page_data,
+  cudf::host_span<rmm::device_buffer> dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -104,7 +104,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
-  std::vector<rmm::device_buffer>& bloom_filter_data,
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
