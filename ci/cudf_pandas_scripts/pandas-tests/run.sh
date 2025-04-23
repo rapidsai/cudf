@@ -28,9 +28,9 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  -n 5 \
+  --numprocesses 5 \
   --tb=no \
-  -m "not slow" \
+  -m "not slow and not single_cpu and not db and not network" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
   --dist worksteal \
