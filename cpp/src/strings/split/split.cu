@@ -159,6 +159,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
  *
  * These are common methods used by both split and rsplit tokenizer functors.
  */
+#if 0
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
   __device__ size_type count_tokens(size_type idx) const
@@ -383,6 +384,18 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
   return std::make_unique<table>(std::move(results));
 }
+#endif
+
+std::unique_ptr<table> make_all_null_table(size_type size,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<column>> results;
+  auto mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  results.push_back(std::make_unique<column>(
+    data_type{type_id::STRING}, size, rmm::device_buffer{}, std::move(mask), size));
+  return std::make_unique<table>(std::move(results));
+}
 
 }  // namespace
 
@@ -438,10 +451,15 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
 
   auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(strings_column.size(),
-                               whitespace_split_tokenizer_fn{*strings_device_view, max_tokens},
-                               stream,
-                               mr);
+    // return whitespace_split_fn(strings_column.size(),
+    //                            whitespace_split_tokenizer_fn{*strings_device_view, max_tokens},
+    //                            stream,
+    //                            mr);
+    auto results =
+      split_fn(strings_column, split_ws_tokenizer_fn{*strings_device_view, max_tokens}, stream, mr);
+    // boundary case: if no columns, return one null column (issue #119)
+    return (results->num_columns() == 0) ? make_all_null_table(strings_column.size(), stream, mr)
+                                         : std::move(results);
   }
 
   string_view d_delimiter(delimiter.data(), delimiter.size());
@@ -461,10 +479,15 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
 
   auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(strings_column.size(),
-                               whitespace_rsplit_tokenizer_fn{*strings_device_view, max_tokens},
-                               stream,
-                               mr);
+    // return whitespace_split_fn(strings_column.size(),
+    //                            whitespace_rsplit_tokenizer_fn{*strings_device_view, max_tokens},
+    //                            stream,
+    //                            mr);
+    auto results = split_fn(
+      strings_column, rsplit_ws_tokenizer_fn{*strings_device_view, max_tokens}, stream, mr);
+    // boundary case: if no columns, return one null column (issue #119)
+    return (results->num_columns() == 0) ? make_all_null_table(strings_column.size(), stream, mr)
+                                         : std::move(results);
   }
 
   string_view d_delimiter(delimiter.data(), delimiter.size());

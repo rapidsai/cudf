@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,6 +87,7 @@ enum class Direction { FORWARD, BACKWARD };
 /**
  * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
  */
+#if 0
 template <Direction direction>
 struct whitespace_token_reader_fn {
   column_device_view const d_strings;  // strings to split
@@ -135,10 +136,11 @@ struct whitespace_token_reader_fn {
       d_result[token_idx] = string_index_pair{d_str.data() + token.first, token.second};
   }
 };
-
+#endif
 }  // namespace
 
 // The output is one list item per string
+#if 0
 template <typename TokenReader>
 std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& input,
                                                    TokenReader reader,
@@ -171,7 +173,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            stream,
                            mr);
 }
-
+#endif
 template <Direction direction>
 std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      string_scalar const& delimiter,
@@ -186,11 +188,18 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
 
   auto d_strings_column_ptr = column_device_view::create(strings.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_record_fn(
-      strings,
-      whitespace_token_reader_fn<direction>{*d_strings_column_ptr, max_tokens},
-      stream,
-      mr);
+    // return whitespace_split_record_fn(
+    //   strings,
+    //   whitespace_token_reader_fn<direction>{*d_strings_column_ptr, max_tokens},
+    //   stream,
+    //   mr);
+    if (direction == Direction::FORWARD) {
+      return split_record_fn(
+        strings, split_ws_tokenizer_fn{*d_strings_column_ptr, max_tokens}, stream, mr);
+    } else {
+      return split_record_fn(
+        strings, rsplit_ws_tokenizer_fn{*d_strings_column_ptr, max_tokens}, stream, mr);
+    }
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
     if (direction == Direction::FORWARD) {

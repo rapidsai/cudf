@@ -51,9 +51,12 @@ template <typename Derived>
 struct base_split_tokenizer {
   __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
 
-  __device__ string_view const get_string(size_type idx) const
+  __device__ auto get_string_offsets(size_type idx) const
   {
-    return d_strings.element<string_view>(idx);
+    auto const offsets = d_strings.child(d_strings.offsets_column_index);
+    auto const itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const index   = d_strings.offset() + idx;
+    return cuda::std::make_pair(itr[index], itr[index + 1]);
   }
 
   __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
@@ -92,20 +95,18 @@ struct base_split_tokenizer {
   {
     if (!is_valid(idx)) { return 0; }
 
-    auto const delim_size = d_delimiter.size_bytes();
-    auto const d_str      = get_string(idx);
-    auto const d_str_end  = d_str.data() + d_str.size_bytes();
-    auto const base_ptr   = get_base_ptr() + delim_size - 1;
+    auto const delim_size    = d_delimiter.size_bytes();
+    auto const d_str_offsets = get_string_offsets(idx);
 
     auto const delimiters =
       cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
                                        d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
 
     size_type token_count = 1;  // all strings will have at least one token
-    auto last_pos         = !delimiters.empty() ? (delimiters[0] - delim_size) : 0L;
+    auto last_pos         = d_str_offsets.first - delim_size;
     for (auto d_pos : delimiters) {
-      // delimiter must fit in string && overlapping delimiters are ignored
-      if (((base_ptr + d_pos) < d_str_end) && ((d_pos - last_pos) >= delim_size)) {
+      // delimiter must fit within the string and overlapping delimiters are ignored
+      if (((d_pos + delim_size) <= d_str_offsets.second) && ((d_pos - last_pos) >= delim_size)) {
         ++token_count;
         last_pos = d_pos;
       }
@@ -135,26 +136,20 @@ struct base_split_tokenizer {
                              cudf::detail::input_offsetalator d_delimiter_offsets,
                              string_index_pair* d_all_tokens) const
   {
+    if (!is_valid(idx)) { return; }
+
     auto const d_tokens =  // this string's tokens output
       cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
                                            d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
 
-    if (!is_valid(idx)) { return; }
-
-    auto const d_str = get_string(idx);
-
-    // max_tokens already included in token counts
-    if (d_tokens.size() == 1) {
-      d_tokens[0] = string_index_pair{(d_str.empty() ? "" : d_str.data()), d_str.size_bytes()};
-      return;
-    }
+    auto const d_str_offsets = get_string_offsets(idx);
 
     auto const delimiters =
       cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
                                        d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
 
     auto& derived = static_cast<Derived const&>(*this);
-    derived.process_tokens(d_str, delimiters, d_tokens);
+    derived.process_tokens(d_str_offsets.first, d_str_offsets.second, delimiters, d_tokens);
   }
 
   base_split_tokenizer(column_device_view const& d_strings,
@@ -184,34 +179,34 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */
-  __device__ void process_tokens(string_view const d_str,
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
                                  device_span<int64_t const> d_delimiters,
                                  device_span<string_index_pair> d_tokens) const
   {
-    auto const base_ptr    = get_base_ptr();  // d_positions values based on this
-    auto str_ptr           = d_str.data();
-    auto const str_end     = str_ptr + d_str.size_bytes();  // end of the string
+    auto const base_ptr    = get_base_ptr();
     auto const token_count = static_cast<size_type>(d_tokens.size());
     auto const delim_size  = d_delimiter.size_bytes();
 
     // build the index-pair of each token for this string
     size_type token_idx = 0;
+    auto last_pos       = pos_begin - delim_size;
     for (auto d_pos : d_delimiters) {
-      auto const next_delim = base_ptr + d_pos;
-      if (next_delim < str_ptr || ((next_delim + delim_size) > str_end)) { continue; }
-      auto const end_ptr = (token_idx + 1 < token_count) ? next_delim : str_end;
+      if (((d_pos + delim_size) > pos_end) || ((d_pos - last_pos) < delim_size)) { continue; }
+      auto const end_pos = (token_idx + 1 < token_count) ? d_pos : pos_end;
 
       // store the token into the output vector
-      d_tokens[token_idx++] =
-        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, end_ptr))};
+      last_pos += delim_size;
+      d_tokens[token_idx++] = string_index_pair{base_ptr + last_pos, end_pos - last_pos};
 
-      // setup for next token
-      str_ptr = end_ptr + delim_size;
+      last_pos = d_pos;
+      if (token_idx >= token_count) { break; }
     }
     // include anything leftover
     if (token_idx < token_count) {
-      d_tokens[token_idx] =
-        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, str_end))};
+      last_pos += delim_size;
+      d_tokens[token_idx] = base_ptr ? string_index_pair{base_ptr + last_pos, pos_end - last_pos}
+                                     : string_index_pair{"", 0};
     }
   }
 
@@ -239,36 +234,35 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */
-  __device__ void process_tokens(string_view const d_str,
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
                                  device_span<int64_t const> d_delimiters,
                                  device_span<string_index_pair> d_tokens) const
   {
-    auto const base_ptr    = get_base_ptr();  // d_positions values are based on this ptr
-    auto const str_begin   = d_str.data();    // beginning of the string
+    auto const base_ptr    = get_base_ptr();  // d_delimiters and pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());
     auto const delim_count = static_cast<size_type>(d_delimiters.size());
     auto const delim_size  = d_delimiter.size_bytes();
 
     // build the index-pair of each token for this string
-    auto str_ptr        = str_begin + d_str.size_bytes();
+    auto last_pos       = pos_end;
     size_type token_idx = 0;
-    for (auto d = delim_count - 1; d >= 0; --d) {  // read right-to-left
-      auto const prev_delim = base_ptr + d_delimiters[d] + delim_size;
-      if (prev_delim > str_ptr || ((prev_delim - delim_size) < str_begin)) { continue; }
-      auto const start_ptr = (token_idx + 1 < token_count) ? prev_delim : str_begin;
+    for (auto d = delim_count - 1; d >= 0 && token_idx < token_count; --d) {  // read right-to-left
+      auto const d_pos = d_delimiters[d];
+      if (((d_pos + delim_size) > pos_end) || ((last_pos - d_pos) < delim_size)) { continue; }
+      auto const start_pos = (token_idx + 1 < token_count) ? d_pos + delim_size : pos_begin;
 
       // store the token into the output vector right-to-left
-      d_tokens[token_count - token_idx - 1] = string_index_pair{
-        start_ptr, static_cast<size_type>(cuda::std::distance(start_ptr, str_ptr))};
+      d_tokens[token_count - token_idx - 1] =
+        string_index_pair{base_ptr + start_pos, last_pos - start_pos};
 
-      // setup for next token
-      str_ptr = start_ptr - delim_size;
+      last_pos = d_pos;
       ++token_idx;
     }
     // include anything leftover (rightover?)
     if (token_idx < token_count) {
-      d_tokens[0] = string_index_pair{
-        str_begin, static_cast<size_type>(cuda::std::distance(str_begin, str_ptr))};
+      d_tokens[0] = base_ptr ? string_index_pair{base_ptr + pos_begin, last_pos - pos_begin}
+                             : string_index_pair{"", 0};
     }
   }
 
@@ -276,6 +270,181 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
                       string_view const& d_delimiter,
                       size_type max_tokens)
     : base_split_tokenizer(d_strings, d_delimiter, max_tokens)
+  {
+  }
+};
+
+template <typename Derived>
+struct base_ws_split_tokenizer {
+  __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
+
+  __device__ auto get_string_offsets(size_type idx) const
+  {
+    auto const offsets = d_strings.child(d_strings.offsets_column_index);
+    auto const itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const index   = d_strings.offset() + idx;
+    return cuda::std::make_pair(itr[index], itr[index + 1]);
+  }
+
+  __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
+
+  __device__ bool is_delimiter(int64_t idx,
+                               cudf::detail::input_offsetalator const d_offsets,
+                               int64_t chars_bytes) const
+  {
+    auto const d_chars = get_base_ptr() + d_offsets[0];
+    return idx < chars_bytes && static_cast<u_char>(d_chars[idx]) <= ' ';
+  }
+
+  __device__ size_type count_tokens(size_type idx,
+                                    int64_t const* d_positions,
+                                    cudf::detail::input_offsetalator d_delimiter_offsets) const
+  {
+    if (!is_valid(idx)) { return 0; }
+
+    auto const d_str_offsets = get_string_offsets(idx);
+
+    auto const delimiters =
+      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+    if (delimiters.size() == (d_str_offsets.second - d_str_offsets.first)) { return 0; }
+    if (delimiters.size() == 0) { return 1; }
+
+    size_type token_count = (delimiters.front() != d_str_offsets.first);
+    for (size_t i = 0; i < delimiters.size(); ++i) {
+      auto const d_pos  = delimiters[i];
+      auto const d_next = (i + 1 < delimiters.size()) ? delimiters[i + 1] : d_str_offsets.second;
+      token_count += (d_next - d_pos > 1);
+    }
+    // number of tokens is capped to max_tokens
+    return ((max_tokens > 0) && (token_count > max_tokens)) ? max_tokens : token_count;
+  }
+
+  __device__ void get_tokens(size_type idx,
+                             cudf::detail::input_offsetalator const d_tokens_offsets,
+                             int64_t const* d_positions,
+                             cudf::detail::input_offsetalator d_delimiter_offsets,
+                             string_index_pair* d_all_tokens) const
+  {
+    if (!is_valid(idx)) { return; }
+
+    auto const d_tokens =  // this string's tokens output
+      cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
+                                           d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
+    if (d_tokens.size() == 0) { return; }
+
+    auto const d_str_offsets = get_string_offsets(idx);
+
+    auto const delimiters =
+      cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
+                                       d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
+
+    auto& derived = static_cast<Derived const&>(*this);
+    derived.process_tokens(d_str_offsets.first, d_str_offsets.second, delimiters, d_tokens);
+  }
+
+  base_ws_split_tokenizer(column_device_view const& d_strings, size_type max_tokens)
+    : d_strings(d_strings), max_tokens(max_tokens)
+  {
+  }
+
+ protected:
+  column_device_view const d_strings;  // strings to split
+  size_type max_tokens;                // maximum number of tokens to identify
+};
+
+struct split_ws_tokenizer_fn : base_ws_split_tokenizer<split_ws_tokenizer_fn> {
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
+                                 device_span<int64_t const> delimiters,
+                                 device_span<string_index_pair> d_tokens) const
+  {
+    if (delimiters.size() == (pos_end - pos_begin)) {
+      d_tokens[0] = string_index_pair{nullptr, 0};
+      return;
+    }
+    auto const base_ptr = get_base_ptr();
+    if (delimiters.size() == 0) {
+      d_tokens[0] = string_index_pair{base_ptr + pos_begin, pos_end - pos_begin};
+      return;
+    }
+
+    auto const token_count = static_cast<size_type>(d_tokens.size());
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
+
+    // build the index-pair of each token for this string
+    size_type token_idx = 0;
+    auto last_pos       = pos_begin;
+    for (size_t di = 0; di < delimiters.size() && token_idx < token_count; ++di) {
+      auto const d_pos = delimiters[di];
+      if (last_pos == d_pos) {
+        ++last_pos;
+        continue;
+      }
+      auto const end_pos    = all_tokens || (token_idx + 1 < token_count) ? d_pos : pos_end;
+      d_tokens[token_idx++] = string_index_pair{base_ptr + last_pos, end_pos - last_pos};
+
+      last_pos = d_pos + 1;
+    }
+    // include anything leftover
+    if (token_idx < token_count) {
+      d_tokens[token_idx] = string_index_pair{base_ptr + last_pos, pos_end - last_pos};
+    }
+  }
+
+  split_ws_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
+    : base_ws_split_tokenizer(d_strings, max_tokens)
+  {
+  }
+};
+
+struct rsplit_ws_tokenizer_fn : base_ws_split_tokenizer<rsplit_ws_tokenizer_fn> {
+  __device__ void process_tokens(int64_t pos_begin,
+                                 int64_t pos_end,
+                                 device_span<int64_t const> delimiters,
+                                 device_span<string_index_pair> d_tokens) const
+  {
+    if (delimiters.size() == (pos_end - pos_begin)) {
+      d_tokens[0] = string_index_pair{nullptr, 0};
+      return;
+    }
+    auto const base_ptr = get_base_ptr();
+    if (delimiters.size() == 0) {
+      d_tokens[0] = string_index_pair{base_ptr + pos_begin, pos_end - pos_begin};
+      return;
+    }
+
+    auto const token_count = static_cast<size_type>(d_tokens.size());
+    auto const delim_count = static_cast<size_type>(delimiters.size());
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
+
+    // build the index-pair of each token for this string
+    auto last_pos       = pos_end;
+    size_type token_idx = 0;
+    for (auto di = delim_count - 1; di >= 0 && token_idx < token_count; --di) {
+      auto const d_pos = delimiters[di];
+      if (last_pos == d_pos + 1) {
+        --last_pos;
+        continue;
+      }
+      // store the token into the output vector right-to-left
+      auto const start_pos = all_tokens || (token_idx + 1 < token_count) ? d_pos + 1 : pos_begin;
+      d_tokens[token_count - token_idx - 1] =
+        string_index_pair{base_ptr + start_pos, last_pos - start_pos};
+
+      last_pos = d_pos;
+      ++token_idx;
+    }
+    // include anything leftover (rightover?)
+    if (token_idx < token_count) {
+      d_tokens[0] = string_index_pair{base_ptr + pos_begin, last_pos - pos_begin};
+    }
+  }
+
+  rsplit_ws_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
+    : base_ws_split_tokenizer(d_strings, max_tokens)
   {
   }
 };
