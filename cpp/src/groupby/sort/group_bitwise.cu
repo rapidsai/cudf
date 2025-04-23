@@ -108,14 +108,14 @@ std::unique_ptr<column> group_bitwise(bitwise_op bit_op,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  return type_dispatcher(values.type(),
-                         bitwise_group_reduction_functor{},
-                         bit_op,
-                         values,
-                         group_labels,
-                         num_groups,
-                         stream,
-                         mr);
+  return cudf::type_dispatcher(values.type(),
+                               bitwise_group_reduction_functor{},
+                               bit_op,
+                               values,
+                               group_labels,
+                               num_groups,
+                               stream,
+                               mr);
 }
 
 }  // namespace cudf::groupby::detail
