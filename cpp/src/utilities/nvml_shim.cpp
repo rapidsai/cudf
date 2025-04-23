@@ -57,10 +57,9 @@ nvml_shim::nvml_shim()
     let_shim_throw(device_get_handle_by_index);
     let_shim_throw(device_get_field_values);
     return;
-  } else {
-    _shared_library_exists = true;
   }
 
+  _shared_library_exists = true;
   get_symbol(init, lib_handle, "nvmlInit_v2");
   get_symbol(shutdown, lib_handle, "nvmlShutdown");
   get_symbol(error_string, lib_handle, "nvmlErrorString");
