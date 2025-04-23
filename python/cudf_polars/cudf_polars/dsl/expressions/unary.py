@@ -264,7 +264,7 @@ class UnaryFunction(Expr):
         elif self.name == "fill_null":
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             if isinstance(self.children[1], Literal):
-                arg = plc.interop.from_arrow(self.children[1].value)
+                arg = plc.Scalar.from_py(self.children[1].value, self.children[1].dtype)
             else:
                 evaluated = self.children[1].evaluate(
                     df, context=context, mapping=mapping

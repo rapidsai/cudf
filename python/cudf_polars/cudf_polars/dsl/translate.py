@@ -12,7 +12,6 @@ from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
@@ -551,13 +550,10 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                 # We check for null first because we want to use the
                 # chars pyarrow type, but it is invalid to try and
                 # produce a string scalar with a null dtype.
-                if chars.value == pa.scalar(None, type=pa.null()):
+                if chars.value is None:
                     # Polars uses None to mean "strip all whitespace"
-                    chars = expr.Literal(
-                        column.dtype,
-                        pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
-                    )
-                elif chars.value == pa.scalar("", type=chars.value.type):
+                    chars = expr.Literal(column.dtype, "")
+                elif chars.value == "":
                     # No-op in polars, but libcudf uses empty string
                     # as signifier to remove whitespace.
                     return column
@@ -624,7 +620,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                 dtype,
                 plc.binaryop.BinaryOperator.LOG_BASE,
                 child,
-                expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
+                expr.Literal(dtype, base),
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
@@ -635,7 +631,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             return expr.Slice(
                 dtype,
                 0,
-                k.value.as_py(),
+                k.value,
                 expr.Sort(dtype, (False, True, not descending), col),
             )
 
@@ -673,8 +669,7 @@ def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> exp
         return expr.LiteralColumn(
             dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
         )
-    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
-    return expr.Literal(dtype, value)
+    return expr.Literal(dtype, node.value)
 
 
 @_translate_expr.register
@@ -702,8 +697,8 @@ def _(node: pl_expr.Slice, translator: Translator, dtype: plc.DataType) -> expr.
     assert isinstance(length, expr.Literal)
     return expr.Slice(
         dtype,
-        offset.value.as_py(),
-        length.value.as_py(),
+        offset.value,
+        length.value,
         translator.translate_expr(n=node.input),
     )
 
@@ -731,7 +726,14 @@ def _(node: pl_expr.Cast, translator: Translator, dtype: plc.DataType) -> expr.E
     inner = translator.translate_expr(n=node.expr)
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
-        return expr.Literal(dtype, inner.value.cast(plc.interop.to_arrow(dtype)))
+        plc_column = plc.Column.from_scalar(
+            plc.Scalar.from_py(inner.value, inner.dtype), 1
+        )
+        casted_column = plc.unary.cast(plc_column, dtype)
+        casted_py_scalar = plc.interop.to_arrow(
+            plc.copying.get_element(casted_column, 0)
+        ).as_py()
+        return expr.Literal(dtype, casted_py_scalar)
     elif isinstance(inner, expr.Cast):
         # Translation of Len/Count-agg put in a cast, remove double
         # casts if we have one.

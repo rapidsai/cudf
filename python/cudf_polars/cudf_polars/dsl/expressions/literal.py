@@ -26,11 +26,10 @@ __all__ = ["Literal", "LiteralColumn"]
 class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Scalar[Any]
+    value: Any  # Python scalar
 
-    def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
+    def __init__(self, dtype: plc.DataType, value: Any) -> None:
         self.dtype = dtype
-        assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
         self.children = ()
         self.is_pointwise = True
@@ -44,7 +43,9 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow scalar is correct by construction.
-        return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
+        return Column(
+            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype), 1)
+        )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""

@@ -79,7 +79,7 @@ class Agg(Expr):
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
             req = plc.aggregation.quantile(
-                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+                quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )
         else:
             raise NotImplementedError(
