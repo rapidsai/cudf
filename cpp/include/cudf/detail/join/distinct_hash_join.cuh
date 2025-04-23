@@ -109,6 +109,16 @@ class distinct_hash_join {
                      rmm::cuda_stream_view stream);
 
   /**
+   * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  distinct_hash_join(cudf::table_view const& build,
+                     cudf::null_equality compare_nulls,
+                     double load_factor,
+                     rmm::cuda_stream_view stream);
+
+  /**
    * @copydoc cudf::distinct_hash_join::inner_join
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
