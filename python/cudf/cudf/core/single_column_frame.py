@@ -115,7 +115,8 @@ class SingleColumnFrame(Frame, NotIterable):
                 self._column.dtype,
                 np.dtypes.DateTime64DType
                 | np.dtypes.TimeDelta64DType
-                | cudf.CategoricalDtype,
+                | cudf.CategoricalDtype
+                | object,
             )
             and hasattr(self._column, "__cuda_array_interface__")
         ):

@@ -557,7 +557,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 self._columns[0].dtype,
                 np.dtypes.DateTime64DType
                 | np.dtypes.TimeDelta64DType
-                | cudf.CategoricalDtype,
+                | cudf.CategoricalDtype
+                | object,
             )
             and na_value is None
         ):
