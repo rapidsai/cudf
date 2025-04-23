@@ -129,7 +129,7 @@ class ConfigOptions:
         executor = config.get("executor", "in-memory")
         if executor == "streaming":
             executor_options, unsupported = _valid_streaming_options(
-                config["executor_options"]
+                config.get("executor_options", {})
             )
             config["executor_options"] = executor_options
         else:
