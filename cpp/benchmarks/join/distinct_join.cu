@@ -18,6 +18,8 @@
 
 #include <cudf/join/distinct_hash_join.hpp>
 
+double constexpr load_factor = 0.5;
+
 template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
                          nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
@@ -25,7 +27,7 @@ void distinct_inner_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls};
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
     return hj_obj.inner_join(probe_input);
   };
 
@@ -39,7 +41,7 @@ void distinct_left_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls};
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
     return hj_obj.left_join(probe_input);
   };
 

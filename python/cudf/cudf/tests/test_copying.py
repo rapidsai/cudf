@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -280,6 +280,7 @@ def test_series_zero_copy_cow_on():
         # modify `s` and will leave rest of the copies
         # untouched.
 
+        assert_eq(s.to_numpy(), np.array([10, 10, 10, 4, 5]))
         assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
         assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
         assert_eq(cp_array, cp.array([10, 10, 10, 4, 5]))
