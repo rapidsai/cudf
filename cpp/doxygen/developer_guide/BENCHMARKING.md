@@ -59,7 +59,7 @@ exercises different code and can therefore uncover regressions that smaller benc
 
 ### Running Benchmarks
 
-By default, benchmarks are **not** built as part of the libcudf build process. To enable them, pass the following flag to CMake:
+By default, benchmarks are **not** built as part of the libcudf build process. To enable them, pass the `BUILD_BENCHMARKS=ON` flag to CMake such as:
 
 ```bash
 cmake -DBUILD_BENCHMARKS=ON cpp/build/latest
