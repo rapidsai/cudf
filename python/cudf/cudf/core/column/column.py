@@ -91,6 +91,25 @@ else:
     NumpyExtensionArray = pd.arrays.PandasArray
 
 
+def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
+    """
+    Given 2 possibly not equal dtypes, can they both hold equivalent values.
+
+    Helper function for .equals when check_dtypes is False.
+    """
+    if left == right:
+        return True
+    if isinstance(left, CategoricalDtype):
+        return _can_values_be_equal(left.categories.dtype, right)
+    elif isinstance(right, CategoricalDtype):
+        return _can_values_be_equal(left, right.categories.dtype)
+    elif is_dtype_obj_numeric(left) and is_dtype_obj_numeric(right):
+        return True
+    elif left.kind == right.kind and left.kind in "mM":
+        return True
+    return False
+
+
 class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
@@ -724,15 +743,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
+        if not isinstance(other, ColumnBase) or len(self) != len(other):
             return False
-        if check_dtypes and (self.dtype != other.dtype):
+        elif self is other:
+            return True
+        elif check_dtypes and self.dtype != other.dtype:
+            return False
+        elif not check_dtypes and not _can_values_be_equal(
+            self.dtype, other.dtype
+        ):
+            return False
+        elif self.null_count != other.null_count:
             return False
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
-            raise TypeError(f"Cannot compare equality with {type(other)}")
+            return False
         return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
