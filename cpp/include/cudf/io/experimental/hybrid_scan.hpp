@@ -168,7 +168,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Filter data pages of filter columns using statistics containing in `PageIndex` metadata
+   * @brief Filter data pages of filter columns using page statistics from page index metadata
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
