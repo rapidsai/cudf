@@ -13,7 +13,13 @@ from libcpp.optional cimport optional
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 
+cdef extern from "<cstddef>" namespace "std":
+    cdef cppclass byte:
+        pass
+
+ctypedef const byte const_byte
 
 cdef extern from "cudf/io/types.hpp" \
         namespace "cudf::io" nogil:
@@ -140,6 +146,12 @@ cdef extern from "cudf/io/types.hpp" \
         ) except +libcudf_exception_handler
         source_info(
             const vector[cudf_io_datasource.datasource*] &datasources
+        ) except +libcudf_exception_handler
+        source_info(
+            device_span[byte] dspan
+        ) except +libcudf_exception_handler
+        source_info(
+            host_span[device_span[const byte]] dspan
         ) except +libcudf_exception_handler
 
     cdef cppclass sink_info:

@@ -314,10 +314,33 @@ class orc_column_view {
   std::optional<uint32_t> _parent_index;
 };
 
-size_type orc_table_view::num_rows() const noexcept
-{
-  return columns.empty() ? 0 : columns.front().size();
-}
+/**
+ * Non-owning view of a cuDF table that includes ORC-related information.
+ *
+ * Columns hierarchy is flattened and stored in pre-order.
+ */
+struct orc_table_view {
+  std::vector<orc_column_view> columns;
+  rmm::device_uvector<orc_column_device_view> d_columns;
+  std::vector<uint32_t> string_column_indices;
+  rmm::device_uvector<uint32_t> d_string_column_indices;
+
+  auto num_columns() const noexcept { return columns.size(); }
+  [[nodiscard]] size_type num_rows() const noexcept
+  {
+    return columns.empty() ? 0 : columns.front().size();
+  }
+  auto num_string_columns() const noexcept { return string_column_indices.size(); }
+
+  auto& column(uint32_t idx) { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
+
+  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
+  {
+    return columns.at(string_column_indices.at(idx));
+  }
+};
 
 namespace {
 struct string_length_functor {
@@ -1690,7 +1713,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
                           null_mask + pd_masks.back().size(),
                           parent_pd_mask,
                           pd_masks.back().data(),
-                          thrust::bit_and<bitmask_type>());
+                          cuda::std::bit_and<bitmask_type>());
       }
     }
     if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
@@ -1870,7 +1893,8 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           // Root column
           if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
-            auto const rows_end = thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
+            auto const rows_end =
+              cuda::std::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
             return rowgroup_rows{rows_begin, rows_end};
           } else {
             // Child column

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -15,7 +15,7 @@ def test_pad():
         "!",
     )
     result = plc.interop.to_arrow(plc_result)
-    expected = pa.chunked_array(pc.utf8_lpad(arr, 2, padding="!"))
+    expected = pa.array(pc.utf8_lpad(arr, 2, padding="!"))
     assert result.equals(expected)
 
 
@@ -23,5 +23,5 @@ def test_zfill():
     arr = pa.array(["a", "1", None])
     plc_result = plc.strings.padding.zfill(plc.interop.from_arrow(arr), 2)
     result = plc.interop.to_arrow(plc_result)
-    expected = pa.chunked_array(pc.utf8_lpad(arr, 2, padding="0"))
+    expected = pa.array(pc.utf8_lpad(arr, 2, padding="0"))
     assert result.equals(expected)

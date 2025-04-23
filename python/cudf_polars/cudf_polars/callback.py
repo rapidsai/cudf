@@ -187,7 +187,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
@@ -203,7 +203,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
@@ -218,7 +218,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    executor: Literal["in-memory", "streaming"] | None,
     config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
@@ -233,16 +233,16 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
+        if executor is None or executor == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
+        elif executor == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_dask(ir, config_options).to_polars()
+            return evaluate_streaming(ir, config_options).to_polars()
         else:
             raise ValueError(f"Unknown executor '{executor}'")
 
@@ -291,6 +291,13 @@ def execute_with_cudf(
         ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+        if (
+            memory_resource is None
+            and executor == "streaming"
+            and translator.config_options.get("executor_options.scheduler")
+            == "distributed"
+        ):  # pragma: no cover; Requires distributed cluster
+            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051

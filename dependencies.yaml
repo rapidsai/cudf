@@ -4,7 +4,7 @@ files:
     output: conda
     matrix:
       cuda: ["11.8", "12.8"]
-      arch: [x86_64]
+      arch: [x86_64, aarch64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
       # version conflicts with the rest of RAPIDS as well as its own
@@ -75,7 +75,17 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
+  test_python_pylibcudf:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_pylibcudf
       - depends_on_pylibcudf
       - depends_on_libcudf
   test_python_other:
@@ -86,6 +96,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
@@ -813,7 +824,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.27
+          - polars>=1.24,<1.28
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -919,21 +930,30 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - fastavro>=0.22.9
-          - hypothesis
+          - &fastavro fastavro>=0.22.9
+          - mmh3
+          - nanoarrow
           - *numpy
           - pandas
+      - output_types: conda
+        packages:
+          - python-xxhash
+      - output_types: [pyproject, requirements]
+        packages:
+          - xxhash
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cramjam
-          - fastavro>=0.22.9
-          - hypothesis
+          - *fastavro
+          # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
+          - hypothesis<6.131.1
           - pytest-benchmark
           - pytest-cases>=3.8.2
+          - pytest-rerunfailures
           - scipy
-          - mmh3
+          - zstandard
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
@@ -942,13 +962,10 @@ dependencies:
           - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
-          - python-xxhash
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
-          - &tokenizers tokenizers==0.15.2
           - tzdata
-          - xxhash
     specific:
       - output_types: [conda, requirements]
         matrices:
@@ -967,7 +984,6 @@ dependencies:
               cuda: "12.*"
             packages:
               - pytorch>=2.4.0
-              - *tokenizers
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -1210,6 +1226,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - ipython
+          - hypothesis<6.131.1
   test_python_cudf_pandas:
     common:
       - output_types: [conda, requirements, pyproject]
