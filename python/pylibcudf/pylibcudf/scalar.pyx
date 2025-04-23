@@ -119,8 +119,7 @@ cdef class Scalar:
 
         Parameters
         ----------
-        py_val: None, bool, int, float, str,
-                datetime.datetime, datetime.timedelta, list, dict
+        py_val: None, bool, int, float, str, datetime, timedelta, list, dict
             Value to convert to a pylibcudf.Scalar
         dtype: DataType | None
             The datatype to cast the value to. If None,
