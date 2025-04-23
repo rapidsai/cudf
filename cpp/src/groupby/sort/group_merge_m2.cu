@@ -26,10 +26,10 @@
 
 #include <cuda/functional>
 #include <cuda/std/functional>
+#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace groupby {
@@ -73,7 +73,7 @@ struct merge_fn {
     // If there are all nulls in the partial results (i.e., sum of all valid counts is
     // zero), then the output is a null.
     auto const is_valid = n > 0;
-    return thrust::make_tuple(n, avg, m2, is_valid);
+    return cuda::std::tuple{n, avg, m2, is_valid};
   }
 };
 
@@ -94,13 +94,11 @@ std::unique_ptr<column> merge_m2(column_view const& values,
 
   // Perform merging for all the aggregations. Their output (and their validity data) are written
   // out concurrently through an output zip iterator.
-  using iterator_tuple  = thrust::tuple<count_type*, result_type*, result_type*, bool*>;
-  using output_iterator = thrust::zip_iterator<iterator_tuple>;
   auto const out_iter =
-    output_iterator{thrust::make_tuple(result_counts->mutable_view().template data<count_type>(),
-                                       result_means->mutable_view().template data<result_type>(),
-                                       result_M2s->mutable_view().template data<result_type>(),
-                                       validities.begin())};
+    thrust::make_zip_iterator(result_counts->mutable_view().template data<count_type>(),
+                              result_means->mutable_view().template data<result_type>(),
+                              result_M2s->mutable_view().template data<result_type>(),
+                              validities.begin());
 
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
@@ -144,6 +142,10 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   CUDF_EXPECTS(values.num_children() == 3,
                "Input to `group_merge_m2` must be a structs column having 3 children columns.");
 
+  // The input column stores tuples of values (`COUNT_VALID`, `MEAN`, and `M2`).
+  // However, the data type for `COUNT_VALID` must be wide enough such as
+  // `INT64` or `FLOAT64` to prevent overflow when summing up.
+  // For Apache Spark, the data type used for storing this is `FLOAT64`.
   auto const count_type_id = values.child(0).type().id();
   CUDF_EXPECTS((count_type_id == type_id::INT64 || count_type_id == type_id::FLOAT64) &&
                  values.child(1).type().id() == type_to_id<result_type>() &&
