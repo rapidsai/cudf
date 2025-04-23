@@ -172,7 +172,7 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
 
     result = (pattern_char == target_char);
   }
-  return {result, thrust::distance(target_itr_start, target_itr)};
+  return {result, cuda::std::distance(target_itr_start, target_itr)};
 }
 
 /**
@@ -246,7 +246,6 @@ CUDF_KERNEL void like_kernel(column_device_view d_strings,
     out_size = warp.shfl(out_size, 0);  // copy out_size to all threads in the warp
     target_itr += out_size;
   }
-  warp.sync();  // not sure if this is needed
 
   result = warp.shfl(result, 0);  // copy result to all threads in the warp
 
