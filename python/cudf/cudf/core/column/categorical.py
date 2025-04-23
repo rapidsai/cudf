@@ -774,11 +774,6 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def __getattribute__(self, name):
-        if name == "__cuda_array_interface__":
-            raise AttributeError  # just needed to make hasattr check return False
-        return super().__getattribute__(name)
-
     def to_pandas(
         self,
         *,

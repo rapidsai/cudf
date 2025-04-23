@@ -553,18 +553,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self.ndim == 1
             and not copy
             and dtype is None
-            and not isinstance(
-                self._columns[0].dtype,
-                np.dtypes.DateTime64DType
-                | np.dtypes.TimeDelta64DType
-                | cudf.CategoricalDtype
-                | object,
-            )
+            and not isinstance(self._columns[0].dtype, cudf.CategoricalDtype)
+            and self._columns[0].dtype.kind != "M"
+            and self._columns[0].dtype.kind != "m"
+            and self._columns[0].dtype.kind != "O"
+            and self._columns[0].has_nulls()
+            and isinstance(self._columns[0], cudf.core.column.ColumnBase)
             and na_value is None
         ):
-            col = self._columns[0]
-            if not col.has_nulls():
-                return cp.asarray(col)
+            return cp.asarray(self._columns[0])
         return self._to_array(
             lambda col: col.values,
             cupy,
