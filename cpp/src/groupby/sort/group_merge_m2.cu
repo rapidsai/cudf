@@ -24,12 +24,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
 #include <cuda/std/functional>
-#include <cuda/std/tuple>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace groupby {
@@ -73,7 +72,7 @@ struct merge_fn {
     // If there are all nulls in the partial results (i.e., sum of all valid counts is
     // zero), then the output is a null.
     auto const is_valid = n > 0;
-    return cuda::std::tuple{n, avg, m2, is_valid};
+    return thrust::tuple{n, avg, m2, is_valid};
   }
 };
 
