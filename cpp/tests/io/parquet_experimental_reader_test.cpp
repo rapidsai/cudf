@@ -170,15 +170,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  auto columns = std::vector<std::unique_ptr<column>>{};
-  if constexpr (NumTableConcats == 1) {
-    columns.push_back(col0.release());
-    columns.push_back(col1.release());
-    columns.push_back(col2.release());
-  } else {
-    columns = table->release();
-  }
-  return std::pair{cudf::table{std::move(columns)}, buffer};
+  return std::pair{std::move(table), buffer};
 }
 
 /**
@@ -531,10 +523,10 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-    auto predicate = cudf::compute_column(written_table, filter_expression);
+    auto predicate = cudf::compute_column(written_table->view(), filter_expression);
     EXPECT_EQ(predicate->view().type().id(), cudf::type_id::BOOL8)
       << "Predicate filter should return a boolean";
-    auto expected = cudf::apply_boolean_mask(written_table, *predicate);
+    auto expected = cudf::apply_boolean_mask(written_table->view(), *predicate);
     // Check equivalence as the nullability between columns may be different
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({0}), read_filter_table->view());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->select({1, 2}), read_payload_table->view());
