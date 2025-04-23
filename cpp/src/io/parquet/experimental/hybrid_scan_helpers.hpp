@@ -111,12 +111,12 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Fetch the byte range of the page index in the Parquet file
    */
-  [[nodiscard]] text::byte_range_info get_page_index_byte_range() const;
+  [[nodiscard]] text::byte_range_info page_index_byte_range() const;
 
   /**
    * @brief Get the Parquet file metadata
    */
-  [[nodiscard]] FileMetaData get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
    * @brief Setup and populate the page index structs in `FileMetaData`

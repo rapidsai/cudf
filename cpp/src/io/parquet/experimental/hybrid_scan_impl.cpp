@@ -52,14 +52,14 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 }
 
-FileMetaData hybrid_scan_reader_impl::get_parquet_metadata() const
+FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
 {
-  return _metadata->get_parquet_metadata();
+  return _metadata->parquet_metadata();
 }
 
-byte_range_info hybrid_scan_reader_impl::get_page_index_byte_range() const
+byte_range_info hybrid_scan_reader_impl::page_index_byte_range() const
 {
-  return _metadata->get_page_index_byte_range();
+  return _metadata->page_index_byte_range();
 }
 
 void hybrid_scan_reader_impl::setup_page_index(
@@ -68,7 +68,7 @@ void hybrid_scan_reader_impl::setup_page_index(
   _metadata->setup_page_index(page_index_bytes);
 }
 
-std::vector<size_type> hybrid_scan_reader_impl::get_all_row_groups(
+std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
   parquet_reader_options const& options) const
 {
   auto const num_row_groups = _metadata->get_num_row_groups();
@@ -86,7 +86,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-hybrid_scan_reader_impl::get_secondary_filters(
+hybrid_scan_reader_impl::secondary_filter_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -130,7 +130,7 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader_impl::get_filter_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::filter_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -138,7 +138,7 @@ hybrid_scan_reader_impl::get_filter_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader_impl::get_payload_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::payload_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {

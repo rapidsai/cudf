@@ -77,7 +77,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   }
 }
 
-text::byte_range_info aggregate_reader_metadata::get_page_index_byte_range() const
+text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
 {
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
@@ -92,7 +92,7 @@ text::byte_range_info aggregate_reader_metadata::get_page_index_byte_range() con
   return {};
 }
 
-FileMetaData aggregate_reader_metadata::get_parquet_metadata() const
+FileMetaData aggregate_reader_metadata::parquet_metadata() const
 {
   return per_file_metadata.front();
 }

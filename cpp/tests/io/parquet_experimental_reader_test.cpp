@@ -168,14 +168,14 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
-  auto parquet_metadata = reader->get_parquet_metadata();
+  auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
   ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
-  auto const page_index_byte_range = reader->get_page_index_byte_range();
+  auto const page_index_byte_range = reader->page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
@@ -184,14 +184,14 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   reader->setup_page_index(page_index_buffer);
 
   // Get Parquet file metadata from the reader again
-  parquet_metadata = reader->get_parquet_metadata();
+  parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are now present
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get all row groups from the reader - API # 4
-  auto input_row_group_indices = reader->get_all_row_groups(options);
+  auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
   ASSERT_EQ(input_row_group_indices.size(), 4);
 
@@ -199,7 +199,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   options.set_row_groups({{0, 1}});
 
   // Get all row groups from the reader again
-  input_row_group_indices = reader->get_all_row_groups(options);
+  input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->get_all_row_groups(options).size(), 2);
+  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
 }

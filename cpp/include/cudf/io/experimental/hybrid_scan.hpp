@@ -83,14 +83,14 @@ class hybrid_scan_reader {
    *
    * @return Parquet file footer metadata
    */
-  [[nodiscard]] FileMetaData get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
    * @brief Get the byte range of the page index in the Parquet file
    *
    * @return Byte range of the page index
    */
-  [[nodiscard]] byte_range_info get_page_index_byte_range() const;
+  [[nodiscard]] byte_range_info page_index_byte_range() const;
 
   /**
    * @brief Setup the page index within the Parquet file metadata (`FileMetaData`) for later use
@@ -109,8 +109,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of row group indices
    */
-  [[nodiscard]] std::vector<size_type> get_all_row_groups(
-    parquet_reader_options const& options) const;
+  [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups using column chunk statistics
@@ -134,8 +133,8 @@ class hybrid_scan_reader {
    * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-  get_secondary_filters(cudf::host_span<size_type const> row_group_indices,
-                        parquet_reader_options const& options) const;
+  secondary_filter_byte_ranges(cudf::host_span<size_type const> row_group_indices,
+                               parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the row groups using column chunk dictionary pages
@@ -191,7 +190,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<byte_range_info> get_filter_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<byte_range_info> filter_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
@@ -222,7 +221,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
    */
-  [[nodiscard]] std::vector<byte_range_info> get_payload_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<byte_range_info> payload_column_chunk_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
