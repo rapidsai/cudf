@@ -179,8 +179,8 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   auto parquet_metadata = reader->get_parquet_metadata();
 
   // Check that the offset and column indices are not present
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
   auto const page_index_byte_range = reader->get_page_index_bytes();
