@@ -30,7 +30,10 @@
  *
  * @throws std::runtime_error if the NVML API call fails.
  */
-#define CHECK_NVML(err_code) cudf::check_nvml(err_code, __FILE__, __LINE__)
+#define CHECK_NVML(err_code)                        \
+  do {                                              \
+    cudf::check_nvml(err_code, __FILE__, __LINE__); \
+  } while (0)
 
 namespace CUDF_EXPORT cudf {
 
@@ -74,7 +77,7 @@ class nvml_shim {
    *
    * @return Boolean answer.
    */
-  bool exists();
+  bool shared_library_exists();
 
   /**
    * @brief Wrapper for nvmlInit_v2.
@@ -103,7 +106,7 @@ class nvml_shim {
 
  private:
   nvml_shim();
-  void* _lib_handle{};
+  bool _shared_library_exists{};
 };
 
 /** @} */

@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/nvml_shim.hpp>
+#include "nvml_shim.hpp"
+
 #include <cudf/utilities/system.hpp>
 
 #include <rmm/cuda_device.hpp>
@@ -25,7 +26,7 @@
 
 namespace cudf {
 
-bool is_nvml_available() { return cudf::nvml_shim::instance().exists(); }
+bool is_nvml_available() { return cudf::nvml_shim::instance().shared_library_exists(); }
 
 bool is_c2c_available()
 {

@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#include "nvml_shim.hpp"
+
+#include "cudf/logger_macros.hpp"
+
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/nvml_shim.hpp>
 
 #include <dlfcn.h>
 
-#include <mutex>
 #include <string>
 
 namespace cudf {
@@ -33,17 +36,36 @@ void get_symbol(std::function<F>& fp, void* lib_handle, char const* symbol)
   auto err_msg = dlerror();  // Check if any error arises
   CUDF_EXPECTS(err_msg == nullptr, "Failed to find symbol " + std::string(symbol));
 }
+
+template <typename Ret, typename... Args>
+void let_shim_throw(std::function<Ret(Args...)>& fp)
+{
+  fp = [](Args...) -> Ret { CUDF_FAIL("NVML shim failed as the shared library does not exist."); };
+}
 }  // namespace
 
 nvml_shim::nvml_shim()
 {
-  if (!exists()) { return; }
+  auto lib_handle = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
 
-  get_symbol(init, _lib_handle, "nvmlInit_v2");
-  get_symbol(shutdown, _lib_handle, "nvmlShutdown");
-  get_symbol(error_string, _lib_handle, "nvmlErrorString");
-  get_symbol(device_get_handle_by_index, _lib_handle, "nvmlDeviceGetHandleByIndex_v2");
-  get_symbol(device_get_field_values, _lib_handle, "nvmlDeviceGetFieldValues");
+  if (lib_handle == nullptr) {
+    CUDF_LOG_INFO("NVIDIA Management Library (NVML) libnvidia-ml.so.1 cannot be opened; reason: %s",
+                  dlerror());
+    let_shim_throw(init);
+    let_shim_throw(shutdown);
+    let_shim_throw(error_string);
+    let_shim_throw(device_get_handle_by_index);
+    let_shim_throw(device_get_field_values);
+    return;
+  } else {
+    _shared_library_exists = true;
+  }
+
+  get_symbol(init, lib_handle, "nvmlInit_v2");
+  get_symbol(shutdown, lib_handle, "nvmlShutdown");
+  get_symbol(error_string, lib_handle, "nvmlErrorString");
+  get_symbol(device_get_handle_by_index, lib_handle, "nvmlDeviceGetHandleByIndex_v2");
+  get_symbol(device_get_field_values, lib_handle, "nvmlDeviceGetFieldValues");
 
   CHECK_NVML(init());
 }
@@ -54,14 +76,6 @@ nvml_shim& nvml_shim::instance()
   return instance;
 }
 
-bool nvml_shim::exists()
-{
-  static std::once_flag flag{};
-  std::call_once(flag, [&] {
-    _lib_handle = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
-  });
-
-  return _lib_handle != nullptr;
-}
+bool nvml_shim::shared_library_exists() { return _shared_library_exists; }
 
 }  // namespace cudf
