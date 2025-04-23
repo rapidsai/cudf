@@ -10,13 +10,12 @@ from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast
-from cudf_polars.dsl.ir import IR, HConcatBcast, Select
+from cudf_polars.dsl.ir import Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
@@ -29,40 +28,14 @@ if TYPE_CHECKING:
     from typing import Any, TypeAlias
 
     from cudf_polars.dsl.expressions.base import Expr
-    from cudf_polars.typing import GenericTransformer, Schema
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions
 
 
 ExprDecomposer: TypeAlias = (
     "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]]"
 )
-
-
-_SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
-
-
-class _Placeholder(IR):
-    """
-    Placeholder leaf node.
-
-    Notes
-    -----
-    This is used as the required IR for ``Literal``
-    expressions in ``_decompose``.
-    """
-
-    __slots__ = ()
-    _non_child = ("schema",)
-
-    def __init__(self, schema: Schema):
-        self.schema = schema
-        self._non_child_args = ()
-        self.children = ()
-
-    @classmethod
-    def do_evaluate(cls) -> DataFrame:
-        """Evaluate and return a dataframe."""
-        return DataFrame([])
 
 
 def _add_select_ir(
@@ -317,6 +290,9 @@ def _decompose_agg_node(
     return expr, input_ir, partition_info
 
 
+_SUPPORTED_AGGS = ("count", "min", "max", "sum", "mean", "n_unique")
+
+
 def _decompose_expr_node(
     expr: Expr,
     input_ir: IR,
@@ -394,8 +370,8 @@ def _decompose(
         if isinstance(expr, Literal):
             # For Literal nodes, we don't actually want an
             # input IR with real columns, because it will
-            # mess up the result of ``HConcatBcast``.
-            ir = _Placeholder({})
+            # mess up the result of ``HConcat``.
+            ir = Empty()
             pi = {ir: PartitionInfo(count=1)}
         else:
             ir = rec.state["input_ir"]
@@ -415,7 +391,11 @@ def _decompose(
         schema: MutableMapping[str, Any] = {}
         for ir in unique_input_irs:
             schema.update(ir.schema)
-        input_ir = HConcatBcast(schema, *unique_input_irs)
+        input_ir = HConcat(
+            schema,
+            True,  # noqa: FBT003
+            *unique_input_irs,
+        )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
     else:
         input_ir = input_irs[0]

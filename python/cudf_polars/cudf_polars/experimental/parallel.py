@@ -19,7 +19,7 @@ from cudf_polars.dsl.ir import (
     Cache,
     Filter,
     GroupBy,
-    HConcatBcast,
+    HConcat,
     HStack,
     MapFunction,
     Projection,
@@ -289,7 +289,7 @@ lower_ir_node.register(Projection, _lower_ir_pwise)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(Filter, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
-lower_ir_node.register(HConcatBcast, _lower_ir_pwise)
+lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
 def _generate_ir_tasks_pwise(
@@ -316,6 +316,6 @@ generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(HConcatBcast, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(HConcat, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)

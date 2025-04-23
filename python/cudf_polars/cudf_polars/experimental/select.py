@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.ir import HConcatBcast, Select
+from cudf_polars.dsl.ir import HConcat, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
@@ -81,9 +81,13 @@ def decompose_select(
         selections.append(partial_input_ir)
 
     # Concatenate partial selections
-    new_ir: HConcatBcast | Select
+    new_ir: HConcat | Select
     if len(selections) > 1:
-        new_ir = HConcatBcast(select_ir.schema, *selections)
+        new_ir = HConcat(
+            select_ir.schema,
+            True,  # noqa: FBT003
+            *selections,
+        )
         partition_info[new_ir] = PartitionInfo(
             count=max(partition_info[c].count for c in selections)
         )

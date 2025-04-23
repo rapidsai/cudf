@@ -492,7 +492,11 @@ def _(
 def _(
     node: pl_ir.HConcat, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.HConcat(schema, *(translator.translate_ir(n=n) for n in node.inputs))
+    return ir.HConcat(
+        schema,
+        False,  # noqa: FBT003
+        *(translator.translate_ir(n=n) for n in node.inputs),
+    )
 
 
 def translate_named_expr(
