@@ -673,11 +673,9 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         super().__init__({name: column}, index=first_index)
         if second_index is not None:
-            # TODO: This there a better way to do this?
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
-        self._check_data_index_length_match()
 
     @classmethod
     @_performance_tracking
