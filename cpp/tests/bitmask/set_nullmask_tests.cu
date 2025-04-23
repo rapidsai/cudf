@@ -158,7 +158,7 @@ TEST_F(SetBitmaskTest, null_mask_partition_bulk)
 
 TEST_F(SetBitmaskTest, null_mask_bulk_empty)
 {
-  EXPECT_NO_THROW(cudf::set_null_mask({}, {}, {}, {}));
+  EXPECT_NO_THROW(cudf::set_null_masks({}, {}, {}, {}));
 }
 
 TEST_F(SetBitmaskTest, error_range)
