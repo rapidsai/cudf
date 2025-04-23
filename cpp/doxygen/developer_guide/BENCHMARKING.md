@@ -59,8 +59,13 @@ exercises different code and can therefore uncover regressions that smaller benc
 
 ### Running Benchmarks
 
-NVBench executables are built under the `cpp/build/latest/benchmarks` directory. Each benchmark is compiled
-into its own binary with a `_NVBENCH` suffix.
+By default, benchmarks are **not** built as part of the libcudf build process. To enable them, pass the following flag to CMake:
+
+```bash
+cmake -DBUILD_BENCHMARKS=ON /path/to/cpp/build/latest/
+```
+This will build the NVBench benchmark executables under the `cpp/build/latest/benchmarks`
+directory. Each benchmark is compiled into its own binary with a `_NVBENCH` suffix.
 
 To list available benchmarks:
 
