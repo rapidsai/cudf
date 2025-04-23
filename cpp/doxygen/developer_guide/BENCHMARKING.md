@@ -76,8 +76,7 @@ ls cpp/build/latest/benchmarks/*_NVBENCH
 To view benchmark options:
 
 ```bash
-./cpp/build/latest/benchmarks/RESHAPE_NVBENCH --help
-```
+./cpp/build/latest/benchmarks/<NAME>_NVBENCH --help
 
 ### Comparing Benchmarks
 
