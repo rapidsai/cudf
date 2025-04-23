@@ -351,7 +351,7 @@ def _decompose(
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
     partition_count = max(partition_info[ir].count for ir in input_irs)
-    unique_input_irs = list(set(input_irs))
+    unique_input_irs = list(dict.fromkeys(input_irs))
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
         # TODO: Check that we aren't concatenating misaligned
