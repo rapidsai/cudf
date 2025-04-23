@@ -107,17 +107,18 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_performance_tracking
     def values(self) -> cupy.ndarray:
+        col = self._column
+        dtype = col.dtype
+
         if (
             self.ndim == 1
-            and not self._column.has_nulls()
-            and not isinstance(self._column.dtype, cudf.CategoricalDtype)
-            and self._column.dtype.kind != "M"
-            and self._column.dtype.kind != "m"
-            and self._column.dtype.kind != "O"
-            and isinstance(self._column, cudf.core.column.ColumnBase)
+            and not col.has_nulls()
+            and not isinstance(dtype, cudf.CategoricalDtype)
+            and dtype.kind not in {"M", "m", "O"}
         ):
-            return cp.asarray(self._column)
-        return self._column.values
+            return cp.asarray(col)
+
+        return col.values
 
     @property  # type: ignore
     @_performance_tracking

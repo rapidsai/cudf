@@ -517,12 +517,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 matrix[:, i] = to_array(col, dtype)
             return matrix
 
-    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
-    # to_cupy. We should investigate the reasons why and whether we can provide
-    # a more efficient method here by exploiting __cuda_array_interface__. In
-    # particular, we need to benchmark how much of the overhead is coming from
-    # (potentially unavoidable) local copies in to_cupy and how much comes from
-    # inefficiencies in the implementation.
+    # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
+    # in common cases (like no nulls, no type conversion, no copying). But these fast
+    # paths only work in limited situations. We should look into expanding the fast
+    # path to cover more types of columns.
     @_performance_tracking
     def to_cupy(
         self,
@@ -549,19 +547,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
-        if (
-            self.ndim == 1
-            and not copy
-            and dtype is None
-            and not isinstance(self._columns[0].dtype, cudf.CategoricalDtype)
-            and self._columns[0].dtype.kind != "M"
-            and self._columns[0].dtype.kind != "m"
-            and self._columns[0].dtype.kind != "O"
-            and self._columns[0].has_nulls()
-            and isinstance(self._columns[0], cudf.core.column.ColumnBase)
-            and na_value is None
-        ):
-            return cp.asarray(self._columns[0])
+        if self.ndim == 1:
+            col = self._columns[0]
+            if (
+                not copy
+                and dtype is None
+                and na_value is None
+                and not col.has_nulls()
+                and not isinstance(col.dtype, cudf.CategoricalDtype)
+                and col.dtype.kind not in {"M", "m", "O"}
+            ):
+                return cp.asarray(col)
         return self._to_array(
             lambda col: col.values,
             cupy,
