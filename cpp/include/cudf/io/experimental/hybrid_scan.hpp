@@ -137,7 +137,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_dictionary_pages(
-    std::vector<rmm::device_buffer>& dictionary_page_data,
+    cudf::host_span<rmm::device_buffer> dictionary_page_data,
     cudf::host_span<size_type const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -152,7 +152,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_bloom_filters(
-    std::vector<rmm::device_buffer>& bloom_filter_data,
+    cudf::host_span<rmm::device_buffer> bloom_filter_data,
     cudf::host_span<size_type const> row_group_indices,
     cudf::io::parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;

@@ -480,7 +480,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
-  std::vector<rmm::device_buffer>& dictionary_page_data,
+  cudf::host_span<rmm::device_buffer> dictionary_page_data,
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -543,7 +543,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
-  std::vector<rmm::device_buffer>& bloom_filter_data,
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
   host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
