@@ -52,14 +52,14 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> 
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 }
 
-FileMetaData const& hybrid_scan_reader_impl::get_parquet_metadata() const
+FileMetaData hybrid_scan_reader_impl::get_parquet_metadata() const
 {
   return _metadata->get_parquet_metadata();
 }
 
-byte_range_info hybrid_scan_reader_impl::get_page_index_bytes() const
+byte_range_info hybrid_scan_reader_impl::get_page_index_byte_range() const
 {
-  return _metadata->get_page_index_bytes();
+  return _metadata->get_page_index_byte_range();
 }
 
 void hybrid_scan_reader_impl::setup_page_index(

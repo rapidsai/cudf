@@ -39,6 +39,8 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+using text::byte_range_info;
+
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
  */
@@ -57,12 +59,12 @@ class hybrid_scan_reader_impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::get_parquet_metadata
    */
-  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData get_parquet_metadata() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_page_index_bytes
+   * @copydoc cudf::io::experimental::hybrid_scan::get_page_index_byte_range
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info get_page_index_byte_range() const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_page_index
@@ -86,8 +88,7 @@ class hybrid_scan_reader_impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::get_secondary_filters
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::io::text::byte_range_info>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
   get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
                         parquet_reader_options const& options);
 
@@ -126,8 +127,7 @@ class hybrid_scan_reader_impl {
    * @return Pair of a vector of byte ranges to column chunks of filter columns and a vector of
    *         their corresponding input source file indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   get_filter_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options);
@@ -151,8 +151,7 @@ class hybrid_scan_reader_impl {
    * @return Pair of a vector of byte ranges to column chunks of payload columns and a vector of
    * their corresponding input source file indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   get_payload_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options);
@@ -220,8 +219,7 @@ class hybrid_scan_reader_impl {
    * @param row_group_indices The row groups indices to read
    * @return A pair of vectors containing the byte ranges and the source indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   get_input_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 

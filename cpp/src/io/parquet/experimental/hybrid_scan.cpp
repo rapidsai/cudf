@@ -29,12 +29,12 @@ hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_byt
 
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
-[[nodiscard]] text::byte_range_info hybrid_scan_reader::get_page_index_bytes() const
+[[nodiscard]] text::byte_range_info hybrid_scan_reader::get_page_index_byte_range() const
 {
-  return _impl->get_page_index_bytes();
+  return _impl->get_page_index_byte_range();
 }
 
-[[nodiscard]] FileMetaData const& hybrid_scan_reader::get_parquet_metadata() const
+[[nodiscard]] FileMetaData hybrid_scan_reader::get_parquet_metadata() const
 {
   return _impl->get_parquet_metadata();
 }

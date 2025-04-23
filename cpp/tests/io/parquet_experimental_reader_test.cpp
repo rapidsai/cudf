@@ -175,7 +175,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
-  auto const page_index_byte_range = reader->get_page_index_bytes();
+  auto const page_index_byte_range = reader->get_page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);

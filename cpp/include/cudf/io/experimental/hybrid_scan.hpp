@@ -83,14 +83,14 @@ class hybrid_scan_reader {
    *
    * @return Parquet file footer metadata
    */
-  [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData get_parquet_metadata() const;
 
   /**
    * @brief Get the byte range of the page index in the Parquet file
    *
    * @return Byte range of the page index
    */
-  [[nodiscard]] byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info get_page_index_byte_range() const;
 
   /**
    * @brief Setup the page index within the Parquet file metadata (`FileMetaData`) for later use
