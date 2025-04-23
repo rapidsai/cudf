@@ -29,7 +29,7 @@
 #include <vector>
 
 //! Parquet physical `Type`
-using Type = cudf::io::parquet::Type;
+using cudf::io::parquet::Type;
 
 namespace CUDF_EXPORT cudf {
 namespace io {
