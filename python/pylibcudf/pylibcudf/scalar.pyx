@@ -32,6 +32,7 @@ from pylibcudf.libcudf.types cimport type_id
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
 from .column cimport Column
+from .traits cimport is_floating_point
 from .types cimport DataType
 from functools import singledispatch
 
@@ -214,6 +215,8 @@ def _(py_val: int, dtype: DataType | None):
     cdef DataType c_dtype
     if dtype is None:
         c_dtype = DataType(type_id.INT64)
+    elif is_floating_point(dtype):
+        return _from_py(float(py_val), dtype)
     else:
         c_dtype = <DataType>dtype
     tid = c_dtype.id()
