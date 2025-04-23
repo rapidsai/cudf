@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ namespace reduction {
 namespace simple {
 namespace detail {
 /**
- * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
+ * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares', and bitwise AND/OR/XOR
  * which directly compute the reduction by a single step reduction call
  *
  * @tparam ElementType  the input column data-type

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -351,6 +352,20 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Performs bitwise reduction on the input column.
+ *
+ * @param bit_op Bitwise operation to perform on the input
+ * @param col input column to perform bitwise reduction on
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Scalar containing the result of bitwise operation on all elements of the input
+ */
+std::unique_ptr<scalar> bitwise_reduction(bitwise_op bit_op,
+                                          column_view const& col,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
 }  // namespace CUDF_EXPORT cudf

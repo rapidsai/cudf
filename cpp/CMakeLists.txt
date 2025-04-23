@@ -606,6 +606,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/histogram.cu
   src/reductions/max.cu
