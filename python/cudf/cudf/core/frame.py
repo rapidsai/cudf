@@ -549,7 +549,18 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
-        if self.ndim == 1 and not copy and dtype is None and na_value is None:
+        if (
+            self.ndim == 1
+            and not copy
+            and dtype is None
+            and not isinstance(
+                self._columns[0].dtype,
+                np.dtypes.DateTime64DType
+                | np.dtypes.TimeDelta64DType
+                | cudf.CategoricalDtype,
+            )
+            and na_value is None
+        ):
             col = self._columns[0]
             if not col.has_nulls():
                 return cp.asarray(col)

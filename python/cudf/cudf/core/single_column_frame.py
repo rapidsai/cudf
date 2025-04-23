@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import cupy as cp
+import numpy as np
 from typing_extensions import Self
 
 import cudf
@@ -107,7 +108,19 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_performance_tracking
     def values(self) -> cupy.ndarray:
-        return cp.asarray(self)
+        if (
+            self.ndim == 1
+            and not self._column.has_nulls()
+            and not isinstance(
+                self._column.dtype,
+                np.dtypes.DateTime64DType
+                | np.dtypes.TimeDelta64DType
+                | cudf.CategoricalDtype,
+            )
+            and hasattr(self._column, "__cuda_array_interface__")
+        ):
+            return cp.asarray(self._column)
+        return self._column.values
 
     @property  # type: ignore
     @_performance_tracking
