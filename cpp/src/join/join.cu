@@ -15,6 +15,7 @@
  */
 #include "join_common_utils.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -55,11 +56,11 @@ inner_join(table_view const& left_input,
   // building/probing the hash map. Because building is typically more expensive than probing, we
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
-    cudf::hash_join hj_obj(left, has_nulls, compare_nulls, stream);
+    cudf::hash_join hj_obj(left, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream);
     auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
     return std::pair(std::move(left_result), std::move(right_result));
   } else {
-    cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
+    cudf::hash_join hj_obj(right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream);
     return hj_obj.inner_join(left, std::nullopt, stream, mr);
   }
 }
@@ -85,7 +86,7 @@ left_join(table_view const& left_input,
                              ? cudf::nullable_join::YES
                              : cudf::nullable_join::NO;
 
-  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
+  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream);
   return hj_obj.left_join(left, std::nullopt, stream, mr);
 }
 
@@ -110,7 +111,7 @@ full_join(table_view const& left_input,
                              ? cudf::nullable_join::YES
                              : cudf::nullable_join::NO;
 
-  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
+  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream);
   return hj_obj.full_join(left, std::nullopt, stream, mr);
 }
 

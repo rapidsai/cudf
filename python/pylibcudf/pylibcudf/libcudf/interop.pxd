@@ -54,12 +54,20 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
             ArrowSchema&& schema,
             ArrowArray&& array
         ) except +libcudf_exception_handler
+        arrow_column(
+            ArrowSchema&& schema,
+            ArrowDeviceArray&& array
+        ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
     cdef cppclass arrow_table:
         arrow_table(
             ArrowArrayStream&& stream,
-            ) except +libcudf_exception_handler
+        ) except +libcudf_exception_handler
+        arrow_table(
+            ArrowSchema&& schema,
+            ArrowDeviceArray&& array,
+        ) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
 
 
@@ -67,9 +75,10 @@ cdef extern from *:
     # Rather than exporting the underlying functions directly to Cython, we expose
     # these wrappers that handle the release to avoid needing to teach Cython how
     # to handle unique_ptrs with custom deleters that aren't default constructible.
-    # This will go away once we introduce cudf::arrow_column (need a
-    # cudf::arrow_schema as well), see
-    # https://github.com/rapidsai/cudf/issues/16104.
+    # We cannot use cudf's owning arrow types for this because pylibcudf's
+    # objects always manage data ownership independently of libcudf in order to
+    # support other data sources (e.g. cupy), so we must use the view-based
+    # C++ APIs and handle ownership in Python.
     """
     #include <nanoarrow/nanoarrow.h>
     #include <nanoarrow/nanoarrow_device.h>
@@ -98,24 +107,13 @@ cdef extern from *:
       delete schema;
     }
 
+    template <typename ViewType>
     ArrowArray* to_arrow_host_raw(
-      cudf::table_view const& tbl,
+      ViewType const& obj,
       rmm::cuda_stream_view stream       = cudf::get_default_stream(),
       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      // Assumes the sync event is null and the data is already on the host.
       ArrowArray *arr = new ArrowArray();
-      auto device_arr = cudf::to_arrow_host(tbl, stream, mr);
-      ArrowArrayMove(&device_arr->array, arr);
-      return arr;
-    }
-
-    ArrowArray* to_arrow_host_raw(
-      cudf::column_view const& col,
-      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
-      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
-      // Assumes the sync event is null and the data is already on the host.
-      ArrowArray *arr = new ArrowArray();
-      auto device_arr = cudf::to_arrow_host(col, stream, mr);
+      auto device_arr = cudf::to_arrow_host(obj, stream, mr);
       ArrowArrayMove(&device_arr->array, arr);
       return arr;
     }
@@ -125,6 +123,54 @@ cdef extern from *:
         array->release(array);
       }
       delete array;
+    }
+
+    void release_arrow_device_array_raw(ArrowDeviceArray *array) {
+      if (array->array.release != nullptr) {
+        array->array.release(&array->array);
+      }
+      delete array;
+    }
+
+    struct PylibcudfArrowDeviceArrayPrivateData {
+       ArrowArray parent;
+       PyObject* owner;
+    };
+
+    void PylibcudfArrowDeviceArrayRelease(ArrowArray* array)
+    {
+      auto private_data = reinterpret_cast<PylibcudfArrowDeviceArrayPrivateData*>(
+        array->private_data);
+      Py_DECREF(private_data->owner);
+      private_data->parent.release(&private_data->parent);
+      array->release = nullptr;
+    }
+
+    template <typename ViewType>
+    ArrowDeviceArray* to_arrow_device_raw(
+      ViewType const& obj,
+      PyObject* owner,
+      rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
+      auto tmp = cudf::to_arrow_device(obj, stream, mr);
+
+      // Instead of moving the whole device array, we move the underlying ArrowArray
+      // into the custom private data struct for managing its data then create a new
+      // device array from scratch.
+      auto private_data = new PylibcudfArrowDeviceArrayPrivateData();
+      ArrowArrayMove(&tmp->array, &private_data->parent);
+      private_data->owner = owner;
+      Py_INCREF(owner);
+
+      ArrowDeviceArray *arr = new ArrowDeviceArray();
+      arr->device_id          = tmp->device_id;
+      arr->device_type        = tmp->device_type;
+      arr->sync_event         = tmp->sync_event;
+      arr->array              = private_data->parent;  // shallow copy
+      arr->array.private_data = private_data;
+      arr->array.release      = &PylibcudfArrowDeviceArrayRelease;
+
+      return arr;
     }
     """
     # The `to_*_raw` functions are all defined in the above extern block as wrappers
@@ -157,4 +203,15 @@ cdef extern from *:
     ) except +libcudf_exception_handler nogil
     cdef void release_arrow_array_raw(
         ArrowArray *
+    ) except +libcudf_exception_handler nogil
+    cdef void release_arrow_device_array_raw(
+        ArrowDeviceArray *
+    ) except +libcudf_exception_handler nogil
+    cdef ArrowDeviceArray* to_arrow_device_raw(
+        const table_view& tbl,
+        object owner,
+    ) except +libcudf_exception_handler nogil
+    cdef ArrowDeviceArray* to_arrow_device_raw(
+        const column_view& tbl,
+        object owner,
     ) except +libcudf_exception_handler nogil
