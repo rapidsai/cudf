@@ -262,7 +262,7 @@ def _decompose_expr_node(
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Decompose an expression into one or more IR nodes.
+    Decompose an expression into partition-wise stages.
 
     Parameters
     ----------
@@ -287,28 +287,13 @@ def _decompose_expr_node(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
-
-    See Also
-    --------
-    _decompose
-    _decompose_agg_node
-    decompose_expr_graph
-
-    Notes
-    -----
-    This function is called by ``decompose_expr_graph`` (via ``_decompose``).
     """
-    # if not expr.children:
     if isinstance(expr, Literal):
         # For Literal nodes, we don't actually want an
         # input IR with real columns, because it will
         # mess up the result of ``HConcat``.
         input_ir = Empty()
         partition_info[input_ir] = PartitionInfo(count=1)
-        # else:
-        #     #input_ir = root_ir
-        #     partition_info[input_ir] = root_partition_info
-        # #return expr, ir, partition_info
 
     partition_count = partition_info[input_ir].count
     if partition_count == 1 or expr.is_pointwise:
@@ -414,13 +399,7 @@ def decompose_expr_graph(
     Notes
     -----
     This function recursively decomposes ``named_expr.value`` and
-    ``input_ir`` into multiple IR nodes that support multi-partition
-    execution.
-
-    See Also
-    --------
-    _decompose
-    decompose_select
+    ``input_ir`` into multiple partition-wise stages.
     """
     state = {
         "input_ir": input_ir,
