@@ -106,7 +106,13 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        return cls.from_table(plc.Table(df), df.columns)
+        plc_table = plc.Table(df)
+        return cls(
+            Column(d_col, name=name).copy_metadata(h_col)
+            for d_col, h_col, name in zip(
+                plc_table.columns(), df.iter_columns(), df.columns, strict=True
+            )
+        )
 
     @classmethod
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
