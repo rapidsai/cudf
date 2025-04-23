@@ -62,7 +62,7 @@ exercises different code and can therefore uncover regressions that smaller benc
 By default, benchmarks are **not** built as part of the libcudf build process. To enable them, pass the following flag to CMake:
 
 ```bash
-cmake -DBUILD_BENCHMARKS=ON /path/to/cpp/build/latest/
+cmake -DBUILD_BENCHMARKS=ON cpp/build/latest
 ```
 This will build the NVBench benchmark executables under the `cpp/build/latest/benchmarks`
 directory. Each benchmark is compiled into its own binary with a `_NVBENCH` suffix.
