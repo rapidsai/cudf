@@ -139,7 +139,7 @@ def _decompose_agg_node(
             input_ir,
             partition_info,
             names=names,
-            repartition=True,  # Repartition
+            repartition=True,
         )
 
         # Combined stage
