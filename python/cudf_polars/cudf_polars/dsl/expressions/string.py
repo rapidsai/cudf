@@ -266,8 +266,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
-                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                    plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
                 )
             )
         elif self.name in {
