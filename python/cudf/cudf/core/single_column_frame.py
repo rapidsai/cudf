@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import cupy as cp
 from typing_extensions import Self
 
 import cudf
@@ -106,7 +107,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_performance_tracking
     def values(self) -> cupy.ndarray:
-        return self._column.values
+        return cp.asarray(self)
 
     @property  # type: ignore
     @_performance_tracking
