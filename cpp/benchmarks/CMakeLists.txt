@@ -202,7 +202,7 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu
+  join/distinct_join.cu join/multiplicity_join.cu
 )
 
 # ##################################################################################################
@@ -301,7 +301,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
+ConfigureNVBench(NULLMASK_NVBENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
