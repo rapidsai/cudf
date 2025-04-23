@@ -14,7 +14,7 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import Cast
+from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
 from cudf_polars.dsl.ir import Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -38,16 +38,16 @@ ExprDecomposer: TypeAlias = (
 )
 
 
-def _add_select_ir(
+def select(
     exprs: Sequence[Expr],
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     *,
     names: Generator[str, None, None],
     repartition: bool = False,
-) -> tuple[list[Col], Repartition | Select, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[list[Col], IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Add a new Select node.
+    Select expressions from an IR node, introducing temporaries.
 
     Parameters
     ----------
@@ -67,27 +67,18 @@ def _add_select_ir(
     Returns
     -------
     columns
-        New expressions to use with ``new_ir``.
+        Expressions to select from the new IR output.
     new_ir
-        The new IR node that can be evaluated by ``columns``.
+        The new IR node that will introduce temporaries.
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
-
-    See Also
-    --------
-    _decompose_agg_node
-
-    Notes
-    -----
-    This function is called by ``_decompose_agg_node`` to decompose
-    Agg operations into multiple IR nodes.
     """
     output_names = [next(names) for _ in range(len(exprs))]
     named_exprs = [
         NamedExpr(name, expr) for name, expr in zip(output_names, exprs, strict=True)
     ]
-    new_ir: Repartition | Select = Select(
+    new_ir: IR = Select(
         {ne.name: ne.value.dtype for ne in named_exprs},
         named_exprs,
         True,  # noqa: FBT003
@@ -104,35 +95,6 @@ def _add_select_ir(
     return columns, new_ir, partition_info
 
 
-def _maybe_shuffle(
-    child: Expr,
-    input_ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
-    *,
-    names: Generator[str, None, None],
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Inject shuffle (if necessary)
-    # Used by `_decompose_agg_node`
-    pi = partition_info[input_ir]
-    if pi.count > 1 and [ne.value for ne in pi.partitioned_on] != [child]:
-        from cudf_polars.experimental.shuffle import Shuffle
-
-        shuffle_on = (NamedExpr(next(names), child),)
-        input_ir = Shuffle(
-            input_ir.schema,
-            shuffle_on,
-            config_options,
-            input_ir,
-        )
-        partition_info[input_ir] = PartitionInfo(
-            count=pi.count,
-            partitioned_on=shuffle_on,
-        )
-
-    return input_ir, partition_info
-
-
 def _decompose_agg_node(
     agg: Agg,
     input_ir: IR,
@@ -142,7 +104,7 @@ def _decompose_agg_node(
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Decompose an Agg expression into multiple IR nodes.
+    Decompose an agg expression into partition-wise stages.
 
     Parameters
     ----------
@@ -167,23 +129,12 @@ def _decompose_agg_node(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
-
-    See Also
-    --------
-    _add_select_ir
-    _decompose_expr_node
-
-    Notes
-    -----
-    This function is called by ``_decompose_expr_node`` to decompose
-    an Agg node into multiple IR nodes. The new IR nodes are added
-    with ``_add_select_ir``.
     """
     expr: Expr
     exprs: list[Expr]
     if agg.name == "count":
         # Chunkwise stage
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [agg],
             input_ir,
             partition_info,
@@ -193,7 +144,7 @@ def _decompose_agg_node(
 
         # Combined stage
         (column,) = columns
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [Agg(agg.dtype, "sum", None, column)],
             input_ir,
             partition_info,
@@ -206,7 +157,7 @@ def _decompose_agg_node(
             Agg(agg.dtype, "sum", None, *agg.children),
             Agg(agg.dtype, "count", None, *agg.children),
         ]
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             exprs,
             input_ir,
             partition_info,
@@ -219,18 +170,10 @@ def _decompose_agg_node(
             BinOp(
                 agg.dtype,
                 plc.binaryop.BinaryOperator.DIV,
-                *(
-                    Agg(
-                        agg.dtype,
-                        "sum",
-                        None,
-                        column,
-                    )
-                    for column in columns
-                ),
+                *(Agg(agg.dtype, "sum", None, column) for column in columns),
             )
         ]
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             exprs,
             input_ir,
             partition_info,
@@ -239,28 +182,45 @@ def _decompose_agg_node(
         )
         (expr,) = columns
     elif agg.name == "n_unique":
-        # Inject shuffle (if necessary)
+        # Get uniques and shuffle (if necessary)
+        # TODO: Should this be a tree reduction by default?
         (child,) = agg.children
-        input_ir, partition_info = _maybe_shuffle(
-            child,
-            input_ir,
-            partition_info,
-            config_options,
-            names=names,
-        )
+        pi = partition_info[input_ir]
+        if pi.count > 1 and [ne.value for ne in pi.partitioned_on] != [input_ir]:
+            from cudf_polars.experimental.shuffle import Shuffle
+
+            children, input_ir, partition_info = select(
+                [UnaryFunction(agg.dtype, "unique", (False,), child)],
+                input_ir,
+                partition_info,
+                names=names,
+            )
+            (child,) = children
+            agg = agg.reconstruct([child])
+            shuffle_on = (NamedExpr(next(names), child),)
+            input_ir = Shuffle(
+                input_ir.schema,
+                shuffle_on,
+                config_options,
+                input_ir,
+            )
+            partition_info[input_ir] = PartitionInfo(
+                count=pi.count,
+                partitioned_on=shuffle_on,
+            )
 
         # Chunkwise stage
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [Cast(agg.dtype, agg)],
             input_ir,
             partition_info,
             names=names,
-            repartition=True,  # Repartition
+            repartition=True,
         )
 
         # Combined stage
         (column,) = columns
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [Agg(agg.dtype, "sum", None, column)],
             input_ir,
             partition_info,
@@ -269,7 +229,7 @@ def _decompose_agg_node(
         (expr,) = columns
     else:
         # Chunkwise stage
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [agg],
             input_ir,
             partition_info,
@@ -279,7 +239,7 @@ def _decompose_agg_node(
 
         # Combined stage
         (column,) = columns
-        columns, input_ir, partition_info = _add_select_ir(
+        columns, input_ir, partition_info = select(
             [Agg(agg.dtype, agg.name, agg.options, column)],
             input_ir,
             partition_info,
@@ -338,7 +298,19 @@ def _decompose_expr_node(
     -----
     This function is called by ``decompose_expr_graph`` (via ``_decompose``).
     """
-    partition_count = partition_info[input_ir]
+    # if not expr.children:
+    if isinstance(expr, Literal):
+        # For Literal nodes, we don't actually want an
+        # input IR with real columns, because it will
+        # mess up the result of ``HConcat``.
+        input_ir = Empty()
+        partition_info[input_ir] = PartitionInfo(count=1)
+        # else:
+        #     #input_ir = root_ir
+        #     partition_info[input_ir] = root_partition_info
+        # #return expr, ir, partition_info
+
+    partition_count = partition_info[input_ir].count
     if partition_count == 1 or expr.is_pointwise:
         # Single-partition and pointwise expressions are always supported.
         return expr, input_ir, partition_info
@@ -359,24 +331,21 @@ def _decompose(
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
     # Used by `decompose_expr_graph``
 
-    # Process child Exprs first
-    if expr.children:
-        children, input_irs, _partition_info = zip(
-            *(rec(c) for c in expr.children), strict=True
+    if not expr.children:
+        # Leaf node
+        return _decompose_expr_node(
+            expr,
+            rec.state["input_ir"],
+            {rec.state["input_ir"]: rec.state["input_partition_info"]},
+            rec.state["config_options"],
+            names=rec.state["unique_names"],
         )
-        partition_info = reduce(operator.or_, _partition_info)
-    else:
-        # Leaf node: Use initial state or place-holder IR
-        if isinstance(expr, Literal):
-            # For Literal nodes, we don't actually want an
-            # input IR with real columns, because it will
-            # mess up the result of ``HConcat``.
-            ir = Empty()
-            pi = {ir: PartitionInfo(count=1)}
-        else:
-            ir = rec.state["input_ir"]
-            pi = {rec.state["input_ir"]: rec.state["input_partition_info"]}
-        children, input_irs, partition_info = (), (ir,), pi
+
+    # Process child Exprs first
+    children, input_irs, _partition_info = zip(
+        *(rec(c) for c in expr.children), strict=True
+    )
+    partition_info = reduce(operator.or_, _partition_info)
 
     # Assume the partition count is the maximum input-IR partition count
     input_ir: IR
