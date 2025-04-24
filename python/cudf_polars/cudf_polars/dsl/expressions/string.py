@@ -224,8 +224,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.join_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(delimiter, type=pa.string())),
-                    plc.interop.from_arrow(pa.scalar(None, type=pa.string())),
+                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
+                    plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
                 )
             )
         elif self.name is StringFunction.Name.Contains:
@@ -271,8 +271,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
-                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                    plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
                 )
             )
         elif self.name in {
@@ -343,8 +343,7 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-
-                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                null = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
                 res = plc.copying.boolean_mask_scatter(
                     [null], plc.Table([col.obj]), not_timestamps
                 )
