@@ -493,15 +493,15 @@ class impl {
 
   std::optional<std::vector<std::string>> _filter_columns_names;
 
-  bool _strings_to_categorical = false;
+  bool _strings_to_categorical{false};
 
   // are there usable page indexes available
-  bool _has_page_index = false;
+  bool _has_page_index{false};
 
   size_type _num_sources{1};
 
   // timestamp_type
-  cudf::data_type _timestamp_type{type_id::EMPTY};
+  cudf::data_type _timestamp_type;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 

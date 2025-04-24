@@ -373,7 +373,7 @@ class reader::impl {
   // Reader configs.
   struct {
     // timestamp_type
-    data_type timestamp_type{type_id::EMPTY};
+    data_type timestamp_type;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
@@ -404,10 +404,10 @@ class reader::impl {
   // number of extra filter columns
   std::size_t _num_filter_only_columns{0};
 
-  bool _strings_to_categorical = false;
+  bool _strings_to_categorical{false};
 
   // are there usable page indexes available
-  bool _has_page_index = false;
+  bool _has_page_index{false};
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
