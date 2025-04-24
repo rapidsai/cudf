@@ -78,6 +78,7 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
+  bool const escaped_utf8{true};
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
@@ -140,6 +141,11 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
       if (utf8_char > 0x0000'00FF) {
+        if (!escaped_utf8) {
+          // write original utf8 character if unescaping is enabled
+          write_char(utf8_char, d_buffer, bytes);
+          continue;
+        }
         // multi-byte char
         uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (codepoint <= 0x0000'FFFF) {
@@ -597,7 +603,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{*d_column}.get_escaped_strings(column_v, stream_, mr_);
+    return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
+      .get_escaped_strings(column_v, stream_, mr_);
   }
 
   // ints:
@@ -826,11 +833,10 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets =
-    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_sync(
-                                     offsets, stream, cudf::get_current_device_resource_ref()),
-                                   rmm::device_buffer{},
-                                   0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector(offsets, stream, cudf::get_current_device_resource_ref()),
+    rmm::device_buffer{},
+    0);
   return cudf::make_strings_column(
     host_strings.size(), std::move(d_offsets), d_chars.release(), 0, {});
 }
@@ -873,7 +879,7 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector_sync(
+    auto const h_bytes = cudf::detail::make_host_vector(
       device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);

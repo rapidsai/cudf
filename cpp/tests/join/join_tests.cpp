@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -152,6 +153,29 @@ struct JoinTest : public cudf::test::BaseFixture {
     return std::pair(std::move(sorted_gold), std::move(sorted_result));
   }
 };
+
+// Disabled for now, waiting on upstream cuco updates
+TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, -0.1),
+               std::invalid_argument);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
+               std::invalid_argument);
+  // Test load factor > 1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 1.5),
+               std::invalid_argument);
+}
 
 TEST_F(JoinTest, EmptySentinelRepro)
 {
@@ -1361,66 +1385,80 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL);
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
-    cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
+  for (auto desired_load_factor : load_factors) {
+    cudf::hash_join hash_join(
+      t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL, desired_load_factor);
 
-    Table t0(std::move(cols0));
+    // Test full join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
+      cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto output_size                         = hash_join.full_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 9;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.full_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.full_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
-    column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
+      std::size_t const size_gold = 9;
+      EXPECT_EQ(output_size, size_gold);
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
-    cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
+      auto result = hash_join.full_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{
+        {NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
+      column_wrapper<int32_t> col_gold_1{
+        {0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
 
-    Table t0(std::move(cols0));
+    // Test left join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
+      cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto output_size                         = hash_join.left_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 5;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.left_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.left_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
-    column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
+      std::size_t const size_gold = 5;
+      EXPECT_EQ(output_size, size_gold);
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
-    cols0.emplace_back(strcol_wrapper({"s1", "s1", "s0", "s4", "s0"}).release());
+      auto result = hash_join.left_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
+      column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
 
-    Table t0(std::move(cols0));
+    // Test inner join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
+      cols0.emplace_back(strcol_wrapper({"s1", "s1", "s0", "s4", "s0"}).release());
 
-    auto output_size                         = hash_join.inner_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 3;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.inner_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.inner_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
-    column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+      std::size_t const size_gold = 3;
+      EXPECT_EQ(output_size, size_gold);
+
+      auto result = hash_join.inner_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
+      column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
   }
 }
 
@@ -1456,7 +1494,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
                            ? cudf::nullable_join::YES
                            : cudf::nullable_join::NO;
 
-  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL);
+  double constexpr desired_load_factor = 0.5;
+  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL, desired_load_factor);
 
   {
     auto output_size = hash_join.left_join_size(t0);
@@ -1607,7 +1646,9 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   cudf::column_view col_zeros(
     cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data(), nullptr, 0);
   cudf::table_view tview{{col_zeros}};
-  cudf::hash_join hash_join(tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL);
+  double constexpr desired_load_factor = 0.5;
+  cudf::hash_join hash_join(
+    tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }
