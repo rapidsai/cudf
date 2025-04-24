@@ -174,7 +174,7 @@ def test_validate_fallback_mode() -> None:
     assert config.executor.name == "streaming"
     assert config.executor.fallback_mode == "warn"
 
-    with pytest.raises(ValueError, match="'foo' is not a valid FallbackMode"):
+    with pytest.raises(ValueError, match="'foo' is not a valid StreamingFallbackMode"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
