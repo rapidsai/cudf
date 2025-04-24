@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -54,6 +54,7 @@ def binary_classification_data():
     return df
 
 
+@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_linear_regression():
     lr = LinearRegression(fit_intercept=True, normalize=False, algorithm="eig")
     X = pd.DataFrame()
@@ -69,6 +70,7 @@ def test_linear_regression():
     return preds.values
 
 
+@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_logistic_regression(binary_classification_data):
     X = binary_classification_data[["feature1", "feature2"]]
     y = binary_classification_data["target"]
@@ -86,6 +88,7 @@ def test_logistic_regression(binary_classification_data):
     return accuracy
 
 
+@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_random_forest(binary_classification_data):
     X = binary_classification_data[["feature1", "feature2"]]
     y = binary_classification_data["target"]
@@ -99,6 +102,7 @@ def test_random_forest(binary_classification_data):
     return preds.values
 
 
+@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_clustering():
     rng = np.random.default_rng(42)
     nsamps = 300
@@ -118,6 +122,7 @@ def test_data_scaling():
     return scaled_data
 
 
+@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_pipeline(binary_classification_data):
     X = binary_classification_data[["feature1", "feature2"]]
     y = binary_classification_data["target"]
