@@ -686,20 +686,16 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
-            index = Column(
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
+            index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
-            df = DataFrame([index, *df.columns])
+            df = DataFrame([index_col, *df.columns])
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
@@ -1344,9 +1340,8 @@ class Join(IR):
         left keys, and is stable wrt the right keys. For all other
         joins, there is no order obligation.
         """
-        dt = plc.interop.to_arrow(plc.types.SIZE_TYPE)
-        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
-        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
         left_order = plc.copying.gather(
             plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
         )
@@ -1922,12 +1917,8 @@ class MapFunction(IR):
         elif name == "row_index":
             col_name, offset = options
             dtype = schema[col_name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,

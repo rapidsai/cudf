@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -76,9 +74,7 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(df.num_rows, type=plc.interop.to_arrow(self.dtype))
-                ),
+                plc.Scalar.from_py(df.num_rows, self.dtype),
                 1,
             )
         )
