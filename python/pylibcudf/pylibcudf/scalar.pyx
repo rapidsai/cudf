@@ -21,6 +21,7 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     numeric_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
+    make_default_constructed_scalar,
     make_empty_scalar_like,
     make_string_scalar,
     make_numeric_scalar,
@@ -31,6 +32,7 @@ from pylibcudf.libcudf.types cimport type_id
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
 from .column cimport Column
+from .traits cimport is_floating_point
 from .types cimport DataType
 from functools import singledispatch
 
@@ -117,7 +119,7 @@ cdef class Scalar:
 
         Parameters
         ----------
-        py_val: bool, int, float, str, datetime.datetime, datetime.timedelta, list, dict
+        py_val: None, bool, int, float, str, datetime, timedelta, list, dict
             Value to convert to a pylibcudf.Scalar
         dtype: DataType | None
             The datatype to cast the value to. If None,
@@ -158,6 +160,17 @@ cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
 @singledispatch
 def _from_py(py_val, dtype: DataType | None):
     raise TypeError(f"{type(py_val).__name__} cannot be converted to pylibcudf.Scalar")
+
+
+@_from_py.register(type(None))
+def _(py_val, dtype: DataType | None):
+    cdef DataType c_dtype
+    if dtype is None:
+        raise ValueError("Must specify a dtype for a None value.")
+    else:
+        c_dtype = <DataType>dtype
+    cdef unique_ptr[scalar] c_obj = make_default_constructed_scalar(c_dtype.c_obj)
+    return _new_scalar(move(c_obj), dtype)
 
 
 @_from_py.register(dict)
@@ -201,6 +214,8 @@ def _(py_val: int, dtype: DataType | None):
     cdef DataType c_dtype
     if dtype is None:
         c_dtype = DataType(type_id.INT64)
+    elif is_floating_point(dtype):
+        return _from_py(float(py_val), dtype)
     else:
         c_dtype = <DataType>dtype
     tid = c_dtype.id()
