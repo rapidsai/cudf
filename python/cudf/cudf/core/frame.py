@@ -8,7 +8,6 @@ from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
-import cupy as cp
 import numpy
 import numpy as np
 import pyarrow as pa
@@ -522,10 +521,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 matrix[:, i] = to_array(col, dtype)
             return matrix
 
-    # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
-    # in common cases (like no nulls, no type conversion, no copying). But these fast
-    # paths only work in limited situations. We should look into expanding the fast
-    # path to cover more types of columns.
     @_performance_tracking
     def to_cupy(
         self,
@@ -552,17 +547,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
-        if self.ndim == 1:
-            col = self._columns[0]
-            if (
-                not copy
-                and dtype is None
-                and na_value is None
-                and not col.has_nulls()
-                and not isinstance(col.dtype, cudf.CategoricalDtype)
-                and col.dtype.kind not in {"M", "m", "O"}
-            ):
-                return cp.asarray(col)
         return self._to_array(
             lambda col: col.values,
             cupy,

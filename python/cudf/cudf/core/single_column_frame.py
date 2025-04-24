@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     import numpy
     import pyarrow as pa
 
-    from cudf._typing import NotImplementedType, ScalarLike
+    from cudf._typing import Dtype, NotImplementedType, ScalarLike
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -108,17 +108,61 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def values(self) -> cupy.ndarray:
         col = self._column
-        dtype = col.dtype
-
         if (
             self.ndim == 1
             and not col.has_nulls()
-            and not isinstance(dtype, cudf.CategoricalDtype)
-            and dtype.kind not in {"M", "m", "O"}
+            and col.dtype.kind in {"i", "u", "f", "b"}
         ):
             return cp.asarray(col)
-
         return col.values
+
+    # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
+    # in common cases (like no nulls, no type conversion, no copying). But these fast
+    # paths only work in limited situations. We should look into expanding the fast
+    # path to cover more types of columns.
+    @_performance_tracking
+    def to_cupy(
+        self,
+        dtype: Dtype | None = None,
+        copy: bool = False,
+        na_value=None,
+    ) -> cupy.ndarray:
+        """
+        Convert the SingleColumnFrame (e.g., Series) to a CuPy array.
+
+        Parameters
+        ----------
+        dtype : str or :class:`numpy.dtype`, optional
+            The dtype to pass to :func:`cupy.asarray`.
+        copy : bool, default False
+            Whether to ensure that the returned value is not a view on
+            another array. ``copy=False`` does not guarantee a zero-copy conversion,
+            but ``copy=True`` guarantees a copy is made.
+        na_value : Any, default None
+            The value to use for missing values. If specified, nulls will be filled
+            before converting to a CuPy array. If not specified and nulls are present,
+            falls back to the slower path.
+
+        Returns
+        -------
+        cupy.ndarray
+        """
+        col = self._column
+        if (
+            not copy
+            and dtype is None
+            and col.dtype.kind in {"i", "u", "f", "b"}
+        ):
+            if col.has_nulls():
+                if na_value is not None:
+                    col = col.fillna(na_value)
+                else:
+                    return super().to_cupy(
+                        dtype=dtype, copy=copy, na_value=na_value
+                    )
+            return cp.asarray(col)
+
+        return super().to_cupy(dtype=dtype, copy=copy, na_value=na_value)
 
     @property  # type: ignore
     @_performance_tracking
