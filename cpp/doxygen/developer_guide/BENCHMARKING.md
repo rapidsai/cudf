@@ -77,6 +77,7 @@ To view benchmark options:
 
 ```bash
 ./cpp/build/latest/benchmarks/<NAME>_NVBENCH --help
+```
 
 ### Comparing Benchmarks
 
