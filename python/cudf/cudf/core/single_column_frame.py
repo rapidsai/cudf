@@ -108,11 +108,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def values(self) -> cupy.ndarray:
         col = self._column
-        if (
-            self.ndim == 1
-            and not col.has_nulls()
-            and col.dtype.kind in {"i", "u", "f", "b"}
-        ):
+        if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
             return cp.asarray(col)
         return col.values
 
@@ -148,10 +144,14 @@ class SingleColumnFrame(Frame, NotIterable):
         cupy.ndarray
         """
         col = self._column
+        final_dtype = (
+            col.dtype if dtype is None else dtype
+        )  # some types do not support | operator
         if (
             not copy
-            and dtype is None
             and col.dtype.kind in {"i", "u", "f", "b"}
+            and cp.can_cast(col.dtype, final_dtype)
+            and not col.has_nulls()
         ):
             if col.has_nulls():
                 if na_value is not None:
@@ -160,7 +160,7 @@ class SingleColumnFrame(Frame, NotIterable):
                     return super().to_cupy(
                         dtype=dtype, copy=copy, na_value=na_value
                     )
-            return cp.asarray(col)
+            return cp.asarray(col, dtype=final_dtype)
 
         return super().to_cupy(dtype=dtype, copy=copy, na_value=na_value)
 
