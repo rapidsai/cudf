@@ -133,7 +133,7 @@ class hybrid_scan_reader {
    * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-  secondary_filter_byte_ranges(cudf::host_span<size_type const> row_group_indices,
+  secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
                                parquet_reader_options const& options) const;
 
   /**
@@ -190,7 +190,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<byte_range_info> filter_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<byte_range_info> filter_column_chunks_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 

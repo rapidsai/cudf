@@ -47,11 +47,11 @@ void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_in
 std::vector<cudf::size_type> hybrid_scan_reader::all_row_groups(
   parquet_reader_options const& options) const
 {
-  CUDF_EXPECTS(options.get_row_groups().size() == 0 or options.get_row_groups().size() == 1,
+  CUDF_EXPECTS(options.get_row_groups().size() <= 1,
                "Encountered invalid size of row group indices in parquet reader options");
 
   // If row groups are specified in parquet reader options, return them as is
-  if (options.get_row_groups().size()) { return options.get_row_groups().front(); }
+  if (options.get_row_groups().size() == 1) { return options.get_row_groups().front(); }
 
   return _impl->all_row_groups(options);
 }
