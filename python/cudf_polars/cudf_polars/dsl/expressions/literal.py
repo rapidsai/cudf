@@ -29,6 +29,10 @@ class Literal(Expr):
     value: Any  # Python scalar
 
     def __init__(self, dtype: plc.DataType, value: Any) -> None:
+        if value is None and dtype.id() == plc.TypeId.EMPTY:
+            # TypeId.EMPTY not supported by libcudf
+            # cuDF Python also maps EMPTY to INT8
+            dtype = plc.DataType(plc.TypeId.INT8)
         self.dtype = dtype
         self.value = value
         self.children = ()
@@ -42,7 +46,6 @@ class Literal(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        # datatype of pyarrow scalar is correct by construction.
         return Column(
             plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype), 1)
         )
