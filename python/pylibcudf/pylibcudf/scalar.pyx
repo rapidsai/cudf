@@ -2,6 +2,7 @@
 
 from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
+from libc.time cimport tm, mktime, time_t
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -19,14 +20,24 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     numeric_scalar,
+    timestamp_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_default_constructed_scalar,
     make_empty_scalar_like,
     make_string_scalar,
     make_numeric_scalar,
+    make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
+from pylibcudf.libcudf.wrappers.durations cimport duration_us
+from pylibcudf.libcudf.wrappers.timestamps cimport (
+    timestamp_us,
+    nanoseconds,
+    time_point,
+    system_clock,
+    time_point_cast,
+)
 
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
@@ -44,6 +55,25 @@ except ImportError as err:
     np_error = err
 
 __all__ = ["Scalar"]
+
+
+cdef time_point[system_clock, nanoseconds] _datetime_to_time_point(
+    datetime.datetime dt
+):
+    if dt.tzinfo is not None:
+        raise NotImplementedError("datetimes with timezones are not supported.")
+    if dt.microsecond != 0:
+        raise NotImplementedError("Non-zero microseconds are not supported.")
+    cdef tm time_struct
+    time_struct.tm_year = dt.year - 1900
+    time_struct.tm_mon = dt.month - 1
+    time_struct.tm_mday = dt.day
+    time_struct.tm_hour = dt.hour
+    time_struct.tm_min = dt.minute
+    time_struct.tm_sec = dt.second
+    cdef time_t time = mktime(&time_struct)
+    cdef time_point[system_clock, nanoseconds] tp = system_clock.from_time_t(time)
+    return tp
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -315,6 +345,32 @@ def _(py_val: str, dtype: DataType | None):
             f"Cannot convert str to Scalar with dtype {tid.name}"
         )
     cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
+    return _new_scalar(move(c_obj), dtype)
+
+
+@_from_py.register(datetime.datetime)
+def _(py_val, dtype: DataType | None):
+    cdef DataType c_dtype
+    if dtype is None:
+        c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+    elif dtype.id() not in {
+        type_id.TIMESTAMP_NANOSECONDS,
+        type_id.TIMESTAMP_MILLISECONDS,
+        type_id.TIMESTAMP_MICROSECONDS,
+        type_id.TIMESTAMP_SECONDS,
+    }:
+        tid = (<DataType>dtype).id()
+        raise TypeError(
+            f"Cannot convert datetime to Scalar with dtype {tid.name}"
+        )
+    else:
+        c_dtype = <DataType>dtype
+    cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(c_dtype.c_obj)
+    cdef time_point[system_clock, nanoseconds] tp = _datetime_to_time_point(py_val)
+    cdef time_point[system_clock, duration_us] tp_casted = (
+        time_point_cast[duration_us, system_clock, nanoseconds](tp)
+    )
+    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp_casted)
     return _new_scalar(move(c_obj), dtype)
 
 
