@@ -14,7 +14,19 @@ def np():
 
 
 @pytest.mark.parametrize(
-    "val", [True, False, -1, 0, 1 - 1.0, 0.0, 1.52, "", "a1!"]
+    "val",
+    [
+        True,
+        False,
+        -1,
+        0,
+        1 - 1.0,
+        0.0,
+        1.52,
+        "",
+        "a1!",
+        datetime.datetime(2020, 1, 1),
+    ],
 )
 def test_from_py(val):
     result = plc.Scalar.from_py(val)
@@ -98,6 +110,12 @@ def test_from_py_with_dtype(val, tid):
             TypeError,
             "Cannot convert float to Scalar with dtype INT32",
         ),
+        (
+            datetime.datetime(2020, 1, 1),
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert datetime to Scalar with dtype INT32",
+        ),
     ],
 )
 def test_from_py_with_dtype_errors(val, tid, error, msg):
@@ -128,9 +146,7 @@ def test_from_py_overflow_errors(val, tid):
         plc.Scalar.from_py(val, dtype)
 
 
-@pytest.mark.parametrize(
-    "val", [datetime.datetime(2020, 1, 1), datetime.timedelta(1), [1], {1: 1}]
-)
+@pytest.mark.parametrize("val", [[1, 2], datetime.timedelta(1), [1], {1: 1}])
 def test_from_py_notimplemented(val):
     with pytest.raises(NotImplementedError):
         plc.Scalar.from_py(val)

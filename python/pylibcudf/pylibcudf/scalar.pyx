@@ -349,9 +349,23 @@ def _(py_val: str, dtype: DataType | None):
 
 
 @_from_py.register(datetime.datetime)
-def _(py_val):
-    cdef DataType dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-    cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(dtype.c_obj)
+def _(py_val, dtype: DataType | None):
+    cdef DataType c_dtype
+    if dtype is None:
+        c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+    elif dtype.id() not in {
+        type_id.TIMESTAMP_NANOSECONDS,
+        type_id.TIMESTAMP_MILLISECONDS,
+        type_id.TIMESTAMP_MICROSECONDS,
+        type_id.TIMESTAMP_SECONDS,
+    }:
+        tid = (<DataType>dtype).id()
+        raise TypeError(
+            f"Cannot convert datetime to Scalar with dtype {tid.name}"
+        )
+    else:
+        c_dtype = <DataType>dtype
+    cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(c_dtype.c_obj)
     cdef time_point[system_clock, nanoseconds] tp = _datetime_to_time_point(py_val)
     cdef time_point[system_clock, duration_us] tp_casted = (
         time_point_cast[duration_us, system_clock, nanoseconds](tp)
@@ -470,4 +484,3 @@ if np is not None:
         (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
->>>>>>> upstream/branch-25.06
