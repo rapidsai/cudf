@@ -48,6 +48,7 @@ ctypedef fused FollowingRangeWindowType:
 cdef class RollingRequest:
     cdef Column values
     cdef Aggregation aggregation
+    cdef size_type min_periods
 
     cdef rolling_request view(self) except *
 
@@ -58,7 +59,6 @@ cpdef Table grouped_range_rolling_window(
     null_order null_order,
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
-    size_type min_periods,
     list requests,
 )
 

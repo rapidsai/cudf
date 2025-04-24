@@ -15,8 +15,8 @@ from pylibcudf.libcudf.types cimport data_type, null_order, order, size_type
 
 cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     cdef cppclass rolling_request:
-        rolling_request() except +libcudf_exception_handler
         column_view values
+        size_type min_periods
         unique_ptr[rolling_aggregation] aggregation
     # This inheritance is a lie, a range_window_type is actually a
     # std::variant of the concrete window types. However, we can't
@@ -40,7 +40,6 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         null_order null_order,
         range_window_type preceding,
         range_window_type following,
-        size_type min_periods,
         vector[rolling_request]& requests
     ) except +libcudf_exception_handler
 

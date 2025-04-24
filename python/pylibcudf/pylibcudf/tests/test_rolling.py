@@ -211,7 +211,7 @@ def test_rolling_windows(
     values = plc.interop.from_arrow(pa.array(values))
 
     request = plc.rolling.RollingRequest(
-        values, plc.aggregation.collect_list()
+        values, 1, plc.aggregation.collect_list()
     )
     (got,) = plc.rolling.grouped_range_rolling_window(
         keys,
@@ -220,7 +220,6 @@ def test_rolling_windows(
         plc.types.NullOrder.AFTER,
         preceding_endpoint,
         following_endpoint,
-        1,
         [request],
     ).columns()
     assert_column_eq(got, expect)

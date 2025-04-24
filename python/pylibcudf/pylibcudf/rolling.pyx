@@ -87,17 +87,27 @@ cdef class RollingRequest:
     Parameters
     ----------
     values
-        The column of values to aggregate
+        The column of values to aggregate.
+    min_periods
+        The minimum number of observations required for a valid result
+        in a given window.
     aggregation
         The aggregation to perform.
     """
-    def __init__(self, Column values not None, Aggregation aggregation not None):
+    def __init__(
+            self,
+            Column values not None,
+            size_type min_periods,
+            Aggregation aggregation not None,
+    ):
         self.values = values
+        self.min_periods = min_periods
         self.aggregation = aggregation
 
     cdef rolling_request view(self) except *:
         cdef rolling_request c_obj
         c_obj.values = self.values.view()
+        c_obj.min_periods = self.min_periods
         c_obj.aggregation = move(self.aggregation.clone_underlying_as_rolling())
         return move(c_obj)
 
@@ -109,7 +119,6 @@ cpdef Table grouped_range_rolling_window(
     null_order null_order,
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
-    size_type min_periods,
     list requests,
 ):
     """
@@ -130,9 +139,6 @@ cpdef Table grouped_range_rolling_window(
         The type of the preceding window offset.
     following
         The type of the following window offset.
-    min_periods
-        Minimum number of observations in the window required to have
-        a value.
     requests
         List of :class:`RollingRequest` objects.
 
@@ -155,10 +161,10 @@ cpdef Table grouped_range_rolling_window(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
-            min_periods,
             crequests
         )
     return Table.from_libcudf(move(result))
+
 
 cpdef Column rolling_window(
     Column source,

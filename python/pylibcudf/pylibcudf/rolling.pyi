@@ -18,7 +18,9 @@ class BoundedOpen:
     delta: Scalar
 
 class RollingRequest:
-    def __init__(self, values: Column, aggregation: Aggregation) -> None: ...
+    def __init__(
+        self, values: Column, min_periods: int, aggregation: Aggregation
+    ) -> None: ...
 
 RangeWindowType = BoundedClosed | BoundedOpen | CurrentRow | Unbounded
 
@@ -29,7 +31,6 @@ def grouped_range_rolling_window(
     null_order: NullOrder,
     preceding: RangeWindowType,
     following: RangeWindowType,
-    min_periods: int,
     requests: list[RollingRequest],
 ) -> Table: ...
 def rolling_window[WindowType: (Column, int)](

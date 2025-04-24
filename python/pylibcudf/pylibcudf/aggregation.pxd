@@ -43,10 +43,10 @@ cdef class Aggregation:
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *
+    cdef unique_ptr[rolling_aggregation] clone_underlying_as_rolling(self) except *
     cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
     cdef const scan_aggregation* view_underlying_as_scan(self) except *
     cdef const rolling_aggregation* view_underlying_as_rolling(self) except *
-    cdef unique_ptr[rolling_aggregation] clone_underlying_as_rolling(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)
