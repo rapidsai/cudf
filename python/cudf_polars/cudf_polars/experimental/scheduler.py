@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-Key: TypeAlias = str | tuple[str, int]
+Key: TypeAlias = str | tuple[str, *tuple[int, ...]]
 Graph: TypeAlias = MutableMapping[Key, Any]
 T_ = TypeVar("T_")
 

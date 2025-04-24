@@ -144,9 +144,9 @@ def test_synchronous_scheduler():
     ir, partition_info = lower_ir_graph(ir, config_options)
     graph, key = task_graph(ir, partition_info)
     scheduler = get_scheduler(config_options)
-    check_cache = {}
-    result = scheduler(graph, key, cache=check_cache)
+    cache = {}
+    result = scheduler(graph, key, cache=cache)
     assert_frame_equal(result.to_polars(), q.collect())
 
     # The cache should only contain the final result
-    assert set(check_cache) == {key}
+    assert set(cache) == {key}
