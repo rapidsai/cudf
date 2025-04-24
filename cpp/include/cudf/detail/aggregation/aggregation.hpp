@@ -1233,6 +1233,18 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
 
   bitwise_op bit_op;
 
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<bitwise_aggregation const&>(_other);
+    return bit_op == other.bit_op;
+  }
+
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ static_cast<size_t>(bit_op);
+  }
+
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<bitwise_aggregation>(*this);
