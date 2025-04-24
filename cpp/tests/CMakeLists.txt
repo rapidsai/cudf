@@ -119,6 +119,7 @@ ConfigureTest(
   GROUPBY_TEST
   groupby/argmin_tests.cpp
   groupby/argmax_tests.cpp
+  groupby/bitwise_tests.cpp
   groupby/collect_list_tests.cpp
   groupby/collect_set_tests.cpp
   groupby/correlation_tests.cpp
@@ -214,6 +215,7 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
+  reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
   reductions/host_udf_example_tests.cu
