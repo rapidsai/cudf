@@ -10,7 +10,6 @@ from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
-import pyarrow.compute as pc
 
 from polars.exceptions import InvalidOperationError
 
@@ -174,7 +173,9 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
+            if (isinstance(target, Literal) and target.value == "") or (
+                isinstance(target, LiteralColumn) and (target.value == "").any()
+            ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"

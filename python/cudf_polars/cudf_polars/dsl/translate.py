@@ -667,12 +667,7 @@ def _(node: pl_expr.Window, translator: Translator, dtype: plc.DataType) -> expr
 @_translate_expr.register
 def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        data = pl.Series._from_pyseries(node.value).to_arrow(
-            compat_level=dtypes.TO_ARROW_COMPAT_LEVEL
-        )
-        return expr.LiteralColumn(
-            dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
-        )
+        return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 

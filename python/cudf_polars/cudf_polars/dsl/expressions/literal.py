@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
     import pyarrow as pa
 
+    import polars as pl
+
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Literal", "LiteralColumn"]
@@ -54,9 +56,9 @@ class Literal(Expr):
 class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Array[Any]
+    value: pl.PySeries
 
-    def __init__(self, dtype: plc.DataType, value: pa.Array) -> None:
+    def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         self.dtype = dtype
         self.value = value
         self.children = ()
@@ -77,8 +79,7 @@ class LiteralColumn(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        # datatype of pyarrow array is correct by construction.
-        return Column(plc.interop.from_arrow(self.value))
+        return Column(self.value)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
