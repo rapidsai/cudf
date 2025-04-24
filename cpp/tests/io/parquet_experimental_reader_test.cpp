@@ -213,7 +213,7 @@ auto hybrid_scan(std::vector<char>& buffer,
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
-  [[maybe_unused]] auto const parquet_metadata = reader->get_parquet_metadata();
+  [[maybe_unused]] auto const parquet_metadata = reader->parquet_metadata();
 
   // Get page index byte range from the reader - API # 2
   auto const page_index_byte_range = reader->get_page_index_bytes();
@@ -225,7 +225,7 @@ auto hybrid_scan(std::vector<char>& buffer,
   reader->setup_page_index(page_index_buffer);
 
   // Get all row groups from the reader - API # 4
-  auto input_row_group_indices = reader->get_all_row_groups(options);
+  auto input_row_group_indices = reader->all_row_groups(options);
 
   // Span to track current row group indices
   auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
@@ -239,7 +239,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Get bloom filter and dictionary page byte ranges from the reader - API # 6
   auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
-    reader->get_secondary_filters(current_row_group_indices, options);
+    reader->secondary_filters_byte_ranges(current_row_group_indices, options);
 
   // If we have dictionary page byte ranges, filter row groups with dictionary pages - API # 7
   std::vector<cudf::size_type> dictionary_page_filtered_row_group_indices;
@@ -281,7 +281,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Get column chunk byte ranges from the reader - API # 10
   auto const filter_column_chunk_byte_ranges =
-    reader->get_filter_column_chunk_byte_ranges(current_row_group_indices, options);
+    reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
   auto filter_column_chunk_buffers =
@@ -298,7 +298,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 
   // Get column chunk byte ranges from the reader - API # 12
   auto const payload_column_chunk_byte_ranges =
-    reader->get_payload_column_chunk_byte_ranges(current_row_group_indices, options);
+    reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
 
   // Fetch column chunk device buffers from the input buffer
   [[maybe_unused]] auto payload_column_chunk_buffers =
@@ -350,11 +350,11 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
-  auto parquet_metadata = reader->get_parquet_metadata();
+  auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
   auto const page_index_byte_range = reader->get_page_index_bytes();
@@ -366,14 +366,14 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   reader->setup_page_index(page_index_buffer);
 
   // Get Parquet file metadata from the reader again
-  parquet_metadata = reader->get_parquet_metadata();
+  parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are now present
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get all row groups from the reader - API # 4
-  auto input_row_group_indices = reader->get_all_row_groups(options);
+  auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
   ASSERT_EQ(input_row_group_indices.size(), 4);
 
@@ -381,9 +381,9 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   options.set_row_groups({{0, 1}});
 
   // Get all row groups from the reader again
-  input_row_group_indices = reader->get_all_row_groups(options);
+  input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->get_all_row_groups(options).size(), 2);
+  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
 }
 
 TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)

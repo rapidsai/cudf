@@ -521,7 +521,7 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options c
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 }
 
-FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_parquet_metadata(); }
+FileMetaData impl::parquet_metadata() const { return _metadata->parquet_metadata(); }
 
 cudf::io::text::byte_range_info impl::get_page_index_bytes() const
 {
@@ -587,7 +587,7 @@ void impl::reset_internal_state()
   _output_metadata.reset();
 }
 
-std::vector<size_type> impl::get_all_row_groups(parquet_reader_options const& options) const
+std::vector<size_type> impl::all_row_groups(parquet_reader_options const& options) const
 {
   auto const num_row_groups = _metadata->get_num_row_groups();
   auto row_groups_indices   = std::vector<size_type>(num_row_groups);
@@ -618,9 +618,9 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
                                                  stream);
 }
 
-std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  parquet_reader_options const& options)
+std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
+impl::secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                    parquet_reader_options const& options)
 {
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
 
@@ -769,7 +769,7 @@ impl::get_input_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_filter_column_chunk_byte_ranges(
+impl::filter_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -778,7 +778,7 @@ impl::get_filter_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_payload_column_chunk_byte_ranges(
+impl::payload_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {

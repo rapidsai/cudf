@@ -93,7 +93,7 @@ cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes(
   return {};
 }
 
-FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
+FileMetaData aggregate_reader_metadata::parquet_metadata() const
 {
   return per_file_metadata.front();
 }
@@ -101,7 +101,7 @@ FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
   // Return early if empty page index buffer span
-  if (not page_index_bytes.size()) {
+  if (page_index_bytes.empty()) {
     CUDF_LOG_WARN("Hybrid scan reader encountered empty `PageIndex` buffer");
     return;
   }
@@ -109,7 +109,7 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
 
-  CUDF_EXPECTS(row_groups.size() and row_groups.front().columns.size(),
+  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
                "No column chunks in Parquet schema to read PageIndex for");
 
   CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());

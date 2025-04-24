@@ -118,7 +118,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Get the Parquet file metadata
    */
-  [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
    * @brief Setup the PageIndex

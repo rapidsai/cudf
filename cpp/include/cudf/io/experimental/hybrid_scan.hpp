@@ -78,7 +78,7 @@ class hybrid_scan_reader {
    *
    * @return Parquet file footer metadata
    */
-  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
    * @brief Get the byte range of the `PageIndex` in the Parquet file
@@ -100,7 +100,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of row group indices
    */
-  [[nodiscard]] std::vector<size_type> get_all_row_groups(
+  [[nodiscard]] std::vector<size_type> all_row_groups(
     cudf::io::parquet_reader_options const& options) const;
 
   /**
@@ -126,8 +126,8 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
                           std::vector<cudf::io::text::byte_range_info>>
-  get_secondary_filters(cudf::host_span<size_type const> row_group_indices,
-                        cudf::io::parquet_reader_options const& options) const;
+  secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
+                                cudf::io::parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the row groups with dictionary pages
@@ -183,7 +183,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_filter_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> filter_column_chunks_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     cudf::io::parquet_reader_options const& options) const;
 
@@ -214,7 +214,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
    */
-  [[nodiscard]] std::vector<text::byte_range_info> get_payload_column_chunk_byte_ranges(
+  [[nodiscard]] std::vector<text::byte_range_info> payload_column_chunks_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options) const;
 
