@@ -7867,45 +7867,45 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByMergeM2() {
     StructType nestedType = new StructType(false,
-        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64),
         new BasicType(true, DType.FLOAT64),
         new BasicType(true, DType.FLOAT64));
 
     try (Table partialResults1 = new Table.TestBuilder()
              .column(1, 2, 3, 4)
              .column(nestedType,
-                 struct(1, 0.0, 0.0),
-                 struct(1, 1.0, 0.0),
-                 struct(0, null, null),
-                 struct(0, null, null))
+                 struct(1L, 0.0, 0.0),
+                 struct(1L, 1.0, 0.0),
+                 struct(0L, null, null),
+                 struct(0L, null, null))
              .build();
          Table partialResults2 = new Table.TestBuilder()
              .column(1, 2, 3)
              .column(nestedType,
-                 struct(1, 3.0, 0.0),
-                 struct(1, 4.0, 0.0),
-                 struct(1, 2.0, 0.0))
+                 struct(1L, 3.0, 0.0),
+                 struct(1L, 4.0, 0.0),
+                 struct(1L, 2.0, 0.0))
              .build();
          Table partialResults3 = new Table.TestBuilder()
              .column(1, 2)
              .column(nestedType,
-                 struct(1, 6.0, 0.0),
-                 struct(1, Double.NaN, Double.NaN))
+                 struct(1L, 6.0, 0.0),
+                 struct(1L, Double.NaN, Double.NaN))
              .build();
          Table partialResults4 = new Table.TestBuilder()
              .column(2, 3, 4)
              .column(nestedType,
-                 struct(1, 9.0, 0.0),
-                 struct(1, 8.0, 0.0),
-                 struct(2, Double.NaN, Double.NaN))
+                 struct(1L, 9.0, 0.0),
+                 struct(1L, 8.0, 0.0),
+                 struct(2L, Double.NaN, Double.NaN))
              .build();
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4)
              .column(nestedType,
-                 struct(3, 3.0, 18.0),
-                 struct(4, Double.NaN, Double.NaN),
-                 struct(2, 5.0, 18.0),
-                 struct(2, Double.NaN, Double.NaN))
+                 struct(3L, 3.0, 18.0),
+                 struct(4L, Double.NaN, Double.NaN),
+                 struct(2L, 5.0, 18.0),
+                 struct(2L, Double.NaN, Double.NaN))
              .build()) {
       try (Table concatenatedResults = Table.concatenate(
              partialResults1,
