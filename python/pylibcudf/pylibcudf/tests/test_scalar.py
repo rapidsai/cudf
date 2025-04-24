@@ -33,6 +33,7 @@ def test_from_py(val):
         (1, TypeId.UINT16),
         (1, TypeId.UINT32),
         (1, TypeId.UINT64),
+        (1, TypeId.FLOAT32),
         (1.0, TypeId.FLOAT32),
         (1.5, TypeId.FLOAT64),
         ("str", TypeId.STRING),
@@ -72,18 +73,6 @@ def test_from_py_with_dtype(val, tid):
             TypeId.UINT64,
             ValueError,
             "Cannot assign negative value to UINT64 scalar",
-        ),
-        (
-            1,
-            TypeId.FLOAT32,
-            TypeError,
-            "Cannot convert int to Scalar with dtype FLOAT32",
-        ),
-        (
-            1,
-            TypeId.FLOAT64,
-            TypeError,
-            "Cannot convert int to Scalar with dtype FLOAT64",
         ),
         (
             1,
@@ -147,10 +136,20 @@ def test_from_py_notimplemented(val):
         plc.Scalar.from_py(val)
 
 
-@pytest.mark.parametrize("val", [object, None])
-def test_from_py_typeerror(val):
+def test_from_py_typeerror():
     with pytest.raises(TypeError):
-        plc.Scalar.from_py(val)
+        plc.Scalar.from_py(object)
+
+
+def test_from_py_none_no_type_raises():
+    with pytest.raises(ValueError):
+        plc.Scalar.from_py(None)
+
+
+def test_from_py_none():
+    result = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
+    expected = pa.scalar(None, type=pa.string())
+    assert plc.interop.to_arrow(result).equals(expected)
 
 
 @pytest.mark.parametrize(

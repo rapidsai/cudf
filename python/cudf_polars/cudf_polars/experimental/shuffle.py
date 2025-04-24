@@ -150,7 +150,7 @@ def _partition_dataframe(
         plc.hashing.murmurhash3_x86_32(
             DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
-        plc.Scalar.from_py(count, plc.types.DataType(plc.types.TypeId.UINT32)),
+        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
