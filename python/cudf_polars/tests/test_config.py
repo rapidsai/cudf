@@ -222,7 +222,7 @@ def test_validate_shuffle_method() -> None:
     [
         "max_rows_per_partition",
         "cardinality_factor",
-        "parquet_partition_blocksize",
+        "parquet_blocksize",
         "groupby_n_ary",
         "broadcast_join_limit",
     ],
@@ -244,30 +244,6 @@ def test_validate_parquet_options(option: str) -> None:
             pl.GPUEngine(
                 executor="streaming",
                 parquet_options={option: object()},
-            )
-        )
-
-
-def test_streaming_executor_parquet_blocksize_compat() -> None:
-    with pytest.raises(
-        ValueError,
-        match="Specify just one of 'parquet_blocksize' or 'parquet_partition_blocksize'.",
-    ):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={
-                    "parquet_blocksize": 1_000_000_000,
-                    "parquet_partition_blocksize": 1_000_000_000,
-                },
-            )
-        )
-
-    with pytest.warns(FutureWarning, match="The 'parquet_blocksize' option"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"parquet_blocksize": 1_000_000_000},
             )
         )
 
