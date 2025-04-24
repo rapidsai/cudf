@@ -33,6 +33,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <memory>
 #include <optional>
 #include <vector>
@@ -112,7 +114,7 @@ class hybrid_scan_reader_impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
@@ -134,7 +136,7 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> data_page_pask,
+    cudf::host_span<thrust::host_vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
@@ -200,7 +202,7 @@ class hybrid_scan_reader_impl {
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
+  void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
 
   /**
    * @brief Select the columns to be read based on the read mode
@@ -492,7 +494,7 @@ class hybrid_scan_reader_impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  std::vector<bool> _page_mask;
+  thrust::host_vector<bool> _page_mask;
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

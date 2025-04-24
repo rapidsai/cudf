@@ -23,6 +23,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <memory>
 #include <utility>
 #include <vector>
@@ -177,7 +179,7 @@ class hybrid_scan_reader {
    *         page-pruning, and a list of boolean vectors indicating which data pages are not pruned,
    *         one per filter column.
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<size_type const> row_group_indices,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
@@ -207,7 +209,7 @@ class hybrid_scan_reader {
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> page_mask,
+    cudf::host_span<thrust::host_vector<bool> const> page_mask,
     cudf::host_span<size_type const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,

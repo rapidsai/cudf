@@ -27,6 +27,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -112,7 +113,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   return {};
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
 hybrid_scan_reader_impl::filter_data_pages_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
@@ -146,7 +147,7 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
 }
 
 table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> data_page_mask,
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
