@@ -1,10 +1,11 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import itertools
 from datetime import datetime, timedelta
 
-import numpy as np
 import pytest
+
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -14,7 +15,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 def df():
     start_date = datetime(2023, 1, 1)
     dates = [start_date + timedelta(days=i) for i in range(6)]
-    
+
     return pl.LazyFrame(
         {
             "date": dates,
@@ -68,23 +69,21 @@ def agg_expr(request):
 @pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
 def test_over(df: pl.LazyFrame, partition_by, agg_expr):
     """Test window functions over partitions."""
-    
+
     window_expr = agg_expr.over(partition_by)
-    
-    result_name = f"{str(agg_expr)}_over_{str(partition_by)}"
+
+    result_name = f"{agg_expr!s}_over_{partition_by!s}"
     window_expr = window_expr.alias(result_name)
-    
+
     query = df.with_columns(window_expr)
-    
+
     assert_gpu_result_equal(query)
 
 
 @pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
 def test_over_with_sort(df: pl.LazyFrame):
     """Test window functions with sorting."""
-    query = df.with_columns(
-        [pl.col("c").rank().sort().over(pl.col("a"))]
-    )
+    query = df.with_columns([pl.col("c").rank().sort().over(pl.col("a"))])
     assert_gpu_result_equal(query)
 
 
@@ -107,11 +106,11 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
 def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
     """Test rolling window functions over time series."""
     window_expr = agg_expr.rolling(period=period, index_column="date")
-    result_name = f"{str(agg_expr)}_rolling_{period}"
+    result_name = f"{agg_expr!s}_rolling_{period}"
     window_expr = window_expr.alias(result_name)
-    
+
     query = df.with_columns(window_expr)
-    
+
     assert_gpu_result_equal(query)
 
 
@@ -123,9 +122,8 @@ def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
 )
 def test_rolling_closed(df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""
-    query = df.with_columns([
-        pl.col("b").sum()
-        .rolling(period="2d", index_column="date", closed=closed)
-    ])
+    query = df.with_columns(
+        [pl.col("b").sum().rolling(period="2d", index_column="date", closed=closed)]
+    )
     assert_gpu_result_equal(query)
 
