@@ -488,6 +488,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
+        elif not isinstance(other, BaseIndex) or len(self) != len(other):
+            return False
+        elif not (
+            is_dtype_obj_numeric(other.dtype)
+            or (
+                isinstance(other, CategoricalIndex)
+                and is_dtype_obj_numeric(other.categories.dtype)
+            )
+        ):
+            return False
         return self._as_int_index().equals(other)
 
     @_performance_tracking
