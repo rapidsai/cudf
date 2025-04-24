@@ -34,27 +34,35 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io::parquet::experimental {
-
-namespace detail {
-
+namespace io::parquet::experimental::detail {
 /**
- * @brief Internal experimental Parquet reader optimized for highly selective filters (Hybrid Scan
- * operation).
+ * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
+ *        Hybrid Scan operation.
  */
-class impl;
+class hybrid_scan_reader_impl;
+}  // namespace io::parquet::experimental::detail
+}  // namespace CUDF_EXPORT cudf
 
-}  // namespace detail
+//! Using `byte_range_info` from cudf::io::text
+using cudf::io::text::byte_range_info;
+
+namespace CUDF_EXPORT cudf {
+namespace io::parquet::experimental {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief The experimental parquet reader class to optimally read parquet files subject to
- *        highly selective filters (Hybrid Scan operation)
+ *        highly selective filters, called a Hybrid Scan operation
  *
  * This class is designed to best exploit reductive optimization techniques to speed up reading
- * Parquet files subject to highly selective filters (Hybrid scan operation). This class reads file
- * contents in two passes, where the first pass optimally reads the `filter` columns (i.e. columns
- * that appear in the filter expression) and the second pass optimally reads the `payload` columns
- * (i.e. columns that do not appear in the filter expression)
+ * Parquet files subject to highly selective filters. This class reads file contents in two passes,
+ * where the first pass optimally reads the `filter` columns (i.e. columns that appear in the filter
+ * expression) and the second pass optimally reads the `payload` columns (i.e. columns that do not
+ * appear in the filter expression).
  */
 class hybrid_scan_reader {
  public:
@@ -85,7 +93,7 @@ class hybrid_scan_reader {
    *
    * @return Byte range of the `PageIndex`
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] text::byte_range_info get_page_index_bytes() const;
 
   /**
    * @brief Setup the PageIndex
@@ -124,8 +132,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::io::text::byte_range_info>>
+  [[nodiscard]] std::pair<std::vector<text::byte_range_info>, std::vector<text::byte_range_info>>
   secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
                                 cudf::io::parquet_reader_options const& options) const;
 
@@ -183,7 +190,7 @@ class hybrid_scan_reader {
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> filter_column_chunks_byte_ranges(
+  [[nodiscard]] std::vector<text::byte_range_info> filter_column_chunks_byte_ranges(
     cudf::host_span<size_type const> row_group_indices,
     cudf::io::parquet_reader_options const& options) const;
 
@@ -236,7 +243,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
  private:
-  std::unique_ptr<detail::impl> _impl;
+  std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };
 
 }  // namespace io::parquet::experimental

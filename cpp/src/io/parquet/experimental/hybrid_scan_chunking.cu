@@ -618,7 +618,7 @@ struct get_decomp_scratch {
 
 }  // anonymous namespace
 
-void impl::create_global_chunk_info(parquet_reader_options const& options)
+void hybrid_scan_reader_impl::create_global_chunk_info(parquet_reader_options const& options)
 {
   auto const num_rows         = _file_itm_data.global_num_rows;
   auto const& row_groups_info = _file_itm_data.row_groups;
@@ -721,7 +721,7 @@ void impl::create_global_chunk_info(parquet_reader_options const& options)
   }
 }
 
-void impl::compute_input_passes()
+void hybrid_scan_reader_impl::compute_input_passes()
 {
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
@@ -741,7 +741,7 @@ void impl::compute_input_passes()
   return;
 }
 
-void impl::compute_output_chunks_for_subpass()
+void hybrid_scan_reader_impl::compute_output_chunks_for_subpass()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -751,9 +751,10 @@ void impl::compute_output_chunks_for_subpass()
   return;
 }
 
-void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
-                           cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
-                           parquet_reader_options const& options)
+void hybrid_scan_reader_impl::handle_chunking(
+  std::vector<rmm::device_buffer> column_chunk_buffers,
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -797,8 +798,8 @@ void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
   setup_next_subpass(options);
 }
 
-void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
-                           parquet_reader_options const& options)
+void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
+                                              parquet_reader_options const& options)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1, "");
@@ -882,7 +883,7 @@ void impl::setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
   }
 }
 
-void impl::setup_next_subpass(parquet_reader_options const& options)
+void hybrid_scan_reader_impl::setup_next_subpass(parquet_reader_options const& options)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<cudf::io::parquet::detail::subpass_intermediate_data>();

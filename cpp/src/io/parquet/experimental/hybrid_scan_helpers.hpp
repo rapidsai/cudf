@@ -36,11 +36,13 @@
 namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
-using equality_literals_collector    = parquet::detail::equality_literals_collector;
-using inline_column_buffer           = io::detail::inline_column_buffer;
-using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
-using row_group_info                 = parquet::detail::row_group_info;
+
+using io::detail::inline_column_buffer;
+using parquet::detail::equality_literals_collector;
+using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
+using text::byte_range_info;
 
 /**
  * @brief Class for parsing dataset metadata
@@ -113,7 +115,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Fetch the byte range of the `PageIndex` in the Parquet file
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info get_page_index_bytes() const;
 
   /**
    * @brief Get the Parquet file metadata
@@ -194,7 +196,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @return Byte ranges of bloom filters, one per input column chunk
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_bloom_filter_bytes(
+  [[nodiscard]] std::vector<byte_range_info> get_bloom_filter_bytes(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
@@ -210,7 +212,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @return Byte ranges of dictionary pages, one per input column chunk
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
+  [[nodiscard]] std::vector<byte_range_info> get_dictionary_page_bytes(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,

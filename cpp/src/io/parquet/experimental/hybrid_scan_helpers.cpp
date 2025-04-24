@@ -78,7 +78,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   }
 }
 
-cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
+text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
 {
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
@@ -315,7 +315,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   return stats_filtered_row_group_indices.value_or(all_row_group_indices);
 }
 
-std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
+std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -347,7 +347,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
   auto const num_equality_columns = equality_col_schemas.size();
   auto const num_chunks           = total_row_groups * num_equality_columns;
 
-  std::vector<cudf::io::text::byte_range_info> bloom_filter_bytes;
+  std::vector<text::byte_range_info> bloom_filter_bytes;
   bloom_filter_bytes.reserve(num_chunks);
 
   // Flag to check if we have at least one valid bloom filter offset
@@ -382,7 +382,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloo
   return bloom_filter_bytes;
 }
 
-std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
+std::vector<text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -414,7 +414,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   auto const num_equality_columns = dictionary_col_schemas.size();
   auto const num_chunks           = total_row_groups * num_equality_columns;
 
-  std::vector<cudf::io::text::byte_range_info> dictionary_page_bytes;
+  std::vector<text::byte_range_info> dictionary_page_bytes;
   dictionary_page_bytes.reserve(num_chunks);
 
   // Flag to check if we have at least one valid dictionary page

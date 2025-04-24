@@ -738,8 +738,9 @@ void decode_page_headers(pass_intermediate_data& pass,
 
 }  // namespace
 
-void impl::prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                              parquet_reader_options const& options)
+void hybrid_scan_reader_impl::prepare_row_groups(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options)
 {
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
@@ -764,7 +765,7 @@ void impl::prepare_row_groups(cudf::host_span<std::vector<size_type> const> row_
   _file_preprocessed = true;
 }
 
-void impl::allocate_level_decode_space()
+void hybrid_scan_reader_impl::allocate_level_decode_space()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -791,7 +792,7 @@ void impl::allocate_level_decode_space()
   }
 }
 
-void impl::build_string_dict_indices()
+void hybrid_scan_reader_impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
 
@@ -834,7 +835,7 @@ void impl::build_string_dict_indices()
   pass.chunks.device_to_host(_stream);
 }
 
-void impl::allocate_nesting_info()
+void hybrid_scan_reader_impl::allocate_nesting_info()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -997,7 +998,7 @@ void impl::allocate_nesting_info()
   page_nesting_decode_info.host_to_device_async(_stream);
 }
 
-bool impl::setup_column_chunks()
+bool hybrid_scan_reader_impl::setup_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
   auto& chunks                = _pass_itm_data->chunks;
@@ -1030,7 +1031,8 @@ bool impl::setup_column_chunks()
   return total_decompressed_size > 0;
 }
 
-void impl::setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_buffers)
+void hybrid_scan_reader_impl::setup_compressed_data(
+  std::vector<rmm::device_buffer> column_chunk_buffers)
 {
   auto& pass = *_pass_itm_data;
 
@@ -1056,7 +1058,7 @@ void impl::setup_compressed_data(std::vector<rmm::device_buffer> column_chunk_bu
                "Encountered page_offsets / num_columns mismatch");
 }
 
-void impl::preprocess_subpass_pages(size_t chunk_read_limit)
+void hybrid_scan_reader_impl::preprocess_subpass_pages(size_t chunk_read_limit)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1175,7 +1177,7 @@ void impl::preprocess_subpass_pages(size_t chunk_read_limit)
   compute_output_chunks_for_subpass();
 }
 
-void impl::allocate_columns(size_t skip_rows, size_t num_rows)
+void hybrid_scan_reader_impl::allocate_columns(size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1365,7 +1367,7 @@ void impl::allocate_columns(size_t skip_rows, size_t num_rows)
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
-cudf::detail::host_vector<size_t> impl::calculate_page_string_offsets()
+cudf::detail::host_vector<size_t> hybrid_scan_reader_impl::calculate_page_string_offsets()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1397,9 +1399,9 @@ cudf::detail::host_vector<size_t> impl::calculate_page_string_offsets()
   return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
-void impl::update_row_mask(cudf::column_view in_row_mask,
-                           cudf::mutable_column_view out_row_mask,
-                           rmm::cuda_stream_view stream)
+void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
+                                              cudf::mutable_column_view out_row_mask,
+                                              rmm::cuda_stream_view stream)
 {
   auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
