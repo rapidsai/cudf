@@ -34,6 +34,7 @@
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/logical.h>
@@ -751,7 +752,7 @@ void impl::compute_output_chunks_for_subpass()
 }
 
 void impl::handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
-                           cudf::host_span<std::vector<bool> const> data_page_mask,
+                           cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
                            parquet_reader_options const& options)
 {
   // if this is our first time in here, setup the first pass.

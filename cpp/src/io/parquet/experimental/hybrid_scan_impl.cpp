@@ -27,6 +27,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -690,7 +691,7 @@ std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
                                                          stream);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
 impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                    parquet_reader_options const& options,
                                    rmm::cuda_stream_view stream,
@@ -786,7 +787,7 @@ impl::get_payload_column_chunk_byte_ranges(
 }
 
 table_with_metadata impl::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> data_page_mask,
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
@@ -1019,7 +1020,7 @@ void impl::populate_metadata(table_metadata& out_metadata) const
 
 void impl::prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
                         std::vector<rmm::device_buffer> column_chunk_buffers,
-                        cudf::host_span<std::vector<bool> const> data_page_mask,
+                        cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
                         parquet_reader_options const& options)
 {
   // if we have not preprocessed at the whole-file level, do that now
@@ -1110,7 +1111,7 @@ void impl::update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> 
   }
 }
 
-void impl::set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask)
+void impl::set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask)
 {
   CUDF_EXPECTS(_file_itm_data._current_input_pass < _file_itm_data.num_passes(), "Invalid pass");
 

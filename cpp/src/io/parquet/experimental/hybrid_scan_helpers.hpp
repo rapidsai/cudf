@@ -27,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <memory>
 #include <optional>
 #include <vector>
@@ -290,7 +292,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return A vector of boolean vectors indicating which data pages need to be decoded to produce
    *         the output table based on the input row mask, one per input column
    */
-  [[nodiscard]] std::vector<std::vector<bool>> compute_data_page_mask(
+  [[nodiscard]] std::vector<thrust::host_vector<bool>> compute_data_page_mask(
     cudf::column_view row_mask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,

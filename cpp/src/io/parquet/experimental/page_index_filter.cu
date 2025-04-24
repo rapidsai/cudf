@@ -40,6 +40,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/gather.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/unique.h>
@@ -533,7 +534,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   return cudf::detail::compute_column(stats_table, stats_expr.get_stats_expr().get(), stream, mr);
 }
 
-std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask(
+std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_page_mask(
   cudf::column_view row_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
@@ -597,7 +598,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
 
   // Lambda to make a vector with all pages required
   auto const all_valid_data_pages = [&]() {
-    std::vector<std::vector<bool>> all_valid_data_pages;
+    std::vector<thrust::host_vector<bool>> all_valid_data_pages;
     all_valid_data_pages.reserve(num_columns);
     std::for_each(
       page_row_counts.cbegin(), page_row_counts.cend(), [&](auto const& col_page_counts) {
@@ -626,7 +627,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
   auto mr = cudf::get_current_device_resource_ref();
 
   // Vector to hold vectors of byte ranges of filtered pages for each column
-  auto data_page_mask = std::vector<std::vector<bool>>();
+  auto data_page_mask = std::vector<thrust::host_vector<bool>>();
   data_page_mask.reserve(num_columns);
   auto total_filtered_pages = size_t{0};
 
@@ -674,7 +675,7 @@ std::vector<std::vector<bool>> aggregate_reader_metadata::compute_data_page_mask
       stream);
 
     // Vector to hold validity of data pages for the this column
-    auto valid_pages = std::vector<bool>(total_pages_in_this_column, false);
+    auto valid_pages = thrust::host_vector<bool>(total_pages_in_this_column, false);
     std::for_each(h_select_page_indices.begin(),
                   h_select_page_indices.end(),
                   [&](auto const page_idx) { valid_pages[page_idx] = true; });
