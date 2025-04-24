@@ -8,12 +8,14 @@ from collections import defaultdict
 from collections.abc import MutableMapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from typing_extensions import Unpack
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import TypeAlias
 
 
-Key: TypeAlias = str | tuple[str, *tuple[int, ...]]
+Key: TypeAlias = str | tuple[str, Unpack[tuple[int, ...]]]
 Graph: TypeAlias = MutableMapping[Key, Any]
 T_ = TypeVar("T_")
 
