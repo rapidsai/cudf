@@ -8492,6 +8492,33 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReductionBitAnd() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42);
+         Scalar result = input.reduce(ReductionAggregation.bitAnd())) {
+      int expected = 0x1F & 0x0F & 0x33 & 0x55 & 0x3F & 0x2F & 0x0F & 0x42;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitOr() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42);
+         Scalar result = input.reduce(ReductionAggregation.bitOr())) {
+      int expected = 0x1F | 0x0F | 0x33 | 0x55 | 0x3F | 0x2F | 0x0F | 0x42;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitXor() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42);
+         Scalar result = input.reduce(ReductionAggregation.bitXor())) {
+      int expected = 0x1F ^ 0x0F ^ 0x33 ^ 0x55 ^ 0x3F ^ 0x2F ^ 0x0F ^ 0x42;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
   void testRowBitCount() {
     try (Table t = new Table.TestBuilder()
         .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)
