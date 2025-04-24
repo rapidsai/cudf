@@ -21,6 +21,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/sorting.hpp>
 
 auto bitwise_aggregate(cudf::column_view const& keys,
                        cudf::column_view const& values,
@@ -33,8 +34,14 @@ auto bitwise_aggregate(cudf::column_view const& keys,
     cudf::make_bitwise_aggregation<cudf::groupby_aggregation>(bit_op));
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys}));
   auto result = gb_obj.aggregate(requests);
-  return std::pair{std::move(result.first->release().front()),
-                   std::move(result.second.front().results.front())};
+
+  auto const sort_order = cudf::sorted_order(result.first->view(), {}, {});
+  auto sorted_keys      = cudf::gather(result.first->view(), *sort_order);
+  auto sorted_vals =
+    cudf::gather(cudf::table_view({result.second.front().results.front()->view()}), *sort_order);
+
+  return std::pair{std::move(sorted_keys->release().front()),
+                   std::move(sorted_vals->release().front())};
 }
 
 template <typename T>
@@ -310,16 +317,28 @@ TYPED_TEST(GroupByBitwiseTypedTest, MultipleAggs)
     cudf::make_bitwise_aggregation<cudf::groupby_aggregation>(cudf::bitwise_op::XOR));
   auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys}));
   auto const result = gb_obj.aggregate(requests);
-
   EXPECT_EQ(result.second.front().results.size(), 3);
-  auto const& out_keys     = result.first->get_column(0);
-  auto const& out_and_vals = result.second.front().results[0];
-  auto const& out_or_vals  = result.second.front().results[1];
-  auto const& out_xor_vals = result.second.front().results[2];
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, out_keys.view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_and_vals, out_and_vals->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_or_vals, out_or_vals->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_xor_vals, out_xor_vals->view());
+
+  auto const sort_order = cudf::sorted_order(result.first->view(), {}, {});
+  auto const sorted_keys =
+    std::move(cudf::gather(result.first->view(), *sort_order)->release().front());
+  auto const sorted_and_vals = std::move(
+    cudf::gather(cudf::table_view({result.second.front().results[0]->view()}), *sort_order)
+      ->release()
+      .front());
+  auto const sorted_or_vals = std::move(
+    cudf::gather(cudf::table_view({result.second.front().results[1]->view()}), *sort_order)
+      ->release()
+      .front());
+  auto const sorted_xor_vals = std::move(
+    cudf::gather(cudf::table_view({result.second.front().results[2]->view()}), *sort_order)
+      ->release()
+      .front());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, sorted_keys->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_and_vals, sorted_and_vals->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_or_vals, sorted_or_vals->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_xor_vals, sorted_xor_vals->view());
 }
 
 // Test with invalid data type
