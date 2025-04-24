@@ -320,7 +320,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitAndAgg(JNIEnv* 
 {
   try {
     cudf::jni::auto_set_device(env);
-    auto output = cudf::make_bitwise_aggregation(cudf::bitwise_op::AND);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::AND);
     return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
@@ -331,7 +331,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitOrAgg(JNIEnv* e
 {
   try {
     cudf::jni::auto_set_device(env);
-    auto output = cudf::make_bitwise_aggregation(cudf::bitwise_op::OR);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::OR);
     return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
@@ -342,7 +342,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitXorAgg(JNIEnv* 
 {
   try {
     cudf::jni::auto_set_device(env);
-    auto output = cudf::make_bitwise_aggregation(cudf::bitwise_op::XOR);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::XOR);
     return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
