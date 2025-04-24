@@ -62,7 +62,8 @@ def test_select_reduce_fallback(df, fallback_mode):
         ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
     elif fallback_mode == "foo":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError, match="'foo' is not a valid FallbackMode"
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
         )
     else:
         ctx = pytest.warns(UserWarning, match=match)
