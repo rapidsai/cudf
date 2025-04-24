@@ -933,6 +933,7 @@ dependencies:
           - &fastavro fastavro>=0.22.9
           - mmh3
           - nanoarrow
+          - hypothesis>=6.131.7
           - *numpy
           - pandas
       - output_types: conda
@@ -947,8 +948,7 @@ dependencies:
         packages:
           - cramjam
           - *fastavro
-          # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - pytest-rerunfailures
@@ -1226,7 +1226,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - ipython
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.7
   test_python_cudf_pandas:
     common:
       - output_types: [conda, requirements, pyproject]
