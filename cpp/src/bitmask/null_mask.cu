@@ -191,6 +191,9 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   CUDF_EXPECTS(num_bitmasks == end_bits.size(), "Number of bitmasks and end bits must be equal.");
   CUDF_EXPECTS(num_bitmasks == valids.size(), "Number of bitmasks and valids must be equal.");
 
+  // Return early if no bitmasks to set
+  if (num_bitmasks == 0) { return; }
+
   size_t average_nullmask_words     = 0;
   size_t cumulative_null_mask_words = 0;
   auto h_number_of_mask_words = cudf::detail::make_host_vector<size_type>(num_bitmasks, stream);
