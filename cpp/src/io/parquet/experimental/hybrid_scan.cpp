@@ -68,16 +68,15 @@ std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_stats(
   return _impl->filter_row_groups_with_stats(input_row_group_indices, options, stream).front();
 }
 
-std::pair<std::vector<cudf::io::text::byte_range_info>,
-          std::vector<cudf::io::text::byte_range_info>>
-hybrid_scan_reader::secondary_filter_byte_ranges(cudf::host_span<size_type const> row_group_indices,
-                                                 parquet_reader_options const& options) const
+std::pair<std::vector<text::byte_range_info>, std::vector<text::byte_range_info>>
+hybrid_scan_reader::secondary_filters_byte_ranges(
+  cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->secondary_filter_byte_ranges(input_row_group_indices, options);
+  return _impl->secondary_filters_byte_ranges(input_row_group_indices, options);
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_dictionary_pages(
@@ -131,15 +130,15 @@ hybrid_scan_reader::filter_data_pages_with_stats(cudf::host_span<size_type const
   return _impl->filter_data_pages_with_stats(input_row_group_indices, options, stream, mr);
 }
 
-[[nodiscard]] std::vector<cudf::io::text::byte_range_info>
-hybrid_scan_reader::filter_column_chunk_byte_ranges(
+[[nodiscard]] std::vector<text::byte_range_info>
+hybrid_scan_reader::filter_column_chunks_byte_ranges(
   cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->filter_column_chunk_byte_ranges(input_row_group_indices, options).first;
+  return _impl->filter_column_chunks_byte_ranges(input_row_group_indices, options).first;
 }
 
 table_with_metadata hybrid_scan_reader::materialize_filter_columns(
@@ -162,14 +161,14 @@ table_with_metadata hybrid_scan_reader::materialize_filter_columns(
                                            stream);
 }
 
-[[nodiscard]] std::vector<cudf::io::text::byte_range_info>
-hybrid_scan_reader::payload_column_chunk_byte_ranges(
+[[nodiscard]] std::vector<text::byte_range_info>
+hybrid_scan_reader::payload_column_chunks_byte_ranges(
   cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->payload_column_chunk_byte_ranges(input_row_group_indices, options).first;
+  return _impl->payload_column_chunks_byte_ranges(input_row_group_indices, options).first;
 }
 
 table_with_metadata hybrid_scan_reader::materialize_payload_columns(

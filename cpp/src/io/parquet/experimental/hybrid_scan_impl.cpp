@@ -86,7 +86,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-hybrid_scan_reader_impl::secondary_filter_byte_ranges(
+hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -130,7 +130,7 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader_impl::filter_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -138,7 +138,7 @@ hybrid_scan_reader_impl::filter_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader_impl::payload_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {

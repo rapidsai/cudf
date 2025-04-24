@@ -88,8 +88,8 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::secondary_filters_byte_ranges
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-  secondary_filter_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                               parquet_reader_options const& options);
+  secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_dictionary_pages
@@ -127,8 +127,8 @@ class hybrid_scan_reader_impl {
    *         their corresponding input source file indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-  filter_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                  parquet_reader_options const& options);
+  filter_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
@@ -150,8 +150,8 @@ class hybrid_scan_reader_impl {
    * their corresponding input source file indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-  payload_column_chunk_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                   parquet_reader_options const& options);
+  payload_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                    parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns
