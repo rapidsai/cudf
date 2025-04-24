@@ -127,7 +127,8 @@ using range_window_type = std::variant<unbounded, current_row, bounded_closed, b
  * @brief A request for a rolling aggregation on a column.
  */
 struct rolling_request {
-  column_view values;                                ///< Elements to aggregate
+  column_view values;     ///< Elements to aggregate
+  size_type min_periods;  ///< Minimum number of observations required for the window to be valid
   std::unique_ptr<rolling_aggregation> aggregation;  ///< Desired aggregation
 };
 
@@ -579,10 +580,9 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * @param null_order Null sort order in the sorted `orderby` column.
  * @param preceding Type of the preceding window.
  * @param following Type of the following window.
- * @param min_periods Minimum number of observations in the window required to have a value.
- * @param requests Columns to aggregate and the aggregations for each column.
+ * @param requests Columns to aggregate and the aggregation for each column.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A table of results, one column per input request.
  */
 std::unique_ptr<table> grouped_range_rolling_window(
@@ -592,10 +592,10 @@ std::unique_ptr<table> grouped_range_rolling_window(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  size_type min_periods,
   host_span<rolling_request const> requests,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
  *

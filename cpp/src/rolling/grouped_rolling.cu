@@ -227,7 +227,6 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    size_type min_periods,
                                                     host_span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
@@ -258,7 +257,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
   if (std::all_of(requests.begin(), requests.end(), [&](rolling_request const& req) {
         return can_optimize_unbounded_window(std::holds_alternative<unbounded>(preceding),
                                              std::holds_alternative<unbounded>(following),
-                                             min_periods,
+                                             req.min_periods,
                                              *req.aggregation);
       })) {
     std::transform(requests.begin(),
@@ -286,12 +285,17 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     requests.begin(), requests.end(), std::back_inserter(results), [&](rolling_request const& req) {
       if (can_optimize_unbounded_window(std::holds_alternative<unbounded>(preceding),
                                         std::holds_alternative<unbounded>(following),
-                                        min_periods,
+                                        req.min_periods,
                                         *req.aggregation)) {
         return optimized_unbounded_window(group_keys, req.values, *req.aggregation, stream, mr);
       } else {
-        return detail::rolling_window(
-          req.values, preceding_view, following_view, min_periods, *req.aggregation, stream, mr);
+        return detail::rolling_window(req.values,
+                                      preceding_view,
+                                      following_view,
+                                      req.min_periods,
+                                      *req.aggregation,
+                                      stream,
+                                      mr);
       }
     });
   return std::make_unique<table>(std::move(results));
@@ -495,23 +499,17 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    size_type min_periods,
                                                     host_span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(min_periods > 0, "min_periods must be positive");
-  return detail::grouped_range_rolling_window(group_keys,
-                                              orderby,
-                                              order,
-                                              null_order,
-                                              preceding,
-                                              following,
-                                              min_periods,
-                                              requests,
-                                              stream,
-                                              mr);
+  CUDF_EXPECTS(std::all_of(requests.begin(),
+                           requests.end(),
+                           [](rolling_request const& req) { return req.min_periods > 0; }),
+               "All min_periods must be positive");
+  return detail::grouped_range_rolling_window(
+    group_keys, orderby, order, null_order, preceding, following, requests, stream, mr);
 }
 
 }  // namespace cudf
