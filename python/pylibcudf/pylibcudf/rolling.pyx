@@ -34,7 +34,7 @@ cdef class Unbounded:
     This window runs to the begin/end of the current row's group.
     """
     def __cinit__(self):
-        self.c_obj = cpp_rolling.unbounded()
+        self.c_obj = move(make_unique[cpp_rolling.unbounded]())
 
 cdef class CurrentRow:
     """
@@ -43,7 +43,7 @@ cdef class CurrentRow:
     This window contains all rows that are equal to the current row in the group.
     """
     def __cinit__(self):
-        self.c_obj = cpp_rolling.current_row()
+        self.c_obj = move(make_unique[cpp_rolling.current_row]())
 
 cdef class BoundedClosed:
     """
@@ -147,249 +147,16 @@ cpdef Table grouped_range_rolling_window(
     for req in requests:
         crequests.push_back(move((<RollingRequest?>req).view()))
 
-    if (
-        PrecedingRangeWindowType is BoundedClosed
-        and FollowingRangeWindowType is BoundedClosed
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedOpen
-        and FollowingRangeWindowType is BoundedOpen
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is CurrentRow
-        and FollowingRangeWindowType is CurrentRow
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is Unbounded
-        and FollowingRangeWindowType is Unbounded
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedClosed
-        and FollowingRangeWindowType is BoundedOpen
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedClosed
-        and FollowingRangeWindowType is CurrentRow
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedClosed
-        and FollowingRangeWindowType is Unbounded
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedOpen
-        and FollowingRangeWindowType is BoundedClosed
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedOpen
-        and FollowingRangeWindowType is CurrentRow
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is BoundedOpen
-        and FollowingRangeWindowType is Unbounded
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                dereference(preceding.c_obj.get()),
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is CurrentRow
-        and FollowingRangeWindowType is BoundedClosed
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is CurrentRow
-        and FollowingRangeWindowType is BoundedOpen
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is CurrentRow
-        and FollowingRangeWindowType is Unbounded
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is Unbounded
-        and FollowingRangeWindowType is BoundedClosed
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is Unbounded
-        and FollowingRangeWindowType is BoundedOpen
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                dereference(following.c_obj.get()),
-                min_periods,
-                crequests
-            )
-    elif (
-        PrecedingRangeWindowType is Unbounded
-        and FollowingRangeWindowType is CurrentRow
-    ):
-        with nogil:
-            result = cpp_rolling.grouped_range_rolling_window(
-                group_keys.view(),
-                orderby.view(),
-                order,
-                null_order,
-                preceding.c_obj,
-                following.c_obj,
-                min_periods,
-                crequests
-            )
-    else:
-        raise NotImplementedError(
-            "Invalid combination of preceding and following windows"
+    with nogil:
+        result = cpp_rolling.grouped_range_rolling_window(
+            group_keys.view(),
+            orderby.view(),
+            order,
+            null_order,
+            dereference(preceding.c_obj.get()),
+            dereference(following.c_obj.get()),
+            min_periods,
+            crequests
         )
     return Table.from_libcudf(move(result))
 

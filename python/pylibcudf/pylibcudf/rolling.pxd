@@ -19,24 +19,19 @@ ctypedef fused WindowType:
     Column
     size_type
 
-
 cdef class Unbounded:
-    cdef unbounded c_obj
-
+    cdef unique_ptr[unbounded] c_obj
 
 cdef class CurrentRow:
-    cdef current_row c_obj
-
+    cdef unique_ptr[current_row] c_obj
 
 cdef class BoundedClosed:
     cdef readonly Scalar delta
     cdef unique_ptr[bounded_closed] c_obj
 
-
 cdef class BoundedOpen:
     cdef readonly Scalar delta
     cdef unique_ptr[bounded_open] c_obj
-
 
 ctypedef fused PrecedingRangeWindowType:
     BoundedClosed

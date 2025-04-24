@@ -18,189 +18,28 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         rolling_request() except +libcudf_exception_handler
         column_view values
         unique_ptr[rolling_aggregation] aggregation
-    cdef cppclass bounded_closed:
+    # This inheritance is a lie, a range_window_type is actually a
+    # std::variant of the concrete window types. However, we can't
+    # construct an instance of a variant in Cython so lie here.
+    # This is only used in type-checking the cython, so that's fine.
+    cdef cppclass range_window_type:
+        pass
+    cdef cppclass bounded_closed(range_window_type):
         bounded_closed(const scalar&) noexcept
-    cdef cppclass bounded_open:
+    cdef cppclass bounded_open(range_window_type):
         bounded_open(const scalar&) noexcept
-    cdef cppclass unbounded:
+    cdef cppclass unbounded(range_window_type):
         unbounded() noexcept
-    cdef cppclass current_row:
+    cdef cppclass current_row(range_window_type):
         current_row() noexcept
 
-    # In the C++ API, there's just a single function that takes a std::variant
-    # But we have no way of passing these from Cython so lie in the overloads here.
     unique_ptr[table] grouped_range_rolling_window(
         const table_view& group_keys,
         const column_view& orderby,
         order order,
         null_order null_order,
-        bounded_closed preceding,
-        bounded_closed following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_open preceding,
-        bounded_open following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        current_row preceding,
-        current_row following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        unbounded preceding,
-        unbounded following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_closed preceding,
-        bounded_open following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_closed preceding,
-        current_row following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_closed preceding,
-        unbounded following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_open preceding,
-        bounded_closed following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_open preceding,
-        current_row following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        bounded_open preceding,
-        unbounded following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        current_row preceding,
-        bounded_closed following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        current_row preceding,
-        bounded_open following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        current_row preceding,
-        unbounded following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        unbounded preceding,
-        bounded_closed following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        unbounded preceding,
-        bounded_open following,
-        size_type min_periods,
-        vector[rolling_request]& requests
-    ) except +libcudf_exception_handler
-
-    unique_ptr[table] grouped_range_rolling_window(
-        const table_view& group_keys,
-        const column_view& orderby,
-        order order,
-        null_order null_order,
-        unbounded preceding,
-        current_row following,
+        range_window_type preceding,
+        range_window_type following,
         size_type min_periods,
         vector[rolling_request]& requests
     ) except +libcudf_exception_handler
