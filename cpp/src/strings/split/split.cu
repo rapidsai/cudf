@@ -143,13 +143,18 @@ namespace {
  * ```
  *
  * @tparam Tokenizer provides unique functions for split/rsplit and whitespace split/rsplit
- * @param strings_column The strings to split
+ * @tparam DelimiterFn Functor for locating delimiters
+ * @param input The strings to split
  * @param tokenizer Tokenizer for counting and producing tokens
+ * @param delimiter_fn Functor called on each byte to check for delimiters
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned objects' device memory
  * @return table of columns for the output of the split
  */
-template <typename Tokenizer>
+template <typename Tokenizer, typename DelimiterFn>
 std::unique_ptr<table> split_fn(strings_column_view const& input,
                                 Tokenizer tokenizer,
+                                DelimiterFn delimiter_fn,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
@@ -160,7 +165,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
   }
 
   // builds the offsets and the vector of all tokens
-  auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, mr);
   auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
@@ -205,7 +210,7 @@ std::unique_ptr<table> make_all_null_table(size_type size,
 
 }  // namespace
 
-std::unique_ptr<table> split(strings_column_view const& strings_column,
+std::unique_ptr<table> split(strings_column_view const& input,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
@@ -215,21 +220,22 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    auto results =
-      split_fn(strings_column, split_ws_tokenizer_fn{*strings_device_view, max_tokens}, stream, mr);
+    auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
     // boundary case: if no columns, return one null column (issue #119)
-    return (results->num_columns() == 0) ? make_all_null_table(strings_column.size(), stream, mr)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
                                          : std::move(results);
   }
 
-  string_view d_delimiter(delimiter.data(), delimiter.size());
-  return split_fn(
-    strings_column, split_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
-std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+std::unique_ptr<table> rsplit(strings_column_view const& input,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
@@ -239,42 +245,43 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    auto results = split_fn(
-      strings_column, rsplit_ws_tokenizer_fn{*strings_device_view, max_tokens}, stream, mr);
+    auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
     // boundary case: if no columns, return one null column (issue #119)
-    return (results->num_columns() == 0) ? make_all_null_table(strings_column.size(), stream, mr)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
                                          : std::move(results);
   }
 
-  string_view d_delimiter(delimiter.data(), delimiter.size());
-  return split_fn(
-    strings_column, rsplit_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<table> split(strings_column_view const& strings_column,
+std::unique_ptr<table> split(strings_column_view const& input,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, stream, mr);
+  return detail::split(input, delimiter, maxsplit, stream, mr);
 }
 
-std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+std::unique_ptr<table> rsplit(strings_column_view const& input,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, stream, mr);
+  return detail::rsplit(input, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings

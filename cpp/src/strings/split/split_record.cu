@@ -43,9 +43,10 @@ namespace detail {
 
 namespace {
 
-template <typename Tokenizer>
+template <typename Tokenizer, typename DelimiterFn>
 std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         Tokenizer tokenizer,
+                                        DelimiterFn delimiter_fn,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
@@ -65,7 +66,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
   }
 
   // builds the offsets and the vector of all tokens
-  auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, mr);
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
                std::overflow_error);
@@ -97,12 +98,14 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return split_record_fn(input, split_ws_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
+    auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
 
-  auto const d_delimiter = delimiter.value(stream);
-  return split_record_fn(
-    input, split_tokenizer_fn{*d_strings, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& input,
@@ -118,12 +121,14 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return split_record_fn(input, rsplit_ws_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
+    auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
 
-  auto const d_delimiter = delimiter.value(stream);
-  return split_record_fn(
-    input, rsplit_tokenizer_fn{*d_strings, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
 }  // namespace detail
