@@ -21,7 +21,8 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -227,9 +228,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     EXPECT_EQ(result_size, expected_outputs.size());
 
     auto result     = this->join(left, right, predicate);
-    auto lhs_result = cudf::detail::make_std_vector_sync(*result.first, cudf::get_default_stream());
-    auto rhs_result =
-      cudf::detail::make_std_vector_sync(*result.second, cudf::get_default_stream());
+    auto lhs_result = cudf::detail::make_std_vector(*result.first, cudf::get_default_stream());
+    auto rhs_result = cudf::detail::make_std_vector(*result.second, cudf::get_default_stream());
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs(lhs_result.size());
     std::transform(lhs_result.begin(),
                    lhs_result.end(),
@@ -735,7 +735,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     EXPECT_EQ(result_size, expected_outputs.size());
 
     auto result         = this->join(left, right, predicate);
-    auto result_indices = cudf::detail::make_std_vector_sync(*result, cudf::get_default_stream());
+    auto result_indices = cudf::detail::make_std_vector(*result, cudf::get_default_stream());
     std::sort(result_indices.begin(), result_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
     EXPECT_TRUE(std::equal(result_indices.begin(),

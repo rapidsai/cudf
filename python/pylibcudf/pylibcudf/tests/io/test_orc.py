@@ -1,58 +1,77 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
-from utils import _convert_types, assert_table_and_meta_eq, make_source
+from utils import (
+    _convert_types,
+    assert_table_and_meta_eq,
+    get_bytes_from_source,
+    make_source,
+)
+
+from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 
-# Shared kwargs to pass to make_source
 _COMMON_ORC_SOURCE_KWARGS = {"format": "orc"}
 
 
+def _cast_unsigned_to_int64(table):
+    _, new_fields = _convert_types(
+        table, pa.types.is_unsigned_integer, pa.int64()
+    )
+    return table.cast(pa.schema(new_fields))
+
+
+def _drop_nested_columns_if_skipping(table, skiprows):
+    if skiprows <= 0:
+        return table
+    cols_to_drop = [
+        field.name for field in table.schema if pa.types.is_nested(field.type)
+    ]
+    return table.drop(cols_to_drop)
+
+
+def _build_orc_reader_options(
+    source_info, nrows=None, skiprows=None, columns=None
+):
+    options = plc.io.orc.OrcReaderOptions.builder(source_info).build()
+    if nrows is not None and nrows >= 0:
+        options.set_num_rows(nrows)
+    if skiprows is not None and skiprows >= 0:
+        options.set_skip_rows(skiprows)
+    if columns:
+        options.set_columns(columns)
+    return options
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
 def test_read_orc_basic(
-    table_data, binary_source_or_sink, nrows_skiprows, columns
+    table_data, binary_source_or_sink, nrows_skiprows, columns, stream
 ):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
 
-    # ORC reader doesn't support skip_rows for nested columns
-    if skiprows > 0:
-        colnames_to_drop = []
-        for i in range(len(pa_table.schema)):
-            field = pa_table.schema.field(i)
-
-            if pa.types.is_nested(field.type):
-                colnames_to_drop.append(field.name)
-        pa_table = pa_table.drop(colnames_to_drop)
-    # ORC doesn't support unsigned ints
-    # let's cast to int64
-    _, new_fields = _convert_types(
-        pa_table, pa.types.is_unsigned_integer, pa.int64()
-    )
-    pa_table = pa_table.cast(pa.schema(new_fields))
+    pa_table = _drop_nested_columns_if_skipping(pa_table, skiprows)
+    pa_table = _cast_unsigned_to_int64(pa_table)
 
     source = make_source(
         binary_source_or_sink, pa_table, **_COMMON_ORC_SOURCE_KWARGS
     )
+    options = _build_orc_reader_options(
+        plc.io.types.SourceInfo([source]),
+        nrows=nrows,
+        skiprows=skiprows,
+        columns=columns,
+    )
 
-    options = plc.io.orc.OrcReaderOptions.builder(
-        plc.io.types.SourceInfo([source])
-    ).build()
-    if nrows >= 0:
-        options.set_num_rows(nrows)
-    if skiprows >= 0:
-        options.set_skip_rows(skiprows)
-    if columns is not None and len(columns) > 0:
-        options.set_columns(columns)
-
-    res = plc.io.orc.read_orc(options)
+    res = plc.io.orc.read_orc(options, stream)
 
     if columns is not None:
         pa_table = pa_table.select(columns)
 
-    # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
         offset=skiprows, length=nrows if nrows != -1 else None
     )
@@ -60,6 +79,39 @@ def test_read_orc_basic(
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
 
+@pytest.mark.parametrize("num_buffers", [1, 2])
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_orc_from_device_buffers(
+    table_data, binary_source_or_sink, num_buffers, stream
+):
+    _, pa_table = table_data
+
+    pa_table = _cast_unsigned_to_int64(pa_table)
+
+    source = make_source(binary_source_or_sink, pa_table, format="orc")
+
+    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+
+    options = plc.io.orc.OrcReaderOptions.builder(
+        plc.io.types.SourceInfo([buf] * num_buffers)
+    ).build()
+
+    result = plc.io.orc.read_orc(options, stream)
+
+    expected = (
+        pa_table
+        if num_buffers == 1
+        else pa.concat_tables([pa_table] * num_buffers)
+    )
+    res = plc.io.types.TableWithMetadata(
+        result.tbl,
+        [(name, []) for name in expected.column_names],
+    )
+
+    assert_table_and_meta_eq(expected, res, check_field_nullability=False)
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize(
     "compression",
     [
@@ -84,6 +136,7 @@ def test_roundtrip_pa_table(
     stripe_size_rows,
     row_index_stride,
     tmp_path,
+    stream,
 ):
     pa_table = pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
     plc_table = plc.interop.from_arrow(pa_table)
@@ -109,7 +162,7 @@ def test_roundtrip_pa_table(
     if row_index_stride is not None:
         options.set_row_index_stride(row_index_stride)
 
-    plc.io.orc.write_orc(options)
+    plc.io.orc.write_orc(options, stream)
 
     read_table = pa.orc.read_table(str(tmpfile_name))
 

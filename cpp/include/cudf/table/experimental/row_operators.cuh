@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/tuple>
@@ -1354,7 +1355,7 @@ class device_row_comparator {
   __device__ constexpr bool operator()(size_type const lhs_index,
                                        size_type const rhs_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_index, rhs_index, this](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
@@ -1466,9 +1467,9 @@ class device_row_comparator {
           auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
-                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
+                  thrust::seq, lvalid, lvalid + lcol.size(), cuda::std::logical_not<bool>()) or
                 thrust::any_of(
-                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
+                  thrust::seq, rvalid, rvalid + rcol.size(), cuda::std::logical_not<bool>())) {
               return false;
             }
           } else {
@@ -1526,7 +1527,7 @@ class device_row_comparator {
         return thrust::all_of(thrust::seq,
                               thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(0) + size,
-                              [=](auto i) { return comp.template operator()<Element>(i, i); });
+                              [this](auto i) { return comp.template operator()<Element>(i, i); });
       }
 
       template <typename Element,
@@ -1870,13 +1871,14 @@ class device_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(),
-        element_hasher_adapter<hash_function>{_check_nulls, _seed},
-        column,
-        row_index);
-    });
+    auto it =
+      thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
+        return cudf::type_dispatcher<dispatch_storage_type>(
+          column.type(),
+          element_hasher_adapter<hash_function>{_check_nulls, _seed},
+          column,
+          row_index);
+      });
 
     // Hash each element and combine all the hash values together
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,7 +237,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
       if (!d_column.is_null(idx)) length = d_column.element<string_view>(idx).length();
       return length;
     }),
-    thrust::plus<size_type>());
+    cuda::std::plus<size_type>());
 
   offsets.set_element_to_zero_async(0, stream);
 

@@ -27,6 +27,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -156,8 +157,8 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   auto const end = start + cumulative_sizes.size();
 
   while (cur_count < total_count) {
-    int64_t split_pos = static_cast<int64_t>(
-      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
+    int64_t split_pos = static_cast<int64_t>(cuda::std::distance(
+      start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
 
     // If we're past the end, or if the returned range has size exceeds the given size limit,
     // move back one position.
@@ -439,7 +440,7 @@ void reader_impl::preprocess_file(read_mode mode)
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
                          cumulative_size_plus{});
-  total_stripe_sizes.device_to_host_sync(_stream);
+  total_stripe_sizes.device_to_host(_stream);
 
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
@@ -486,13 +487,11 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   // Load stripe data into memory:
   //
 
-  // If we load data from sources into host buffers, we need to transfer (async) data to device
-  // memory. Such host buffers need to be kept alive until we sync the transfers.
-  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
-
-  // If we load data directly from sources into device memory, the loads are also async.
-  // Thus, we need to make sure to sync all them at the end.
+  // Storing the future and the expected size of the read data
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> device_read_tasks;
+  // Storing the future, the expected size of the read data and the device destination pointer
+  std::vector<std::tuple<std::future<std::unique_ptr<datasource::buffer>>, std::size_t, uint8_t*>>
+    host_read_tasks;
 
   // Range of the read info (offset, length) to read for the current being loaded stripes.
   auto const [read_begin, read_end] =
@@ -518,24 +517,22 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         source_ptr->device_read_async(
           read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
         read_info.length);
-
     } else {
-      auto buffer = source_ptr->host_read(read_info.offset, read_info.length);
-      CUDF_EXPECTS(buffer->size() == read_info.length, "Unexpected discrepancy in bytes read.");
-      CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read_info.dst_pos,
-                                    buffer->data(),
-                                    read_info.length,
-                                    cudaMemcpyDefault,
-                                    _stream.value()));
-      host_read_buffers.emplace_back(std::move(buffer));
+      host_read_tasks.emplace_back(source_ptr->host_read_async(read_info.offset, read_info.length),
+                                   read_info.length,
+                                   dst_base + read_info.dst_pos);
     }
   }
-
-  if (host_read_buffers.size() > 0) {  // if there was host read
-    _stream.synchronize();
-    host_read_buffers.clear();  // its data was copied to device memory after stream sync
+  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
+  for (auto& [fut, expected_size, dev_dst] : host_read_tasks) {  // if there were host reads
+    host_read_buffers.emplace_back(fut.get());
+    auto* host_buffer = host_read_buffers.back().get();
+    CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
   }
-  for (auto& task : device_read_tasks) {  // if there was device read
+
+  for (auto& task : device_read_tasks) {  // if there were device reads
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
@@ -683,7 +680,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
                                    decompressor.GetBlockSize(),
                                    decompressor.GetLog2MaxCompressionRatio(),
                                    _stream);
-      compinfo.device_to_host_sync(_stream);
+      compinfo.device_to_host(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info           = stream_info[stream_idx];
@@ -713,7 +710,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),
                          cumulative_size_plus{});
-  stripe_decomp_sizes.device_to_host_sync(_stream);
+  stripe_decomp_sizes.device_to_host(_stream);
 
   auto const decode_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *

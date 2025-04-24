@@ -1,7 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
-from io import StringIO
 
 import pandas as pd
 import pyarrow as pa
@@ -13,6 +12,9 @@ from utils import (
     sink_to_str,
     write_source_str,
 )
+
+from rmm.pylibrmm.device_buffer import DeviceBuffer
+from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
@@ -44,6 +46,7 @@ def csv_table_data(table_data):
     return plc.interop.from_arrow(pa_table), pa_table
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("delimiter", [",", ";"])
 def test_read_csv_basic(
     csv_table_data,
@@ -51,6 +54,7 @@ def test_read_csv_basic(
     text_compression_type,
     nrows_skiprows,
     delimiter,
+    stream,
 ):
     _, pa_table = csv_table_data
     compression_type = text_compression_type
@@ -86,7 +90,7 @@ def test_read_csv_basic(
     )
     options.set_delimiter(delimiter)
     options.set_names([str(name) for name in column_names])
-    res = plc.io.csv.read_csv(options)
+    res = plc.io.csv.read_csv(options, stream)
 
     assert_table_and_meta_eq(
         pa_table,
@@ -210,7 +214,7 @@ def test_read_csv_parse_options(
     options.set_comment("#")
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         comment="#",
         decimal=decimal,
         skip_blank_lines=skip_blanks,
@@ -243,7 +247,7 @@ def test_read_csv_na_values(
         options.set_na_values(na_values)
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         na_filter=na_filter,
         na_values=na_values if na_filter else None,
         keep_default_na=keep_default_na,
@@ -291,6 +295,27 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
     )
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_csv_from_device_buffers(csv_table_data, stream):
+    _, pa_table = csv_table_data
+
+    csv_string = pa_table.to_pandas().to_csv(index=False)
+    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([buf])
+    ).build()
+    result = plc.io.csv.read_csv(options, stream)
+
+    expected = pa.concat_tables([pa_table])
+
+    assert_table_and_meta_eq(
+        expected,
+        result,
+        check_types_if_empty=False,
+    )
+
+
 # TODO: test these
 # str prefix = "",
 # bool mangle_dupe_cols = True,
@@ -307,6 +332,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # bool dayfirst = False,
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("sep", [",", "*"])
 @pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("header", [True, False])
@@ -318,6 +344,7 @@ def test_write_csv(
     lineterminator,
     header,
     rows_per_chunk,
+    stream,
 ):
     plc_tbl_w_meta, pa_table = table_data_with_non_nested_pa_types
     sink = source_or_sink
@@ -336,7 +363,8 @@ def test_write_csv(
             .true_value("True")
             .false_value("False")
             .build()
-        )
+        ),
+        stream,
     )
 
     # Convert everything to string to make comparisons easier

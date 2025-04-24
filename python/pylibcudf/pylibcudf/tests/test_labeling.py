@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -21,7 +21,7 @@ def test_label_bins(left_inclusive, right_inclusive):
             in_col, left_edges, left_inclusive, right_edges, right_inclusive
         )
     )
-    expected = pa.chunked_array([[0, 0, 0]], type=pa.int32())
+    expected = pa.array([0, 0, 0], type=pa.int32())
     assert result.equals(expected)
 
 

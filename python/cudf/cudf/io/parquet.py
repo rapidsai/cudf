@@ -1227,10 +1227,10 @@ def _read_parquet(
                 for name, col in zip(column_names, concatenated_columns)
             }
             df = cudf.DataFrame._from_data(data)
+            ioutils._add_df_col_struct_names(df, child_names)
             df = _process_metadata(
                 df,
                 column_names,
-                child_names,
                 per_file_user_data,
                 row_groups,
                 filepaths_or_buffers,
@@ -1266,21 +1266,10 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    tbl_w_meta.column_names(include_children=False),
-                    tbl_w_meta.columns,
-                    strict=True,
-                )
-            }
-
-            df = cudf.DataFrame._from_data(data)
-
+            df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
             df = _process_metadata(
                 df,
                 tbl_w_meta.column_names(include_children=False),
-                tbl_w_meta.child_names,
                 tbl_w_meta.per_file_user_data,
                 row_groups,
                 filepaths_or_buffers,
@@ -2224,7 +2213,6 @@ def _get_stat_freq(
 def _process_metadata(
     df: cudf.DataFrame,
     names: list[Hashable],
-    child_names: dict,
     per_file_user_data: list,
     row_groups,
     filepaths_or_buffers,
@@ -2233,7 +2221,6 @@ def _process_metadata(
     nrows: int = -1,
     skip_rows: int = 0,
 ) -> cudf.DataFrame:
-    ioutils._add_df_col_struct_names(df, child_names)
     index_col = None
     is_range_index = True
     column_index_type = None

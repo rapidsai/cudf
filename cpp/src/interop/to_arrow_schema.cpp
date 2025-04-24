@@ -152,8 +152,12 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
 
     child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
-    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      col.type(), detail::dispatch_to_arrow_type{}, col, metadata.children_meta[i], child));
+    if (col.type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out->children[i], NANOARROW_TYPE_NA));
+    } else {
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+        col.type(), detail::dispatch_to_arrow_type{}, col, metadata.children_meta[i], child));
+    }
   }
 
   return NANOARROW_OK;
@@ -174,6 +178,9 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
   out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
   out->children[0]->flags = child.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  if (child.type().id() == cudf::type_id::EMPTY) {
+    return ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA);
+  }
   return cudf::type_dispatcher(
     child.type(), detail::dispatch_to_arrow_type{}, child, child_meta, out->children[0]);
 }
@@ -185,9 +192,11 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
 {
   cudf::dictionary_column_view const dview{input};
 
-  NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, id_to_arrow_type(dview.indices().type().id())));
+  NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(
+    out, dview.is_empty() ? NANOARROW_TYPE_INT32 : id_to_arrow_type(dview.indices().type().id())));
   NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(out));
   ArrowSchemaInit(out->dictionary);
+  if (dview.is_empty()) { return ArrowSchemaSetType(out->dictionary, NANOARROW_TYPE_INT64); }
 
   auto dict_keys = dview.keys();
   return cudf::type_dispatcher(
@@ -217,8 +226,12 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child, metadata[i].name.c_str()));
     child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
-    NANOARROW_THROW_NOT_OK(
-      cudf::type_dispatcher(col.type(), detail::dispatch_to_arrow_type{}, col, metadata[i], child));
+    if (col.type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_THROW_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));
+    } else {
+      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+        col.type(), detail::dispatch_to_arrow_type{}, col, metadata[i], child));
+    }
   }
 
   unique_schema_t out(new ArrowSchema, [](ArrowSchema* schema) {

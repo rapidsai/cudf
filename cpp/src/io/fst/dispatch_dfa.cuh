@@ -19,6 +19,7 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 
 #include <cstdint>
 
@@ -213,7 +214,7 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Kernel invocation
     uint32_t grid_size = std::max(
-      1u, CUB_QUOTIENT_CEILING(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
+      1u, cuda::ceil_div<uint32_t>(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
 
     dfa_kernel<<<grid_size, PolicyT::BLOCK_THREADS, 0, stream>>>(dfa,
                                                                  d_chars_in,
@@ -349,8 +350,9 @@ struct DispatchFSM : DeviceFSMPolicy {
       NUM_SYMBOLS_PER_BLOCK = BLOCK_THREADS * SYMBOLS_PER_THREAD
     };
 
-    BlockOffsetT num_blocks = std::max(1u, CUB_QUOTIENT_CEILING(num_chars, NUM_SYMBOLS_PER_BLOCK));
-    size_t num_threads      = num_blocks * BLOCK_THREADS;
+    BlockOffsetT num_blocks =
+      std::max<uint32_t>(1u, cuda::ceil_div<uint32_t>(num_chars, NUM_SYMBOLS_PER_BLOCK));
+    size_t num_threads = num_blocks * BLOCK_THREADS;
 
     //------------------------------------------------------------------------------
     // TEMPORARY MEMORY REQUIREMENTS
@@ -416,7 +418,7 @@ struct DispatchFSM : DeviceFSMPolicy {
         num_blocks, allocations[MEM_FST_OFFSET], allocation_sizes[MEM_FST_OFFSET]);
       if (error != cudaSuccess) return error;
       constexpr uint32_t FST_INIT_TPB = 256;
-      uint32_t num_fst_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, FST_INIT_TPB);
+      uint32_t num_fst_init_blocks    = cuda::ceil_div(num_blocks, FST_INIT_TPB);
       initialization_pass_kernel<<<num_fst_init_blocks, FST_INIT_TPB, 0, stream>>>(
         fst_offset_tile_state, num_blocks);
     }
@@ -431,7 +433,7 @@ struct DispatchFSM : DeviceFSMPolicy {
         num_blocks, allocations[MEM_SINGLE_PASS_STV], allocation_sizes[MEM_SINGLE_PASS_STV]);
       if (error != cudaSuccess) return error;
       constexpr uint32_t STV_INIT_TPB = 256;
-      uint32_t num_stv_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, STV_INIT_TPB);
+      uint32_t num_stv_init_blocks    = cuda::ceil_div(num_blocks, STV_INIT_TPB);
       initialization_pass_kernel<<<num_stv_init_blocks, STV_INIT_TPB, 0, stream>>>(stv_tile_state,
                                                                                    num_blocks);
     } else {

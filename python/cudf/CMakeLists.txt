@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../../rapids_config.cmake)
+include(../../cmake/rapids_config.cmake)
 include(rapids-cuda)
 rapids_cuda_init_architectures(cudf-python)
 
@@ -26,18 +26,8 @@ project(
 
 find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 
-# an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
-# for the interop.pyx
-include(rapids-cpm)
-rapids_cpm_init()
-include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
-
 include(rapids-cython-core)
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
-
-if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
-endif()

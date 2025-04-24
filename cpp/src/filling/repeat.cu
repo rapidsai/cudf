@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/repeat.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
@@ -81,7 +82,7 @@ struct count_checker {
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
       auto max = thrust::reduce(
-        rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
+        rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, cudf::detail::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
                    "count exceeds the column size limit",
                    std::overflow_error);

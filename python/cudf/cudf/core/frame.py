@@ -43,19 +43,17 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from types import ModuleType
 
-    from cudf._typing import Dtype, ScalarLike
+    from cudf._typing import Dtype, DtypeObj, ScalarLike
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable, Serializable):
-    """A collection of Column objects with an optional index.
+    """A collection of Column objects.
 
     Parameters
     ----------
     data : dict
         An dict mapping column names to Columns
-    index : Table
-        A Frame representing the (optional) index columns.
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
@@ -319,7 +317,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return self._num_rows
 
     @_performance_tracking
-    def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
+    def astype(
+        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+    ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
@@ -386,14 +386,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> df.equals(different_column_type)
         True
         """
-        if self is other:
+        if not isinstance(other, type(self)):
+            return False
+        elif self is other:
             return True
-        if not isinstance(other, type(self)) or len(self) != len(other):
+        elif (
+            self._num_columns != other._num_columns
+            or self._num_rows != other._num_rows
+        ):
             return False
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(self._columns, other._columns)
+            for self_col, other_col in zip(
+                self._columns, other._columns, strict=True
+            )
         )
 
     @_performance_tracking

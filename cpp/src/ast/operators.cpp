@@ -18,7 +18,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/std/type_traits>
-#include <thrust/optional.h>
 
 #include <vector>
 

@@ -30,8 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -67,7 +67,7 @@ struct tabulator {
   auto __device__ operator()(size_type idx) const
   {
     auto const list_idx_end = thrust::upper_bound(thrust::seq, offsets, offsets + n_lists, idx);
-    auto const list_idx     = thrust::distance(offsets, list_idx_end) - 1;
+    auto const list_idx     = cuda::std::distance(offsets, list_idx_end) - 1;
     auto const list_offset  = offsets[list_idx];
     auto const list_step    = steps ? steps[list_idx] : T{1};
     return starts[list_idx] + multiply(list_step, idx - list_offset);
@@ -158,19 +158,11 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const n_lists = starts.size();
   if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
 
-  // Generate list offsets for the output.
-  auto list_offsets = make_numeric_column(
-    data_type(type_to_id<size_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const offsets_begin  = list_offsets->mutable_view().template begin<size_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
-  // First copy the sizes since the exclusive_scan tries to read (n_lists+1) values
-  thrust::copy_n(rmm::exec_policy(stream), sizes_input_it, sizes.size(), offsets_begin);
-
-  auto const n_elements = cudf::detail::sizes_to_offsets(
-    offsets_begin, offsets_begin + list_offsets->size(), offsets_begin, 0, stream);
-  CUDF_EXPECTS(n_elements <= std::numeric_limits<size_type>::max(),
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
+  // Generate list offsets for the output.
+  auto [list_offsets, n_elements] = cudf::detail::make_offsets_child_column(
+    sizes_input_it, sizes_input_it + sizes.size(), stream, mr);
+  auto const offsets_begin = list_offsets->view().template begin<size_type>();
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},

@@ -542,12 +542,10 @@ class orc_decompressor {
    * @brief ORC block decompression
    *
    * @param src compressed data
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return decompressed data
    */
-  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
-                                             rmm::cuda_stream_view stream);
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint64_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {

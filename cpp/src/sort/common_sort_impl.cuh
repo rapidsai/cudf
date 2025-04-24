@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,9 +84,9 @@ struct inplace_column_sort_fn {
       }
     };
     if (order == order::ASCENDING) {
-      do_sort(thrust::less<T>());
+      do_sort(cuda::std::less<T>());
     } else {
-      do_sort(thrust::greater<T>());
+      do_sort(cuda::std::greater<T>());
     }
   }
 
