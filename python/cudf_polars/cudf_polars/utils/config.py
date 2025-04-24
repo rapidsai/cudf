@@ -120,10 +120,12 @@ class StreamingExecutor:
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
     cardinality_factor
-        A dictionary mapping column names floats strictly greater than 0 and less
-        than or equal to 1. Each factor estimates the fractional number of unique values
-        in the column. By default, a value of ``1.0`` is used for any column not
-        included in ``cardinality_factor``.
+        A dictionary mapping column names to floats between 0 and 1 (inclusive
+        on the right).
+
+        Each factor estimates the fractional number of unique values in the
+        column. By default, ``1.0`` is used for any column not included in
+        ``cardinality_factor``.
     parquet_partition_blocksize
         Controls how large parquet files are split into multiple partitions.
         Files larger than ``parquet_partition_blocksize`` bytes are split into multiple
