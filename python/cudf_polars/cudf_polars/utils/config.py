@@ -23,16 +23,16 @@ __all__ = ["ConfigOptions"]
 # TODO: Use enum.StrEnum when we drop Python 3.10
 
 
-class FallbackMode(str, enum.Enum):
+class StreamingFallbackMode(str, enum.Enum):
     """
     How the streaming executor handles operations that don't support multiple partitions.
 
     Upon encountering an unsupported operation, the streaming executor will fall
     back to using a single partition, which might use a large amount of memory.
 
-    * ``FallbackMode.WARN`` : Emit a warning and fall back to a single partition.
-    * ``FallbackMode.SILENT``: Silently fall back to a single partition.
-    * ``FallbackMode.RAISE`` : Raise an exception.
+    * ``StreamingFallbackMode.WARN`` : Emit a warning and fall back to a single partition.
+    * ``StreamingFallbackMode.SILENT``: Silently fall back to a single partition.
+    * ``StreamingFallbackMode.RAISE`` : Raise an exception.
     """
 
     WARN = "warn"
@@ -76,7 +76,7 @@ class ParquetOptions:
     Parameters
     ----------
     chunked
-        Whether to use cudf's ``ChunkedParquetReader`` to read the parquet
+        Whether to use libcudf's ``ChunkedParquetReader`` to read the parquet
         dataset in chunks. This is useful when reading very large parquet
         files.
     chunk_read_limit
@@ -112,10 +112,9 @@ class StreamingExecutor:
         by default.
 
         Note ``scheduler="distributed"`` requires a Dask cluster to be running.
-
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
-        ``FallbackMode.WARN`` by default.
+        ``StreamingFallbackMode.WARN`` by default.
     max_rows_per_partition
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
@@ -135,7 +134,6 @@ class StreamingExecutor:
         it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
 
         This is useful when the absolute number of partitions is large.
-
     broadcast_join_limit
         The maximum number of partitions to allow for the smaller table in
         a broadcast join.
@@ -147,7 +145,7 @@ class StreamingExecutor:
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
     scheduler: Scheduler = Scheduler.SYNCHRONOUS
-    fallback_mode: FallbackMode = FallbackMode.WARN
+    fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
     parquet_partition_blocksize: int = 1_000_000_000
@@ -162,7 +160,9 @@ class StreamingExecutor:
             )
 
         # frozen dataclass, so use object.__setattr__
-        object.__setattr__(self, "fallback_mode", FallbackMode(self.fallback_mode))
+        object.__setattr__(
+            self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
+        )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         if self.shuffle_method is not None:
             object.__setattr__(
