@@ -2547,7 +2547,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   expected_metadata.column_metadata[1].child(1).child(0).set_name("int_field");
   expected_metadata.column_metadata[1].child(1).child(1).set_name("float_field");
 
-  auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(std::move(expected_metadata));

@@ -180,8 +180,11 @@ class parquet_metadata {
  public:
   /// Key-value metadata in the file footer.
   using key_value_metadata = std::unordered_map<std::string, std::string>;
-  /// row group metadata from each RowGroup element.
+  /// Row group metadata from each RowGroup element.
   using row_group_metadata = std::unordered_map<std::string, int64_t>;
+  /// Column chunk metadata from each ColumnChunkMetaData element.
+  using column_chunk_metadata =
+    std::unordered_map<std::string, std::vector<std::unordered_map<std::string, int64_t>>>;
 
   /**
    * @brief Default constructor.
@@ -203,12 +206,14 @@ class parquet_metadata {
                    int64_t num_rows,
                    size_type num_rowgroups,
                    key_value_metadata file_metadata,
-                   std::vector<row_group_metadata> rg_metadata)
+                   std::vector<row_group_metadata> rg_metadata,
+                   column_chunk_metadata column_chunk_metadata)
     : _schema{std::move(schema)},
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
       _file_metadata{std::move(file_metadata)},
-      _rowgroup_metadata{std::move(rg_metadata)}
+      _rowgroup_metadata{std::move(rg_metadata)},
+      _column_chunk_metadata{std::move(column_chunk_metadata)}
   {
   }
 
@@ -249,12 +254,20 @@ class parquet_metadata {
    */
   [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
 
+  /**
+   * @brief Returns a vector of column chunk metadata for each named column.
+   *
+   * @return A vector of column chunk metadata for each named column
+   */
+  [[nodiscard]] auto const& columnchunk_metadata() const { return _column_chunk_metadata; }
+
  private:
   parquet_schema _schema;
   int64_t _num_rows;
   size_type _num_rowgroups;
   key_value_metadata _file_metadata;
   std::vector<row_group_metadata> _rowgroup_metadata;
+  column_chunk_metadata _column_chunk_metadata;
 };
 
 /**
