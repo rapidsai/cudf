@@ -35,13 +35,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <src/io/comp/nvcomp_adapter.hpp>
-
 #include <array>
 #include <numeric>
 #include <type_traits>
-
-namespace nvcomp = cudf::io::detail::nvcomp;
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
@@ -1138,10 +1134,6 @@ TEST_F(OrcReaderTest, SingleInputs)
 
 TEST_F(OrcReaderTest, zstdCompressionRegression)
 {
-  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD)) {
-    GTEST_SKIP() << "Newer nvCOMP version is required";
-  }
-
   // Test with zstd compressed orc file with high compression ratio.
   constexpr std::array<uint8_t, 170> input_buffer{
     0x4f, 0x52, 0x43, 0x5a, 0x00, 0x00, 0x28, 0xb5, 0x2f, 0xfd, 0xa4, 0x34, 0xc7, 0x03, 0x00, 0x74,
@@ -1703,11 +1695,6 @@ TEST_F(OrcMetadataReaderTest, TestNested)
 
 TEST_F(OrcReaderTest, ZstdMaxCompressionRate)
 {
-  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD) or
-      nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD)) {
-    GTEST_SKIP() << "Newer nvCOMP version is required";
-  }
-
   // Encodes as 64KB of zeros, which compresses to 18 bytes with ZSTD
   std::vector<float> const h_data(8 * 1024);
   float32_col col(h_data.begin(), h_data.end());
@@ -2041,6 +2028,11 @@ TEST_P(OrcCompressionTest, Basic)
 {
   constexpr auto num_rows     = 12000;
   auto const compression_type = GetParam();
+
+  if (not cudf::io::is_compressed_read_orc_supported(compression_type) or
+      not cudf::io::is_compressed_write_orc_supported(compression_type)) {
+    GTEST_SKIP() << "Compression not supported with the current configuration";
+  }
 
   // Generate compressible data
   auto int_sequence =
