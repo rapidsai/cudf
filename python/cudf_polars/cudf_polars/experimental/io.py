@@ -259,24 +259,32 @@ class SplitScan(IR):
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     import numpy as np
-    import pyarrow.dataset as pa_ds
 
     # Use average total_uncompressed_size of three files
-    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = min(3, len(ir.paths))
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
+    )
     column_sizes = {}
-    ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
-    for i, frag in enumerate(ds.get_fragments()):
-        md = frag.metadata
-        for rg in range(md.num_row_groups):
-            row_group = md.row_group(rg)
-            for col in range(row_group.num_columns):
-                column = row_group.column(col)
-                name = column.path_in_schema
-                if name not in column_sizes:
-                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                column_sizes[name][i] += column.total_uncompressed_size
+    rowgroup_offsets_per_file = np.cumsum(metadata.num_rowgroups_per_file())
+    rowgroup_offsets_per_file = np.insert(rowgroup_offsets_per_file, 0, 0)
 
+    # For each column, calculate the `total_uncompressed_size` for each file
+    for name, colchunk_metadata in metadata.columnchunk_metadata().items():
+        column_sizes[name] = np.zeros(n_sample, dtype="int64")
+        for file_idx in range(n_sample):
+            column_sizes[name][file_idx] = np.sum(
+                [
+                    item["total_uncompressed_size"]
+                    for item in colchunk_metadata[
+                        rowgroup_offsets_per_file[file_idx] : rowgroup_offsets_per_file[
+                            file_idx + 1
+                        ]
+                    ]
+                ]
+            )
+
+    # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
@@ -156,7 +156,7 @@ cdef class ParquetMetadata:
 
     cpdef int num_rowgroups(self):
         """
-        Returns the number of rowgroups in the file.
+        Returns the total number of rowgroups in the file.
 
         Returns
         -------
@@ -164,6 +164,12 @@ cdef class ParquetMetadata:
             Number of row groups.
         """
         return self.meta.num_rowgroups()
+
+    cpdef list num_rowgroups_per_file(self):
+        """
+        Returns the number of rowgroups in each file.
+        """
+        return self.meta.num_rowgroups_per_file()
 
     cpdef dict metadata(self):
         """
@@ -189,6 +195,18 @@ cdef class ParquetMetadata:
             {key.decode(): val for key, val in metadata}
             for metadata in self.meta.rowgroup_metadata()
         ]
+
+    cpdef dict columnchunk_metadata(self):
+        """
+        Returns metadata from all column chunks in the file footer for each leaf column.
+        """
+        return {
+            col_name.decode(): [
+                {field.decode(): value for field, value in meta.items()}
+                for meta in colchunk_metas
+            ]
+            for col_name, colchunk_metas in self.meta.columnchunk_metadata()
+        }
 
 
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info):

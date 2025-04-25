@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,19 +198,23 @@ class parquet_metadata {
    *
    * @param schema parquet schema
    * @param num_rows number of rows
-   * @param num_rowgroups number of row groups
+   * @param num_rowgroups total number of row groups
+   * @param num_rowgroups_per_file number of row groups per file
    * @param file_metadata key-value metadata in the file footer
    * @param rg_metadata vector of maps containing metadata for each row group
+   * @param column_chunk_metadata Map of vectors containing each column's metadata across row groups
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
                    size_type num_rowgroups,
+                   std::vector<size_type> num_rowgroups_per_file,
                    key_value_metadata file_metadata,
                    std::vector<row_group_metadata> rg_metadata,
                    column_chunk_metadata column_chunk_metadata)
     : _schema{std::move(schema)},
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
+      _num_rowgroups_per_file{std::move(num_rowgroups_per_file)},
       _file_metadata{std::move(file_metadata)},
       _rowgroup_metadata{std::move(rg_metadata)},
       _column_chunk_metadata{std::move(column_chunk_metadata)}
@@ -234,11 +238,18 @@ class parquet_metadata {
   [[nodiscard]] auto num_rows() const { return _num_rows; }
 
   /**
-   * @brief Returns the number of rowgroups in the file.
+   * @brief Returns the total number of rowgroups
    *
-   * @return Number of row groups
+   * @return Total number of row groups
    */
   [[nodiscard]] auto num_rowgroups() const { return _num_rowgroups; }
+
+  /**
+   * @brief Returns the number of rowgroups in each file.
+   *
+   * @return Number of row groups per file
+   */
+  [[nodiscard]] auto const& num_rowgroups_per_file() const { return _num_rowgroups_per_file; }
 
   /**
    * @brief Returns the Key value metadata in the file footer.
@@ -265,6 +276,7 @@ class parquet_metadata {
   parquet_schema _schema;
   int64_t _num_rows;
   size_type _num_rowgroups;
+  std::vector<size_type> _num_rowgroups_per_file;
   key_value_metadata _file_metadata;
   std::vector<row_group_metadata> _rowgroup_metadata;
   column_chunk_metadata _column_chunk_metadata;

@@ -435,6 +435,16 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
   return static_cast<size_type>(total_row_groups);
 }
 
+std::vector<size_type> aggregate_reader_metadata::get_num_row_groups_per_file() const
+{
+  std::vector<size_type> per_file_num_row_groups(per_file_metadata.size());
+  std::transform(per_file_metadata.begin(),
+                 per_file_metadata.end(),
+                 per_file_num_row_groups.begin(),
+                 [](auto const& pfm) { return pfm.row_groups.size(); });
+  return per_file_num_row_groups;
+}
+
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_type chunk_start_row) const
