@@ -126,4 +126,3 @@ def test_rolling_closed(df: pl.LazyFrame, closed: str):
         [pl.col("b").sum().rolling(period="2d", index_column="date", closed=closed)]
     )
     assert_gpu_result_equal(query)
-
