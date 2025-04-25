@@ -579,7 +579,7 @@ class Scan(IR):
                 options.set_columns(with_columns)
             if filters is not None:
                 options.set_filter(filters)
-            if config_options.get("parquet_options.chunked", default=True):
+            if config_options.parquet_options.chunked:
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -591,14 +591,8 @@ class Scan(IR):
                     options.set_num_rows(nrows)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=config_options.get(
-                        "parquet_options.chunk_read_limit",
-                        default=cls.PARQUET_DEFAULT_CHUNK_SIZE,
-                    ),
-                    pass_read_limit=config_options.get(
-                        "parquet_options.pass_read_limit",
-                        default=cls.PARQUET_DEFAULT_PASS_LIMIT,
-                    ),
+                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
+                    pass_read_limit=config_options.parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
