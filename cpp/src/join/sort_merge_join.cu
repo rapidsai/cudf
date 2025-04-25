@@ -35,8 +35,9 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -44,7 +45,6 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 #include <thrust/unique.h>
 
 #include <utility>
@@ -56,16 +56,6 @@ namespace {
 template <typename LargerIterator, typename SmallerIterator>
 class merge {
  private:
-  template <typename T>
-  void debug_print(std::string str, host_span<const T> span)
-  {
-    std::cout << str << " : ";
-    for (const auto& element : span) {
-      std::cout << element << " ";
-    }
-    std::cout << std::endl;
-  }
-
   table_view smaller;
   table_view larger;
   SmallerIterator sorted_smaller_order_begin;
@@ -154,7 +144,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     }
     auto d_dremel_device_views = detail::make_device_uvector(
       dremel_device_views, stream, cudf::get_current_device_resource_ref());
-    return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
+    return std::tuple(std::move(dremel_data), std::move(d_dremel_device_views));
   };
   auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
   auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
@@ -309,8 +299,8 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
         thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
         thrust::make_reverse_iterator(offsets_subset.end()),
         thrust::make_reverse_iterator(child_positions.end()));
-      auto subset_size   = thrust::distance(thrust::make_reverse_iterator(offsets_subset.end()),
-                                          thrust::get<0>(unique_end));
+      auto subset_size   = cuda::std::distance(thrust::make_reverse_iterator(offsets_subset.end()),
+                                             cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
       auto [reduced_validity_mask, num_nulls] =
@@ -392,8 +382,6 @@ void sort_merge_join::preprocess_tables(table_view const left,
 
 void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-
   auto temp_mr = cudf::get_current_device_resource_ref();
   std::vector<cudf::order> column_order(tbl_view.num_columns(), cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_precedence(tbl_view.num_columns(), cudf::null_order::BEFORE);
