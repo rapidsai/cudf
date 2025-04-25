@@ -14,11 +14,33 @@ from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equ
 from cudf_polars.utils.config import ConfigOptions
 
 
+@pytest.fixture(scope="module")
+def left():
+    return pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+
+
+@pytest.fixture(scope="module")
+def right():
+    return pl.LazyFrame(
+        {
+            "xx": range(9),
+            "y": [2, 4, 3] * 3,
+            "zz": [1, 2, 3] * 3,
+        }
+    )
+
+
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5, 10, 15])
 @pytest.mark.parametrize("broadcast_join_limit", [1, 16])
-def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
+def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -28,20 +50,6 @@ def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
             "broadcast_join_limit": broadcast_join_limit,
             "shuffle_method": "tasks",
         },
-    )
-    left = pl.LazyFrame(
-        {
-            "x": range(15),
-            "y": [1, 2, 3] * 5,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
-        }
-    )
-    right = pl.LazyFrame(
-        {
-            "xx": range(6),
-            "y": [2, 4, 3] * 2,
-            "zz": [1, 2] * 3,
-        }
     )
     if reverse:
         left, right = right, left
@@ -65,7 +73,7 @@ def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
 
 
 @pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(broadcast_join_limit):
+def test_broadcast_join_limit(left, right, broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -110,3 +118,23 @@ def test_broadcast_join_limit(broadcast_join_limit):
     else:
         # Expect broadcast join
         assert len(shuffle_nodes) == 0
+
+
+def test_join_then_shuffle(left, right):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "max_rows_per_partition": 2,
+            "broadcast_join_limit": 1,
+        },
+    )
+    q = left.join(right, on="y", how="inner").select(
+        pl.col("x").sum(),
+        pl.col("xx").mean(),
+        pl.col("y").n_unique(),
+        (pl.col("y") * pl.col("y")).n_unique().alias("y2"),
+    )
+
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
