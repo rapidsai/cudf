@@ -9,8 +9,6 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -170,12 +168,7 @@ class Agg(Expr):
     def _count(self, column: Column) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(
-                        column.size - column.null_count,
-                        type=plc.interop.to_arrow(self.dtype),
-                    ),
-                ),
+                plc.Scalar.from_py(column.size - column.null_count, self.dtype),
                 1,
             )
         )
@@ -184,9 +177,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(0, type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(0, self.dtype),
                     1,
                 )
             )
@@ -196,9 +187,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
@@ -210,9 +199,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
