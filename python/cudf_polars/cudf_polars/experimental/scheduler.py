@@ -103,7 +103,7 @@ def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
                 continue
 
             # Add direct descendants of current to nodes stack
-            next_nodes = [dep for dep in dependencies[current] if dep not in completed]
+            next_nodes = set(dependencies[current]) - completed
             if next_nodes:
                 nodes.extend(next_nodes)
             else:
