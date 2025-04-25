@@ -252,10 +252,12 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
 
+  size_type const physical_length = input->length + input->offset + 1;
+
   auto offsets_column = [&] {
     void const* offsets_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
     ArrowArray offsets_array       = {
-            .length     = input->offset + input->length + 1,
+            .length     = physical_length,
             .null_count = 0,
             .offset     = 0,
             .n_buffers  = 2,
@@ -268,18 +270,17 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
     }
 
     // For large lists, convert 64-bit offsets to 32-bit on host with bounds checking
-    int64_t const* large_offsets = reinterpret_cast<int64_t const*>(
-      static_cast<uint8_t const*>(input->buffers[fixed_width_data_buffer_idx]) +
-      input->offset * sizeof(int64_t));
+    int64_t const* large_offsets =
+      reinterpret_cast<int64_t const*>(input->buffers[fixed_width_data_buffer_idx]);
 
-    std::vector<int32_t> int32_offsets(input->length + 1);
+    std::vector<int32_t> int32_offsets(physical_length);
     auto const max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
-    CUDF_EXPECTS(large_offsets[input->length] <= max_offset,
+    CUDF_EXPECTS(large_offsets[physical_length - 1] <= max_offset,
                  "Large list offsets exceed 32-bit integer bounds",
                  std::overflow_error);
 
     std::transform(large_offsets,
-                   large_offsets + input->length + 1,
+                   large_offsets + physical_length,
                    int32_offsets.begin(),
                    [max_offset](int64_t offset) { return static_cast<int32_t>(offset); });
 
