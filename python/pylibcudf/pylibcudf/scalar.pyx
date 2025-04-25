@@ -56,7 +56,7 @@ __all__ = ["Scalar"]
 # The DeviceMemoryResource attribute could be released prematurely
 # by the gc if the Scalar is in a reference cycle. Removing the tp_clear
 # function with the no_gc_clear decoration prevents that. See
-# https:#github.com/rapidsai/rmm/pull/931 for details.
+# https://github.com/rapidsai/rmm/pull/931 for details.
 @no_gc_clear
 cdef class Scalar:
     """A scalar value in device memory.
