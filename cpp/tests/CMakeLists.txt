@@ -326,7 +326,6 @@ ConfigureTest(
   GPUS 1
   PERCENT 30
 )
-
 ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
