@@ -176,12 +176,7 @@ def test_init_via_list_of_empty_tuples(rows):
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
 
-    assert_eq(
-        pdf,
-        gdf,
-        check_like=True,
-        check_index_type=False,
-    )
+    assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -10736,7 +10731,7 @@ def test_dataframe_constructor_unbounded_sequence():
 
 def test_dataframe_constructor_dataframe_list():
     df = cudf.DataFrame(range(2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame([df])
 
 
@@ -11338,6 +11333,14 @@ def test_construct_dict_scalar_values_raises():
         pd.DataFrame(data)
     with pytest.raises(ValueError):
         cudf.DataFrame(data)
+
+
+@pytest.mark.parametrize("columns", [None, [3, 4]])
+@pytest.mark.parametrize("index", [None, [1, 2]])
+def test_construct_empty_listlike_index_and_columns(columns, index):
+    result = cudf.DataFrame([], columns=columns, index=index)
+    expected = pd.DataFrame([], columns=columns, index=index)
+    assert_eq(result, expected)
 
 
 def test_rename_reset_label_dtype():
